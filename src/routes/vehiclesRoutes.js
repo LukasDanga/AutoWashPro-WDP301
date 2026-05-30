@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middlewares/auth');
+const { authenticate } = require('../middlewares/auth.middleware');
 const { validate } = require('../utils/helpers');
 const { vehicleValidators } = require('../utils/validators');
-const vehicleController = require('../controllers/vehicleController');
+const vehicleController = require('../controllers/vehicles.controller');
 
 router.use(authenticate);
 
@@ -21,24 +21,19 @@ router.use(authenticate);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [licensePlate, brand, model, vehicleType]
+ *             required: [licensePlate, vehicleType, brand, color]
  *             properties:
  *               licensePlate: { type: string, example: "30A-12345" }
+ *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }
  *               brand: { type: string, example: "Toyota" }
  *               model: { type: string, example: "Camry" }
  *               color: { type: string, example: "Black" }
- *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van', 'other'], example: "sedan" }
+ *               year: { type: number }
+ *               imageUrl: { type: string }
+ *               isDefault: { type: boolean }
  *     responses:
  *       201:
  *         description: Vehicle added
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data:
- *                   $ref: '#/components/schemas/Vehicle'
  *       400:
  *         description: Validation error
  */
@@ -55,16 +50,6 @@ router.post('/', vehicleValidators.create, validate, vehicleController.addVehicl
  *     responses:
  *       200:
  *         description: List of vehicles
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Vehicle'
  */
 router.get('/', vehicleController.getMyVehicles);
 
@@ -82,7 +67,6 @@ router.get('/', vehicleController.getMyVehicles);
  *         required: true
  *         schema:
  *           type: string
- *         description: Vehicle ID
  *     responses:
  *       200:
  *         description: Vehicle details
@@ -105,7 +89,6 @@ router.get('/:id', vehicleController.getVehicleById);
  *         required: true
  *         schema:
  *           type: string
- *         description: Vehicle ID
  *     requestBody:
  *       required: true
  *       content:
@@ -114,10 +97,13 @@ router.get('/:id', vehicleController.getVehicleById);
  *             type: object
  *             properties:
  *               licensePlate: { type: string }
+ *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }
  *               brand: { type: string }
  *               model: { type: string }
  *               color: { type: string }
- *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van', 'other'] }
+ *               year: { type: number }
+ *               imageUrl: { type: string }
+ *               isDefault: { type: boolean }
  *     responses:
  *       200:
  *         description: Vehicle updated
@@ -140,7 +126,6 @@ router.put('/:id', vehicleValidators.update, validate, vehicleController.updateV
  *         required: true
  *         schema:
  *           type: string
- *         description: Vehicle ID
  *     responses:
  *       200:
  *         description: Vehicle deleted

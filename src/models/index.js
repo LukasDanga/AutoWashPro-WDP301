@@ -1,13 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const basename = path.basename(__filename);
+
+const schemaFiles = fs.readdirSync(__dirname).filter((f) => f.endsWith('.schema.js') && f !== 'index.js');
 
 const models = {};
-fs.readdirSync(__dirname)
-  .filter((file) => file !== basename && file.endsWith('.js'))
-  .forEach((file) => {
-    const name = file.replace('.js', '');
-    models[name] = require(path.join(__dirname, file));
-  });
+schemaFiles.forEach((file) => {
+  const name = file.replace('.schema.js', '');
+  models[name] = require(path.join(__dirname, file));
+});
 
 module.exports = models;

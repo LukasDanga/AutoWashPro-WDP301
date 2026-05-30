@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middlewares/auth');
+const { authenticate } = require('../middlewares/auth.middleware');
 const { validate } = require('../utils/helpers');
 const { authValidators } = require('../utils/validators');
-const authController = require('../controllers/authController');
+const authController = require('../controllers/auth.controller');
 
 /**
  * @swagger
@@ -17,17 +17,17 @@ const authController = require('../controllers/authController');
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password, fullName]
+ *             required: [email, password, name]
  *             properties:
  *               email: { type: string, example: user@example.com }
  *               password: { type: string, example: Password123 }
- *               fullName: { type: string, example: John Doe }
+ *               name: { type: string, example: John Doe }
  *               phone: { type: string, example: "0123456789" }
  *     responses:
  *       201:
  *         description: User registered successfully
  *       400:
- *         description: Validation error or email already exists
+ *         description: Validation error
  */
 router.post('/register', authValidators.register, validate, authController.register);
 
@@ -101,14 +101,6 @@ router.post('/logout', authenticate, authController.logout);
  *     responses:
  *       200:
  *         description: User profile
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data:
- *                   $ref: '#/components/schemas/User'
  *       401:
  *         description: Unauthorized
  */
@@ -129,7 +121,7 @@ router.get('/profile', authenticate, authController.getProfile);
  *           schema:
  *             type: object
  *             properties:
- *               fullName: { type: string }
+ *               name: { type: string }
  *               phone: { type: string }
  *     responses:
  *       200:

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { ROLES, USER_STATUS } = require('./constants');
+const { ROLES, USER_STATUS } = require('../config/constants');
 
 const userSchema = new mongoose.Schema(
   {
@@ -17,7 +17,6 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-userSchema.index({ email: 1 });
 userSchema.index({ phone: 1 });
 
 userSchema.pre('save', function (next) {

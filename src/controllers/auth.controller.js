@@ -1,4 +1,4 @@
-const authService = require('../services/authService');
+const authService = require('../services/auth.service');
 const { catchAsync, success } = require('../utils/helpers');
 
 exports.register = catchAsync(async (req, res) => {

@@ -1,4 +1,4 @@
 const authRoutes = require('./authRoutes');
-const vehicleRoutes = require('./vehicleRoutes');
+const vehiclesRoutes = require('./vehiclesRoutes');
 
-module.exports = { authRoutes, vehicleRoutes };
+module.exports = { authRoutes, vehiclesRoutes };

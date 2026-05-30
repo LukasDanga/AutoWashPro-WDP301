@@ -1,4 +1,4 @@
-const vehicleService = require('../services/vehicleService');
+const vehicleService = require('../services/vehicles.service');
 const { catchAsync, success } = require('../utils/helpers');
 
 exports.addVehicle = catchAsync(async (req, res) => {
