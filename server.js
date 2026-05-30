@@ -6,8 +6,10 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const swaggerUi = require('swagger-ui-express');
 
 const config = require('./src/config');
+const swaggerSpec = require('./src/config/swagger');
 const { errorHandler, notFoundHandler } = require('./src/utils/helpers');
 const { authRoutes, vehicleRoutes } = require('./src/routes');
 
@@ -22,6 +24,8 @@ app.use(express.urlencoded({ extended: true }));
 if (config.NODE_ENV === 'development') app.use(morgan('dev'));
 
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { success: false, message: 'Too many requests' } }));
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
