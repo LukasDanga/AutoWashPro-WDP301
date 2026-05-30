@@ -1,4 +1,5 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+const path = require('path');
 
 const options = {
   definition: {
@@ -27,10 +28,11 @@ const options = {
           type: 'object',
           properties: {
             _id: { type: 'string' },
+            name: { type: 'string' },
             email: { type: 'string' },
-            fullName: { type: 'string' },
             phone: { type: 'string' },
-            role: { type: 'string', enum: ['customer', 'admin'] },
+            role: { type: 'string', enum: ['admin', 'manager', 'staff', 'customer'] },
+            status: { type: 'string', enum: ['active', 'inactive', 'suspended'] },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -38,12 +40,14 @@ const options = {
           type: 'object',
           properties: {
             _id: { type: 'string' },
-            user: { type: 'string' },
+            userId: { type: 'string' },
             licensePlate: { type: 'string' },
+            vehicleType: { type: 'string', enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] },
             brand: { type: 'string' },
             model: { type: 'string' },
             color: { type: 'string' },
-            vehicleType: { type: 'string', enum: ['sedan', 'suv', 'pickup', 'van', 'other'] },
+            year: { type: 'number' },
+            isDefault: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -52,12 +56,16 @@ const options = {
           properties: {
             success: { type: 'boolean', example: false },
             message: { type: 'string' },
+            code: { type: 'string' },
           },
         },
       },
     },
   },
-  apis: ['./routes/*.js'],
+  apis: [
+    path.resolve(__dirname, '../routes/authRoutes.js'),
+    path.resolve(__dirname, '../routes/vehiclesRoutes.js'),
+  ],
 };
 
 module.exports = swaggerJsdoc(options);

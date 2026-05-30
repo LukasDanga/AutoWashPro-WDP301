@@ -5,8 +5,8 @@ const schemaFiles = fs.readdirSync(__dirname).filter((f) => f.endsWith('.schema.
 
 const models = {};
 schemaFiles.forEach((file) => {
-  const name = file.replace('.schema.js', '');
-  models[name] = require(path.join(__dirname, file));
+  const pascal = file.replace('.schema.js', '').replace(/^./, (c) => c.toUpperCase());
+  models[pascal] = require(path.join(__dirname, file));
 });
 
 module.exports = models;
