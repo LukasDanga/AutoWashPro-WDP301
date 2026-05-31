@@ -15,6 +15,20 @@ const authValidators = {
     body('currentPassword').notEmpty().withMessage('Current password is required'),
     body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
   ],
+  createUser: [
+    body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }),
+    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('phone').optional().trim(),
+    body('role').notEmpty().withMessage('Role is required').isIn(['admin', 'manager', 'staff']),
+  ],
+  updateUser: [
+    param('id').isMongoId().withMessage('Invalid user ID'),
+    body('name').optional().trim().isLength({ max: 100 }),
+    body('phone').optional().trim(),
+    body('role').optional().isIn(['admin', 'manager', 'staff']),
+    body('status').optional().isIn(['active', 'inactive', 'suspended']),
+  ],
 };
 
 const vehicleValidators = {
@@ -37,4 +51,32 @@ const vehicleValidators = {
   ],
 };
 
-module.exports = { authValidators, vehicleValidators };
+const branchValidators = {
+  create: [
+    body('name').trim().notEmpty().withMessage('Branch name is required').isLength({ max: 200 }),
+    body('address').trim().notEmpty().withMessage('Address is required').isLength({ max: 500 }),
+    body('phone').optional().trim().isLength({ max: 20 }),
+    body('email').optional().trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('openingTime').optional().trim(),
+    body('closingTime').optional().trim(),
+    body('status').optional().isIn(['active', 'inactive']),
+    body('image').optional().trim(),
+  ],
+  update: [
+    param('id').isMongoId().withMessage('Invalid branch ID'),
+    body('name').optional().trim().isLength({ max: 200 }),
+    body('address').optional().trim().isLength({ max: 500 }),
+    body('phone').optional().trim().isLength({ max: 20 }),
+    body('email').optional().trim().isEmail().normalizeEmail(),
+    body('openingTime').optional().trim(),
+    body('closingTime').optional().trim(),
+    body('status').optional().isIn(['active', 'inactive']),
+    body('image').optional().trim(),
+  ],
+  updateStatus: [
+    param('id').isMongoId().withMessage('Invalid branch ID'),
+    body('status').notEmpty().withMessage('Status is required').isIn(['active', 'inactive']),
+  ],
+};
+
+module.exports = { authValidators, vehicleValidators, branchValidators };

@@ -37,3 +37,28 @@ exports.changePassword = catchAsync(async (req, res) => {
   const tokens = await authService.changePassword(req.userId, req.body);
   success(res, tokens, 'Password changed successfully');
 });
+
+exports.createUser = catchAsync(async (req, res) => {
+  const user = await authService.createUser(req.body);
+  success(res, user, 'User created', 201);
+});
+
+exports.getAllUsers = catchAsync(async (req, res) => {
+  const users = await authService.getAllUsers(req.query);
+  success(res, users, 'Users retrieved');
+});
+
+exports.getUserById = catchAsync(async (req, res) => {
+  const user = await authService.getUserById(req.params.id);
+  success(res, user, 'User retrieved');
+});
+
+exports.updateUser = catchAsync(async (req, res) => {
+  const user = await authService.updateUser(req.params.id, req.body);
+  success(res, user, 'User updated');
+});
+
+exports.deleteUser = catchAsync(async (req, res) => {
+  await authService.deleteUser(req.params.id);
+  success(res, null, 'User deleted');
+});

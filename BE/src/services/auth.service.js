@@ -93,3 +93,37 @@ exports.changePassword = async (userId, { currentPassword, newPassword }) => {
 
   return tokens;
 };
+
+exports.createUser = async ({ name, email, password, phone, role }) => {
+  const existing = await User.findOne({ email });
+  if (existing) throw Object.assign(new Error('Email already registered'), { statusCode: 409, code: 'EMAIL_EXISTS' });
+
+  const user = new User({ name, email, password, phone, role });
+  await user.save();
+  return user;
+};
+
+exports.getAllUsers = async (filters = {}) => {
+  const query = {};
+  if (filters.role) query.role = filters.role;
+  if (filters.status) query.status = filters.status;
+  return User.find(query).sort({ createdAt: -1 });
+};
+
+exports.getUserById = async (id) => {
+  const user = await User.findById(id);
+  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
+  return user;
+};
+
+exports.updateUser = async (id, updates) => {
+  const user = await User.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
+  return user;
+};
+
+exports.deleteUser = async (id) => {
+  const user = await User.findByIdAndDelete(id);
+  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
+  return user;
+};
