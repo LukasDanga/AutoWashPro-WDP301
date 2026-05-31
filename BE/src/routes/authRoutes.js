@@ -44,9 +44,9 @@ router.post('/register', authValidators.register, validate, authController.regis
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password]
+ *             required: [identifier, password]
  *             properties:
- *               email: { type: string, example: user@example.com }
+ *               identifier: { type: string, example: user@example.com }
  *               password: { type: string, example: Password123 }
  *     responses:
  *       200:

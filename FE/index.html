@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AUTOWASH - Đăng nhập / Đăng ký</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="card">
+      <div class="brand">
+        <div class="logo">💧</div>
+        <h1>AUTOWASH APP</h1>
+        <p class="tag">Tích điểm rửa xe cao cấp bọt khí sạch, đồng bộ tức thời dịch vụ cho xế yêu.</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-target="login">ĐĂNG NHẬP</button>
+        <button class="tab" data-target="register">ĐĂNG KÝ</button>
+      </div>
+
+      <div class="panel" id="login">
+        <label class="label">Số điện thoại khách hàng</label>
+        <div class="input"><span class="icon">📞</span><input id="login-phone" placeholder="Mẫu : 0901234567"></div>
+
+        <label class="label">Mật khẩu truy cập</label>
+        <div class="input"><span class="icon">🔒</span><input id="login-pass" type="password" placeholder="Nhập 8+ ký tự..."><button class="eye" data-target="#login-pass">👁️</button></div>
+
+        <button class="primary" id="login-btn">ĐĂNG NHẬP →</button>
+
+        <div class="quick">
+          <div class="quick-title">ĐĂNG NHẬP NHANH (QUICK FILL)</div>
+          <div class="quick-card">
+            <div>
+              <div class="q-title">Khách VIP: Bảo Khang</div>
+              <div class="q-sub">SĐT : 0901234567</div>
+            </div>
+            <button class="outline" id="quick-fill">Thử nghiệm</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel hidden" id="register">
+        <label class="label">Tên thành viên</label>
+        <div class="input"><span class="icon">👤</span><input id="reg-name" placeholder="Tên của bạn..."></div>
+
+        <label class="label">Số điện thoại khách hàng</label>
+        <div class="input"><span class="icon">📞</span><input id="reg-phone" placeholder="Mẫu : 0901234567"></div>
+
+        <label class="label">Địa chỉ Email nhận phiếu thu</label>
+        <div class="input"><span class="icon">✉️</span><input id="reg-email" placeholder="Mẫu: khachhang@mail.com"></div>
+
+        <div class="plate">
+          <div class="plate-preview">
+            <div class="plate-top">T. PHỐ <span class="flag">★ VIỆT NAM</span></div>
+            <div class="plate-num">59F2 - 999.99</div>
+          </div>
+          <div class="plate-fields">
+            <input placeholder="Mã số biển số" id="reg-plate">
+            <input placeholder="Dòng xe máy" id="reg-model">
+          </div>
+        </div>
+
+        <label class="label">Mật khẩu truy cập</label>
+        <div class="input"><span class="icon">🔒</span><input id="reg-pass" type="password" placeholder="Nhập 8+ ký tự..."><button class="eye" data-target="#reg-pass">👁️</button></div>
+
+        <button class="primary" id="activate-btn">KÍCH HOẠT TÀI KHOẢN →</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -20,8 +20,12 @@ exports.register = async ({ name, email, password, phone }) => {
   return { user, ...tokens };
 };
 
-exports.login = async ({ email, password }) => {
-  const user = await User.findOne({ email }).select('+password');
+exports.login = async ({ identifier, password }) => {
+  const query = identifier.includes('@')
+    ? { email: identifier.toLowerCase().trim() }
+    : { phone: identifier.trim() };
+
+  const user = await User.findOne(query).select('+password');
   if (!user) throw Object.assign(new Error('Invalid email or password'), { statusCode: 401, code: 'INVALID_CREDENTIALS' });
 
   const isMatch = await user.comparePassword(password);
