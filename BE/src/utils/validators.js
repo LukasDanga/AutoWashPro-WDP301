@@ -1,4 +1,4 @@
-const { body, param, query } = require('express-validator');
+const { body, param } = require('express-validator');
 
 const authValidators = {
   register: [
@@ -79,70 +79,4 @@ const branchValidators = {
   ],
 };
 
-const packageValidators = {
-  create: [
-    body('name').trim().notEmpty().withMessage('Package name is required').isLength({ max: 200 }),
-    body('description').optional().trim().isLength({ max: 1000 }),
-    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
-    body('duration').isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
-    body('image').optional().trim(),
-    body('status').optional().isIn(['active', 'inactive']),
-  ],
-  update: [
-    param('id').isMongoId().withMessage('Invalid package ID'),
-    body('name').optional().trim().isLength({ max: 200 }),
-    body('description').optional().trim().isLength({ max: 1000 }),
-    body('price').optional().isFloat({ min: 0 }),
-    body('duration').optional().isInt({ min: 1 }),
-    body('image').optional().trim(),
-    body('status').optional().isIn(['active', 'inactive']),
-  ],
-};
-
-const bookingValidators = {
-  create: [
-    body('branchId').isMongoId().withMessage('Invalid branch ID'),
-    body('packageId').isMongoId().withMessage('Invalid package ID'),
-    body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
-    body('bookingDate').isISO8601().withMessage('Invalid date format'),
-    body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
-    body('note').optional().trim().isLength({ max: 500 }),
-  ],
-  update: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
-    body('bookingDate').optional().isISO8601(),
-    body('startTime').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/),
-    body('note').optional().trim().isLength({ max: 500 }),
-  ],
-  updateStatus: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']),
-  ],
-  slots: [
-    query('branchId').isMongoId().withMessage('Invalid branch ID'),
-    query('date').isISO8601().withMessage('Invalid date format'),
-    query('packageId').isMongoId().withMessage('Invalid package ID'),
-  ],
-  cancel: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
-  ],
-  getByBookingId: [
-    param('bookingId').isMongoId().withMessage('Invalid booking ID'),
-  ],
-};
-
-const paymentValidators = {
-  create: [
-    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
-    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
-  ],
-  confirm: [
-    body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
-    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
-  ],
-  refund: [
-    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
-  ],
-};
-
-module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators };
+module.exports = { authValidators, vehicleValidators, branchValidators };

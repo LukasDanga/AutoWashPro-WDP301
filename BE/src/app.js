@@ -8,7 +8,7 @@ const swaggerUi = require('swagger-ui-express');
 
 const swaggerSpec = require('./config/swagger');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
-const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes } = require('./routes');
+const { authRoutes, vehiclesRoutes, branchRoutes } = require('./routes');
 
 const app = express();
 
@@ -32,9 +32,6 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().
 app.use('/api/auth', authRoutes);
 app.use('/api/vehicles', vehiclesRoutes);
 app.use('/api/branches', branchRoutes);
-app.use('/api/packages', packageRoutes);
-app.use('/api/bookings', bookingRoutes);
-app.use('/api/payments', paymentRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
