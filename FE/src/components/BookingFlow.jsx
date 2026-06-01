@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import BookingsHistory from './BookingsHistory.jsx';
 
 const sidebarItems = [
   { id: 'dashboard', label: 'Bảng điều khiển', hint: 'Thành viên & phương tiện', icon: '♡' },
@@ -142,6 +143,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [couponApplied, setCouponApplied] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
+  const [activeNav, setActiveNav] = useState('booking');
 
   useEffect(() => {
     if (!selectedVehicle && vehicleList[0]) {
@@ -266,11 +268,15 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       </header>
 
       <div className="aw-layout">
-        <aside className="aw-sidebar">
-          <div className="aw-sidebar-greeting">Xin chào, Bảo Khang!</div>
-
+          <aside className="aw-sidebar">
+          <div className="aw-sidebar-greeting">Xin chào, {user?.name || 'Bảo Khang'}!</div>
           {sidebarItems.map((item) => (
-            <button key={item.id} className={item.id === 'booking' ? 'aw-nav selected' : 'aw-nav'} type="button">
+            <button
+              key={item.id}
+              className={item.id === activeNav ? 'aw-nav selected' : 'aw-nav'}
+              type="button"
+              onClick={() => setActiveNav(item.id)}
+            >
               <span className="aw-nav-icon">{item.icon}</span>
               <span>
                 <strong>{item.label.toUpperCase()}</strong>
@@ -282,6 +288,8 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
         </aside>
 
         <main className="aw-main">
+          {activeNav === 'booking' ? (
+          <>
           <section className="aw-hero">
             <div>
               <div className="aw-section-kicker">CỔNG ĐẶT LỊCH RỬA TRỰC TUYẾN 24/7</div>
@@ -472,6 +480,15 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
               </div>
             </aside>
           </section>
+          </>
+          ) : null}
+
+          {activeNav === 'history' ? (
+            <div style={{ paddingTop: 8 }}>
+              <BookingsHistory apiBase={apiBase} token={token} />
+            </div>
+          ) : null}
+
         </main>
       </div>
     </div>
