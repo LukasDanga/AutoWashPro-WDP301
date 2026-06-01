@@ -1,0 +1,212 @@
+// AutoWashPro — Database Schema
+// Paste to: https://dbdiagram.io/d
+
+Project AutoWashPro {
+  database_type: 'MongoDB'
+}
+
+// =============================================
+// 1. USER
+// =============================================
+Table users {
+  _id                   ObjectId [pk]
+  name                  String
+  email                 String [unique]
+  password              String
+  phone                 String
+  role                  String
+  status                String
+  avatar                String
+  dateOfBirth           Date
+  refreshToken          String
+  lastLogin             Date
+  forgotPasswordToken   String
+  forgotPasswordExpires Date
+  branchId              ObjectId
+}
+
+// =============================================
+// 2. BRANCH (Chi nhanh rua xe)
+// =============================================
+Table branches {
+  _id           ObjectId [pk]
+  name          String
+  address       String
+  phone         String
+  email         String
+  openingTime   String
+  closingTime   String
+  status        String
+  image         String
+  location      String
+}
+
+// =============================================
+// 3. PACKAGE (Goi dich vu)
+// =============================================
+Table packages {
+  _id           ObjectId [pk]
+  name          String
+  description   String
+  price         Number
+  duration      Number
+  image         String
+  status        String
+  category      String
+  vehicleTypes  String
+}
+
+// =============================================
+// 4. VEHICLE (Phuong tien)
+// =============================================
+Table vehicles {
+  _id           ObjectId [pk]
+  userId        ObjectId
+  licensePlate  String [unique]
+  vehicleType   String
+  brand         String
+  model         String
+  color         String
+  year          Number
+  imageUrl      String
+  isDefault     Boolean
+}
+
+// =============================================
+// 5. BOOKING (Lich hen)
+// =============================================
+Table bookings {
+  _id                 ObjectId [pk]
+  userId              ObjectId
+  branchId            ObjectId
+  packageId          ObjectId
+  vehicleId          ObjectId
+  bookingDate        Date
+  startTime          String
+  endTime            String
+  status             String
+  note               String
+  cancelledAt        Date
+  cancelledBy        String
+  cancellationReason  String
+  confirmedAt        Date
+  rescheduleCount    Number
+  voucherCode        String
+  discountAmount     Number
+  finalPrice        Number
+  paymentStatus      String
+  paidAt            Date
+}
+
+// =============================================
+// 6. PAYMENT (Thanh toan)
+// =============================================
+Table payments {
+  _id                   ObjectId [pk]
+  bookingId             ObjectId
+  userId                ObjectId
+  amount                Number
+  method                String
+  status                String
+  transactionId         String
+  paymentUrl            String
+  paidAt                Date
+  refundedAt            Date
+  gatewayTransactionId  String
+  failureReason        String
+  retryCount           Number
+}
+
+// =============================================
+// 7. CHECKIN (Check-in dich vu)
+// =============================================
+Table checkins {
+  _id                 ObjectId [pk]
+  bookingId           ObjectId [unique]
+  userId              ObjectId
+  branchId            ObjectId
+  checkInTime         Date
+  checkOutTime        Date
+  serviceDuration     Number
+  status              String
+  note                String
+  rating              Number
+  feedback            String
+  scheduledDuration   Number
+}
+
+// =============================================
+// 8. VOUCHER (Ma giam gia)
+// =============================================
+Table vouchers {
+  _id                   ObjectId [pk]
+  code                  String [unique]
+  name                  String
+  description           String
+  type                  String
+  value                 Number
+  maxDiscount           Number
+  minOrder              Number
+  quantity              Number
+  remaining             Number
+  maxUsagePerUser       Number
+  startDate             Date
+  endDate               Date
+  applicablePackages    ObjectId
+  applicableBranches    ObjectId
+  applicableToAllPackages Boolean
+  applicableToAllBranches Boolean
+  status                String
+  createdBy             ObjectId
+}
+
+// =============================================
+// 9. VOUCHER_USAGE (Lich su su dung voucher)
+// =============================================
+Table voucher_usages {
+  _id             ObjectId [pk]
+  voucherId       ObjectId
+  userId          ObjectId
+  bookingId       ObjectId
+  discountAmount  Number
+  usedAt          Date
+}
+
+// =============================================
+// 10. NOTIFICATION (Thong bao)
+// =============================================
+Table notifications {
+  _id         ObjectId [pk]
+  userId      ObjectId
+  bookingId   ObjectId
+  title       String
+  message     String
+  type        String
+  isRead      Boolean
+  data        String
+}
+
+// =============================================
+// RELATIONSHIPS
+// =============================================
+
+Ref: users._id < vehicles.userId
+Ref: users._id < bookings.userId
+Ref: users._id < bookings.cancelledBy
+Ref: branches._id < bookings.branchId
+Ref: branches._id < users.branchId
+Ref: packages._id < bookings.packageId
+Ref: vehicles._id < bookings.vehicleId
+Ref: bookings._id - checkins.bookingId
+Ref: users._id < checkins.userId
+Ref: branches._id < checkins.branchId
+Ref: bookings._id - payments.bookingId
+Ref: users._id < payments.userId
+Ref: users._id < notifications.userId
+Ref: bookings._id < notifications.bookingId
+Ref: users._id < vouchers.createdBy
+Ref: vouchers._id < voucher_usages.voucherId
+Ref: users._id < voucher_usages.userId
+Ref: bookings._id < voucher_usages.bookingId
+Ref: packages._id < vouchers.applicablePackages
+Ref: branches._id < vouchers.applicableBranches

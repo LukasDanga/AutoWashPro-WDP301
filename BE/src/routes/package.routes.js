@@ -12,8 +12,10 @@ const { ROLES } = require('../config/permissions');
  *   get:
  *     summary: Get all packages
  *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
  */
-router.get('/', packageController.getAllPackages);
+router.get('/', authenticate, packageController.getAllPackages);
 
 /**
  * @swagger
@@ -21,8 +23,10 @@ router.get('/', packageController.getAllPackages);
  *   get:
  *     summary: Get package by ID
  *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
  */
-router.get('/:id', packageController.getPackageById);
+router.get('/:id', authenticate, packageController.getPackageById);
 
 /**
  * @swagger

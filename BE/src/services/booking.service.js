@@ -1,4 +1,4 @@
-const { Booking, Package, Branch, Vehicle } = require('../models');
+const { Booking, Package, Branch, Vehicle, Payment } = require('../models');
 
 const VALID_STATUSES = ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'];
 
@@ -53,7 +53,7 @@ const computeEndTime = (startTime, duration) => {
 };
 
 exports.createBooking = async (data) => {
-  const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note } = data;
+  const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice } = data;
 
   const pkg = await Package.findById(packageId);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
@@ -101,7 +101,13 @@ exports.createBooking = async (data) => {
     throw Object.assign(new Error('Time slot not available'), { statusCode: 409, code: 'SLOT_UNAVAILABLE' });
   }
 
-  const booking = new Booking({ userId, branchId, packageId, vehicleId, bookingDate: bd, startTime, endTime, note });
+  const booking = new Booking({
+    userId, branchId, packageId, vehicleId,
+    bookingDate: bd, startTime, endTime, note,
+    voucherCode: voucherCode || undefined,
+    discountAmount: discountAmount || 0,
+    finalPrice: finalPrice || pkg.price,
+  });
   await booking.save();
   return booking;
 };
@@ -147,9 +153,11 @@ exports.updateBooking = async (id, updates, userRole) => {
     throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
   }
 
-  const allowedFields = ['bookingDate', 'startTime', 'note', 'packageId'];
+  const allowedFields = ['bookingDate', 'startTime', 'note', 'packageId', 'branchId'];
   const filtered = {};
   allowedFields.forEach((k) => { if (updates[k] !== undefined) filtered[k] = updates[k]; });
+
+  const isRescheduled = filtered.bookingDate || filtered.startTime || filtered.packageId || updates.branchId;
 
   if (filtered.startTime || filtered.packageId || updates.branchId) {
     const pkgId = filtered.packageId || booking.packageId;
@@ -177,6 +185,7 @@ exports.updateBooking = async (id, updates, userRole) => {
   }
 
   Object.assign(booking, filtered);
+  if (isRescheduled) booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
   await booking.save();
   return booking;
 };
@@ -194,12 +203,13 @@ exports.updateBookingStatus = async (id, status) => {
   }
 
   booking.status = status;
+  if (status === 'confirmed') booking.confirmedAt = new Date();
   if (status === 'cancelled') booking.cancelledAt = new Date();
   await booking.save();
   return booking;
 };
 
-exports.cancelBooking = async (id, userId, userRole) => {
+exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
   const booking = await Booking.findById(id);
   if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   if (userRole !== 'admin' && userRole !== 'manager' && String(booking.userId) !== String(userId)) {
@@ -207,6 +217,10 @@ exports.cancelBooking = async (id, userId, userRole) => {
   }
   if (booking.status === 'completed') throw Object.assign(new Error('Cannot cancel a completed booking'), { statusCode: 400, code: 'INVALID_STATUS' });
   if (booking.status === 'cancelled') throw Object.assign(new Error('Booking already cancelled'), { statusCode: 400, code: 'ALREADY_CANCELLED' });
+
+  if (booking.paymentStatus === 'paid' && booking.status !== 'pending') {
+    throw Object.assign(new Error('Cannot cancel a booking that has been paid. Please request a refund first.'), { statusCode: 400, code: 'PAYMENT_PAID' });
+  }
 
   const now = new Date();
   const bookingDateTime = new Date(booking.bookingDate);
@@ -216,8 +230,11 @@ exports.cancelBooking = async (id, userId, userRole) => {
     throw Object.assign(new Error('Cannot cancel within 30 minutes of booking start time'), { statusCode: 400, code: 'CANCEL_WINDOW_PASSED' });
   }
 
+  const cancelledBy = userRole === 'customer' ? 'customer' : userRole === 'admin' ? 'admin' : 'manager';
   booking.status = 'cancelled';
   booking.cancelledAt = new Date();
+  booking.cancelledBy = cancelledBy;
+  if (cancellationReason) booking.cancellationReason = cancellationReason;
   await booking.save();
   return booking;
 };

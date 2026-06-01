@@ -13,11 +13,16 @@ const userSchema = new mongoose.Schema(
     dateOfBirth: { type: Date },
     refreshToken: { type: String, select: false },
     lastLogin: { type: Date },
+    forgotPasswordToken: { type: String, select: false },
+    forgotPasswordExpires: { type: Date, select: false },
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
   },
   { timestamps: true }
 );
 
 userSchema.index({ phone: 1 });
+userSchema.index({ branchId: 1 });
+userSchema.index({ forgotPasswordToken: 1 });
 
 userSchema.pre('save', function (next) {
   if (this.isModified('password')) {

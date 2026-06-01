@@ -3,12 +3,6 @@ const { Payment, Booking } = require('../models');
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'momo', 'vnpay'];
 
-const createPaymentRecord = async (bookingId, userId, amount, method) => {
-  const payment = new Payment({ bookingId, userId, amount, method, transactionId: generateTransactionId() });
-  await payment.save();
-  return payment;
-};
-
 const simulateMomoPayment = (amount, transactionId) => `https://momo.vn/pay?amount=${amount}&txn=${transactionId}`;
 const simulateVNPayPayment = (amount, transactionId) => `https://vnpay.vn/pay?amount=${amount}&txn=${transactionId}`;
 
@@ -29,27 +23,55 @@ exports.createPayment = async (bookingId, userId, method) => {
     throw Object.assign(new Error('Package not found'), { statusCode: 400, code: 'PACKAGE_NOT_FOUND' });
   }
 
-  const existing = await Payment.findOne({ bookingId, status: 'paid' });
-  if (existing) throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
+  let payment = await Payment.findOne({ bookingId, status: 'paid' });
 
-  const amount = booking.packageId.price;
-  const payment = await createPaymentRecord(bookingId, userId, amount, method);
+  if (!['pending', 'confirmed'].includes(booking.status)) {
+    throw Object.assign(new Error(`Cannot create payment for booking with status '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
+  }
 
-  if (method === 'cash') return payment;
+  if (booking.paymentStatus === 'paid') {
+    throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
+  }
+
+  const amount = booking.finalPrice || booking.packageId.price;
+  const transactionId = generateTransactionId();
+
+  // Atomic create-or-find to prevent double-payment race
+  payment = await Payment.findOneAndUpdate(
+    { bookingId, status: { $ne: 'paid' } },
+    { bookingId, userId, amount, method, transactionId, status: 'pending' },
+    { new: true, upsert: true, runValidators: true }
+  );
+
+  if (payment.status === 'paid') {
+    throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
+  }
+
+  if (method === 'cash') {
+    return payment;
+  }
 
   const paymentUrl = method === 'momo'
-    ? simulateMomoPayment(amount, payment.transactionId)
-    : simulateVNPayPayment(amount, payment.transactionId);
+    ? simulateMomoPayment(amount, transactionId)
+    : simulateVNPayPayment(amount, transactionId);
 
   payment.paymentUrl = paymentUrl;
   await payment.save();
   return payment;
 };
 
-exports.confirmPayment = async (transactionId, method) => {
-  const payment = await Payment.findOne({ transactionId }).populate('bookingId');
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
-  if (payment.status === 'paid') return payment;
+exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => {
+  const payment = await Payment.findOneAndUpdate(
+    { transactionId, status: { $ne: 'paid' } },
+    { status: 'paid', paidAt: new Date(), gatewayTransactionId: gatewayTransactionId || undefined },
+    { new: true }
+  ).populate('bookingId');
+
+  if (!payment) {
+    const existing = await Payment.findOne({ transactionId, status: 'paid' });
+    if (existing) return existing;
+    throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  }
 
   if (!VALID_METHODS.includes(method)) {
     throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
@@ -64,12 +86,7 @@ exports.confirmPayment = async (transactionId, method) => {
     throw Object.assign(new Error('Cannot confirm payment for this booking'), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
   }
 
-  payment.status = 'paid';
-  payment.paidAt = new Date();
-  await payment.save();
-
-  const bookingId = typeof booking === 'object' ? booking._id : booking;
-  await Booking.findByIdAndUpdate(bookingId, { status: 'confirmed' });
+  await Booking.findByIdAndUpdate(booking._id, { status: 'confirmed', paymentStatus: 'paid', paidAt: new Date() });
   return payment;
 };
 
@@ -106,20 +123,22 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
 };
 
 exports.refundPayment = async (bookingId) => {
-  const payment = await Payment.findOne({ bookingId });
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
-  if (payment.status !== 'paid') throw Object.assign(new Error('Only paid payments can be refunded'), { statusCode: 400, code: 'INVALID_REFUND' });
+  const payment = await Payment.findOneAndUpdate(
+    { bookingId, status: 'paid' },
+    { status: 'refunded', refundedAt: new Date() },
+    { new: true }
+  );
+  if (!payment) throw Object.assign(new Error('Only paid payments can be refunded'), { statusCode: 400, code: 'INVALID_REFUND' });
 
   const booking = await Booking.findById(bookingId);
   if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   if (booking.status === 'completed') {
     throw Object.assign(new Error('Cannot refund a completed booking'), { statusCode: 400, code: 'BOOKING_COMPLETED' });
   }
+  if (booking.status === 'in_progress') {
+    throw Object.assign(new Error('Cannot refund a booking in progress'), { statusCode: 400, code: 'BOOKING_IN_PROGRESS' });
+  }
 
-  payment.status = 'refunded';
-  payment.refundedAt = new Date();
-  await payment.save();
-
-  await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled' });
+  await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled', paymentStatus: 'refunded' });
   return payment;
 };

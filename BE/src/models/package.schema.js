@@ -8,10 +8,13 @@ const packageSchema = new mongoose.Schema(
     duration: { type: Number, required: true, min: 1 },
     image: { type: String },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    category: { type: String, enum: ['external', 'internal', 'full'], default: 'full' },
+    vehicleTypes: [{ type: String, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }],
   },
   { timestamps: true }
 );
 
 packageSchema.index({ status: 1 });
+packageSchema.index({ category: 1 });
 
 module.exports = mongoose.model('Package', packageSchema);

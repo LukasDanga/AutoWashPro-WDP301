@@ -11,6 +11,9 @@ const paymentSchema = new mongoose.Schema(
     paymentUrl: { type: String },
     paidAt: { type: Date },
     refundedAt: { type: Date },
+    gatewayTransactionId: { type: String },
+    failureReason: { type: String },
+    retryCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -18,5 +21,6 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ bookingId: 1 });
 paymentSchema.index({ userId: 1 });
 paymentSchema.index({ status: 1 });
+paymentSchema.index({ gatewayTransactionId: 1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

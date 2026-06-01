@@ -31,7 +31,7 @@ const options = {
             name: { type: 'string' },
             email: { type: 'string' },
             phone: { type: 'string' },
-            role: { type: 'string', enum: ['admin', 'manager', 'staff', 'customer'] },
+            role: { type: 'string', enum: ['admin', 'manager', 'customer'] },
             status: { type: 'string', enum: ['active', 'inactive', 'suspended'] },
             createdAt: { type: 'string', format: 'date-time' },
           },
@@ -69,6 +69,9 @@ const options = {
     path.resolve(__dirname, '../routes/package.routes.js'),
     path.resolve(__dirname, '../routes/booking.routes.js'),
     path.resolve(__dirname, '../routes/payment.routes.js'),
+    path.resolve(__dirname, '../routes/voucher.routes.js'),
+    path.resolve(__dirname, '../routes/checkin.routes.js'),
+    path.resolve(__dirname, '../routes/notification.routes.js'),
   ],
 };
 

@@ -32,7 +32,7 @@ const { ROLES } = require('../config/permissions');
  *       201:
  *         description: Booking created
  */
-router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.CUSTOMER), bookingValidators.create, validate, bookingController.createBooking);
+router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.create, validate, bookingController.createBooking);
 
 /**
  * @swagger
@@ -43,7 +43,7 @@ router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF
  *     security:
  *       - bearerAuth: []
  */
-router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF), bookingController.getAllBookings);
+router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getAllBookings);
 
 /**
  * @swagger
@@ -104,7 +104,7 @@ router.get('/:id', authenticate, bookingController.getBookingById);
  *     security:
  *       - bearerAuth: []
  */
-router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF), bookingValidators.update, validate, bookingController.updateBooking);
+router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingValidators.update, validate, bookingController.updateBooking);
 
 /**
  * @swagger
@@ -115,7 +115,7 @@ router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STA
  *     security:
  *       - bearerAuth: []
  */
-router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
+router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
 
 /**
  * @swagger

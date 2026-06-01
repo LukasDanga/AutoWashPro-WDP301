@@ -27,6 +27,6 @@ exports.deleteBranch = catchAsync(async (req, res) => {
 });
 
 exports.updateStatus = catchAsync(async (req, res) => {
-  const branch = await branchService.updateStatus(req.params.id, req.body.trangThai);
+  const branch = await branchService.updateStatus(req.params.id, req.body.status);
   success(res, branch, 'Branch status updated');
 });

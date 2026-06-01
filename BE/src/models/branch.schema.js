@@ -10,11 +10,16 @@ const branchSchema = new mongoose.Schema(
     closingTime: { type: String, default: '18:00' },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     image: { type: String },
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: { type: [Number], default: [0, 0] },
+    },
   },
   { timestamps: true }
 );
 
 branchSchema.index({ name: 1 });
 branchSchema.index({ status: 1 });
+branchSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Branch', branchSchema);

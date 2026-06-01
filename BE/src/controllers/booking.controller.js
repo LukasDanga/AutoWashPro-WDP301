@@ -33,7 +33,7 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
 });
 
 exports.cancelBooking = catchAsync(async (req, res) => {
-  const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role);
+  const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, req.body.cancellationReason);
   success(res, booking, 'Booking cancelled');
 });
 
@@ -55,8 +55,8 @@ exports.createPayment = catchAsync(async (req, res) => {
 });
 
 exports.confirmPayment = catchAsync(async (req, res) => {
-  const { transactionId, method } = req.body;
-  const payment = await paymentService.confirmPayment(transactionId, method);
+  const { transactionId, method, gatewayTransactionId } = req.body;
+  const payment = await paymentService.confirmPayment(transactionId, method, gatewayTransactionId);
   success(res, payment, 'Payment confirmed');
 });
 

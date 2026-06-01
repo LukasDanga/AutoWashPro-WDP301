@@ -15,7 +15,7 @@ const { ROLES } = require('../config/permissions');
  *     security:
  *       - bearerAuth: []
  */
-router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.CUSTOMER), paymentValidators.create, validate, bookingController.createPayment);
+router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), paymentValidators.create, validate, bookingController.createPayment);
 
 /**
  * @swagger
@@ -48,7 +48,7 @@ router.get('/my', authenticate, bookingController.getMyPayments);
  *     security:
  *       - bearerAuth: []
  */
-router.get('/booking/:bookingId', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.CUSTOMER), bookingValidators.getByBookingId, validate, bookingController.getPaymentByBooking);
+router.get('/booking/:bookingId', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.getByBookingId, validate, bookingController.getPaymentByBooking);
 
 /**
  * @swagger
@@ -59,7 +59,7 @@ router.get('/booking/:bookingId', authenticate, authorize(ROLES.ADMIN, ROLES.MAN
  *     security:
  *       - bearerAuth: []
  */
-router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF), paymentValidators.confirm, validate, bookingController.confirmPayment);
+router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), paymentValidators.confirm, validate, bookingController.confirmPayment);
 
 /**
  * @swagger
