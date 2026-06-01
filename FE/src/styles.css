@@ -382,6 +382,95 @@ input:focus-visible {
 	box-shadow: var(--shadow);
 }
 
+.aw-booking-item {
+	margin-top: 12px;
+	padding: 12px;
+	border-radius: 12px;
+	border: 1px solid rgba(255,255,255,0.04);
+	background: linear-gradient(180deg, rgba(6,10,20,0.3), rgba(8,12,24,0.2));
+}
+
+.aw-booking-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+}
+
+.aw-booking-code { font-weight: 700; color: var(--accent-3); }
+.aw-booking-branch { color: var(--muted); margin-top: 4px; }
+.aw-booking-meta { text-align: right; }
+.aw-booking-datetime { font-weight: 700; }
+.aw-booking-body { display:flex; justify-content:space-between; margin-top:8px; color:var(--muted); }
+.aw-booking-actions { margin-top:10px; }
+.aw-booking-actions button { padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:transparent; cursor:pointer; }
+.aw-booking-detail { margin-top:8px; padding:8px; background:rgba(255,255,255,0.02); border-radius:8px; font-size:0.85rem; }
+
+.aw-badge { padding:6px 10px; border-radius:999px; background: rgba(255,255,255,0.04); color:var(--muted); font-weight:700; }
+.aw-badge.is-positive { background: #083; color: #cfffe3; }
+
+/* History view styles */
+.aw-history-filters {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	padding: 14px 4px 0 0;
+}
+.aw-history-filters input {
+	flex: 1 1 480px;
+	padding: 12px 14px;
+	border-radius: 14px;
+	border: 1px solid var(--line);
+	background: rgba(255,255,255,0.02);
+	color: var(--text);
+}
+.aw-history-filters select {
+	width: 240px;
+	padding: 12px 10px;
+	border-radius: 12px;
+	border: 1px solid var(--line);
+	background: rgba(255,255,255,0.02);
+	color: var(--text);
+}
+.aw-history-filters .aw-clear {
+	margin-left: auto;
+	background: transparent;
+	border: none;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.aw-history-card {
+	margin-top: 18px;
+	padding: 18px;
+	border-radius: 14px;
+	border: 1px solid rgba(255,255,255,0.04);
+	background: linear-gradient(180deg, rgba(10,16,30,0.6), rgba(8,12,22,0.4));
+}
+.aw-history-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.aw-history-code { font-size:0.9rem; color:#8db6ff; font-weight:800; }
+.aw-history-code span { background: rgba(255,255,255,0.04); padding:4px 8px; border-radius:6px; margin-left:8px; }
+.aw-history-branch { margin-top:6px; color:var(--muted); }
+.aw-history-status { text-align:right; }
+.aw-pill { padding:6px 12px; border-radius:999px; color:#fff; font-weight:700; }
+.pill-confirmed { background: linear-gradient(90deg,#1dd1a1,#2ecc71); }
+.pill-pending { background: linear-gradient(90deg,#f6c343,#ff6b6b); }
+.pill-cancel { background: linear-gradient(90deg,#c0392b,#e74c3c); }
+.pill-paid { background: linear-gradient(90deg,#2ecc71,#1dd1a1); }
+.pill-completed { background: linear-gradient(90deg,#3498db,#2980b9); }
+
+.aw-history-body { margin-top:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.03); }
+.aw-history-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; align-items:center; }
+.aw-history-col small { display:block; color:var(--muted); font-size:0.8rem; }
+.aw-history-strong { font-weight:800; margin-top:6px; }
+.aw-history-strong.amount { color: #ffb86b; }
+
+.aw-history-footer { display:flex; justify-content:space-between; align-items:center; margin-top:12px; border-top:1px solid rgba(255,255,255,0.03); padding-top:12px; }
+.aw-history-pay { color:var(--muted); }
+.text-highlight { color:#ffb86b; font-weight:700; }
+.text-muted { color:var(--muted); }
+.aw-btn-cancel { background: linear-gradient(90deg,#8b1f1f,#c0392b); color:#fff; border:none; padding:8px 12px; border-radius:8px; margin-right:8px; }
+.aw-btn-detail { background: transparent; border:1px solid rgba(255,255,255,0.06); color:var(--text); padding:8px 12px; border-radius:8px; }
+
 .aw-card-section {
 	padding: 18px;
 }
