@@ -1,29 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import BookingFlow from './components/BookingFlow.jsx';
+import {
+  clearSession as clearStoredSession,
+  getApiBaseUrl,
+  persistSession,
+  readApiError,
+  storageKeys,
+} from './lib/authStorage.js';
 
-const storageKeys = {
-  accessToken: 'aw_accessToken',
-  refreshToken: 'aw_refreshToken',
+const ADMIN_QUICK_LOGIN = {
+  identifier: 'admin@washpro.vn',
+  password: 'Admin123!',
 };
-
-function getApiBaseUrl() {
-  return import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-}
-
-async function readApiError(response) {
-  try {
-    const payload = await response.json();
-    return payload?.message || payload?.error || 'Request failed';
-  } catch {
-    return 'Request failed';
-  }
-}
 
 function normalizePlate(value) {
   return value.replace(/[^0-9A-Za-z.-]/g, '').toUpperCase();
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const apiBase = useMemo(() => getApiBaseUrl(), []);
   const [token, setToken] = useState(() => localStorage.getItem(storageKeys.accessToken) || '');
   const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem(storageKeys.refreshToken) || '');
@@ -65,18 +62,27 @@ export default function App() {
       }
 
       const profilePayload = await profileResponse.json();
-      setUser(profilePayload?.data ?? profilePayload);
+      const profile = profilePayload?.data ?? profilePayload;
+      setUser(profile);
 
-      const vehiclesResponse = await fetch(`${apiBase}/vehicles`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      if (profile?.role !== 'admin') {
+        const vehiclesResponse = await fetch(`${apiBase}/vehicles`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
 
-      if (!vehiclesResponse.ok) {
-        throw new Error(await readApiError(vehiclesResponse));
+        if (!vehiclesResponse.ok) {
+          throw new Error(await readApiError(vehiclesResponse));
+        }
+
+        const vehiclesPayload = await vehiclesResponse.json();
+        setVehicles(
+          Array.isArray(vehiclesPayload?.data) ? vehiclesPayload.data : vehiclesPayload?.data || [],
+        );
+      } else {
+        setVehicles([]);
       }
 
-      const vehiclesPayload = await vehiclesResponse.json();
-      setVehicles(Array.isArray(vehiclesPayload?.data) ? vehiclesPayload.data : vehiclesPayload?.data || []);
+      return profile;
     } catch (error) {
       clearSession();
       setAuthError(error.message || 'Không thể tải phiên đăng nhập');
@@ -85,11 +91,10 @@ export default function App() {
     }
   }
 
-  function persistSession(nextAccessToken, nextRefreshToken) {
+  function applySession(nextAccessToken, nextRefreshToken) {
     setToken(nextAccessToken);
     setRefreshToken(nextRefreshToken || '');
-    localStorage.setItem(storageKeys.accessToken, nextAccessToken);
-    localStorage.setItem(storageKeys.refreshToken, nextRefreshToken || '');
+    persistSession(nextAccessToken, nextRefreshToken);
   }
 
   function clearSession() {
@@ -97,17 +102,45 @@ export default function App() {
     setRefreshToken('');
     setUser(null);
     setVehicles([]);
-    localStorage.removeItem(storageKeys.accessToken);
-    localStorage.removeItem(storageKeys.refreshToken);
+    clearStoredSession();
+  }
+
+  function redirectByRole(profile) {
+    if (profile?.role === 'admin') {
+      navigate('/admin', { replace: true });
+    }
   }
 
   useEffect(() => {
-    if (token) {
-      loadSession(token);
-    } else {
+    if (!token) {
       setAuthLoading(false);
+      return;
     }
+
+    loadSession(token).then((profile) => {
+      if (profile?.role === 'admin') {
+        navigate('/admin', { replace: true });
+      }
+    });
   }, []);
+
+  async function loginWithCredentials(identifier, password) {
+    const response = await fetch(`${apiBase}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readApiError(response));
+    }
+
+    const payload = await response.json();
+    const data = payload?.data || payload;
+    applySession(data?.accessToken, data?.refreshToken);
+    const profile = await loadSession(data?.accessToken);
+    return profile;
+  }
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -116,23 +149,38 @@ export default function App() {
     setStatusMessage('');
 
     try {
-      const response = await fetch(`${apiBase}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: loginPhone, password: loginPass }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response));
+      const profile = await loginWithCredentials(loginPhone, loginPass);
+      if (profile?.role === 'admin') {
+        redirectByRole(profile);
+        return;
       }
-
-      const payload = await response.json();
-      const data = payload?.data || payload;
-      persistSession(data?.accessToken, data?.refreshToken);
-      await loadSession(data?.accessToken);
       setStatusMessage('Đăng nhập thành công.');
     } catch (error) {
       setAuthError(error.message || 'Đăng nhập thất bại');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
+  async function handleQuickAdminLogin() {
+    setLoginPhone(ADMIN_QUICK_LOGIN.identifier);
+    setLoginPass(ADMIN_QUICK_LOGIN.password);
+    setLoginLoading(true);
+    setAuthError('');
+    setStatusMessage('');
+
+    try {
+      const profile = await loginWithCredentials(
+        ADMIN_QUICK_LOGIN.identifier,
+        ADMIN_QUICK_LOGIN.password,
+      );
+      if (profile?.role === 'admin') {
+        redirectByRole(profile);
+        return;
+      }
+      setAuthError('Tài khoản không có quyền quản trị.');
+    } catch (error) {
+      setAuthError(error.message || 'Đăng nhập admin thất bại. Chạy seed backend trước.');
     } finally {
       setLoginLoading(false);
     }
@@ -162,7 +210,7 @@ export default function App() {
 
       const registerPayload = await registerResponse.json();
       const registerData = registerPayload?.data || registerPayload;
-      persistSession(registerData?.accessToken, registerData?.refreshToken);
+      applySession(registerData?.accessToken, registerData?.refreshToken);
 
       const normalizedPlate = normalizePlate(regPlate);
       if (normalizedPlate && registerData?.accessToken) {
@@ -238,6 +286,9 @@ export default function App() {
             <button type="button" className={authMode === 'register' ? 'aw-auth-tab active' : 'aw-auth-tab'} onClick={() => setAuthMode('register')}>Đăng ký</button>
           </div>
 
+          {location.state?.adminAuthError ? (
+            <div className="aw-auth-message error">{location.state.adminAuthError}</div>
+          ) : null}
           {authError ? <div className="aw-auth-message error">{authError}</div> : null}
           {statusMessage ? <div className="aw-auth-message success">{statusMessage}</div> : null}
 
@@ -259,6 +310,21 @@ export default function App() {
               <button className="aw-auth-primary" type="submit" disabled={loginLoading}>
                 {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}
               </button>
+
+              <div className="aw-auth-quick">
+                <p className="aw-auth-quick-label">Đăng nhập nhanh (kiểm thử Admin)</p>
+                <button
+                  type="button"
+                  className="aw-auth-quick-btn"
+                  disabled={loginLoading}
+                  onClick={handleQuickAdminLogin}
+                >
+                  {loginLoading ? 'ĐANG XỬ LÝ...' : 'Vào bảng Admin (admin@washpro.vn)'}
+                </button>
+                <p className="aw-auth-quick-hint">
+                  Cần tài khoản seed: admin@washpro.vn / Admin123!
+                </p>
+              </div>
             </form>
           ) : (
             <form className="aw-auth-form" onSubmit={handleRegister}>

@@ -1019,6 +1019,50 @@ input:focus-visible {
 	cursor: not-allowed;
 }
 
+.aw-auth-quick {
+	margin-top: 18px;
+	padding-top: 18px;
+	border-top: 1px solid rgba(177, 194, 255, 0.14);
+}
+
+.aw-auth-quick-label {
+	margin: 0 0 10px;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: rgba(220, 230, 250, 0.72);
+}
+
+.aw-auth-quick-btn {
+	width: 100%;
+	min-height: 48px;
+	border: 1px solid rgba(61, 224, 255, 0.35);
+	border-radius: 14px;
+	background: rgba(61, 224, 255, 0.08);
+	color: #edf3ff;
+	font-weight: 700;
+	cursor: pointer;
+	transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.aw-auth-quick-btn:hover:not(:disabled) {
+	background: rgba(61, 224, 255, 0.14);
+	border-color: rgba(61, 224, 255, 0.55);
+}
+
+.aw-auth-quick-btn:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.aw-auth-quick-hint {
+	margin: 10px 0 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: rgba(220, 230, 250, 0.55);
+}
+
 @media (max-width: 1280px) {
 	.aw-grid {
 		grid-template-columns: 1fr;
