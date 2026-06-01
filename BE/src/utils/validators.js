@@ -79,4 +79,26 @@ const branchValidators = {
   ],
 };
 
-module.exports = { authValidators, vehicleValidators, branchValidators };
+const bookingValidators = {
+  create: [
+    body('branchId').trim().notEmpty().withMessage('Branch ID is required'),
+    body('branchName').trim().notEmpty().withMessage('Branch name is required').isLength({ max: 200 }),
+    body('branchAddress').trim().notEmpty().withMessage('Branch address is required').isLength({ max: 500 }),
+    body('vehicleId').trim().notEmpty().withMessage('Vehicle ID is required'),
+    body('vehicleName').trim().notEmpty().withMessage('Vehicle name is required').isLength({ max: 200 }),
+    body('vehiclePlate').trim().notEmpty().withMessage('Vehicle plate is required').isLength({ max: 30 }),
+    body('vehicleType').trim().notEmpty().withMessage('Vehicle type is required').isLength({ max: 30 }),
+    body('serviceId').trim().notEmpty().withMessage('Service ID is required'),
+    body('serviceName').trim().notEmpty().withMessage('Service name is required').isLength({ max: 200 }),
+    body('serviceDuration').optional().trim().isLength({ max: 50 }),
+    body('servicePrice').isInt({ min: 0 }).withMessage('Service price must be a positive integer'),
+    body('bookingDate').isISO8601().withMessage('Booking date is required and must be valid'),
+    body('timeSlot').trim().notEmpty().withMessage('Time slot is required').isLength({ max: 50 }),
+    body('couponCode').optional().trim().isLength({ max: 50 }),
+    body('discountAmount').optional().isInt({ min: 0 }),
+    body('totalAmount').isInt({ min: 0 }).withMessage('Total amount must be a positive integer'),
+    body('notes').optional().trim().isLength({ max: 500 }),
+  ],
+};
+
+module.exports = { authValidators, vehicleValidators, branchValidators, bookingValidators };
