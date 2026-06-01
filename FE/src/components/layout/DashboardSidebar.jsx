@@ -1,0 +1,90 @@
+import { NavLink } from 'react-router-dom';
+import { SignOut } from '@phosphor-icons/react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+
+/**
+ * Sidebar tái sử dụng cho Admin, Manager, Staff (cùng UI, khác menuItems).
+ *
+ * @param {Object} props
+ * @param {{ name: string, tagline?: string, logo?: React.ReactNode }} props.brand
+ * @param {{ id: string, label: string, to: string, icon: React.ComponentType, end?: boolean }[]} props.menuItems
+ * @param {{ name: string, roleLabel?: string }} props.user
+ * @param {() => void} props.onLogout
+ * @param {string} [props.className]
+ */
+export default function DashboardSidebar({ brand, menuItems, user, onLogout, className }) {
+  return (
+    <aside
+      className={cn(
+        'sticky top-0 flex h-screen min-h-0 w-[272px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
+        className,
+      )}
+    >
+      <div className="flex items-center gap-3 px-5 py-5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          {brand.logo ?? (
+            <span className="text-lg font-bold tracking-tight" aria-hidden>
+              AW
+            </span>
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold leading-tight">{brand.name}</p>
+          {brand.tagline ? (
+            <p className="truncate text-xs text-muted-foreground">{brand.tagline}</p>
+          ) : null}
+        </div>
+      </div>
+
+      <Separator />
+
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Menu chính">
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.id}
+              to={item.to}
+              end={item.end ?? false}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                )
+              }
+            >
+              <Icon size={20} weight="duotone" className="shrink-0" aria-hidden />
+              <span className="truncate">{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      <div className="mt-auto shrink-0 border-t border-sidebar-border">
+        <div className="flex items-center gap-3 px-4 py-4">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{user.name}</p>
+            {user.roleLabel ? (
+              <p className="truncate text-xs text-muted-foreground">{user.roleLabel}</p>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onLogout}
+            aria-label="Đăng xuất"
+            title="Đăng xuất"
+          >
+            <SignOut size={20} weight="bold" />
+          </Button>
+        </div>
+      </div>
+    </aside>
+  );
+}
