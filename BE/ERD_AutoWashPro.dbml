@@ -39,6 +39,7 @@ Table branches {
   status        String
   image         String
   location      String
+  managerId     ObjectId
 }
 
 // =============================================
@@ -123,7 +124,8 @@ Table payments {
 Table checkins {
   _id                 ObjectId [pk]
   bookingId           ObjectId [unique]
-  userId              ObjectId
+  customerId          ObjectId
+  staffId             ObjectId
   branchId            ObjectId
   checkInTime         Date
   checkOutTime        Date
@@ -195,10 +197,13 @@ Ref: users._id < bookings.userId
 Ref: users._id < bookings.cancelledBy
 Ref: branches._id < bookings.branchId
 Ref: branches._id < users.branchId
+Ref: branches._id < branches.managerId
+Ref: users._id < branches.managerId
 Ref: packages._id < bookings.packageId
 Ref: vehicles._id < bookings.vehicleId
 Ref: bookings._id - checkins.bookingId
-Ref: users._id < checkins.userId
+Ref: users._id < checkins.customerId
+Ref: users._id < checkins.staffId
 Ref: branches._id < checkins.branchId
 Ref: bookings._id - payments.bookingId
 Ref: users._id < payments.userId

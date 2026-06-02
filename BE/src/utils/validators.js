@@ -127,7 +127,7 @@ const bookingValidators = {
   ],
   updateStatus: [
     param('id').isMongoId().withMessage('Invalid booking ID'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']),
+    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'in_progress', 'completed', 'cancelled']),
   ],
   slots: [
     query('branchId').isMongoId().withMessage('Invalid branch ID'),
@@ -155,6 +155,11 @@ const paymentValidators = {
   ],
   refund: [
     body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+  ],
+  callback: [
+    body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
+    body('gatewayTransactionId').optional().trim(),
+    body('success').isBoolean().withMessage('Success flag is required'),
   ],
 };
 
@@ -198,6 +203,15 @@ const voucherValidators = {
     body('code').trim().notEmpty().withMessage('Voucher code is required'),
     body('bookingId').optional().isMongoId().withMessage('Invalid booking ID'),
     body('discountAmount').optional().isFloat({ min: 0 }),
+  ],
+  reserve: [
+    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('bookingId').isMongoId().withMessage('Booking ID is required'),
+    body('discountAmount').optional().isFloat({ min: 0 }),
+  ],
+  rollback: [
+    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('bookingId').isMongoId().withMessage('Booking ID is required'),
   ],
 };
 

@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const checkinSchema = new mongoose.Schema(
   {
     bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', required: true, unique: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', required: true },
     checkInTime: { type: Date, default: Date.now },
     checkOutTime: { type: Date },
@@ -17,7 +18,7 @@ const checkinSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-checkinSchema.index({ userId: 1 });
+checkinSchema.index({ customerId: 1 });
 checkinSchema.index({ branchId: 1 });
 checkinSchema.index({ checkInTime: -1 });
 checkinSchema.index({ status: 1 });

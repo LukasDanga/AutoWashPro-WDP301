@@ -22,5 +22,7 @@ paymentSchema.index({ bookingId: 1 });
 paymentSchema.index({ userId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ gatewayTransactionId: 1 });
+// Prevent multiple pending payments for the same booking
+paymentSchema.index({ bookingId: 1, status: 1 }, { unique: true, partialFilterExpression: { status: 'pending' } });
 
 module.exports = mongoose.model('Payment', paymentSchema);

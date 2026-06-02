@@ -11,14 +11,13 @@ const bookingSchema = new mongoose.Schema(
     endTime: { type: String, required: true },
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'in_progress', 'completed', 'cancelled'],
       default: 'pending',
     },
     note: { type: String, trim: true, maxlength: 500 },
     cancelledAt: { type: Date },
     cancelledBy: { type: String, enum: ['customer', 'admin', 'manager', 'system'] },
     cancellationReason: { type: String, trim: true, maxlength: 500 },
-    confirmedAt: { type: Date },
     rescheduleCount: { type: Number, default: 0 },
     voucherCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
@@ -38,5 +37,7 @@ bookingSchema.index({ branchId: 1 });
 bookingSchema.index({ branchId: 1, bookingDate: 1, status: 1 });
 bookingSchema.index({ paymentStatus: 1 });
 bookingSchema.index({ voucherCode: 1 });
+// Speed up slot conflict lookups
+bookingSchema.index({ branchId: 1, bookingDate: 1, startTime: 1, status: 1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

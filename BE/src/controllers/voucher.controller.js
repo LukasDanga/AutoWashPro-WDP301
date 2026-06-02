@@ -37,8 +37,24 @@ exports.validateVoucher = catchAsync(async (req, res) => {
   success(res, result, 'Voucher validated');
 });
 
-exports.redeemVoucher = catchAsync(async (req, res) => {
+exports.reserveVoucher = catchAsync(async (req, res) => {
   const { code, bookingId, discountAmount } = req.body;
-  const voucher = await voucherService.redeemVoucher(code, req.userId, bookingId, discountAmount);
-  success(res, voucher, 'Voucher redeemed');
+  const result = await voucherService.reserveVoucher(code, req.userId, bookingId, discountAmount || 0);
+  success(res, result, 'Voucher reserved');
+});
+
+exports.rollbackVoucher = catchAsync(async (req, res) => {
+  const { code, bookingId } = req.body;
+  await voucherService.rollbackVoucher(code, req.userId, bookingId);
+  success(res, null, 'Voucher reservation cancelled');
+});
+
+exports.getVoucherUsage = catchAsync(async (req, res) => {
+  const usages = await voucherService.getVoucherUsage(req.params.id);
+  success(res, usages, 'Voucher usage retrieved');
+});
+
+exports.getUserVouchers = catchAsync(async (req, res) => {
+  const vouchers = await voucherService.getUserVouchers(req.userId);
+  success(res, vouchers, 'User vouchers retrieved');
 });

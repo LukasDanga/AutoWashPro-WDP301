@@ -14,6 +14,7 @@ const branchSchema = new mongoose.Schema(
       type: { type: String, enum: ['Point'], default: 'Point' },
       coordinates: { type: [Number], default: [0, 0] },
     },
+    managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
@@ -21,5 +22,6 @@ const branchSchema = new mongoose.Schema(
 branchSchema.index({ name: 1 });
 branchSchema.index({ status: 1 });
 branchSchema.index({ location: '2dsphere' });
+branchSchema.index({ managerId: 1 });
 
 module.exports = mongoose.model('Branch', branchSchema);

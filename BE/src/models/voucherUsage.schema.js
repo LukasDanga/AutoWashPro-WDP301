@@ -12,6 +12,7 @@ const voucherUsageSchema = new mongoose.Schema(
 );
 
 voucherUsageSchema.index({ voucherId: 1, userId: 1 });
+voucherUsageSchema.index({ voucherId: 1, userId: 1, bookingId: 1 }, { unique: true });
 voucherUsageSchema.index({ userId: 1 });
 
 module.exports = mongoose.model('VoucherUsage', voucherUsageSchema);

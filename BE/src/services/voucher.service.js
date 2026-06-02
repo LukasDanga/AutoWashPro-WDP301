@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { Voucher, Package, VoucherUsage } = require('../models');
 
 const generateCode = () => {
@@ -84,7 +85,6 @@ exports.validateVoucher = async (code, bookingData, userId) => {
     }
   }
 
-  // Validate package applicability
   if (!voucher.applicableToAllPackages && voucher.applicablePackages.length > 0) {
     if (!voucher.applicablePackages.some((p) => String(p) === String(bookingData.packageId))) {
       throw Object.assign(new Error('Voucher not applicable to this package'), { statusCode: 400, code: 'VOUCHER_NOT_APPLICABLE' });
@@ -96,7 +96,6 @@ exports.validateVoucher = async (code, bookingData, userId) => {
     }
   }
 
-  // Get actual amount from package price (never trust client-provided amount)
   let amount = 0;
   if (bookingData.packageId) {
     const pkg = await Package.findById(bookingData.packageId);
@@ -119,27 +118,104 @@ exports.validateVoucher = async (code, bookingData, userId) => {
   };
 };
 
-exports.redeemVoucher = async (code, userId, bookingId, discountAmount) => {
-  // Atomic: decrement only if remaining > 0
-  const voucher = await Voucher.findOneAndUpdate(
-    { code: code.toUpperCase(), remaining: { $gt: 0 } },
-    { $inc: { remaining: -1 } },
-    { new: true }
-  );
-  if (!voucher) {
-    const existing = await Voucher.findOne({ code: code.toUpperCase() });
-    if (!existing) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-    throw Object.assign(new Error('Voucher fully redeemed'), { statusCode: 400, code: 'VOUCHER_EXHAUSTED' });
-  }
+/**
+ * Reserve voucher for a booking (atomic decrement).
+ * If payment fails, call rollbackVoucher() to restore remaining count.
+ */
+exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (userId) {
-    await new VoucherUsage({
+  try {
+    // Lock voucher and check all conditions atomically
+    const voucher = await Voucher.findOneAndUpdate(
+      {
+        code: code.toUpperCase(),
+        remaining: { $gt: 0 },
+        status: 'active',
+        startDate: { $lte: new Date() },
+        endDate: { $gte: new Date() },
+      },
+      { $inc: { remaining: -1 } },
+      { new: true, session }
+    );
+
+    if (!voucher) {
+      const existing = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
+      if (!existing) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+      if (existing.remaining <= 0) throw Object.assign(new Error('Voucher fully redeemed'), { statusCode: 400, code: 'VOUCHER_EXHAUSTED' });
+      throw Object.assign(new Error('Voucher is inactive or expired'), { statusCode: 400, code: 'VOUCHER_INVALID' });
+    }
+
+    // Check per-user usage limit inside the same transaction
+    if (voucher.maxUsagePerUser > 0) {
+      const usageCount = await VoucherUsage.countDocuments({ voucherId: voucher._id, userId }).session(session);
+      if (usageCount >= voucher.maxUsagePerUser) {
+        // Rollback the decrement we just did
+        await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
+        throw Object.assign(new Error(`You have reached the maximum usage limit for this voucher (${voucher.maxUsagePerUser} time(s))`), { statusCode: 400, code: 'VOUCHER_MAX_USAGE' });
+      }
+    }
+
+    const usage = new VoucherUsage({
       voucherId: voucher._id,
       userId,
       bookingId,
       discountAmount,
-    }).save();
-  }
+    });
+    await usage.save({ session });
 
-  return voucher;
+    await session.commitTransaction();
+    return { voucher, usage };
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+};
+
+/**
+ * Rollback voucher reservation (restore remaining count).
+ * Idempotent: safe to call multiple times — only restores if usage record exists.
+ */
+exports.rollbackVoucher = async (code, userId, bookingId) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const usage = await VoucherUsage.findOne({ userId, bookingId }).session(session);
+    if (!usage) {
+      // Already rolled back or never reserved — safe to skip
+      await session.commitTransaction();
+      return;
+    }
+
+    const voucher = await Voucher.findById(usage.voucherId).session(session);
+    if (voucher) {
+      await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
+    }
+
+    await VoucherUsage.deleteOne({ _id: usage._id }).session(session);
+    await session.commitTransaction();
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+};
+
+exports.getVoucherUsage = async (voucherId) => {
+  return VoucherUsage.find({ voucherId })
+    .populate('userId', 'name email')
+    .populate('bookingId', 'bookingDate startTime status')
+    .sort({ usedAt: -1 });
+};
+
+exports.getUserVouchers = async (userId) => {
+  return VoucherUsage.find({ userId })
+    .populate('voucherId')
+    .populate('bookingId', 'bookingDate startTime status')
+    .sort({ usedAt: -1 });
 };

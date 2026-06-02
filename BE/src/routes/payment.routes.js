@@ -72,4 +72,7 @@ router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), pay
  */
 router.post('/refund', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), paymentValidators.refund, validate, bookingController.refundPayment);
 
+// Callback from MoMo/VNPay gateway (no auth required — called by payment gateway)
+router.post('/callback', paymentValidators.callback, validate, bookingController.confirmPaymentCallback);
+
 module.exports = router;

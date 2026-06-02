@@ -80,3 +80,10 @@ exports.refundPayment = catchAsync(async (req, res) => {
   const payment = await paymentService.refundPayment(bookingId);
   success(res, payment, 'Payment refunded');
 });
+
+// Callback from MoMo/VNPay gateway (no auth — gateway calls this)
+exports.confirmPaymentCallback = catchAsync(async (req, res) => {
+  const { transactionId, gatewayTransactionId, success } = req.body;
+  const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId, success);
+  success(res, payment, success ? 'Payment confirmed' : 'Payment failed');
+});
