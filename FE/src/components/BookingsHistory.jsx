@@ -93,7 +93,7 @@ export default function BookingsHistory({ apiBase, token }) {
                 <div className="aw-history-branch">Gặp tại trung tâm: {b.branchName}</div>
               </div>
               <div className="aw-history-status">
-                <div className={`aw-pill ${b.status === 'confirmed' ? 'pill-confirmed' : b.status === 'cancelled' ? 'pill-cancel' : b.status === 'paid' ? 'pill-paid' : b.status === 'completed' ? 'pill-completed' : 'pill-pending'}`}>{b.status?.toUpperCase() === 'CONFIRMED' ? 'Đã xác nhận' : b.status?.toUpperCase() === 'CANCELLED' ? 'Đã hủy' : b.status?.toUpperCase() === 'PAID' ? 'Đã thanh toán' : b.status?.toUpperCase() === 'COMPLETED' ? 'Đã hoàn thành' : 'Chờ xác nhận'}</div>
+                <div className={`aw-pill ${b.status === 'confirmed' ? 'pill-confirmed' : b.status === 'cancelled' ? 'pill-cancel' : b.status === 'completed' ? 'pill-completed' : 'pill-pending'}`}>{b.status?.toUpperCase() === 'CONFIRMED' ? 'Đã xác nhận' : b.status?.toUpperCase() === 'CANCELLED' ? 'Đã hủy' : b.status?.toUpperCase() === 'COMPLETED' ? 'Đã hoàn thành' : 'Chờ xác nhận'}</div>
               </div>
             </div>
 
@@ -119,7 +119,7 @@ export default function BookingsHistory({ apiBase, token }) {
             </div>
 
             <div className="aw-history-footer">
-              <div className="aw-history-pay">Phương thức t.toán: <strong>Tại quầy</strong> • Trạng thái: <strong className="text-highlight">{b.status === 'pending' ? 'Chờ thanh toán' : b.status === 'confirmed' ? 'Đã xác nhận' : b.status === 'paid' ? 'Đã thanh toán' : b.status === 'completed' ? 'Đã hoàn thành' : 'Chờ xác nhận'}</strong> • <span className="text-muted">tích lũy +{b.pointsEarned || 0} điểm</span></div>
+              <div className="aw-history-pay">Phương thức t.toán: <strong>Tại quầy</strong> • Trạng thái: <strong className="text-highlight">{b.status === 'pending' ? 'Chờ thanh toán' : b.status === 'confirmed' ? 'Đã xác nhận' : b.status === 'cancelled' ? 'Đã hủy' : b.status === 'completed' ? 'Đã hoàn thành' : 'Chờ xác nhận'}</strong> • <span className="text-muted">tích lũy +{b.pointsEarned || 0} điểm</span></div>
               <div>
                 <button className="aw-btn-cancel" type="button">Hủy đặt lịch</button>
                 {/* <button className="aw-btn-detail" type="button" onClick={() => loadDetail(b._id || b.id)}>Xem chi tiết</button> */}
