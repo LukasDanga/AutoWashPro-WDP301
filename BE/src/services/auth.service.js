@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const config = require('../config');
+const loyaltyService = require('./loyalty.service');
 
 const generateTokens = (userId) => {
   const accessToken = jwt.sign({ id: userId }, config.JWT_SECRET, { expiresIn: config.JWT_EXPIRES_IN });
@@ -36,6 +37,10 @@ exports.login = async ({ identifier, password }) => {
   user.refreshToken = tokens.refreshToken;
   user.lastLogin = new Date();
   await user.save();
+  
+  // Kiểm tra điểm hết hạn (chạy bất đồng bộ)
+  loyaltyService.checkAndExpirePoints(user._id).catch(err => console.error('Point expiration error:', err));
+  
   return { user, ...tokens };
 };
 
@@ -70,6 +75,9 @@ exports.logout = async (userId) => {
 };
 
 exports.getProfile = async (userId) => {
+  // Kiểm tra điểm hết hạn trước khi trả về user
+  await loyaltyService.checkAndExpirePoints(userId).catch(err => console.error('Point expiration error:', err));
+  
   const user = await User.findById(userId);
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
   return user;

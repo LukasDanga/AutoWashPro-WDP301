@@ -15,6 +15,7 @@ router.get('/:id', authenticate, voucherController.getVoucherById);
 router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherValidators.update, validate, voucherController.updateVoucher);
 router.delete('/:id', authenticate, authorize(ROLES.ADMIN), voucherController.deleteVoucher);
 router.post('/validate', authenticate, voucherValidators.validate, validate, voucherController.validateVoucher);
+router.post('/redeem-points', authenticate, voucherController.redeemPoints);
 
 // Reserve voucher when payment is created (any authenticated user: customer, admin, manager)
 router.post('/reserve', authenticate, voucherValidators.reserve, validate, voucherController.reserveVoucher);
