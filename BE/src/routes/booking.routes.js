@@ -38,7 +38,7 @@ router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTO
  * @swagger
  * /api/bookings:
  *   get:
- *     summary: Get all bookings (admin/manager/staff)
+ *     summary: Get all bookings (admin/manager)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
