@@ -108,6 +108,8 @@ export default function App() {
   function redirectByRole(profile) {
     if (profile?.role === 'admin') {
       navigate('/admin', { replace: true });
+    } else if (profile?.role === 'manager') {
+      navigate('/manager', { replace: true });
     }
   }
 
@@ -120,6 +122,8 @@ export default function App() {
     loadSession(token).then((profile) => {
       if (profile?.role === 'admin') {
         navigate('/admin', { replace: true });
+      } else if (profile?.role === 'manager') {
+        navigate('/manager', { replace: true });
       }
     });
   }, []);

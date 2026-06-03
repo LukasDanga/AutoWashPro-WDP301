@@ -1,4 +1,5 @@
 import {
+  Buildings,
   ChartLine,
   ClockCounterClockwise,
   Gift,
@@ -19,6 +20,12 @@ export const ADMIN_MENU_ITEMS = [
     to: '/admin',
     icon: ChartLine,
     end: true,
+  },
+  {
+    id: 'branches',
+    label: 'Quản lý chi nhánh',
+    to: '/admin/branches',
+    icon: Buildings,
   },
   {
     id: 'users',
@@ -56,6 +63,10 @@ export const ADMIN_PAGE_META = {
   overview: {
     title: 'Giám sát tổng quan',
     description: 'Theo dõi hoạt động hệ thống rửa xe theo thời gian thực.',
+  },
+  branches: {
+    title: 'Quản lý chi nhánh',
+    description: 'Xem, thêm, sửa và quản lý trạng thái các chi nhánh rửa xe.',
   },
   users: {
     title: 'Quản lý người dùng',
