@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AdminLayout from '@/components/admin/AdminLayout';
 import FeaturePlaceholder from '@/components/admin/FeaturePlaceholder';
 import BranchManagement from '@/components/admin/BranchManagement';
+import UserManagement from '@/components/admin/UserManagement';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -88,7 +89,7 @@ export default function AdminRoutes() {
       <Route element={<AdminLayout user={user} onLogout={handleLogout} />}>
         <Route index element={<FeaturePlaceholder title={ADMIN_PAGE_META.overview.title} description={ADMIN_PAGE_META.overview.description} />} />
         <Route path="branches" element={<BranchManagement />} />
-        <Route path="users" element={<FeaturePlaceholder title={ADMIN_PAGE_META.users.title} description={ADMIN_PAGE_META.users.description} />} />
+        <Route path="users" element={<UserManagement />} />
         <Route
           path="reviews"
           element={
