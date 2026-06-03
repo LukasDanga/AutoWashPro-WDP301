@@ -20,6 +20,11 @@ const voucherSchema = new mongoose.Schema(
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     maxUsagePerUser: { type: Number, default: 1 },
+    requiredPoints: { type: Number, default: 0, min: 0 },
+    applicableTiers: [{ type: String, enum: ['bronze', 'silver', 'gold', 'diamond'] }],
+    isBirthdayVoucher: { type: Boolean, default: false },
+    isTemplate: { type: Boolean, default: false },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

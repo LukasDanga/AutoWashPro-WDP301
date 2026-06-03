@@ -16,6 +16,10 @@ const userSchema = new mongoose.Schema(
     forgotPasswordToken: { type: String, select: false },
     forgotPasswordExpires: { type: Date, select: false },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+    loyaltyPoints: { type: Number, default: 0 },
+    lifetimePoints: { type: Number, default: 0 },
+    tier: { type: String, enum: ['bronze', 'silver', 'gold', 'diamond'], default: 'bronze' },
+    pointsExpiresAt: { type: Date },
   },
   { timestamps: true }
 );

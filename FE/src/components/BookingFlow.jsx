@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import BookingsHistory from './BookingsHistory.jsx';
+import LoyaltyGifts from './LoyaltyGifts.jsx';
 
 const sidebarItems = [
   { id: 'dashboard', label: 'Bảng điều khiển', hint: 'Thành viên & phương tiện', icon: '♡' },
@@ -141,9 +142,21 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [couponCode, setCouponCode] = useState('');
   const [message, setMessage] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
   const [activeNav, setActiveNav] = useState('booking');
+  const [currentUser, setCurrentUser] = useState(user);
+
+  const refreshUser = async () => {
+    try {
+      const res = await fetch(`${apiBase}/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.data) setCurrentUser(data.data);
+    } catch (e) { console.error(e); }
+  };
 
   useEffect(() => {
     if (!selectedVehicle && vehicleList[0]) {
@@ -156,27 +169,47 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const service = services.find((item) => item.id === selectedService) || services[0];
   const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
 
-  const discount = couponApplied ? Math.round(service.price * 0.1) : 0;
-  const total = service.price - discount;
+  const discount = couponApplied && appliedVoucher ? appliedVoucher.savings : 0;
+  const total = Math.max(0, service.price - discount);
   const points = Math.max(60, Math.round(total / 1000) * 10);
 
-  function applyCoupon() {
+  async function applyCoupon() {
     const normalized = couponCode.trim().toUpperCase();
 
     if (!normalized) {
       setCouponApplied(false);
+      setAppliedVoucher(null);
       setMessage('Nhập mã coupon để áp dụng ưu đãi.');
       return;
     }
 
-    if (normalized === 'VIP10' || normalized === 'AUTOWASH10') {
-      setCouponApplied(true);
-      setMessage('Đã áp dụng mã ưu đãi 10%.');
-      return;
-    }
+    try {
+      const res = await fetch(`${apiBase}/vouchers/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          code: normalized,
+          bookingData: {
+            packageId: service.id,
+            branchId: branch.id,
+            amount: service.price
+          }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Mã ưu đãi không hợp lệ');
 
-    setCouponApplied(false);
-    setMessage('Mã coupon chưa hợp lệ.');
+      setCouponApplied(true);
+      setAppliedVoucher(data.data);
+      setMessage(`Đã áp dụng mã: Giảm ${formatCurrency(data.data.savings)}`);
+    } catch (err) {
+      setCouponApplied(false);
+      setAppliedVoucher(null);
+      setMessage(err.message);
+    }
   }
 
   async function confirmBooking() {
@@ -256,11 +289,11 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           <div className="aw-user-chip">
           <div className="aw-avatar" aria-hidden="true">BK</div>
           <div className="aw-user-meta">
-            <strong>{user?.name ? `Anh/Chị: ${user.name}` : 'Anh/Chị: Bảo Khang'}</strong>
+            <strong>{currentUser?.name ? `Anh/Chị: ${currentUser.name}` : 'Anh/Chị: Bảo Khang'}</strong>
             <div>
-              <span className="aw-tier">{user?.role ? user.role.toUpperCase() : 'TẬP ĐOÀN GOLD'}</span>
+              <span className="aw-tier">{currentUser?.tier ? currentUser.tier.toUpperCase() : (currentUser?.role ? currentUser.role.toUpperCase() : 'TẬP ĐOÀN GOLD')}</span>
               <span className="aw-divider">|</span>
-              <span>{user?.phone || '0901234567'}</span>
+              <span>{currentUser?.phone || '0901234567'}</span>
             </div>
           </div>
           <button className="aw-icon-button" type="button" aria-label="Đăng xuất" onClick={onLogout}>↗</button>
@@ -269,7 +302,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
       <div className="aw-layout">
           <aside className="aw-sidebar">
-          <div className="aw-sidebar-greeting">Xin chào, {user?.name || 'Bảo Khang'}!</div>
+          <div className="aw-sidebar-greeting">Xin chào, {currentUser?.name || 'Bảo Khang'}!</div>
           {sidebarItems.map((item) => (
             <button
               key={item.id}
@@ -465,7 +498,13 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                     <span>THỰC THU TẠI TIỆM</span>
                     <strong>{formatCurrency(total)}</strong>
                   </div>
-                  <div>
+                  {discount > 0 && (
+                    <div style={{color: '#10b981', marginTop: '4px'}}>
+                      <span>KHUYẾN MÃI TỪ VOUCHER</span>
+                      <strong>- {formatCurrency(discount)}</strong>
+                    </div>
+                  )}
+                  <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #333'}}>
                     <span>TÍCH ĐIỂM SĂM SÉT</span>
                     <strong>+{points} Điểm</strong>
                   </div>
@@ -486,6 +525,12 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           {activeNav === 'history' ? (
             <div style={{ paddingTop: 8 }}>
               <BookingsHistory apiBase={apiBase} token={token} />
+            </div>
+          ) : null}
+
+          {activeNav === 'gifts' ? (
+            <div style={{ paddingTop: 8 }}>
+              <LoyaltyGifts apiBase={apiBase} token={token} user={currentUser} refreshUser={refreshUser} />
             </div>
           ) : null}
 

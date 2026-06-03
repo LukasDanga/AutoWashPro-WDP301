@@ -14,6 +14,11 @@ const ADMIN_QUICK_LOGIN = {
   password: 'Admin123!',
 };
 
+const MANAGER_QUICK_LOGIN = {
+  identifier: 'manager@washpro.vn',
+  password: 'Manager123!',
+};
+
 function normalizePlate(value) {
   return value.replace(/[^0-9A-Za-z.-]/g, '').toUpperCase();
 }
@@ -190,6 +195,30 @@ export default function App() {
     }
   }
 
+  async function handleQuickManagerLogin() {
+    setLoginPhone(MANAGER_QUICK_LOGIN.identifier);
+    setLoginPass(MANAGER_QUICK_LOGIN.password);
+    setLoginLoading(true);
+    setAuthError('');
+    setStatusMessage('');
+
+    try {
+      const profile = await loginWithCredentials(
+        MANAGER_QUICK_LOGIN.identifier,
+        MANAGER_QUICK_LOGIN.password,
+      );
+      if (profile?.role === 'manager') {
+        redirectByRole(profile);
+        return;
+      }
+      setAuthError('Tài khoản không có quyền quản lý chi nhánh.');
+    } catch (error) {
+      setAuthError(error.message || 'Đăng nhập manager thất bại. Chạy seed-manager.js trước.');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
   async function handleRegister(event) {
     event.preventDefault();
     setRegisterLoading(true);
@@ -316,17 +345,26 @@ export default function App() {
               </button>
 
               <div className="aw-auth-quick">
-                <p className="aw-auth-quick-label">Đăng nhập nhanh (kiểm thử Admin)</p>
+                <p className="aw-auth-quick-label">Đăng nhập nhanh (kiểm thử)</p>
                 <button
                   type="button"
                   className="aw-auth-quick-btn"
                   disabled={loginLoading}
                   onClick={handleQuickAdminLogin}
                 >
-                  {loginLoading ? 'ĐANG XỬ LÝ...' : 'Vào bảng Admin (admin@washpro.vn)'}
+                  {loginLoading ? 'ĐANG XỬ LÝ...' : '🔑 Admin (admin@washpro.vn)'}
+                </button>
+                <button
+                  type="button"
+                  className="aw-auth-quick-btn"
+                  disabled={loginLoading}
+                  onClick={handleQuickManagerLogin}
+                  style={{ marginTop: '8px' }}
+                >
+                  {loginLoading ? 'ĐANG XỬ LÝ...' : '🏪 Manager (manager@washpro.vn)'}
                 </button>
                 <p className="aw-auth-quick-hint">
-                  Cần tài khoản seed: admin@washpro.vn / Admin123!
+                  Admin: admin@washpro.vn / Admin123! &nbsp;|&nbsp; Manager: manager@washpro.vn / Manager123!
                 </p>
               </div>
             </form>

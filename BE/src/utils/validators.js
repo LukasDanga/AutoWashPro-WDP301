@@ -8,7 +8,7 @@ const authValidators = {
     body('phone').optional().trim(),
   ],
   login: [
-    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('identifier').trim().notEmpty().withMessage('Email or phone number is required'),
     body('password').notEmpty().withMessage('Password is required'),
   ],
   changePassword: [

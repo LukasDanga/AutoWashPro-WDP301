@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Voucher, Package, VoucherUsage } = require('../models');
+const { Voucher, Package, VoucherUsage, User, PointHistory } = require('../models');
 
 const generateCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -72,6 +72,12 @@ exports.validateVoucher = async (code, bookingData, userId) => {
   const voucher = await Voucher.findOne({ code: code.toUpperCase() });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   if (voucher.status !== 'active') throw Object.assign(new Error('Voucher is inactive'), { statusCode: 400, code: 'VOUCHER_INACTIVE' });
+  if (voucher.isTemplate) throw Object.assign(new Error('Voucher template cannot be used directly'), { statusCode: 400, code: 'VOUCHER_IS_TEMPLATE' });
+
+  // Kiểm tra gán cho user cụ thể
+  if (voucher.assignedTo && String(voucher.assignedTo) !== String(userId)) {
+    throw Object.assign(new Error('Voucher is assigned to another user'), { statusCode: 403, code: 'VOUCHER_ASSIGNED_TO_OTHER' });
+  }
 
   const now = new Date();
   if (now < voucher.startDate) throw Object.assign(new Error('Voucher is not yet active'), { statusCode: 400, code: 'VOUCHER_NOT_ACTIVE' });
@@ -82,6 +88,14 @@ exports.validateVoucher = async (code, bookingData, userId) => {
     const usageCount = await VoucherUsage.countDocuments({ voucherId: voucher._id, userId });
     if (usageCount >= voucher.maxUsagePerUser) {
       throw Object.assign(new Error(`You have reached the maximum usage limit for this voucher (${voucher.maxUsagePerUser} time(s))`), { statusCode: 400, code: 'VOUCHER_MAX_USAGE' });
+    }
+  }
+
+  // Kiểm tra hạng thành viên nếu voucher yêu cầu
+  if (userId && voucher.applicableTiers && voucher.applicableTiers.length > 0) {
+    const user = await User.findById(userId);
+    if (!user || !voucher.applicableTiers.includes(user.tier)) {
+      throw Object.assign(new Error(`Voucher is only applicable for tiers: ${voucher.applicableTiers.join(', ')}`), { statusCode: 403, code: 'VOUCHER_TIER_MISMATCH' });
     }
   }
 
@@ -221,4 +235,95 @@ exports.getUserVouchers = async (userId) => {
     .populate('voucherId')
     .populate('bookingId', 'bookingDate startTime status')
     .sort({ usedAt: -1 });
+};
+
+/**
+ * Đổi điểm lấy Voucher
+ */
+exports.redeemPointsForVoucher = async (templateId, userId) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const user = await User.findById(userId).session(session);
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+
+    const template = await Voucher.findById(templateId).session(session);
+    if (!template) throw Object.assign(new Error('Voucher template not found'), { statusCode: 404 });
+    
+    if (!template.isTemplate) {
+      throw Object.assign(new Error('This is not a redeemable voucher template'), { statusCode: 400 });
+    }
+    
+    if (template.requiredPoints <= 0) {
+      throw Object.assign(new Error('This voucher does not require points to redeem'), { statusCode: 400 });
+    }
+
+    if (user.loyaltyPoints < template.requiredPoints) {
+      throw Object.assign(new Error(`Not enough points. Required: ${template.requiredPoints}, Available: ${user.loyaltyPoints}`), { statusCode: 400, code: 'INSUFFICIENT_POINTS' });
+    }
+
+    if (template.applicableTiers && template.applicableTiers.length > 0 && !template.applicableTiers.includes(user.tier)) {
+      throw Object.assign(new Error(`Your tier (${user.tier}) is not eligible for this voucher`), { statusCode: 403 });
+    }
+
+    if (template.remaining <= 0) {
+      throw Object.assign(new Error('Voucher is out of stock'), { statusCode: 400 });
+    }
+
+    // Trừ số lượng template
+    template.remaining -= 1;
+    await template.save({ session });
+
+    // Trừ điểm user
+    user.loyaltyPoints -= template.requiredPoints;
+    
+    // Gia hạn điểm
+    const sixMonthsLater = new Date();
+    sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+    user.pointsExpiresAt = sixMonthsLater;
+    await user.save({ session });
+
+    // Ghi log PointHistory
+    await PointHistory.create([{
+      userId,
+      points: -template.requiredPoints,
+      type: 'redeemed',
+      description: `Đổi ${template.requiredPoints} điểm lấy voucher ${template.name}`,
+      referenceId: template._id,
+    }], { session });
+
+    // Tạo Voucher thực tế cho User từ template
+    const userVoucher = new Voucher({
+      code: `RD${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+      name: template.name,
+      description: template.description,
+      type: template.type,
+      value: template.value,
+      maxDiscount: template.maxDiscount,
+      minOrder: template.minOrder,
+      quantity: 1,
+      remaining: 1,
+      startDate: new Date(),
+      endDate: template.endDate,
+      applicablePackages: template.applicablePackages,
+      applicableBranches: template.applicableBranches,
+      applicableToAllPackages: template.applicableToAllPackages,
+      applicableToAllBranches: template.applicableToAllBranches,
+      status: 'active',
+      isTemplate: false,
+      assignedTo: userId,
+      maxUsagePerUser: 1,
+    });
+    
+    await userVoucher.save({ session });
+    await session.commitTransaction();
+
+    return userVoucher;
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
 };

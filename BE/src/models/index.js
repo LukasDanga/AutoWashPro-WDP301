@@ -9,4 +9,7 @@ schemaFiles.forEach((file) => {
   models[pascal] = require(path.join(__dirname, file));
 });
 
-module.exports = models;
+module.exports = {
+  ...models,
+  PointHistory: models.PointHistory,
+};

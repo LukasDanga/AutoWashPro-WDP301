@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { Payment, Booking } = require('../models');
 const notificationService = require('./notification.service');
 const voucherService = require('./voucher.service');
+const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'momo', 'vnpay'];
@@ -57,6 +58,10 @@ exports.createPayment = async (bookingId, userId, method) => {
       payment.paidAt = new Date();
       await payment.save({ session });
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+      
+      // Tích điểm
+      await loyaltyService.addPointsFromPayment(userId, amount, bookingId, session);
+      
       await session.commitTransaction();
     } catch (err) {
       await session.abortTransaction();
@@ -127,6 +132,9 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     await payment.save({ session });
     await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
 
+    // Tích điểm
+    await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+
     await session.commitTransaction();
 
     notificationService.send(
@@ -169,6 +177,9 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
       await payment.save({ session });
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+      
+      // Tích điểm
+      await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
     } else {
       payment.status = 'failed';
       await payment.save({ session });
