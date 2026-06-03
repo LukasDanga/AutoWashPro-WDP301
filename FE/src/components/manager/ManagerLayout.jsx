@@ -1,23 +1,20 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Drop } from '@phosphor-icons/react';
 import DashboardShell from '@/components/layout/DashboardShell';
-import { ADMIN_BRAND, ADMIN_MENU_ITEMS, ADMIN_PAGE_META } from '@/config/adminMenu';
+import { MANAGER_BRAND, MANAGER_MENU_ITEMS, MANAGER_PAGE_META } from '@/config/managerMenu';
 import { clearSession } from '@/lib/authStorage';
 
 function resolvePageMeta(pathname) {
-  if (pathname === '/admin' || pathname === '/admin/') {
-    return ADMIN_PAGE_META.overview;
-  }
-  if (pathname.startsWith('/admin/branches')) return ADMIN_PAGE_META.branches;
-  if (pathname.startsWith('/admin/users')) return ADMIN_PAGE_META.users;
-  if (pathname.startsWith('/admin/reviews')) return ADMIN_PAGE_META.reviews;
-  if (pathname.startsWith('/admin/rewards')) return ADMIN_PAGE_META.rewards;
-  if (pathname.startsWith('/admin/activity')) return ADMIN_PAGE_META.activity;
-  if (pathname.startsWith('/admin/profile')) return ADMIN_PAGE_META.profile;
-  return ADMIN_PAGE_META.overview;
+  if (pathname === '/manager' || pathname === '/manager/') return MANAGER_PAGE_META.overview;
+  if (pathname.startsWith('/manager/bookings')) return MANAGER_PAGE_META.bookings;
+  if (pathname.startsWith('/manager/checkins')) return MANAGER_PAGE_META.checkins;
+  if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
+  if (pathname.startsWith('/manager/vouchers')) return MANAGER_PAGE_META.vouchers;
+  if (pathname.startsWith('/manager/profile')) return MANAGER_PAGE_META.profile;
+  return MANAGER_PAGE_META.overview;
 }
 
-export default function AdminLayout({ user, onLogout }) {
+export default function ManagerLayout({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const meta = resolvePageMeta(location.pathname);
@@ -31,13 +28,13 @@ export default function AdminLayout({ user, onLogout }) {
   return (
     <DashboardShell
       brand={{
-        ...ADMIN_BRAND,
+        ...MANAGER_BRAND,
         logo: <Drop size={24} weight="fill" className="text-primary" aria-hidden />,
       }}
-      menuItems={ADMIN_MENU_ITEMS}
+      menuItems={MANAGER_MENU_ITEMS}
       user={{
-        name: user?.name || 'Quản trị viên',
-        roleLabel: user?.role ? `Vai trò: ${user.role}` : 'Admin',
+        name: user?.name || 'Quản lý',
+        roleLabel: 'Quản lý chi nhánh',
       }}
       onLogout={handleLogout}
       header={
@@ -47,7 +44,7 @@ export default function AdminLayout({ user, onLogout }) {
         </div>
       }
     >
-      <Outlet />
+      <Outlet context={{ user }} />
     </DashboardShell>
   );
 }
