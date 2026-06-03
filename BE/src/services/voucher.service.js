@@ -184,17 +184,20 @@ exports.rollbackVoucher = async (code, userId, bookingId) => {
   session.startTransaction();
 
   try {
-    const usage = await VoucherUsage.findOne({ userId, bookingId }).session(session);
-    if (!usage) {
+    const voucher = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
+    if (!voucher) {
       // Already rolled back or never reserved — safe to skip
       await session.commitTransaction();
       return;
     }
 
-    const voucher = await Voucher.findById(usage.voucherId).session(session);
-    if (voucher) {
-      await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
+    const usage = await VoucherUsage.findOne({ voucherId: voucher._id, userId, bookingId }).session(session);
+    if (!usage) {
+      await session.commitTransaction();
+      return;
     }
+
+    await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
 
     await VoucherUsage.deleteOne({ _id: usage._id }).session(session);
     await session.commitTransaction();
