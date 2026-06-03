@@ -14,11 +14,22 @@ async function seed() {
       name: 'Admin WashPro',
       email: process.env.ADMIN_EMAIL || 'admin@washpro.vn',
       password: process.env.ADMIN_PASSWORD || 'Admin123!',
-      phone: '0901234567',
+      phone: '0999999999', // Đổi SĐT admin để không trùng với Quick Fill
       role: 'admin',
       status: 'active',
     });
     console.log('Admin created:', admin.email, '/ Admin123!');
+
+    // Tạo Khách VIP để khớp với Quick Fill ở Frontend
+    await User.create({
+      name: 'Bảo Khang',
+      email: 'baokhang@washpro.vn',
+      password: 'password123',
+      phone: '0901234567',
+      role: 'customer',
+      status: 'active',
+    });
+    console.log('VIP Customer created: 0901234567 / password123');
 
     await mongoose.disconnect();
     process.exit(0);

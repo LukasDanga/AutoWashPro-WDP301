@@ -344,29 +344,55 @@ export default function App() {
                 {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}
               </button>
 
-              <div className="aw-auth-quick">
-                <p className="aw-auth-quick-label">Đăng nhập nhanh (kiểm thử)</p>
-                <button
-                  type="button"
-                  className="aw-auth-quick-btn"
-                  disabled={loginLoading}
-                  onClick={handleQuickAdminLogin}
-                >
-                  {loginLoading ? 'ĐANG XỬ LÝ...' : '🔑 Admin (admin@washpro.vn)'}
-                </button>
-                <button
-                  type="button"
-                  className="aw-auth-quick-btn"
-                  disabled={loginLoading}
-                  onClick={handleQuickManagerLogin}
-                  style={{ marginTop: '8px' }}
-                >
-                  {loginLoading ? 'ĐANG XỬ LÝ...' : '🏪 Manager (manager@washpro.vn)'}
-                </button>
-                <p className="aw-auth-quick-hint">
-                  Admin: admin@washpro.vn / Admin123! &nbsp;|&nbsp; Manager: manager@washpro.vn / Manager123!
-                </p>
-              </div>
+                <div className="aw-auth-quick" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                  <p className="aw-auth-quick-label">Đăng nhập nhanh (kiểm thử)</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="aw-auth-quick-btn"
+                      disabled={loginLoading}
+                      onClick={() => {
+                        setLoginPhone('dong@washpro.vn');
+                        setLoginPass('Password123!');
+                        handleLogin({ preventDefault: () => {} });
+                      }}
+                      style={{ background: '#cd7f32', color: '#fff', border: 'none' }}
+                    >
+                      {loginLoading ? '...' : '🥉 Khách Đồng'}
+                    </button>
+                    <button
+                      type="button"
+                      className="aw-auth-quick-btn"
+                      disabled={loginLoading}
+                      onClick={() => {
+                        setLoginPhone('kimcuong@washpro.vn');
+                        setLoginPass('Password123!');
+                        handleLogin({ preventDefault: () => {} });
+                      }}
+                      style={{ background: '#b9f2ff', color: '#000', border: 'none' }}
+                    >
+                      {loginLoading ? '...' : '💎 Khách KC'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="aw-auth-quick-btn"
+                      disabled={loginLoading}
+                      onClick={handleQuickManagerLogin}
+                    >
+                      {loginLoading ? '...' : '🏪 Manager'}
+                    </button>
+                    <button
+                      type="button"
+                      className="aw-auth-quick-btn"
+                      disabled={loginLoading}
+                      onClick={handleQuickAdminLogin}
+                    >
+                      {loginLoading ? '...' : '🔑 Admin'}
+                    </button>
+                  </div>
+                </div>
             </form>
           ) : (
             <form className="aw-auth-form" onSubmit={handleRegister}>
