@@ -14,6 +14,7 @@ import {
   XCircle,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { Map, MapMarker, MapControls, MarkerContent, MarkerPopup } from '@/components/ui/map';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -185,6 +186,36 @@ export default function ManagerBranch({ user }) {
   return (
     <div className="space-y-5">
       <p className="text-sm text-slate-500">Danh sách chi nhánh bạn có quyền quản lý.</p>
+
+      {branches.length > 0 && (
+        <div className="h-[400px] w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm relative z-0">
+          <Map
+            viewport={{ center: branches[0]?.location?.coordinates || [106.700981, 10.776889], zoom: 12 }}
+            className="h-full w-full"
+          >
+            <MapControls position="bottom-right" showZoom showCompass showLocate />
+            {branches.map((b) => {
+              if (!b.location?.coordinates) return null;
+              return (
+                <MapMarker
+                  key={`marker-${b._id}`}
+                  longitude={b.location.coordinates[0]}
+                  latitude={b.location.coordinates[1]}
+                >
+                  <MarkerContent />
+                  <MarkerPopup>
+                    <div className="space-y-1 p-1">
+                      <h4 className="font-semibold text-slate-800 text-sm">{b.name}</h4>
+                      <p className="text-xs text-slate-500">{b.address}</p>
+                    </div>
+                  </MarkerPopup>
+                </MapMarker>
+              );
+            })}
+          </Map>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {branches.map((b) => {
           const active = b.status === 'active';
@@ -219,12 +250,12 @@ export default function ManagerBranch({ user }) {
                 </ul>
                 <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3">
                   <button onClick={() => handleToggle(b)} disabled={toggling}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors">
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium !text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors">
                     {toggling ? <Spinner size={12} /> : active ? <ToggleRight size={15} className="text-emerald-500" /> : <ToggleLeft size={15} className="text-slate-400" />}
                     {active ? 'Đang mở' : 'Đã tắt'}
                   </button>
                   <button id={`edit-branch-${b._id}`} onClick={() => setEditing(b)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                    className="flex h-7 w-7 items-center justify-center rounded-lg !text-slate-400 hover:bg-blue-50 hover:!text-blue-600 transition-colors">
                     <PencilSimple size={14} />
                   </button>
                 </div>

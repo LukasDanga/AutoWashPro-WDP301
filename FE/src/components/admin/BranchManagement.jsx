@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowClockwise,
   Buildings,
+  CaretLeft,
   CheckCircle,
   Clock,
   Envelope,
@@ -18,6 +19,7 @@ import {
   XCircle,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { Map, MapMarker, MapControls, MarkerContent, MarkerPopup } from '@/components/ui/map';
 
 /* ─────────────────────────── API helper ─────────────────────────── */
 async function apiFetch(path, options = {}) {
@@ -287,98 +289,134 @@ function ConfirmDelete({ branch, onConfirm, onCancel, deleting }) {
   );
 }
 
-/* ─────────────────────────── Branch card ────────────────────────── */
-function BranchCard({ branch, onEdit, onDelete, onToggle, togglingId }) {
+/* ─────────────────────────── Detail View ─────────────────────────── */
+function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, togglingId }) {
   const toggling = togglingId === branch._id;
   const active = branch.status === 'active';
 
   return (
-    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md overflow-hidden">
-      {/* image */}
-      <div className="relative h-32 overflow-hidden bg-slate-50">
-        {branch.image ? (
-          <img
-            src={branch.image}
-            alt={branch.name}
-            className="h-full w-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Buildings size={48} weight="thin" className="text-slate-300" />
-          </div>
-        )}
-        <div className="absolute left-3 top-3">
-          <StatusBadge status={branch.status} />
-        </div>
-      </div>
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold !text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm transition-colors"
+        >
+          <CaretLeft size={16} weight="bold" />
+          Quay lại danh sách
+        </button>
 
-      {/* body */}
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <h3 className="text-sm font-semibold text-slate-800 line-clamp-1">{branch.name}</h3>
-
-        <ul className="space-y-1.5 text-xs text-slate-500">
-          <li className="flex items-start gap-2">
-            <MapPin size={13} className="mt-0.5 shrink-0 text-blue-400" />
-            <span className="line-clamp-2">{branch.address}</span>
-          </li>
-          {branch.phone && (
-            <li className="flex items-center gap-2">
-              <Phone size={13} className="shrink-0 text-blue-400" />
-              {branch.phone}
-            </li>
-          )}
-          {branch.email && (
-            <li className="flex items-center gap-2">
-              <Envelope size={13} className="shrink-0 text-blue-400" />
-              <span className="truncate">{branch.email}</span>
-            </li>
-          )}
-          {(branch.openingTime || branch.closingTime) && (
-            <li className="flex items-center gap-2">
-              <Clock size={13} className="shrink-0 text-blue-400" />
-              {branch.openingTime} – {branch.closingTime}
-            </li>
-          )}
-        </ul>
-
-        {/* action row */}
-        <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3">
+        <div className="flex gap-2">
           <button
-            id={`toggle-${branch._id}`}
             onClick={() => onToggle(branch)}
             disabled={toggling}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold !text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm disabled:opacity-50 transition-colors"
           >
-            {toggling
-              ? <Spinner size={13} />
-              : active
-                ? <ToggleRight size={16} className="text-emerald-500" />
-                : <ToggleLeft size={16} className="text-slate-400" />}
-            {active ? 'Đang mở' : 'Đã tắt'}
+            {toggling ? <Spinner size={14} /> : active ? <ToggleRight size={16} className="text-emerald-500" /> : <ToggleLeft size={16} className="text-slate-400" />}
+            {active ? 'Tắt hoạt động' : 'Bật hoạt động'}
           </button>
+          <button
+            onClick={() => onEdit(branch)}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold !text-blue-700 hover:bg-blue-100 transition-colors"
+          >
+            <PencilSimple size={16} /> Sửa
+          </button>
+          <button
+            onClick={() => onDelete(branch)}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold !text-red-700 hover:bg-red-100 transition-colors"
+          >
+            <Trash size={16} /> Xóa
+          </button>
+        </div>
+      </div>
 
-          <div className="flex gap-1">
-            <button
-              id={`edit-${branch._id}`}
-              onClick={() => onEdit(branch)}
-              title="Chỉnh sửa"
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+      <div className="flex flex-col gap-6">
+        {/* ── Top: Title & Status ── */}
+        <div className="flex items-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 overflow-hidden shadow-sm shrink-0">
+            {branch.image ? (
+              <img src={branch.image} alt={branch.name} className="h-full w-full object-cover" />
+            ) : (
+              <Buildings size={32} weight="duotone" />
+            )}
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+              {branch.name}
+              <StatusBadge status={branch.status} />
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">Thông tin chi tiết và bản đồ định vị của chi nhánh.</p>
+          </div>
+        </div>
+
+        {/* ── Middle: Map ── */}
+        <div className="h-[400px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm relative z-0">
+          <Map
+            viewport={{ center: branch.location?.coordinates || [106.700981, 10.776889], zoom: 15 }}
+            className="h-full w-full"
+          >
+            <MapControls position="bottom-right" showZoom showCompass showLocate />
+            <MapMarker
+              longitude={branch.location?.coordinates?.[0] || 106.700981}
+              latitude={branch.location?.coordinates?.[1] || 10.776889}
             >
-              <PencilSimple size={14} />
-            </button>
-            <button
-              id={`delete-${branch._id}`}
-              onClick={() => onDelete(branch)}
-              title="Xóa"
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-            >
-              <Trash size={14} />
-            </button>
+              <MarkerContent />
+              <MarkerPopup>
+                <div className="space-y-1 p-1">
+                  <h4 className="font-semibold text-slate-800 text-sm">{branch.name}</h4>
+                  <p className="text-xs text-slate-500">{branch.address}</p>
+                </div>
+              </MarkerPopup>
+            </MapMarker>
+          </Map>
+        </div>
+
+        {/* ── Bottom: Information Cards ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <MapPin size={20} weight="fill" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Địa chỉ</p>
+              <p className="text-sm font-medium text-slate-700 leading-snug">{branch.address || 'Chưa cập nhật'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <Phone size={20} weight="fill" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Điện thoại</p>
+              <p className="text-sm font-medium text-slate-700">{branch.phone || 'Chưa cập nhật'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <Envelope size={20} weight="fill" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Email liên hệ</p>
+              <p className="text-sm font-medium text-slate-700 break-all">{branch.email || 'Chưa cập nhật'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+              <Clock size={20} weight="fill" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Giờ mở cửa</p>
+              <p className="text-sm font-medium text-slate-700">
+                {branch.openingTime && branch.closingTime ? `${branch.openingTime} – ${branch.closingTime}` : 'Chưa cập nhật'}
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    </article>
+    </div>
   );
 }
 
@@ -393,6 +431,7 @@ export default function BranchManagement() {
   const [statusFilter, setStatusFilter] = useState('');
   const [modal, setModal] = useState(null);     // null | 'create' | 'edit' | 'delete'
   const [selected, setSelected] = useState(null);
+  const [currentView, setCurrentView] = useState('list'); // 'list' | 'detail'
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
@@ -506,10 +545,34 @@ export default function BranchManagement() {
   };
 
   /* ─────────────────── render ─────────────────── */
+  if (currentView === 'detail' && selected) {
+    return (
+      <div className="space-y-6">
+        <BranchDetailFull
+          branch={selected}
+          onBack={() => setCurrentView('list')}
+          onEdit={(br) => { setSelected(br); setModal('edit'); }}
+          onDelete={(br) => { setSelected(br); setModal('delete'); }}
+          onToggle={handleToggle}
+          togglingId={togglingId}
+        />
+
+        {/* ── Modals for Detail View ── */}
+        {modal === 'edit' && (
+          <Modal title="Cập nhật thông tin chi nhánh" onClose={() => setModal(null)} wide>
+            <BranchForm initial={selected} onSave={handleUpdate} onCancel={() => setModal(null)} saving={saving} />
+          </Modal>
+        )}
+        {modal === 'delete' && (
+          <ConfirmDelete branch={selected} onConfirm={handleDelete} onCancel={() => setModal(null)} deleting={deleting} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-
-      {/* ── Stat row ── */}
+      {/* ── Stat cards ── */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Tổng chi nhánh',     value: stats.total,    icon: <Buildings size={18} weight="duotone" className="text-blue-500" />,    bg: 'bg-blue-50' },
@@ -609,22 +672,83 @@ export default function BranchManagement() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {branches.map((b) => (
-            <BranchCard
-              key={b._id}
-              branch={b}
-              onEdit={(br) => { setSelected(br); setModal('edit'); }}
-              onDelete={(br) => { setSelected(br); setModal('delete'); }}
-              onToggle={handleToggle}
-              togglingId={togglingId}
-            />
-          ))}
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full border-collapse text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-4">Tên chi nhánh</th>
+                <th className="px-6 py-4">Địa chỉ / Liên hệ</th>
+                <th className="px-6 py-4">Giờ hoạt động</th>
+                <th className="px-6 py-4">Trạng thái</th>
+                <th className="px-6 py-4 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {branches.map((b) => (
+                <tr key={b._id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400 overflow-hidden">
+                        {b.image ? (
+                          <img src={b.image} alt={b.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <Buildings size={20} weight="thin" />
+                        )}
+                      </div>
+                      <div className="font-semibold text-slate-800">{b.name}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <div className="text-slate-700 font-medium line-clamp-1">{b.address}</div>
+                    {(b.phone || b.email) && (
+                      <div className="text-xs text-slate-400 mt-1 flex gap-2">
+                        {b.phone && <span>{b.phone}</span>}
+                        {b.phone && b.email && <span>·</span>}
+                        {b.email && <span>{b.email}</span>}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-3.5 whitespace-nowrap text-slate-500">
+                    {b.openingTime || b.closingTime ? `${b.openingTime} - ${b.closingTime}` : '-'}
+                  </td>
+                  <td className="px-6 py-3.5 whitespace-nowrap">
+                    <StatusBadge status={b.status} />
+                  </td>
+                  <td className="px-6 py-3.5 whitespace-nowrap text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => { setSelected(b); setCurrentView('detail'); }}
+                        title="Xem chi tiết"
+                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg !text-slate-400 hover:bg-slate-100 hover:!text-slate-700 transition-colors"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor">
+                          <path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.48c.35.79,8.82,19.58,27.65,38.41C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.35c18.83-18.83,27.3-37.62,27.65-38.41A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128a133.47,133.47,0,0,1-23.06,30.75C185.67,180.81,158.78,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => { setSelected(b); setModal('edit'); }}
+                        title="Chỉnh sửa"
+                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg !text-slate-400 hover:bg-blue-50 hover:!text-blue-600 transition-colors"
+                      >
+                        <PencilSimple size={15} />
+                      </button>
+                      <button
+                        onClick={() => { setSelected(b); setModal('delete'); }}
+                        title="Xóa"
+                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg !text-slate-400 hover:bg-red-50 hover:!text-red-500 transition-colors"
+                      >
+                        <Trash size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* ── Modals ── */}
-      {modal === 'create' && (
+      {/* ── Modals ── */}      {modal === 'create' && (
         <Modal title="Thêm chi nhánh mới" onClose={() => setModal(null)} wide>
           <BranchForm initial={EMPTY} onSave={handleCreate} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
