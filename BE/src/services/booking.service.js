@@ -152,7 +152,8 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   if (filters.bookingDate) {
     const d = filters.bookingDate instanceof Date ? filters.bookingDate : new Date(filters.bookingDate);
     const dateStr = d.toISOString().split('T')[0];
-    query.bookingDate = getDayBounds(dateStr);
+    const { gte, lte } = getDayBounds(dateStr);
+    query.bookingDate = { $gte: gte, $lte: lte };
   }
   return Booking.find(query)
     .populate('userId', 'name email phone')
