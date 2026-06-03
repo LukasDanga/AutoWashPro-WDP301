@@ -615,9 +615,9 @@ function ControlButton({
       aria-label={label}
       type="button"
       className={cn(
-        "flex size-8 items-center justify-center transition-all",
+        "flex size-8 items-center justify-center transition-all !text-slate-700 [&_svg]:!stroke-slate-700",
         "first:rounded-t-md last:rounded-b-md",
-        "hover:bg-accent dark:hover:bg-accent/40",
+        "hover:bg-slate-100 hover:!text-slate-900 hover:[&_svg]:!stroke-slate-900",
         "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
         "disabled:pointer-events-none disabled:opacity-50"
       )}
@@ -1000,11 +1000,11 @@ function mergeArcPaint(paint, hoverPaint) {
       baseValue === undefined
         ? hoverValue
         : [
-            "case",
-            ["boolean", ["feature-state", "hover"], false],
-            hoverValue,
-            baseValue,
-          ];
+          "case",
+          ["boolean", ["feature-state", "hover"], false],
+          hoverValue,
+          baseValue,
+        ];
   }
   return merged;
 }
