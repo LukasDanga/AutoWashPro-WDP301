@@ -35,11 +35,14 @@ exports.checkIn = async (bookingId, userId, userRole, data = {}) => {
     });
     await checkin.save({ session });
 
-    await Booking.findOneAndUpdate(
+    const updatedBooking = await Booking.findOneAndUpdate(
       { _id: bookingId, status: 'pending' },
       { status: 'in_progress' },
-      { session }
+      { new: true, session }
     );
+    if (!updatedBooking) {
+      throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
+    }
 
     await session.commitTransaction();
     return checkin;
