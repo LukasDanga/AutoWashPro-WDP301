@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AdminLayout from '@/components/admin/AdminLayout';
 import FeaturePlaceholder from '@/components/admin/FeaturePlaceholder';
 import BranchManagement from '@/components/admin/BranchManagement';
+import ManagerVouchers from '@/components/manager/ManagerVouchers';
 import UserManagement from '@/components/admin/UserManagement';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -101,12 +102,7 @@ export default function AdminRoutes() {
         />
         <Route
           path="rewards"
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.rewards.title}
-              description={ADMIN_PAGE_META.rewards.description}
-            />
-          }
+          element={<ManagerVouchers />}
         />
         <Route
           path="activity"

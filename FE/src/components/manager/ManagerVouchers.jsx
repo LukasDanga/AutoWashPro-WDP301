@@ -42,6 +42,15 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 /* ── voucher form modal ── */
 const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
 const EMPTY_VOUCHER = {
@@ -148,6 +157,37 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
               </select>
             </div>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Áp dụng cho hạng thành viên (để trống là áp dụng tất cả)</label>
+            <div className="flex flex-wrap gap-3 mt-1">
+              {[
+                { id: 'bronze', label: 'Đồng' },
+                { id: 'silver', label: 'Bạc' },
+                { id: 'gold', label: 'Vàng' },
+                { id: 'diamond', label: 'Kim Cương' }
+              ].map((tier) => {
+                const currentTiers = form.applicableTiers || [];
+                const isChecked = currentTiers.includes(tier.id);
+                return (
+                  <label key={tier.id} className="flex items-center gap-1.5 cursor-pointer text-sm text-slate-700">
+                    <input 
+                      type="checkbox" 
+                      checked={isChecked} 
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          set('applicableTiers', [...currentTiers, tier.id]);
+                        } else {
+                          set('applicableTiers', currentTiers.filter(t => t !== tier.id));
+                        }
+                      }} 
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
+                    />
+                    {tier.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày bắt đầu <span className="text-red-500">*</span></label>
@@ -231,7 +271,7 @@ export default function ManagerVouchers() {
       {/* toolbar */}
       <div className="flex items-center gap-3">
         <button onClick={fetch_} disabled={loading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-black hover:bg-slate-100 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
         <button id="create-voucher-btn" onClick={() => { setSelected(null); setModal('create'); }}
@@ -286,7 +326,7 @@ export default function ManagerVouchers() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">{v.remaining ?? v.quantity}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(v.startDate).toLocaleDateString('vi-VN')} – {new Date(v.endDate).toLocaleDateString('vi-VN')}
+                    {formatDate(v.startDate)} – {formatDate(v.endDate)}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive(v) ? 'bg-emerald-50 text-emerald-700' : isExpired(v) ? 'bg-slate-100 text-slate-400' : 'bg-rose-50 text-rose-600'}`}>
