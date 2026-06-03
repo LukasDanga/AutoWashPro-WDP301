@@ -16,7 +16,6 @@ exports.register = async ({ name, email, password, phone }) => {
   const tokens = generateTokens(user._id);
   user.refreshToken = tokens.refreshToken;
   await user.save();
-
   return { user, ...tokens };
 };
 
@@ -37,7 +36,6 @@ exports.login = async ({ identifier, password }) => {
   user.refreshToken = tokens.refreshToken;
   user.lastLogin = new Date();
   await user.save();
-
   return { user, ...tokens };
 };
 
@@ -51,14 +49,18 @@ exports.refreshToken = async (token) => {
     throw Object.assign(new Error('Invalid refresh token'), { statusCode: 401, code: 'INVALID_REFRESH_TOKEN' });
   }
 
-  const user = await User.findById(decoded.id).select('+refreshToken');
-  if (!user || user.refreshToken !== token) {
-    throw Object.assign(new Error('Refresh token has been revoked'), { statusCode: 401, code: 'INVALID_REFRESH_TOKEN' });
-  }
+  const tokens = generateTokens(decoded.id);
 
-  const tokens = generateTokens(user._id);
-  user.refreshToken = tokens.refreshToken;
-  await user.save();
+  // Atomic: update only if the refresh token matches
+  const user = await User.findOneAndUpdate(
+    { _id: decoded.id, refreshToken: token },
+    { refreshToken: tokens.refreshToken, lastLogin: new Date() },
+    { new: true }
+  );
+
+  if (!user) {
+    throw Object.assign(new Error('Refresh token has been revoked or is invalid'), { statusCode: 401, code: 'INVALID_REFRESH_TOKEN' });
+  }
 
   return tokens;
 };
@@ -77,7 +79,6 @@ exports.updateProfile = async (userId, updates) => {
   const allowed = ['name', 'phone', 'avatar', 'dateOfBirth'];
   const filtered = {};
   allowed.forEach((k) => { if (updates[k] !== undefined) filtered[k] = updates[k]; });
-
   const user = await User.findByIdAndUpdate(userId, filtered, { new: true, runValidators: true });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
   return user;
@@ -94,14 +95,12 @@ exports.changePassword = async (userId, { currentPassword, newPassword }) => {
   const tokens = generateTokens(user._id);
   user.refreshToken = tokens.refreshToken;
   await user.save();
-
   return tokens;
 };
 
 exports.createUser = async ({ name, email, password, phone, role }) => {
   const existing = await User.findOne({ email });
   if (existing) throw Object.assign(new Error('Email already registered'), { statusCode: 409, code: 'EMAIL_EXISTS' });
-
   const user = new User({ name, email, password, phone, role });
   await user.save();
   return user;

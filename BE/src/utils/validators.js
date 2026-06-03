@@ -1,4 +1,4 @@
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 
 const authValidators = {
   register: [
@@ -8,7 +8,7 @@ const authValidators = {
     body('phone').optional().trim(),
   ],
   login: [
-    body('identifier').trim().notEmpty().withMessage('Email or phone is required'),
+    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
     body('password').notEmpty().withMessage('Password is required'),
   ],
   changePassword: [
@@ -20,13 +20,14 @@ const authValidators = {
     body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('phone').optional().trim(),
-    body('role').notEmpty().withMessage('Role is required').isIn(['admin', 'manager', 'staff']),
+    body('role').notEmpty().withMessage('Role is required').isIn(['admin', 'manager']),
+    body('branchId').optional().isMongoId().withMessage('Invalid branch ID'),
   ],
   updateUser: [
     param('id').isMongoId().withMessage('Invalid user ID'),
     body('name').optional().trim().isLength({ max: 100 }),
     body('phone').optional().trim(),
-    body('role').optional().isIn(['admin', 'manager', 'staff']),
+    body('role').optional().isIn(['admin', 'manager']),
     body('status').optional().isIn(['active', 'inactive', 'suspended']),
   ],
 };
@@ -61,6 +62,7 @@ const branchValidators = {
     body('closingTime').optional().trim(),
     body('status').optional().isIn(['active', 'inactive']),
     body('image').optional().trim(),
+    body('location.coordinates').optional().isArray().withMessage('Coordinates must be an array [longitude, latitude]'),
   ],
   update: [
     param('id').isMongoId().withMessage('Invalid branch ID'),
@@ -72,6 +74,7 @@ const branchValidators = {
     body('closingTime').optional().trim(),
     body('status').optional().isIn(['active', 'inactive']),
     body('image').optional().trim(),
+    body('location.coordinates').optional().isArray(),
   ],
   updateStatus: [
     param('id').isMongoId().withMessage('Invalid branch ID'),
@@ -79,26 +82,156 @@ const branchValidators = {
   ],
 };
 
-const bookingValidators = {
+const packageValidators = {
   create: [
-    body('branchId').trim().notEmpty().withMessage('Branch ID is required'),
-    body('branchName').trim().notEmpty().withMessage('Branch name is required').isLength({ max: 200 }),
-    body('branchAddress').trim().notEmpty().withMessage('Branch address is required').isLength({ max: 500 }),
-    body('vehicleId').trim().notEmpty().withMessage('Vehicle ID is required'),
-    body('vehicleName').trim().notEmpty().withMessage('Vehicle name is required').isLength({ max: 200 }),
-    body('vehiclePlate').trim().notEmpty().withMessage('Vehicle plate is required').isLength({ max: 30 }),
-    body('vehicleType').trim().notEmpty().withMessage('Vehicle type is required').isLength({ max: 30 }),
-    body('serviceId').trim().notEmpty().withMessage('Service ID is required'),
-    body('serviceName').trim().notEmpty().withMessage('Service name is required').isLength({ max: 200 }),
-    body('serviceDuration').optional().trim().isLength({ max: 50 }),
-    body('servicePrice').isInt({ min: 0 }).withMessage('Service price must be a positive integer'),
-    body('bookingDate').isISO8601().withMessage('Booking date is required and must be valid'),
-    body('timeSlot').trim().notEmpty().withMessage('Time slot is required').isLength({ max: 50 }),
-    body('couponCode').optional().trim().isLength({ max: 50 }),
-    body('discountAmount').optional().isInt({ min: 0 }),
-    body('totalAmount').isInt({ min: 0 }).withMessage('Total amount must be a positive integer'),
-    body('notes').optional().trim().isLength({ max: 500 }),
+    body('name').trim().notEmpty().withMessage('Package name is required').isLength({ max: 200 }),
+    body('description').optional().trim().isLength({ max: 1000 }),
+    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+    body('duration').isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
+    body('image').optional().trim(),
+    body('status').optional().isIn(['active', 'inactive']),
+    body('category').optional().isIn(['external', 'internal', 'full']),
+    body('vehicleTypes').optional().isArray(),
+  ],
+  update: [
+    param('id').isMongoId().withMessage('Invalid package ID'),
+    body('name').optional().trim().isLength({ max: 200 }),
+    body('description').optional().trim().isLength({ max: 1000 }),
+    body('price').optional().isFloat({ min: 0 }),
+    body('duration').optional().isInt({ min: 1 }),
+    body('image').optional().trim(),
+    body('status').optional().isIn(['active', 'inactive']),
+    body('category').optional().isIn(['external', 'internal', 'full']),
+    body('vehicleTypes').optional().isArray(),
   ],
 };
 
-module.exports = { authValidators, vehicleValidators, branchValidators, bookingValidators };
+const bookingValidators = {
+  create: [
+    body('branchId').isMongoId().withMessage('Invalid branch ID'),
+    body('packageId').isMongoId().withMessage('Invalid package ID'),
+    body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
+    body('bookingDate').isISO8601().withMessage('Invalid date format'),
+    body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
+    body('note').optional().trim().isLength({ max: 500 }),
+    body('voucherCode').optional().trim().isLength({ max: 50 }),
+    body('discountAmount').optional().isFloat({ min: 0 }),
+    body('finalPrice').optional().isFloat({ min: 0 }),
+  ],
+  update: [
+    param('id').isMongoId().withMessage('Invalid booking ID'),
+    body('bookingDate').optional().isISO8601(),
+    body('startTime').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/),
+    body('note').optional().trim().isLength({ max: 500 }),
+    body('packageId').optional().isMongoId().withMessage('Invalid package ID'),
+  ],
+  updateStatus: [
+    param('id').isMongoId().withMessage('Invalid booking ID'),
+    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'in_progress', 'completed', 'cancelled']),
+  ],
+  slots: [
+    query('branchId').isMongoId().withMessage('Invalid branch ID'),
+    query('date').isISO8601().withMessage('Invalid date format'),
+    query('packageId').isMongoId().withMessage('Invalid package ID'),
+  ],
+  cancel: [
+    param('id').isMongoId().withMessage('Invalid booking ID'),
+    body('cancellationReason').optional().trim().isLength({ max: 500 }),
+  ],
+  getByBookingId: [
+    param('bookingId').isMongoId().withMessage('Invalid booking ID'),
+  ],
+};
+
+const paymentValidators = {
+  create: [
+    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
+  ],
+  confirm: [
+    body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
+    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
+    body('gatewayTransactionId').optional().trim(),
+  ],
+  refund: [
+    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+  ],
+  callback: [
+    body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
+    body('gatewayTransactionId').optional().trim(),
+    body('success').isBoolean().withMessage('Success flag is required'),
+  ],
+};
+
+const voucherValidators = {
+  create: [
+    body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 200 }),
+    body('description').optional().trim().isLength({ max: 500 }),
+    body('type').notEmpty().withMessage('Type is required').isIn(['percentage', 'fixed']),
+    body('value').isFloat({ min: 0 }).withMessage('Value must be a positive number'),
+    body('maxDiscount').optional().isFloat({ min: 0 }),
+    body('minOrder').optional().isFloat({ min: 0 }),
+    body('quantity').isInt({ min: 0 }).withMessage('Quantity must be at least 0'),
+    body('maxUsagePerUser').optional().isInt({ min: 1 }),
+    body('startDate').isISO8601().withMessage('Invalid start date'),
+    body('endDate').isISO8601().withMessage('Invalid end date'),
+    body('applicablePackages').optional().isArray(),
+    body('applicableBranches').optional().isArray(),
+    body('applicableToAllPackages').optional().isBoolean(),
+    body('applicableToAllBranches').optional().isBoolean(),
+    body('status').optional().isIn(['active', 'inactive']),
+  ],
+  update: [
+    param('id').isMongoId().withMessage('Invalid voucher ID'),
+    body('name').optional().trim().isLength({ max: 200 }),
+    body('description').optional().trim().isLength({ max: 500 }),
+    body('type').optional().isIn(['percentage', 'fixed']),
+    body('value').optional().isFloat({ min: 0 }),
+    body('maxDiscount').optional().isFloat({ min: 0 }),
+    body('minOrder').optional().isFloat({ min: 0 }),
+    body('quantity').optional().isInt({ min: 0 }),
+    body('maxUsagePerUser').optional().isInt({ min: 1 }),
+    body('startDate').optional().isISO8601(),
+    body('endDate').optional().isISO8601(),
+    body('status').optional().isIn(['active', 'inactive']),
+  ],
+  validate: [
+    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('bookingData').isObject().withMessage('Booking data is required'),
+  ],
+  redeem: [
+    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('bookingId').optional().isMongoId().withMessage('Invalid booking ID'),
+    body('discountAmount').optional().isFloat({ min: 0 }),
+  ],
+  reserve: [
+    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('bookingId').isMongoId().withMessage('Booking ID is required'),
+    body('discountAmount').optional().isFloat({ min: 0 }),
+  ],
+  rollback: [
+    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('bookingId').isMongoId().withMessage('Booking ID is required'),
+  ],
+};
+
+const checkinValidators = {
+  checkIn: [
+    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+  ],
+  updateStatus: [
+    param('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    body('status').notEmpty().withMessage('Status is required').isIn(['in_progress', 'completed']),
+    body('note').optional().trim().isLength({ max: 500 }),
+    body('rating').optional().isInt({ min: 1, max: 5 }),
+    body('feedback').optional().trim().isLength({ max: 1000 }),
+  ],
+};
+
+const notificationValidators = {
+  markRead: [
+    param('id').isMongoId().withMessage('Invalid notification ID'),
+  ],
+};
+
+module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, voucherValidators, checkinValidators, notificationValidators };
