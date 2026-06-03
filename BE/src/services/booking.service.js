@@ -112,12 +112,21 @@ exports.createBooking = async (data) => {
       throw Object.assign(new Error('Time slot not available'), { statusCode: 409, code: 'SLOT_UNAVAILABLE' });
     }
 
+    let computedDiscountAmount = 0;
+    let computedFinalPrice = pkg.price;
+
+    if (voucherCode) {
+      const voucherResult = await voucherService.validateVoucher(voucherCode, { packageId, branchId }, userId);
+      computedDiscountAmount = voucherResult.discountAmount;
+      computedFinalPrice = voucherResult.finalAmount;
+    }
+
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
       bookingDate: bd, startTime, endTime, note,
       voucherCode: voucherCode || undefined,
-      discountAmount: discountAmount || 0,
-      finalPrice: finalPrice || pkg.price,
+      discountAmount: computedDiscountAmount,
+      finalPrice: computedFinalPrice,
     });
     await booking.save({ session });
 
