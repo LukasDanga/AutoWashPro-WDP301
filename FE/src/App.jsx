@@ -1,27 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import BookingFlow from './components/BookingFlow.jsx';
-import {
-  clearSession as clearStoredSession,
-  getApiBaseUrl,
-  persistSession,
-  readApiError,
-  storageKeys,
-} from './lib/authStorage.js';
-
-const ADMIN_QUICK_LOGIN = {
-  identifier: 'admin@washpro.vn',
-  password: 'Admin123!',
-};
-
-const MANAGER_QUICK_LOGIN = {
-  identifier: 'manager@washpro.vn',
-  password: 'Manager123!',
-};
-
-function normalizePlate(value) {
-  return value.replace(/[^0-9A-Za-z.-]/g, '').toUpperCase();
-}
+import AuthScreen from './components/AuthScreen.jsx';
 
 export default function App() {
   const navigate = useNavigate();
@@ -31,25 +11,8 @@ export default function App() {
   const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem(storageKeys.refreshToken) || '');
   const [authLoading, setAuthLoading] = useState(Boolean(token));
   const [authError, setAuthError] = useState('');
-  const [authMode, setAuthMode] = useState('login');
   const [user, setUser] = useState(null);
   const [vehicles, setVehicles] = useState([]);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [registerLoading, setRegisterLoading] = useState(false);
-  const [loginPhone, setLoginPhone] = useState('');
-  const [loginPass, setLoginPass] = useState('');
-  const [showLoginPass, setShowLoginPass] = useState(false);
-  const [regName, setRegName] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPass, setRegPass] = useState('');
-  const [showRegPass, setShowRegPass] = useState(false);
-  const [regPlate, setRegPlate] = useState('59F2-999.99');
-  const [regVehicleType, setRegVehicleType] = useState('motorcycle');
-  const [regBrand, setRegBrand] = useState('Honda');
-  const [regModel, setRegModel] = useState('SH 150i');
-  const [regColor, setRegColor] = useState('Đen');
-  const [statusMessage, setStatusMessage] = useState('');
 
   async function loadSession(accessToken) {
     if (!accessToken) return;
@@ -133,7 +96,7 @@ export default function App() {
     });
   }, []);
 
-  async function loginWithCredentials(identifier, password) {
+  async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -148,133 +111,54 @@ export default function App() {
     const data = payload?.data || payload;
     applySession(data?.accessToken, data?.refreshToken);
     const profile = await loadSession(data?.accessToken);
+    
+    if (expectedRole && profile?.role !== expectedRole) {
+      throw new Error(`Tài khoản không có quyền ${expectedRole === 'admin' ? 'quản trị' : 'quản lý chi nhánh'}.`);
+    }
+    
+    if (profile?.role === 'admin' || profile?.role === 'manager') {
+      redirectByRole(profile);
+    }
+    
     return profile;
   }
 
-  async function handleLogin(event) {
-    event.preventDefault();
-    setLoginLoading(true);
-    setAuthError('');
-    setStatusMessage('');
+  async function registerUser(data) {
+    const registerResponse = await fetch(`${apiBase}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        password: data.password,
+      }),
+    });
 
-    try {
-      const profile = await loginWithCredentials(loginPhone, loginPass);
-      if (profile?.role === 'admin') {
-        redirectByRole(profile);
-        return;
-      }
-      setStatusMessage('Đăng nhập thành công.');
-    } catch (error) {
-      setAuthError(error.message || 'Đăng nhập thất bại');
-    } finally {
-      setLoginLoading(false);
+    if (!registerResponse.ok) {
+      throw new Error(await readApiError(registerResponse));
     }
-  }
 
-  async function handleQuickAdminLogin() {
-    setLoginPhone(ADMIN_QUICK_LOGIN.identifier);
-    setLoginPass(ADMIN_QUICK_LOGIN.password);
-    setLoginLoading(true);
-    setAuthError('');
-    setStatusMessage('');
+    const registerPayload = await registerResponse.json();
+    const registerData = registerPayload?.data || registerPayload;
+    applySession(registerData?.accessToken, registerData?.refreshToken);
 
-    try {
-      const profile = await loginWithCredentials(
-        ADMIN_QUICK_LOGIN.identifier,
-        ADMIN_QUICK_LOGIN.password,
-      );
-      if (profile?.role === 'admin') {
-        redirectByRole(profile);
-        return;
-      }
-      setAuthError('Tài khoản không có quyền quản trị.');
-    } catch (error) {
-      setAuthError(error.message || 'Đăng nhập admin thất bại. Chạy seed backend trước.');
-    } finally {
-      setLoginLoading(false);
-    }
-  }
-
-  async function handleQuickManagerLogin() {
-    setLoginPhone(MANAGER_QUICK_LOGIN.identifier);
-    setLoginPass(MANAGER_QUICK_LOGIN.password);
-    setLoginLoading(true);
-    setAuthError('');
-    setStatusMessage('');
-
-    try {
-      const profile = await loginWithCredentials(
-        MANAGER_QUICK_LOGIN.identifier,
-        MANAGER_QUICK_LOGIN.password,
-      );
-      if (profile?.role === 'manager') {
-        redirectByRole(profile);
-        return;
-      }
-      setAuthError('Tài khoản không có quyền quản lý chi nhánh.');
-    } catch (error) {
-      setAuthError(error.message || 'Đăng nhập manager thất bại. Chạy seed-manager.js trước.');
-    } finally {
-      setLoginLoading(false);
-    }
-  }
-
-  async function handleRegister(event) {
-    event.preventDefault();
-    setRegisterLoading(true);
-    setAuthError('');
-    setStatusMessage('');
-
-    try {
-      const registerResponse = await fetch(`${apiBase}/auth/register`, {
+    if (data.vehicle?.licensePlate && registerData?.accessToken) {
+      const vehicleResponse = await fetch(`${apiBase}/vehicles`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: regName,
-          email: regEmail,
-          phone: regPhone,
-          password: regPass,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${registerData.accessToken}`,
+        },
+        body: JSON.stringify(data.vehicle),
       });
 
-      if (!registerResponse.ok) {
-        throw new Error(await readApiError(registerResponse));
+      if (!vehicleResponse.ok) {
+        throw new Error(await readApiError(vehicleResponse));
       }
-
-      const registerPayload = await registerResponse.json();
-      const registerData = registerPayload?.data || registerPayload;
-      applySession(registerData?.accessToken, registerData?.refreshToken);
-
-      const normalizedPlate = normalizePlate(regPlate);
-      if (normalizedPlate && registerData?.accessToken) {
-        const vehicleResponse = await fetch(`${apiBase}/vehicles`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${registerData.accessToken}`,
-          },
-          body: JSON.stringify({
-            licensePlate: normalizedPlate,
-            vehicleType: regVehicleType,
-            brand: regBrand,
-            model: regModel,
-            color: regColor,
-            isDefault: true,
-          }),
-        });
-
-        if (!vehicleResponse.ok) {
-          throw new Error(await readApiError(vehicleResponse));
-        }
-      }
-
-      await loadSession(registerData?.accessToken);
-      setStatusMessage('Đăng ký thành công, đang mở luồng đặt lịch.');
-    } catch (error) {
-      setAuthError(error.message || 'Đăng ký thất bại');
-    } finally {
-      setRegisterLoading(false);
     }
+
+    await loadSession(registerData?.accessToken);
   }
 
   async function handleLogout() {
@@ -293,179 +177,23 @@ export default function App() {
   }
 
   if (authLoading) {
-    return <div className="aw-auth-shell"><div className="aw-auth-card aw-auth-loading">Đang kiểm tra phiên đăng nhập...</div></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+          <p className="text-sm font-semibold text-slate-500">Đang kiểm tra phiên đăng nhập...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!token || !user) {
     return (
-      <div className="aw-auth-shell">
-        <div className="aw-auth-backdrop aw-auth-backdrop-left" />
-        <div className="aw-auth-backdrop aw-auth-backdrop-right" />
-
-        <section className="aw-auth-card">
-          <div className="aw-auth-brand">
-            <div className="aw-auth-logo">💧</div>
-            <div>
-              <div className="aw-auth-title-row">
-                <h1>AUTOWASH PORTAL WEB</h1>
-                <span>CLIENT HUB</span>
-              </div>
-              <p>Đăng nhập hoặc đăng ký trước, sau đó mới vào luồng đặt lịch trực tuyến.</p>
-            </div>
-          </div>
-
-          <div className="aw-auth-tabs">
-            <button type="button" className={authMode === 'login' ? 'aw-auth-tab active' : 'aw-auth-tab'} onClick={() => setAuthMode('login')}>Đăng nhập</button>
-            <button type="button" className={authMode === 'register' ? 'aw-auth-tab active' : 'aw-auth-tab'} onClick={() => setAuthMode('register')}>Đăng ký</button>
-          </div>
-
-          {location.state?.adminAuthError ? (
-            <div className="aw-auth-message error">{location.state.adminAuthError}</div>
-          ) : null}
-          {authError ? <div className="aw-auth-message error">{authError}</div> : null}
-          {statusMessage ? <div className="aw-auth-message success">{statusMessage}</div> : null}
-
-          {authMode === 'login' ? (
-            <form className="aw-auth-form" onSubmit={handleLogin}>
-              <label>
-                Số điện thoại hoặc email
-                <input value={loginPhone} onChange={(event) => setLoginPhone(event.target.value)} placeholder="0901234567 hoặc user@mail.com" />
-              </label>
-
-              <label>
-                Mật khẩu
-                <div className="aw-auth-password">
-                  <input type={showLoginPass ? 'text' : 'password'} value={loginPass} onChange={(event) => setLoginPass(event.target.value)} placeholder="Nhập mật khẩu" />
-                  <button type="button" onClick={() => setShowLoginPass((value) => !value)}>{showLoginPass ? 'Ẩn' : 'Hiện'}</button>
-                </div>
-              </label>
-
-              <button className="aw-auth-primary" type="submit" disabled={loginLoading}>
-                {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}
-              </button>
-
-                <div className="aw-auth-quick" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-                  <p className="aw-auth-quick-label">Đăng nhập nhanh (kiểm thử)</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="aw-auth-quick-btn"
-                      disabled={loginLoading}
-                      onClick={() => {
-                        setLoginPhone('dong@washpro.vn');
-                        setLoginPass('Password123!');
-                        handleLogin({ preventDefault: () => {} });
-                      }}
-                      style={{ background: '#cd7f32', color: '#fff', border: 'none' }}
-                    >
-                      {loginLoading ? '...' : '🥉 Khách Đồng'}
-                    </button>
-                    <button
-                      type="button"
-                      className="aw-auth-quick-btn"
-                      disabled={loginLoading}
-                      onClick={() => {
-                        setLoginPhone('kimcuong@washpro.vn');
-                        setLoginPass('Password123!');
-                        handleLogin({ preventDefault: () => {} });
-                      }}
-                      style={{ background: '#b9f2ff', color: '#000', border: 'none' }}
-                    >
-                      {loginLoading ? '...' : '💎 Khách KC'}
-                    </button>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="aw-auth-quick-btn"
-                      disabled={loginLoading}
-                      onClick={handleQuickManagerLogin}
-                    >
-                      {loginLoading ? '...' : '🏪 Manager'}
-                    </button>
-                    <button
-                      type="button"
-                      className="aw-auth-quick-btn"
-                      disabled={loginLoading}
-                      onClick={handleQuickAdminLogin}
-                    >
-                      {loginLoading ? '...' : '🔑 Admin'}
-                    </button>
-                  </div>
-                </div>
-            </form>
-          ) : (
-            <form className="aw-auth-form" onSubmit={handleRegister}>
-              <div className="aw-auth-two-col">
-                <label>
-                  Tên thành viên
-                  <input value={regName} onChange={(event) => setRegName(event.target.value)} placeholder="Bảo Khang" />
-                </label>
-
-                <label>
-                  Số điện thoại
-                  <input value={regPhone} onChange={(event) => setRegPhone(event.target.value)} placeholder="0901234567" />
-                </label>
-              </div>
-
-              <label>
-                Email
-                <input value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="khachhang@mail.com" />
-              </label>
-
-              <label>
-                Mật khẩu
-                <div className="aw-auth-password">
-                  <input type={showRegPass ? 'text' : 'password'} value={regPass} onChange={(event) => setRegPass(event.target.value)} placeholder="Nhập mật khẩu" />
-                  <button type="button" onClick={() => setShowRegPass((value) => !value)}>{showRegPass ? 'Ẩn' : 'Hiện'}</button>
-                </div>
-              </label>
-
-              <div className="aw-auth-vehicle-box">
-                <div className="aw-auth-vehicle-title">Tạo xe mặc định sau khi đăng ký</div>
-                <div className="aw-auth-two-col">
-                  <label>
-                    Biển số
-                    <input value={regPlate} onChange={(event) => setRegPlate(normalizePlate(event.target.value))} placeholder="59F2-999.99" />
-                  </label>
-
-                  <label>
-                    Hãng xe
-                    <input value={regBrand} onChange={(event) => setRegBrand(event.target.value)} placeholder="Honda" />
-                  </label>
-                </div>
-
-                <div className="aw-auth-two-col">
-                  <label>
-                    Dòng xe
-                    <input value={regModel} onChange={(event) => setRegModel(event.target.value)} placeholder="SH 150i" />
-                  </label>
-
-                  <label>
-                    Màu xe
-                    <input value={regColor} onChange={(event) => setRegColor(event.target.value)} placeholder="Đen" />
-                  </label>
-                </div>
-
-                <label>
-                  Phân loại xe
-                  <select value={regVehicleType} onChange={(event) => setRegVehicleType(event.target.value)}>
-                    <option value="motorcycle">Xe máy</option>
-                    <option value="sedan">Sedan</option>
-                    <option value="suv">SUV</option>
-                    <option value="pickup">Pickup</option>
-                    <option value="van">Van</option>
-                  </select>
-                </label>
-              </div>
-
-              <button className="aw-auth-primary" type="submit" disabled={registerLoading}>
-                {registerLoading ? 'ĐANG ĐĂNG KÝ...' : 'ĐĂNG KÝ VÀ VÀO LUỒNG ĐẶT LỊCH'}
-              </button>
-            </form>
-          )}
-        </section>
-      </div>
+      <AuthScreen 
+        authLoading={authLoading}
+        onLogin={loginWithCredentials}
+        onRegister={registerUser}
+      />
     );
   }
 
