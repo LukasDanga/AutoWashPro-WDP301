@@ -201,9 +201,8 @@ exports.updateBooking = async (id, updates, userRole) => {
       const endTime = computeEndTime(startT, pkg.duration);
       filtered.endTime = endTime;
 
-      const dateStr = (filtered.bookingDate || booking.bookingDate) instanceof Date
-        ? filtered.bookingDate.toISOString().split('T')[0]
-        : filtered.bookingDate;
+      const dateObj = filtered.bookingDate ? new Date(filtered.bookingDate) : booking.bookingDate;
+      const dateStr = dateObj.toISOString().split('T')[0];
       const bid = filtered.branchId || booking.branchId;
       const { gte, lte } = getDayBounds(dateStr);
 
