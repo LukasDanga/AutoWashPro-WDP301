@@ -69,10 +69,23 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
   }
+  
   .maplibregl-popup-content {
     @apply bg-transparent! shadow-none! p-0! rounded-none!;
   }
+  
   .maplibregl-popup-tip {
     @apply hidden!;
+  }
+  
+  /* Fix map controls blending into background due to global resets */
+  .mapboxgl-ctrl-group button,
+  .maplibregl-ctrl-group button {
+    color: #334155 !important;
+  }
+  
+  .mapboxgl-ctrl-group button svg,
+  .maplibregl-ctrl-group button svg {
+    fill: #334155 !important;
   }
 }

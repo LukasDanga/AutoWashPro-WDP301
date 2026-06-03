@@ -184,86 +184,135 @@ export default function ManagerBranch({ user }) {
   );
 
   return (
-    <div className="space-y-5">
-      <p className="text-sm text-slate-500">Danh sách chi nhánh bạn có quyền quản lý.</p>
+    <div className="space-y-10">
+      <div>
+        <p className="text-sm text-slate-500">Thông tin chi tiết và bản đồ định vị của các chi nhánh bạn đang quản lý.</p>
+      </div>
 
-      {branches.length > 0 && (
-        <div className="h-[400px] w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm relative z-0">
-          <Map
-            viewport={{ center: branches[0]?.location?.coordinates || [106.700981, 10.776889], zoom: 12 }}
-            className="h-full w-full"
-          >
-            <MapControls position="bottom-right" showZoom showCompass showLocate />
-            {branches.map((b) => {
-              if (!b.location?.coordinates) return null;
-              return (
-                <MapMarker
-                  key={`marker-${b._id}`}
-                  longitude={b.location.coordinates[0]}
-                  latitude={b.location.coordinates[1]}
-                >
-                  <MarkerContent />
-                  <MarkerPopup>
-                    <div className="space-y-1 p-1">
-                      <h4 className="font-semibold text-slate-800 text-sm">{b.name}</h4>
-                      <p className="text-xs text-slate-500">{b.address}</p>
+      {branches.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 py-20 text-slate-400">
+          <Buildings size={48} weight="duotone" className="mb-4 text-slate-300" />
+          <p>Bạn chưa được phân công quản lý chi nhánh nào.</p>
+        </div>
+      ) : (
+        <div className="space-y-16">
+          {branches.map((b) => {
+            const active = b.status === 'active';
+            const toggling = togglingId === b._id;
+
+            return (
+              <div key={b._id} className="flex flex-col gap-6">
+                {/* ── Top: Title & Status ── */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 overflow-hidden shadow-sm shrink-0">
+                      {b.image ? (
+                        <img src={b.image} alt={b.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <Buildings size={32} weight="duotone" />
+                      )}
                     </div>
-                  </MarkerPopup>
-                </MapMarker>
-              );
-            })}
-          </Map>
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                        {b.name}
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${active ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+                          <div className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          {active ? 'Hoạt động' : 'Ngừng hoạt động'}
+                        </span>
+                      </h2>
+                      <p className="text-sm text-slate-500 mt-1">Chi tiết hoạt động</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggle(b)}
+                      disabled={toggling}
+                      className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold !text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm disabled:opacity-50 transition-colors"
+                    >
+                      {toggling ? <Spinner size={14} /> : active ? <ToggleRight size={16} className="text-emerald-500" /> : <ToggleLeft size={16} className="text-slate-400" />}
+                      {active ? 'Tắt hoạt động' : 'Bật hoạt động'}
+                    </button>
+                    <button
+                      onClick={() => setEditing(b)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold !text-blue-700 hover:bg-blue-100 transition-colors"
+                    >
+                      <PencilSimple size={16} /> Cập nhật
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Middle: Map ── */}
+                <div className="h-[400px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm relative z-0">
+                  <Map
+                    viewport={{ center: b.location?.coordinates || [106.700981, 10.776889], zoom: 15 }}
+                    className="h-full w-full"
+                  >
+                    <MapControls position="bottom-right" showZoom showCompass showLocate />
+                    <MapMarker
+                      longitude={b.location?.coordinates?.[0] || 106.700981}
+                      latitude={b.location?.coordinates?.[1] || 10.776889}
+                    >
+                      <MarkerContent />
+                      <MarkerPopup>
+                        <div className="space-y-1 p-1">
+                          <h4 className="font-semibold text-slate-800 text-sm">{b.name}</h4>
+                          <p className="text-xs text-slate-500">{b.address}</p>
+                        </div>
+                      </MarkerPopup>
+                    </MapMarker>
+                  </Map>
+                </div>
+
+                {/* ── Bottom: Information Cards ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                      <MapPin size={20} weight="fill" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Địa chỉ</p>
+                      <p className="text-sm font-medium text-slate-700 leading-snug">{b.address || 'Chưa cập nhật'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                      <Phone size={20} weight="fill" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Điện thoại</p>
+                      <p className="text-sm font-medium text-slate-700">{b.phone || 'Chưa cập nhật'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                      <Envelope size={20} weight="fill" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Email liên hệ</p>
+                      <p className="text-sm font-medium text-slate-700 break-all">{b.email || 'Chưa cập nhật'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                      <Clock size={20} weight="fill" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Giờ mở cửa</p>
+                      <p className="text-sm font-medium text-slate-700">
+                        {b.openingTime && b.closingTime ? `${b.openingTime} – ${b.closingTime}` : 'Chưa cập nhật'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {branches.map((b) => {
-          const active = b.status === 'active';
-          const toggling = togglingId === b._id;
-          return (
-            <article key={b._id} className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-              {/* image */}
-              <div className="relative h-32 bg-slate-50">
-                {b.image ? (
-                  <img src={b.image} alt={b.name} className="h-full w-full object-cover"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Buildings size={44} weight="thin" className="text-slate-300" />
-                  </div>
-                )}
-                <div className="absolute left-3 top-3">
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'}`}>
-                    {active ? <CheckCircle size={11} weight="fill" /> : <XCircle size={11} weight="fill" />}
-                    {active ? 'Hoạt động' : 'Ngừng'}
-                  </span>
-                </div>
-              </div>
-              {/* body */}
-              <div className="flex flex-1 flex-col gap-3 p-4">
-                <h3 className="text-sm font-semibold text-slate-800 line-clamp-1">{b.name}</h3>
-                <ul className="space-y-1.5 text-xs text-slate-500">
-                  <li className="flex items-start gap-2"><MapPin size={13} className="mt-0.5 shrink-0 text-blue-400" /><span className="line-clamp-2">{b.address}</span></li>
-                  {b.phone && <li className="flex items-center gap-2"><Phone size={13} className="shrink-0 text-blue-400" />{b.phone}</li>}
-                  {b.email && <li className="flex items-center gap-2"><Envelope size={13} className="shrink-0 text-blue-400" /><span className="truncate">{b.email}</span></li>}
-                  <li className="flex items-center gap-2"><Clock size={13} className="shrink-0 text-blue-400" />{b.openingTime} – {b.closingTime}</li>
-                </ul>
-                <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3">
-                  <button onClick={() => handleToggle(b)} disabled={toggling}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium !text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors">
-                    {toggling ? <Spinner size={12} /> : active ? <ToggleRight size={15} className="text-emerald-500" /> : <ToggleLeft size={15} className="text-slate-400" />}
-                    {active ? 'Đang mở' : 'Đã tắt'}
-                  </button>
-                  <button id={`edit-branch-${b._id}`} onClick={() => setEditing(b)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg !text-slate-400 hover:bg-blue-50 hover:!text-blue-600 transition-colors">
-                    <PencilSimple size={14} />
-                  </button>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
 
       {editing && (
         <EditModal branch={editing} onSave={handleSave} onClose={() => setEditing(null)} saving={saving} />

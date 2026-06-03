@@ -271,7 +271,7 @@ export default function ManagerVouchers() {
       {/* toolbar */}
       <div className="flex items-center gap-3">
         <button onClick={fetch_} disabled={loading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-black hover:bg-slate-100 disabled:opacity-50 transition-colors">
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
         <button id="create-voucher-btn" onClick={() => { setSelected(null); setModal('create'); }}
