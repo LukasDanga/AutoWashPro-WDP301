@@ -7,10 +7,10 @@ const voucherController = require('../controllers/voucher.controller');
 const { ROLES } = require('../config/permissions');
 
 router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherValidators.create, validate, voucherController.createVoucher);
-router.get('/', authenticate, voucherController.getAllVouchers);
+router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherController.getAllVouchers);
 router.get('/me', authenticate, voucherController.getUserVouchers);
 router.get('/code/:code', authenticate, voucherController.getVoucherByCode);
-router.get('/usage/:id', authenticate, voucherController.getVoucherUsage);
+router.get('/usage/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherController.getVoucherUsage);
 router.get('/:id', authenticate, voucherController.getVoucherById);
 router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherValidators.update, validate, voucherController.updateVoucher);
 router.delete('/:id', authenticate, authorize(ROLES.ADMIN), voucherController.deleteVoucher);
