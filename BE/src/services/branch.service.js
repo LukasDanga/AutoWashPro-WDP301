@@ -11,7 +11,7 @@ exports.createBranch = async (data) => {
   return branch;
 };
 
-exports.getAllBranches = async (filters = {}) => {
+exports.getAllBranches = async (filters = {}, user) => {
   const query = {};
   if (filters.status) query.status = filters.status;
   if (filters.search) {
@@ -20,6 +20,15 @@ exports.getAllBranches = async (filters = {}) => {
       { address: { $regex: filters.search, $options: 'i' } },
     ];
   }
+
+  if (user) {
+    if (user.role === 'manager') {
+      query.managerId = user.id;
+    } else if (user.role === 'customer') {
+      query.status = 'active';
+    }
+  }
+
   return Branch.find(query).sort({ createdAt: -1 });
 };
 

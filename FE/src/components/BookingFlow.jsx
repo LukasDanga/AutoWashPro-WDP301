@@ -11,18 +11,7 @@ const sidebarItems = [
   { id: 'profile', label: 'Hồ sơ cá nhân', hint: 'Chỉnh sửa tài khoản', icon: '👤' },
 ];
 
-const branches = [
-  {
-    id: 'q5',
-    name: 'AutoWash Quận 5',
-    address: '188 Nguyễn Văn Cừ, Quận 5, TP. Hồ Chí Minh',
-  },
-  {
-    id: 'binh-thanh',
-    name: 'AutoWash Bình Thạnh',
-    address: '345 Điện Biên Phủ, Quận Bình Thạnh, TP. Hồ Chí Minh',
-  },
-];
+// branches will be fetched from API
 
 const vehicles = [
   { id: 'sh150i', name: 'Honda SH 150i', plate: '59F2-999.99', type: 'Xe máy', points: '2.400 điểm' },
@@ -133,7 +122,8 @@ function buildBookingDates() {
 
 export default function BookingFlow({ user, vehicles: userVehicles = [], onLogout, apiBase, token }) {
   const bookingDates = useMemo(() => buildBookingDates(), []);
-  const [selectedBranch, setSelectedBranch] = useState(branches[0].id);
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
   const vehicleList = userVehicles;
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleList[0]?.id || vehicleList[0]?._id || vehicleList[0]?.licensePlate || '');
   const [selectedService, setSelectedService] = useState(services[0].id);
@@ -147,6 +137,27 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [bookingCode, setBookingCode] = useState('');
   const [activeNav, setActiveNav] = useState('booking');
   const [currentUser, setCurrentUser] = useState(user);
+
+  useEffect(() => {
+    async function fetchBranches() {
+      try {
+        const res = await fetch(`${apiBase}/branches`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const payload = await res.json();
+        const data = payload?.data || payload;
+        const mappedBranches = (Array.isArray(data) ? data : []).map(b => ({
+          ...b,
+          id: b._id || b.id
+        }));
+        setBranches(mappedBranches);
+        if (mappedBranches.length > 0) {
+          setSelectedBranch(mappedBranches[0].id);
+        }
+      } catch (e) { console.error('Failed to load branches', e); }
+    }
+    if (token) fetchBranches();
+  }, [apiBase, token]);
 
   const refreshUser = async () => {
     try {
@@ -164,7 +175,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
     }
   }, [selectedVehicle, vehicleList]);
 
-  const branch = branches.find((item) => item.id === selectedBranch) || branches[0];
+  const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
   const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
   const service = services.find((item) => item.id === selectedService) || services[0];
   const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
@@ -350,7 +361,9 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
               <article className="aw-card-section">
                 <div className="aw-step-title"><span>1</span> CHỌN CHI NHÁNH TRUNG TÂM</div>
                 <div className="aw-options two-up">
-                  {branches.map((item) => (
+                  {branches.length === 0 ? (
+                    <div style={{ gridColumn: 'span 2', color: '#888', fontStyle: 'italic', padding: '10px' }}>Không có chi nhánh nào đang hoạt động.</div>
+                  ) : branches.map((item) => (
                     <button
                       key={item.id}
                       type="button"
