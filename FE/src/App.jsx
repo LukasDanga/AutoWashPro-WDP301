@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import BookingFlow from './components/BookingFlow.jsx';
 import AuthScreen from './components/AuthScreen.jsx';
+import {
+  clearSession as clearStoredSession,
+  getApiBaseUrl,
+  persistSession,
+  readApiError,
+  storageKeys,
+} from './lib/authStorage.js';
 
 export default function App() {
   const navigate = useNavigate();
