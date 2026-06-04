@@ -60,7 +60,7 @@ exports.getAvailableSlots = catchAsync(async (req, res) => {
 
 exports.createPayment = catchAsync(async (req, res) => {
   const { bookingId, method } = req.body;
-  const payment = await paymentService.createPayment(bookingId, req.userId, method);
+  const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, method);
   success(res, payment, 'Payment created', 201);
 });
 

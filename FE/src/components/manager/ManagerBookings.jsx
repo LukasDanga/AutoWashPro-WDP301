@@ -73,7 +73,7 @@ function StatusBadge({ status }) {
 }
 
 /* ── status update dropdown ── */
-function StatusMenu({ bookingId, current, onUpdated }) {
+function StatusMenu({ bookingId, current, onUpdated, notify }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const nexts = NEXT_STATUS[current];
@@ -91,7 +91,8 @@ function StatusMenu({ bookingId, current, onUpdated }) {
       const payload = await res.json();
       onUpdated(payload?.data ?? payload);
     } catch (err) {
-      alert(err.message);
+      if (typeof notify === 'function') notify(err.message, 'error');
+      else alert(err.message);
     } finally { setBusy(false); }
   };
 
@@ -100,12 +101,11 @@ function StatusMenu({ bookingId, current, onUpdated }) {
       <button
         onClick={() => setOpen((p) => !p)}
         disabled={busy}
-        className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors hover:opacity-80 disabled:opacity-50"
-        style={{ background: STATUS_MAP[current]?.cls?.split(' ')[0] }}
+        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors hover:opacity-80 disabled:opacity-50 ${STATUS_MAP[current]?.cls || 'bg-slate-100 text-slate-500'}`}
       >
         {busy ? <Spinner size={11} /> : null}
-        <StatusBadge status={current} />
-        <CaretDown size={10} />
+        <span>{STATUS_MAP[current]?.label || current}</span>
+        <CaretDown size={10} className="opacity-70" />
       </button>
       {open && (
         <div className="absolute right-0 top-7 z-20 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
@@ -122,7 +122,7 @@ function StatusMenu({ bookingId, current, onUpdated }) {
 }
 
 /* ── booking details tab ── */
-function BookingDetailsTab({ booking, onBack, onUpdated }) {
+function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
@@ -143,7 +143,24 @@ function BookingDetailsTab({ booking, onBack, onUpdated }) {
       const payload = await res.json();
       onUpdated(payload?.data ?? payload);
     } catch (err) {
-      alert(err.message);
+      if (typeof notify === 'function') notify(err.message, 'error');
+      else alert(err.message);
+    } finally { setBusy(false); }
+  };
+
+  const handleCashPayment = async () => {
+    if (!window.confirm('Xác nhận khách đã thanh toán bằng tiền mặt?')) return;
+    setBusy(true);
+    try {
+      const res = await api(`/payments`, {
+        method: 'POST',
+        body: JSON.stringify({ bookingId: booking._id, method: 'cash' }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      onUpdated({ ...booking, paymentStatus: 'paid' });
+    } catch (err) {
+      if (typeof notify === 'function') notify(err.message, 'error');
+      else alert(err.message);
     } finally { setBusy(false); }
   };
 
@@ -215,9 +232,17 @@ function BookingDetailsTab({ booking, onBack, onUpdated }) {
             <p className="text-sm text-slate-700 mb-2">
               Tổng tiền: <strong className="text-slate-900">{Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫</strong>
             </p>
-            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-              {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
+              </span>
+              {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
+                <button disabled={busy} onClick={handleCashPayment}
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
+                  Xác nhận tiền mặt
+                </button>
+              )}
+            </div>
           </div>
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Ghi chú</h3>
@@ -288,7 +313,7 @@ export default function ManagerBookings() {
   };
 
   if (selectedBooking) {
-    return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} />;
+    return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} notify={notify} />;
   }
 
   return (
@@ -358,21 +383,21 @@ export default function ManagerBookings() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setSelectedBooking(b)} title="Chi tiết & Tracking"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <Eye size={16} />
-                      </button>
-                      <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} />
-                    </div>
+                    <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {b.status !== 'cancelled' && b.status !== 'completed' && (
-                      <button onClick={() => handleCancel(b._id)}
-                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
-                        Hủy
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setSelectedBooking(b)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
+                        Xem đơn
                       </button>
-                    )}
+                      {b.status !== 'cancelled' && b.status !== 'completed' && (
+                        <button onClick={() => handleCancel(b._id)}
+                          className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
+                          Hủy
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
