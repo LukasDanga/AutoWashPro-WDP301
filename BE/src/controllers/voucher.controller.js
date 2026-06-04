@@ -59,6 +59,11 @@ exports.getUserVouchers = catchAsync(async (req, res) => {
   success(res, vouchers, 'User vouchers retrieved');
 });
 
+exports.getAvailableVouchers = catchAsync(async (req, res) => {
+  const result = await voucherService.getAvailableVouchersForUser(req.userId);
+  success(res, result, 'Available vouchers retrieved');
+});
+
 exports.redeemPoints = catchAsync(async (req, res) => {
   const { templateId } = req.body;
   if (!templateId) throw Object.assign(new Error('Voucher template ID is required'), { statusCode: 400 });

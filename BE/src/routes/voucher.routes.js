@@ -9,6 +9,8 @@ const { ROLES } = require('../config/permissions');
 router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherValidators.create, validate, voucherController.createVoucher);
 router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherController.getAllVouchers);
 router.get('/me', authenticate, voucherController.getUserVouchers);
+router.get('/available', authenticate, voucherController.getAvailableVouchers);
+
 router.get('/code/:code', authenticate, voucherController.getVoucherByCode);
 router.get('/usage/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), voucherController.getVoucherUsage);
 router.get('/:id', authenticate, voucherController.getVoucherById);

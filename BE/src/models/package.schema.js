@@ -10,6 +10,14 @@ const packageSchema = new mongoose.Schema(
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     category: { type: String, enum: ['external', 'internal', 'full'], default: 'full' },
     vehicleTypes: [{ type: String, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }],
+    subServices: [
+      {
+        name: { type: String, required: true },
+        price: { type: Number, required: true, min: 0 },
+        duration: { type: Number, required: true, min: 0 }, // minutes
+        isOptional: { type: Boolean, default: true },
+      },
+    ],
   },
   { timestamps: true }
 );

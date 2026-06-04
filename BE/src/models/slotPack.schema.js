@@ -67,7 +67,7 @@ const slotPackSchema = new mongoose.Schema(
 
 slotPackSchema.index({ userId: 1 });
 slotPackSchema.index({ branchId: 1 });
-slotPackSchema.index({ packCode: 1 }, { unique: true });
+
 slotPackSchema.index({ status: 1 });
 slotPackSchema.index({ userId: 1, status: 1 });
 

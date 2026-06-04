@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import VoucherPicker from './VoucherPicker.jsx';
 
 const DISCOUNT_TIERS = [
   { min: 1,  max: 4,  pct: 0,  label: 'Giá gốc' },
@@ -13,18 +14,15 @@ const STATUS_LABELS = {
   expired:   { label: 'Hết hạn',      cls: 'sp-status-expired' },
   cancelled: { label: 'Đã hủy',       cls: 'sp-status-cancelled' },
 };
-
 const TIER_BADGE = { bronze: '🥉', silver: '🥈', gold: '🥇', diamond: '💎' };
 const TIER_COLOR = { bronze: '#cd7f32', silver: '#adb5bd', gold: '#f2b84b', diamond: '#3de0ff' };
 
 function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
-
 function getDiscountPct(n) {
   return DISCOUNT_TIERS.find(t => n >= t.min && n <= t.max)?.pct || 0;
 }
-
 function getDiscountLabel(n) {
   return DISCOUNT_TIERS.find(t => n >= t.min && n <= t.max)?.label || '';
 }
@@ -42,9 +40,9 @@ function SlotMeter({ total, remaining }) {
   );
 }
 
-function PackCard({ pack, onUseSlot, isManager }) {
+function PackCard({ pack }) {
   const status = STATUS_LABELS[pack.status] || { label: pack.status, cls: '' };
-  const pkg = pack.packageId;
+  const pkg    = pack.packageId;
   const branch = pack.branchId;
   return (
     <div className={`sp-pack-card ${pack.status !== 'active' ? 'sp-pack-dimmed' : ''}`}>
@@ -56,47 +54,44 @@ function PackCard({ pack, onUseSlot, isManager }) {
         </div>
         <div className="sp-pack-right">
           <span className={`sp-status-pill ${status.cls}`}>{status.label}</span>
-          {pack.discountPercent > 0 && (
-            <span className="sp-discount-badge">-{pack.discountPercent}%</span>
-          )}
+          {pack.discountPercent > 0 && <span className="sp-discount-badge">-{pack.discountPercent}%</span>}
         </div>
       </div>
-
       <SlotMeter total={pack.totalSlots} remaining={pack.remainingSlots} />
-
       <div className="sp-pack-meta">
         <div><small>Giá gói</small><strong>{formatCurrency(pack.finalPriceAfterVoucher ?? pack.finalPrice)}</strong></div>
         <div><small>Đã dùng</small><strong>{pack.usedSlots} lần</strong></div>
         {pack.expiresAt && <div><small>Hết hạn</small><strong>{new Date(pack.expiresAt).toLocaleDateString('vi-VN')}</strong></div>}
-        <div><small>Thanh toán</small><strong className={pack.paymentStatus === 'paid' ? 'sp-paid' : 'sp-unpaid'}>{pack.paymentStatus === 'paid' ? '✓ Đã TT' : '⏳ Chờ TT'}</strong></div>
+        <div><small>Thanh toán</small>
+          <strong className={pack.paymentStatus === 'paid' ? 'sp-paid' : 'sp-unpaid'}>
+            {pack.paymentStatus === 'paid' ? '✓ Đã TT' : '⏳ Chờ TT'}
+          </strong>
+        </div>
       </div>
-
       {pack.voucherCode && (
-        <div className="sp-voucher-tag">🏷 Voucher: {pack.voucherCode} — tiết kiệm thêm {formatCurrency(pack.voucherDiscount)}</div>
+        <div className="sp-voucher-tag">🏷 {pack.voucherCode} — tiết kiệm thêm {formatCurrency(pack.voucherDiscount)}</div>
       )}
     </div>
   );
 }
 
 export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBase, token }) {
-  const [tab, setTab] = useState('buy'); // 'buy' | 'my'
+  const [tab, setTab] = useState('buy');
 
   // ─── Buy state ───────────────────────────────────────────────────────────────
   const [branches, setBranches] = useState([]);
   const [packages, setPackages] = useState([]);
-  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedBranch, setSelectedBranch]   = useState('');  // STEP 1 — phải chọn trước
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [selectedPackage, setSelectedPackage] = useState('');
-  const [slotCount, setSlotCount] = useState(5);
-  const [couponCode, setCouponCode] = useState('');
+  const [slotCount, setSlotCount]   = useState(5);
   const [appliedVoucher, setAppliedVoucher] = useState(null);
-  const [couponMsg, setCouponMsg] = useState('');
   const [buyLoading, setBuyLoading] = useState(false);
-  const [buyResult, setBuyResult] = useState(null);
-  const [buyError, setBuyError] = useState('');
+  const [buyResult, setBuyResult]   = useState(null);
+  const [buyError, setBuyError]     = useState('');
 
-  // ─── My packs state ───────────────────────────────────────────────────────────
-  const [myPacks, setMyPacks] = useState([]);
+  // ─── My packs ────────────────────────────────────────────────────────────────
+  const [myPacks, setMyPacks]       = useState([]);
   const [packsLoading, setPacksLoading] = useState(false);
 
   useEffect(() => {
@@ -112,7 +107,6 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
         const pList = (pData?.data || pData || []).filter(p => p.status === 'active').map(p => ({ ...p, id: p._id || p.id }));
         setBranches(Array.isArray(bList) ? bList : []);
         setPackages(Array.isArray(pList) ? pList : []);
-        if (bList[0]) setSelectedBranch(bList[0].id);
         if (pList[0]) setSelectedPackage(pList[0].id);
       } catch (e) { console.error(e); }
     }
@@ -142,27 +136,18 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
   const gross = (pkg?.price || 0) * slotCount;
   const qtyDiscount = Math.floor(gross * discountPct / 100);
   const baseTotal = gross - qtyDiscount;
-  const voucherDiscount = appliedVoucher?.savings || 0;
-  const finalTotal = Math.max(0, baseTotal - voucherDiscount);
+  const branchObj = branches.find(b => b.id === selectedBranch);
 
-  async function applyCoupon() {
-    const code = couponCode.trim().toUpperCase();
-    if (!code) { setCouponMsg('Nhập mã để áp dụng.'); return; }
-    try {
-      const res = await fetch(`${apiBase}/vouchers/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code, bookingData: { amount: baseTotal, packageId: selectedPackage, branchId: selectedBranch } }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Mã không hợp lệ');
-      setAppliedVoucher(data.data);
-      setCouponMsg(`✓ Giảm thêm ${formatCurrency(data.data.savings)}`);
-    } catch (err) {
-      setAppliedVoucher(null);
-      setCouponMsg(err.message);
+  // Voucher discount áp thêm lên baseTotal
+  const voucherSavings = (() => {
+    if (!appliedVoucher || !baseTotal) return 0;
+    if (appliedVoucher.type === 'percentage') {
+      const d = Math.floor(baseTotal * appliedVoucher.value / 100);
+      return appliedVoucher.maxDiscount > 0 ? Math.min(d, appliedVoucher.maxDiscount) : d;
     }
-  }
+    return Math.min(appliedVoucher.value || 0, baseTotal);
+  })();
+  const finalTotal = Math.max(0, baseTotal - voucherSavings);
 
   async function handleBuy() {
     if (!selectedBranch || !selectedVehicle || !selectedPackage) {
@@ -181,7 +166,7 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
           vehicleId: selectedVehicle,
           packageId: selectedPackage,
           totalSlots: slotCount,
-          voucherCode: couponCode.trim().toUpperCase() || undefined,
+          voucherCode: appliedVoucher?.code || undefined,
         }),
       });
       const data = await res.json();
@@ -203,23 +188,12 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
         <div>
           <div className="aw-section-kicker">🎫 GÓI SLOT RỬA XE</div>
           <h2 className="rb-title">Mua trước — Dùng dần</h2>
-          <p className="rb-sub">Mua gói nhiều lần, nhận chiết khấu hấp dẫn. Đến bất kỳ lúc nào, không cần đặt lịch trước.</p>
+          <p className="rb-sub">Chọn chi nhánh → mua gói nhiều lần, nhận chiết khấu hấp dẫn.</p>
         </div>
         <div className="rb-tier-badge" style={{ borderColor: tierColor, color: tierColor }}>
           {TIER_BADGE[user?.tier] || '🥉'} {(user?.tier || 'bronze').toUpperCase()}
           <small>Ưu tiên phục vụ cao hơn</small>
         </div>
-      </div>
-
-      {/* Discount tier banner */}
-      <div className="sp-discount-banner">
-        {DISCOUNT_TIERS.map(t => (
-          <div key={t.pct} className={`sp-tier-item ${slotCount >= t.min && slotCount <= t.max ? 'sp-tier-active' : ''}`}>
-            <span className="sp-tier-range">{t.min === 20 ? '20+' : `${t.min}–${t.max}`} lần</span>
-            <strong className="sp-tier-pct">{t.pct > 0 ? `-${t.pct}%` : 'Gốc'}</strong>
-            <small>{t.label}</small>
-          </div>
-        ))}
       </div>
 
       {/* Tabs */}
@@ -234,168 +208,202 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
 
       {/* ─── Tab Buy ─────────────────────────────────────────────────── */}
       {tab === 'buy' && (
-        <div className="rb-grid">
-          <div className="rb-flow">
-            {/* Chi nhánh */}
-            <article className="aw-card-section">
-              <div className="aw-step-title"><span>1</span> CHI NHÁNH</div>
-              <div className="aw-options two-up">
-                {branches.map(b => (
-                  <button key={b.id} type="button"
-                    className={b.id === selectedBranch ? 'aw-option active' : 'aw-option'}
-                    onClick={() => setSelectedBranch(b.id)}>
-                    <div className="aw-option-head"><strong>{b.name}</strong><span>{b.id === selectedBranch ? '●' : '○'}</span></div>
-                    <p>{b.address}</p>
-                  </button>
-                ))}
+        <>
+          {/* Discount banner */}
+          <div className="sp-discount-banner">
+            {DISCOUNT_TIERS.map(t => (
+              <div key={t.pct} className={`sp-tier-item ${slotCount >= t.min && slotCount <= t.max ? 'sp-tier-active' : ''}`}>
+                <span className="sp-tier-range">{t.min === 20 ? '20+' : `${t.min}–${t.max}`} lần</span>
+                <strong className="sp-tier-pct">{t.pct > 0 ? `-${t.pct}%` : 'Gốc'}</strong>
+                <small>{t.label}</small>
               </div>
-            </article>
-
-            {/* Xe */}
-            <article className="aw-card-section">
-              <div className="aw-step-title"><span>2</span> XE</div>
-              <div className="aw-options two-up">
-                {userVehicles.length > 0 ? userVehicles.map(v => {
-                  const vid = v._id || v.id;
-                  const vname = v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate;
-                  return (
-                    <button key={vid} type="button"
-                      className={vid === selectedVehicle ? 'aw-option active' : 'aw-option'}
-                      onClick={() => setSelectedVehicle(vid)}>
-                      <div className="aw-option-head"><strong>{vname}</strong><span>{vid === selectedVehicle ? '●' : '○'}</span></div>
-                      <p>{v.licensePlate || v.plate}</p>
-                    </button>
-                  );
-                }) : <div className="aw-empty-state"><strong>Chưa có xe.</strong></div>}
-              </div>
-            </article>
-
-            {/* Gói dịch vụ */}
-            <article className="aw-card-section">
-              <div className="aw-step-title"><span>3</span> GÓI DỊCH VỤ</div>
-              <div className="aw-options stacked scrollable" style={{ maxHeight: 240 }}>
-                {packages.map(p => (
-                  <button key={p.id} type="button"
-                    className={p.id === selectedPackage ? 'aw-option aw-service active' : 'aw-option aw-service'}
-                    onClick={() => setSelectedPackage(p.id)}>
-                    <div className="aw-option-head service-head">
-                      <div><strong>{p.name}</strong><small>{p.duration} phút</small></div>
-                      <span>{formatCurrency(p.price)} / lần</span>
-                    </div>
-                    <p>{p.description}</p>
-                  </button>
-                ))}
-              </div>
-            </article>
-
-            {/* Số lượng */}
-            <article className="aw-card-section">
-              <div className="aw-step-title"><span>4</span> SỐ LẦN RỬA XE</div>
-              <div className="sp-slot-selector">
-                <button type="button" className="sp-slot-btn" onClick={() => setSlotCount(n => Math.max(1, n - 1))}>−</button>
-                <div className="sp-slot-display">
-                  <strong>{slotCount}</strong>
-                  <span>lần</span>
-                </div>
-                <button type="button" className="sp-slot-btn" onClick={() => setSlotCount(n => Math.min(50, n + 1))}>+</button>
-              </div>
-
-              {/* Quick select */}
-              <div className="sp-quick-slots">
-                {[1, 3, 5, 10, 15, 20].map(n => (
-                  <button key={n} type="button"
-                    className={n === slotCount ? 'sp-quick-btn active' : 'sp-quick-btn'}
-                    onClick={() => setSlotCount(n)}>
-                    {n}x
-                    {getDiscountPct(n) > 0 && <span className="sp-quick-save">-{getDiscountPct(n)}%</span>}
-                  </button>
-                ))}
-              </div>
-
-              {discountPct > 0 && (
-                <div className="sp-discount-hint">
-                  🎉 Bạn đang nhận chiết khấu <strong style={{ color: '#10b981' }}>{discountPct}%</strong> — {getDiscountLabel(slotCount)}!
-                </div>
-              )}
-            </article>
+            ))}
           </div>
 
-          {/* Summary */}
-          <aside className="aw-summary">
-            <div className="aw-summary-card">
-              <div className="aw-summary-title">TÓM TẮT GÓI SLOT</div>
-
-              <div className="aw-summary-row">
-                <span>Gói dịch vụ:</span><strong>{pkg?.name || '—'}</strong>
-              </div>
-              <div className="aw-summary-row">
-                <span>Giá mỗi lần:</span><strong>{pkg ? formatCurrency(pkg.price) : '—'}</strong>
-              </div>
-              <div className="aw-summary-row">
-                <span>Số lần:</span><strong style={{ color: '#3de0ff' }}>{slotCount} lần</strong>
-              </div>
-
-              <div className="aw-summary-divider" />
-
-              <div className="aw-summary-row">
-                <span>Tổng gốc:</span><strong>{formatCurrency(gross)}</strong>
-              </div>
-              {discountPct > 0 && (
-                <div className="aw-summary-row">
-                  <span>Chiết khấu số lượng (-{discountPct}%):</span>
-                  <strong style={{ color: '#10b981' }}>− {formatCurrency(qtyDiscount)}</strong>
-                </div>
-              )}
-
-              {/* Voucher */}
-              <label className="aw-summary-label" htmlFor="sp-coupon">COUPON BỔ SUNG</label>
-              <div className="aw-coupon-row">
-                <input id="sp-coupon" value={couponCode} onChange={e => setCouponCode(e.target.value)} placeholder="NHẬP MÃ COUPON..." />
-                <button type="button" onClick={applyCoupon}>Áp dụng</button>
-              </div>
-              {couponMsg && <div className="rb-coupon-msg">{couponMsg}</div>}
-
-              {voucherDiscount > 0 && (
-                <div className="aw-summary-row" style={{ marginTop: 8 }}>
-                  <span>Giảm thêm (voucher):</span>
-                  <strong style={{ color: '#10b981' }}>− {formatCurrency(voucherDiscount)}</strong>
-                </div>
-              )}
-
-              <div className="aw-pricing" style={{ marginTop: 12 }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <span>TỔNG THANH TOÁN</span>
-                  <strong style={{ fontSize: '1.3rem', color: '#ffb86b' }}>{formatCurrency(finalTotal)}</strong>
-                </div>
-              </div>
-
-              {discountPct > 0 && (
-                <div className="sp-save-tag">
-                  Tiết kiệm: {formatCurrency(qtyDiscount + voucherDiscount)} ({discountPct > 0 ? `${discountPct}% số lượng` : ''}{voucherDiscount > 0 ? ' + voucher' : ''})
-                </div>
-              )}
-
-              {buyError && <div className="rb-error">{buyError}</div>}
-
-              {buyResult && (
-                <div className="rb-result">
-                  <div className="rb-result-ok">✓ Đã mua gói thành công!</div>
-                  <div className="sp-pack-code-display">Mã gói: <strong>{buyResult.packCode}</strong></div>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 6 }}>
-                    Đưa mã này cho nhân viên khi đến rửa xe.
-                  </div>
-                </div>
-              )}
-
-              <button className="aw-confirm" type="button" onClick={handleBuy} disabled={buyLoading || !pkg}>
-                {buyLoading ? 'ĐANG TẠO GÓI...' : `MUA ${slotCount} LẦN — ${formatCurrency(finalTotal)}`}
-              </button>
+          {/* ─── STEP 1: Chọn địa điểm TRƯỚC ──────────────────────── */}
+          <article className="aw-card-section loc-section">
+            <div className="aw-step-title loc-title">
+              <span>📍</span> BƯỚC 1: CHỌN CHI NHÁNH
+              {selectedBranch && <span className="loc-selected-name"> — {branchObj?.name}</span>}
             </div>
-          </aside>
-        </div>
+            <div className="loc-branches-grid">
+              {branches.length === 0 ? (
+                <div className="aw-empty-state">Đang tải chi nhánh...</div>
+              ) : branches.map(b => (
+                <button key={b.id} type="button"
+                  className={b.id === selectedBranch ? 'loc-branch-card active' : 'loc-branch-card'}
+                  onClick={() => setSelectedBranch(b.id)}>
+                  <div className="loc-branch-icon">🏪</div>
+                  <div className="loc-branch-body">
+                    <strong>{b.name}</strong>
+                    <p>{b.address}</p>
+                    {b.openingTime && <span className="loc-branch-hours">⏰ {b.openingTime} – {b.closingTime}</span>}
+                  </div>
+                  {b.id === selectedBranch && <div className="loc-check">✓</div>}
+                </button>
+              ))}
+            </div>
+          </article>
+
+          {!selectedBranch && (
+            <div className="rb-pick-branch-hint">
+              👆 Vui lòng chọn chi nhánh phía trên để tiến hành mua gói
+            </div>
+          )}
+
+          {/* Chỉ hiện khi đã chọn chi nhánh */}
+          {selectedBranch && (
+            <div className="rb-grid">
+              <div className="rb-flow">
+                {/* Xe */}
+                <article className="aw-card-section">
+                  <div className="aw-step-title"><span>2</span> CHỌN XE</div>
+                  <div className="aw-options two-up">
+                    {userVehicles.length > 0 ? userVehicles.map(v => {
+                      const vid = v._id || v.id;
+                      const vname = v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate;
+                      return (
+                        <button key={vid} type="button"
+                          className={vid === selectedVehicle ? 'aw-option active' : 'aw-option'}
+                          onClick={() => setSelectedVehicle(vid)}>
+                          <div className="aw-option-head"><strong>{vname}</strong><span>{vid === selectedVehicle ? '●' : '○'}</span></div>
+                          <p>{v.licensePlate || v.plate}</p>
+                        </button>
+                      );
+                    }) : <div className="aw-empty-state"><strong>Chưa có xe.</strong></div>}
+                  </div>
+                </article>
+
+                {/* Gói dịch vụ */}
+                <article className="aw-card-section">
+                  <div className="aw-step-title"><span>3</span> GÓI DỊCH VỤ</div>
+                  <div className="aw-options stacked scrollable" style={{ maxHeight: 240 }}>
+                    {packages.map(p => (
+                      <button key={p.id} type="button"
+                        className={p.id === selectedPackage ? 'aw-option aw-service active' : 'aw-option aw-service'}
+                        onClick={() => setSelectedPackage(p.id)}>
+                        <div className="aw-option-head service-head">
+                          <div><strong>{p.name}</strong><small>{p.duration} phút</small></div>
+                          <span>{formatCurrency(p.price)} / lần</span>
+                        </div>
+                        <p>{p.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </article>
+
+                {/* Số lượng */}
+                <article className="aw-card-section">
+                  <div className="aw-step-title"><span>4</span> SỐ LẦN RỬA XE</div>
+                  <div className="sp-slot-selector">
+                    <button type="button" className="sp-slot-btn" onClick={() => setSlotCount(n => Math.max(1, n - 1))}>−</button>
+                    <div className="sp-slot-display"><strong>{slotCount}</strong><span>lần</span></div>
+                    <button type="button" className="sp-slot-btn" onClick={() => setSlotCount(n => Math.min(50, n + 1))}>+</button>
+                  </div>
+                  <div className="sp-quick-slots">
+                    {[1, 3, 5, 10, 15, 20].map(n => (
+                      <button key={n} type="button"
+                        className={n === slotCount ? 'sp-quick-btn active' : 'sp-quick-btn'}
+                        onClick={() => setSlotCount(n)}>
+                        {n}x
+                        {getDiscountPct(n) > 0 && <span className="sp-quick-save">-{getDiscountPct(n)}%</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {discountPct > 0 && (
+                    <div className="sp-discount-hint">
+                      🎉 Chiết khấu số lượng: <strong style={{ color: '#10b981' }}>{discountPct}%</strong> — {getDiscountLabel(slotCount)}!
+                    </div>
+                  )}
+                </article>
+
+                {/* Voucher */}
+                <article className="aw-card-section" style={{ padding: 0 }}>
+                  <VoucherPicker
+                    apiBase={apiBase}
+                    token={token}
+                    selected={appliedVoucher}
+                    onSelect={setAppliedVoucher}
+                    orderAmount={baseTotal}
+                  />
+                </article>
+              </div>
+
+              {/* Summary */}
+              <aside className="aw-summary">
+                <div className="aw-summary-card">
+                  <div className="aw-summary-title">TÓM TẮT GÓI SLOT</div>
+
+                  <div className="aw-summary-row">
+                    <span>Chi nhánh:</span><strong>{branchObj?.name || '—'}</strong>
+                  </div>
+                  <div className="aw-summary-row">
+                    <span>Gói dịch vụ:</span><strong>{pkg?.name || '—'}</strong>
+                  </div>
+                  <div className="aw-summary-row">
+                    <span>Giá mỗi lần:</span><strong>{pkg ? formatCurrency(pkg.price) : '—'}</strong>
+                  </div>
+                  <div className="aw-summary-row">
+                    <span>Số lần:</span><strong style={{ color: '#3de0ff' }}>{slotCount} lần</strong>
+                  </div>
+
+                  <div className="aw-summary-divider" />
+
+                  <div className="aw-summary-row">
+                    <span>Tổng gốc:</span><strong>{formatCurrency(gross)}</strong>
+                  </div>
+                  {discountPct > 0 && (
+                    <div className="aw-summary-row">
+                      <span>Chiết khấu SL (-{discountPct}%):</span>
+                      <strong style={{ color: '#10b981' }}>−{formatCurrency(qtyDiscount)}</strong>
+                    </div>
+                  )}
+                  {voucherSavings > 0 && (
+                    <div className="aw-summary-row">
+                      <span>Voucher ({appliedVoucher?.code}):</span>
+                      <strong style={{ color: '#10b981' }}>−{formatCurrency(voucherSavings)}</strong>
+                    </div>
+                  )}
+
+                  <div className="aw-pricing">
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span>TỔNG THANH TOÁN</span>
+                      <strong style={{ fontSize: '1.3rem', color: '#ffb86b' }}>{formatCurrency(finalTotal)}</strong>
+                    </div>
+                  </div>
+
+                  {(discountPct > 0 || voucherSavings > 0) && (
+                    <div className="sp-save-tag">
+                      🎉 Tiết kiệm: {formatCurrency(qtyDiscount + voucherSavings)}
+                      {discountPct > 0 && ` (${discountPct}% SL`}
+                      {voucherSavings > 0 && (discountPct > 0 ? ' + voucher)' : ' (voucher)')}
+                    </div>
+                  )}
+
+                  {buyError && <div className="rb-error">{buyError}</div>}
+
+                  {buyResult && (
+                    <div className="rb-result">
+                      <div className="rb-result-ok">✓ Đã mua gói thành công!</div>
+                      <div className="sp-pack-code-display">Mã gói: <strong>{buyResult.packCode}</strong></div>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 6 }}>
+                        Đưa mã này cho nhân viên khi đến rửa xe.
+                      </div>
+                    </div>
+                  )}
+
+                  <button className="aw-confirm" type="button" onClick={handleBuy}
+                    disabled={buyLoading || !pkg || !selectedBranch}>
+                    {buyLoading ? 'ĐANG TẠO GÓI...' : `MUA ${slotCount} LẦN — ${formatCurrency(finalTotal)}`}
+                  </button>
+                </div>
+              </aside>
+            </div>
+          )}
+        </>
       )}
 
-      {/* ─── Tab My Packs ────────────────────────────────────────────── */}
+      {/* ─── Tab My Packs ──────────────────────────────────────────── */}
       {tab === 'my' && (
         <div className="sp-my-packs">
           {packsLoading ? (
@@ -407,9 +415,7 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
             </div>
           ) : (
             <div className="sp-packs-grid">
-              {myPacks.map(p => (
-                <PackCard key={p._id} pack={p} />
-              ))}
+              {myPacks.map(p => <PackCard key={p._id} pack={p} />)}
             </div>
           )}
         </div>

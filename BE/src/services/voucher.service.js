@@ -111,11 +111,11 @@ exports.validateVoucher = async (code, bookingData, userId) => {
   }
 
   let amount = 0;
-  if (bookingData.packageId) {
+  if (bookingData.amount !== undefined) {
+    amount = bookingData.amount;
+  } else if (bookingData.packageId) {
     const pkg = await Package.findById(bookingData.packageId);
     if (pkg) amount = pkg.price;
-  } else if (bookingData.amount !== undefined) {
-    amount = bookingData.amount;
   }
 
   if (amount < voucher.minOrder) {
@@ -236,6 +236,74 @@ exports.getUserVouchers = async (userId) => {
     .populate('bookingId', 'bookingDate startTime status')
     .sort({ usedAt: -1 });
 };
+
+/**
+ * Lấy tất cả voucher có thể dùng cho user hiện tại, phân loại 3 nhóm:
+ *  - tier_exclusive: chỉ cho hạng của user (diamond/gold/silver)
+ *  - public:        ai cũng dùng được (applicableTiers rỗng)
+ *  - redeemable:    đổi điểm (isTemplate + requiredPoints > 0)
+ */
+exports.getAvailableVouchersForUser = async (userId) => {
+  const user = await User.findById(userId);
+  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+
+  const now = new Date();
+
+  // Lấy tất cả voucher active, còn hạn, còn hàng, không phải template
+  const allVouchers = await Voucher.find({
+    status: 'active',
+    isTemplate: false,
+    startDate: { $lte: now },
+    endDate:   { $gte: now },
+    $and: [
+      { $or: [{ remaining: { $gt: 0 } }, { quantity: 0 }] },
+      { $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }, { assignedTo: userId }] },
+    ],
+  }).lean();
+
+  // Redeemable templates (đổi điểm)
+  const templates = await Voucher.find({
+    status: 'active',
+    isTemplate: true,
+    requiredPoints: { $gt: 0 },
+    remaining: { $gt: 0 },
+    endDate: { $gte: now },
+  }).lean();
+
+  const tierExclusive = [];
+  const publicVouchers = [];
+
+  for (const v of allVouchers) {
+    // Kiểm tra giới hạn dùng per-user
+    if (v.maxUsagePerUser > 0) {
+      const usageCount = await VoucherUsage.countDocuments({ voucherId: v._id, userId });
+      if (usageCount >= v.maxUsagePerUser) continue;
+    }
+
+    if (v.applicableTiers && v.applicableTiers.length > 0) {
+      // Voucher dành riêng theo tier
+      if (v.applicableTiers.includes(user.tier)) {
+        tierExclusive.push(v);
+      }
+      // Nếu tier không khớp → bỏ qua
+    } else {
+      // Voucher công khai
+      publicVouchers.push(v);
+    }
+  }
+
+  return {
+    user: {
+      tier: user.tier,
+      loyaltyPoints: user.loyaltyPoints,
+      lifetimePoints: user.lifetimePoints,
+    },
+    tier_exclusive: tierExclusive,
+    public: publicVouchers,
+    redeemable: templates,
+  };
+};
+
 
 /**
  * Đổi điểm lấy Voucher
