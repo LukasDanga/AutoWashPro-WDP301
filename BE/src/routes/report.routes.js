@@ -1,0 +1,18 @@
+const express = require('express');
+const router = express.Router();
+const { authenticate, authorize } = require('../middlewares/auth.middleware');
+const reportController = require('../controllers/report.controller');
+const { ROLES } = require('../config/permissions');
+
+/**
+ * @swagger
+ * /api/reports/revenue:
+ *   get:
+ *     summary: Get revenue report
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/revenue', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), reportController.getRevenueReport);
+
+module.exports = router;
