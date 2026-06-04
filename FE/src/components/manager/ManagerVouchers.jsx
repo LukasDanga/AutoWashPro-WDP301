@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowClockwise,
   CheckCircle,
+  MagnifyingGlass,
   Plus,
   Tag,
   Trash,
@@ -223,19 +224,22 @@ export default function ManagerVouchers() {
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [search, setSearch] = useState('');
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await api('/vouchers');
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      const res = await api(`/vouchers?${params.toString()}`);
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const data = p?.data ?? p;
       setVouchers(Array.isArray(data) ? data : []);
     } catch (err) { setError(err.message || 'Không thể tải voucher'); }
     finally { setLoading(false); }
-  }, []);
+  }, [search]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
@@ -274,6 +278,24 @@ export default function ManagerVouchers() {
           className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
+        <div className="relative flex-1 max-w-md">
+          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Tìm theo mã hoặc tên voucher..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
         <button id="create-voucher-btn" onClick={() => { setSelected(null); setModal('create'); }}
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm">
           <Plus size={14} weight="bold" />Tạo voucher
