@@ -7,6 +7,16 @@ exports.createBooking = catchAsync(async (req, res) => {
   success(res, booking, 'Booking created', 201);
 });
 
+exports.createRecurringBooking = catchAsync(async (req, res) => {
+  const result = await bookingService.createRecurringBooking({ ...req.body, userId: req.userId });
+  success(res, result, `Recurring booking created: ${result.totalCreated} bookings`, 201);
+});
+
+exports.cancelRecurringGroup = catchAsync(async (req, res) => {
+  const result = await bookingService.cancelRecurringGroup(req.params.groupId, req.userId, req.user.role);
+  success(res, result, `Cancelled ${result.cancelled} bookings in recurring group`);
+});
+
 exports.getAllBookings = catchAsync(async (req, res) => {
   const bookings = await bookingService.getAllBookings(req.query, req.user.role, req.userId);
   success(res, bookings, 'Bookings retrieved');

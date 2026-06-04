@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-const { Booking, Package, Branch, Vehicle, Payment } = require('../models');
+const crypto = require('crypto');
+const { Booking, Package, Branch, Vehicle, Payment, User } = require('../models');
 const notificationService = require('./notification.service');
 const voucherService = require('./voucher.service');
 
@@ -389,4 +390,202 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     }
     return { ...s, available };
   });
+};
+
+// ─── Tier → Priority mapping ─────────────────────────────────────────────────
+const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4 };
+
+// ─── Recurring Booking ────────────────────────────────────────────────────────
+
+/**
+ * Tạo hàng loạt booking theo lịch định kỳ.
+ *
+ * data {
+ *   userId, branchId, packageId, vehicleId,
+ *   weekdays: [0-6],   // 0=CN, 1=T2, ..., 6=T7
+ *   startTime: 'HH:mm',
+ *   weeks: number,      // số tuần lặp lại (1-12)
+ *   note, voucherCode
+ * }
+ *
+ * Trả về { created: Booking[], failed: { date, reason }[] }
+ */
+exports.createRecurringBooking = async (data) => {
+  const {
+    userId, branchId, packageId, vehicleId,
+    weekdays, startTime, weeks,
+    note, voucherCode,
+  } = data;
+
+  // --- Validate base entities (ngoài transaction — chỉ đọc) ---
+  const [pkg, branch, vehicle, user] = await Promise.all([
+    Package.findById(packageId),
+    Branch.findById(branchId),
+    Vehicle.findById(vehicleId),
+    User.findById(userId),
+  ]);
+
+  if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+  if (!branch) throw Object.assign(new Error('Branch not found'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+  if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+  if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+  if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
+  if (String(vehicle.userId) !== String(userId)) {
+    throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+
+  // --- Validate weekdays & weeks ---
+  if (!Array.isArray(weekdays) || weekdays.length === 0) {
+    throw Object.assign(new Error('At least one weekday must be selected'), { statusCode: 400, code: 'INVALID_WEEKDAYS' });
+  }
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 12) {
+    throw Object.assign(new Error('Weeks must be between 1 and 12'), { statusCode: 400, code: 'INVALID_WEEKS' });
+  }
+
+  // --- Validate time ---
+  const endTime = computeEndTime(startTime, pkg.duration);
+  const endMinutes = parseTime(endTime);
+  const closeMinutes = parseTime(branch.closingTime || '20:00');
+  if (endMinutes > closeMinutes) {
+    throw Object.assign(new Error('Booking end time exceeds branch closing time'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
+  }
+
+  // --- Priority ---
+  const priority = TIER_PRIORITY[user?.tier] || 1;
+
+  // --- Validate voucher (1 lần, áp cho toàn bộ series) ---
+  let computedDiscountAmount = 0;
+  let computedFinalPrice = pkg.price;
+  if (voucherCode) {
+    const vResult = await voucherService.validateVoucher(voucherCode, { packageId, branchId, amount: pkg.price }, userId);
+    computedDiscountAmount = vResult.discountAmount;
+    computedFinalPrice = vResult.finalAmount;
+  }
+
+  // --- Build danh sách các ngày cần tạo booking ---
+  const recurringGroupId = crypto.randomUUID();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const targetDates = [];
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < 7; d++) {
+      const candidate = new Date(today);
+      candidate.setDate(today.getDate() + w * 7 + d);
+      if (weekdays.includes(candidate.getDay())) {
+        // Bỏ qua ngày trong quá khứ
+        if (candidate >= today) {
+          targetDates.push(new Date(candidate));
+        }
+      }
+    }
+  }
+
+  if (targetDates.length === 0) {
+    throw Object.assign(new Error('No valid dates to book for the selected weekdays and weeks'), { statusCode: 400, code: 'NO_DATES' });
+  }
+
+  // --- Tạo booking lần lượt, bỏ qua ngày conflict ---
+  const created = [];
+  const failed  = [];
+
+  for (const bookingDate of targetDates) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const bookingStr = bookingDate.toISOString().split('T')[0];
+      const { gte, lte } = getDayBounds(bookingStr);
+
+      const conflicting = await Booking.find({
+        branchId,
+        bookingDate: { $gte: gte, $lte: lte },
+        status: { $in: ['pending', 'in_progress'] },
+      }).session(session);
+
+      const ns = parseTime(startTime);
+      const ne = parseTime(endTime);
+      const hasConflict = conflicting.some((b) => {
+        const bs = parseTime(b.startTime);
+        const be = parseTime(b.endTime);
+        return bs !== null && be !== null && isSlotOverlap(ns, ne, bs, be);
+      });
+
+      if (hasConflict) {
+        await session.abortTransaction();
+        failed.push({ date: bookingStr, reason: 'Slot không còn trống vào ngày này' });
+        continue;
+      }
+
+      const booking = new Booking({
+        userId, branchId, packageId, vehicleId,
+        bookingDate, startTime, endTime,
+        note: note || '',
+        bookingType: 'recurring',
+        recurringGroupId,
+        priority,
+        voucherCode: voucherCode ? voucherCode.trim().toUpperCase() : undefined,
+        discountAmount: computedDiscountAmount,
+        finalPrice: computedFinalPrice,
+      });
+      await booking.save({ session });
+      await session.commitTransaction();
+      created.push(booking);
+    } catch (err) {
+      await session.abortTransaction();
+      const bookingStr = bookingDate.toISOString().split('T')[0];
+      failed.push({ date: bookingStr, reason: err.message || 'Lỗi không xác định' });
+    } finally {
+      session.endSession();
+    }
+  }
+
+  if (created.length === 0) {
+    throw Object.assign(
+      new Error('Không thể tạo bất kỳ booking nào. Tất cả khung giờ đã bị đặt.'),
+      { statusCode: 409, code: 'ALL_SLOTS_TAKEN' }
+    );
+  }
+
+  // Thông báo tổng kết
+  notificationService.send(
+    userId,
+    'Đặt lịch định kỳ thành công',
+    `Đã tạo ${created.length} lịch hẹn định kỳ cho ${pkg.name}.${failed.length > 0 ? ` ${failed.length} ngày bị bỏ qua do xung đột slot.` : ''}`,
+    'recurring_booking_created',
+    { recurringGroupId, count: created.length }
+  ).catch(() => {});
+
+  return { created, failed, recurringGroupId, totalCreated: created.length, totalFailed: failed.length };
+};
+
+/**
+ * Hủy toàn bộ booking trong 1 nhóm định kỳ (recurringGroupId).
+ * Chỉ hủy những booking đang pending.
+ */
+exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
+  const bookings = await Booking.find({
+    recurringGroupId,
+    status: 'pending',
+  });
+
+  if (bookings.length === 0) {
+    throw Object.assign(new Error('No pending bookings found for this recurring group'), { statusCode: 404, code: 'NOT_FOUND' });
+  }
+
+  // Validate ownership (nếu là customer)
+  if (userRole === 'customer' && String(bookings[0].userId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+
+  const results = await Promise.allSettled(
+    bookings.map((b) =>
+      Booking.findOneAndUpdate(
+        { _id: b._id, status: 'pending' },
+        { status: 'cancelled', cancelledAt: new Date(), cancelledBy: userRole }
+      )
+    )
+  );
+
+  const cancelled = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
+  return { cancelled: cancelled.length, total: bookings.length };
 };
