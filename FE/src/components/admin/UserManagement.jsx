@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowClockwise,
-  Buildings,
   CheckCircle,
   Coins,
   Crown,
@@ -194,7 +193,6 @@ function Modal({ title, onClose, children, wide = false }) {
           wide ? "max-w-2xl" : "max-w-lg"
         }`}
       >
-        {/* header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-[15px] font-semibold text-slate-800">{title}</h2>
           <button
@@ -204,7 +202,6 @@ function Modal({ title, onClose, children, wide = false }) {
             <X size={16} />
           </button>
         </div>
-        {/* body */}
         <div className="max-h-[78vh] overflow-y-auto px-6 py-5">{children}</div>
       </div>
     </div>
@@ -318,7 +315,7 @@ function CreateForm({ onSave, onCancel, saving }) {
           value={form.role}
           onChange={(e) => set("role", e.target.value)}
         >
-          <option value="manager">Quản lý chi nhánh (manager)</option>
+          <option value="manager">Quản lý</option>
           <option value="admin">Quản trị viên (admin)</option>
         </select>
       </Field>
@@ -345,7 +342,7 @@ function CreateForm({ onSave, onCancel, saving }) {
   );
 }
 
-function EditForm({ initial, onSave, onCancel, saving, branches }) {
+function EditForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
     name: initial.name || "",
     phone: initial.phone || "",
@@ -370,11 +367,7 @@ function EditForm({ initial, onSave, onCancel, saving, branches }) {
     const errs = validate();
     if (Object.keys(errs).length) return setErrors(errs);
 
-    const data = { ...form };
-    if (data.role !== "manager") {
-      data.branchId = null; // Clear branch relationship if not manager
-    }
-    onSave(data);
+    onSave(form);
   };
 
   return (
@@ -405,9 +398,8 @@ function EditForm({ initial, onSave, onCancel, saving, branches }) {
             value={form.role}
             onChange={(e) => set("role", e.target.value)}
           >
-            <option value="customer">Khách hàng</option>
-            <option value="manager">Quản lý chi nhánh</option>
-            <option value="admin">Quản trị viên (Admin)</option>
+            <option value="manager">Quản lý (manager)</option>
+            <option value="admin">Quản trị viên (admin)</option>
           </select>
         </Field>
 
@@ -426,13 +418,13 @@ function EditForm({ initial, onSave, onCancel, saving, branches }) {
 
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
         <button
-  type="button"
-  onClick={onCancel}
-  disabled={saving}
-  className="rounded-lg border border-slate-200 px-4 py-2 text-sm !text-black hover:bg-slate-50 transition-colors"
->
-  Hủy
-</button>
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm !text-black hover:bg-slate-50 transition-colors"
+        >
+          Hủy
+        </button>
         <button
           type="submit"
           disabled={saving}
@@ -447,10 +439,7 @@ function EditForm({ initial, onSave, onCancel, saving, branches }) {
 }
 
 /* ─────────────────────────── Detail View ─────────────────────────── */
-function DetailView({ user, branches }) {
-  const branch = user.branchId
-    ? branches.find((b) => b._id === user.branchId)
-    : null;
+function DetailView({ user }) {
   const createdDate = user.createdAt
     ? new Date(user.createdAt).toLocaleString("vi-VN")
     : "Không rõ";
@@ -526,31 +515,15 @@ function DetailView({ user, branches }) {
         </div>
       </div>
 
-      {/* Management details */}
-      <div className="space-y-3">
-        {user.role === "manager" && (
-          <div className="flex items-center gap-2 rounded-lg bg-indigo-50/50 p-3 ring-1 ring-indigo-50 border border-indigo-100">
-            <Buildings size={18} className="text-indigo-500 shrink-0" />
-            <div>
-              <p className="text-xs text-slate-500 font-medium">
-                Chi nhánh trực thuộc quản lý
-              </p>
-              <p className="font-semibold text-indigo-900">
-                {branch ? branch.name : "Chưa được phân bổ chi nhánh cụ thể"}
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-slate-400">
-          <div>
-            <span>Lần đăng nhập cuối:</span>
-            <p className="font-medium text-slate-600 mt-0.5">{lastLoginDate}</p>
-          </div>
-          <div>
-            <span>Ngày đăng ký tài khoản:</span>
-            <p className="font-medium text-slate-600 mt-0.5">{createdDate}</p>
-          </div>
+      {/* Registration info */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-slate-400">
+        <div>
+          <span>Lần đăng nhập cuối:</span>
+          <p className="font-medium text-slate-600 mt-0.5">{lastLoginDate}</p>
+        </div>
+        <div>
+          <span>Ngày đăng ký tài khoản:</span>
+          <p className="font-medium text-slate-600 mt-0.5">{createdDate}</p>
         </div>
       </div>
     </div>
@@ -582,10 +555,6 @@ function ConfirmDelete({ user, onConfirm, onCancel, deleting }) {
             onClick={onCancel}
             disabled={deleting}
             className="rounded-lg border border-slate-200 px-4 py-2 text-sm !text-black hover:bg-slate-50 transition-colors"
-            style={{
-              color: "#000000",
-              opacity: 1,
-            }}
           >
             Hủy
           </button>
@@ -608,7 +577,6 @@ function ConfirmDelete({ user, onConfirm, onCancel, deleting }) {
    ─────────────────────────────────────────────────────────────────── */
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
-  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
 
@@ -618,7 +586,7 @@ export default function UserManagement() {
   const [statusFilter, setStatusFilter] = useState("");
 
   // Modals state
-  const [modal, setModal] = useState(null); // 'create' | 'edit' | 'detail' | 'delete'
+  const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
 
   const [saving, setSaving] = useState(false);
@@ -626,20 +594,6 @@ export default function UserManagement() {
   const [toast, setToast] = useState(null);
 
   const notify = (message, type = "success") => setToast({ message, type });
-
-  // Fetch branches (for association and lookup)
-  const fetchBranches = async () => {
-    try {
-      const res = await apiFetch("/branches");
-      if (res.ok) {
-        const payload = await res.json();
-        const data = payload?.data ?? payload;
-        setBranches(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.error("Lỗi khi tải chi nhánh:", err);
-    }
-  };
 
   // Fetch Users
   const fetchUsers = useCallback(
@@ -660,11 +614,10 @@ export default function UserManagement() {
 
   // Load initial data
   useEffect(() => {
-    fetchBranches();
     fetchUsers();
   }, []); // eslint-disable-line
 
-  // Handle local searching (because API does not have search parameter support)
+  // Handle local searching
   const filteredUsers = users.filter((u) => {
     const q = search.toLowerCase().trim();
     if (!q) return true;
@@ -685,7 +638,7 @@ export default function UserManagement() {
     fetchUsers(roleFilter, val);
   };
 
-  // Actions: Create user
+  // Actions
   const handleCreate = async (data) => {
     setSaving(true);
     try {
@@ -700,7 +653,6 @@ export default function UserManagement() {
     }
   };
 
-  // Actions: Update user
   const handleUpdate = async (data) => {
     setSaving(true);
     try {
@@ -715,7 +667,6 @@ export default function UserManagement() {
     }
   };
 
-  // Actions: Delete user
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -730,7 +681,7 @@ export default function UserManagement() {
     }
   };
 
-  // Calculate statistics
+  // Statistics
   const stats = {
     total: users.length,
     admins: users.filter((u) => u.role === "admin").length,
@@ -741,39 +692,31 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      {/* ── Stat cards ── */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
           {
             label: "Tổng người dùng",
             value: stats.total,
-            icon: (
-              <Users size={18} weight="duotone" className="text-blue-500" />
-            ),
+            icon: <Users size={18} weight="duotone" className="text-blue-500" />,
             bg: "bg-blue-50",
           },
           {
             label: "Quản trị viên (Admin)",
             value: stats.admins,
-            icon: (
-              <Shield size={18} weight="duotone" className="text-rose-500" />
-            ),
+            icon: <Shield size={18} weight="duotone" className="text-rose-500" />,
             bg: "bg-rose-50",
           },
           {
-            label: "Quản lý chi nhánh",
+            label: "Quản lý",
             value: stats.managers,
-            icon: (
-              <Crown size={18} weight="duotone" className="text-indigo-500" />
-            ),
+            icon: <Crown size={18} weight="duotone" className="text-indigo-500" />,
             bg: "bg-indigo-50",
           },
           {
             label: "Tài khoản bị khóa",
             value: stats.suspended,
-            icon: (
-              <Warning size={18} weight="duotone" className="text-amber-500" />
-            ),
+            icon: <Warning size={18} weight="duotone" className="text-amber-500" />,
             bg: "bg-amber-50",
           },
         ].map((s) => (
@@ -781,24 +724,19 @@ export default function UserManagement() {
             key={s.label}
             className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm"
           >
-            <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${s.bg}`}
-            >
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${s.bg}`}>
               {s.icon}
             </div>
             <div>
-              <p className="text-lg font-bold text-slate-800 leading-none">
-                {s.value}
-              </p>
+              <p className="text-lg font-bold text-slate-800 leading-none">{s.value}</p>
               <p className="text-[11px] text-slate-500 mt-1">{s.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <MagnifyingGlass
             size={15}
@@ -812,7 +750,6 @@ export default function UserManagement() {
           />
         </div>
 
-        {/* Filter Role */}
         <select
           value={roleFilter}
           onChange={(e) => handleRoleFilter(e.target.value)}
@@ -824,7 +761,6 @@ export default function UserManagement() {
           <option value="customer">Khách hàng</option>
         </select>
 
-        {/* Filter Status */}
         <select
           value={statusFilter}
           onChange={(e) => handleStatusFilter(e.target.value)}
@@ -836,7 +772,6 @@ export default function UserManagement() {
           <option value="suspended">Bị khóa</option>
         </select>
 
-        {/* Refresh */}
         <button
           onClick={() => fetchUsers()}
           disabled={loading}
@@ -847,12 +782,10 @@ export default function UserManagement() {
             size={18}
             color="#000000"
             weight="bold"
-            style={{ opacity: 1 }}
             className={loading ? "animate-spin" : ""}
           />
         </button>
 
-        {/* Add User */}
         <button
           onClick={() => {
             setSelected(null);
@@ -865,7 +798,7 @@ export default function UserManagement() {
         </button>
       </div>
 
-      {/* ── Table List ── */}
+      {/* Table */}
       {loading ? (
         <div className="flex flex-col items-center gap-3 py-28 text-slate-400">
           <Spinner size={28} />
@@ -904,30 +837,19 @@ export default function UserManagement() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredUsers.map((u) => (
-                <tr
-                  key={u._id}
-                  className="hover:bg-slate-50/50 transition-colors"
-                >
+                <tr key={u._id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 font-bold uppercase overflow-hidden text-sm">
                         {u.avatar ? (
-                          <img
-                            src={u.avatar}
-                            alt={u.name}
-                            className="h-full w-full object-cover"
-                          />
+                          <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
                         ) : (
                           u.name.charAt(0)
                         )}
                       </div>
                       <div>
-                        <div className="font-semibold text-slate-800">
-                          {u.name}
-                        </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          {u.email}
-                        </div>
+                        <div className="font-semibold text-slate-800">{u.name}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{u.email}</div>
                       </div>
                     </div>
                   </td>
@@ -941,11 +863,7 @@ export default function UserManagement() {
                     <div className="flex items-center gap-2">
                       <TierBadge tier={u.tier} />
                       <span className="text-xs text-slate-500 flex items-center gap-0.5">
-                        <Coins
-                          size={12}
-                          weight="fill"
-                          className="text-amber-500"
-                        />
+                        <Coins size={12} weight="fill" className="text-amber-500" />
                         {u.loyaltyPoints || 0}
                       </span>
                     </div>
@@ -994,43 +912,27 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* ── Modals ── */}
+      {/* Modals */}
       {modal === "create" && (
-        <Modal
-          title="Thêm tài khoản quản trị mới"
-          onClose={() => setModal(null)}
-          wide
-        >
-          <CreateForm
-            onSave={handleCreate}
-            onCancel={() => setModal(null)}
-            saving={saving}
-          />
+        <Modal title="Thêm tài khoản quản trị mới" onClose={() => setModal(null)} wide>
+          <CreateForm onSave={handleCreate} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
       )}
 
       {modal === "edit" && selected && (
-        <Modal
-          title={`Chỉnh sửa tài khoản: ${selected.name}`}
-          onClose={() => setModal(null)}
-          wide
-        >
+        <Modal title={`Chỉnh sửa tài khoản: ${selected.name}`} onClose={() => setModal(null)} wide>
           <EditForm
             initial={selected}
             onSave={handleUpdate}
             onCancel={() => setModal(null)}
             saving={saving}
-            branches={branches}
           />
         </Modal>
       )}
 
       {modal === "detail" && selected && (
-        <Modal
-          title="Thông tin chi tiết người dùng"
-          onClose={() => setModal(null)}
-        >
-          <DetailView user={selected} branches={branches} />
+        <Modal title="Thông tin chi tiết người dùng" onClose={() => setModal(null)}>
+          <DetailView user={selected} />
         </Modal>
       )}
 
@@ -1043,7 +945,6 @@ export default function UserManagement() {
         />
       )}
 
-      {/* ── Toast notifications ── */}
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );

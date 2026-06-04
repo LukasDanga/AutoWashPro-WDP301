@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Buildings, CheckCircle, FloppyDisk, UserCircle, X, XCircle } from '@phosphor-icons/react';
+import { CheckCircle, FloppyDisk, Shield, UserCircle, X, XCircle } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
 function api(path, opts = {}) {
@@ -8,9 +8,11 @@ function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getStoredToken()}`, ...opts.headers },
   });
 }
+
 async function readErr(res) {
   try { const j = await res.json(); return j?.message || `Lỗi ${res.status}`; } catch { return `Lỗi ${res.status}`; }
 }
+
 function Spinner({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -19,6 +21,7 @@ function Spinner({ size = 18 }) {
     </svg>
   );
 }
+
 function Toast({ toast, onDismiss }) {
   useEffect(() => { if (!toast) return; const t = setTimeout(onDismiss, 3500); return () => clearTimeout(t); }, [toast, onDismiss]);
   if (!toast) return null;
@@ -45,7 +48,7 @@ function formatDate(dateStr) {
   });
 }
 
-export default function ManagerProfile({ user }) {
+export default function AdminProfile({ user }) {
   const [form, setForm] = useState({ name: '', phone: '' });
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [saving, setSaving] = useState(false);
@@ -96,10 +99,10 @@ export default function ManagerProfile({ user }) {
 
   return (
     <div className="max-w-4xl space-y-6">
-      {/* Manager Profile Header */}
+      {/* Admin Profile Header */}
       <div className="flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-50">
-          <Buildings size={48} weight="duotone" className="text-blue-500" />
+          <Shield size={48} weight="duotone" className="text-blue-500" />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-3">
@@ -109,8 +112,8 @@ export default function ManagerProfile({ user }) {
           <p className="mt-1 text-sm text-slate-500">{user?.email ?? '—'}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-600">
-              <Buildings size={12} className="mr-1" />
-              Quản lý chi nhánh
+              <Shield size={12} className="mr-1" />
+              Quản trị viên
             </span>
             <span className="text-xs text-slate-400">ID: {user?._id ?? '—'}</span>
           </div>
@@ -165,7 +168,7 @@ export default function ManagerProfile({ user }) {
       {/* Change Password */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <FloppyDisk size={18} className="text-slate-500" />
+          <Shield size={18} className="text-slate-500" />
           Đổi mật khẩu
         </h3>
         <form onSubmit={handlePwSave} className="space-y-4">
