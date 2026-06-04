@@ -292,7 +292,10 @@ exports.updateBookingStatus = async (id, status) => {
     { _id: id, status: currentBooking.status },
     update,
     { new: true }
-  );
+  ).populate('userId', 'name email phone')
+   .populate('branchId', 'name address phone')
+   .populate('packageId', 'name price duration')
+   .populate('vehicleId', 'licensePlate vehicleType brand color');
   if (!booking) {
     throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
   }

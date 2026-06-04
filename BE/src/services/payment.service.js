@@ -10,14 +10,14 @@ const VALID_METHODS = ['cash', 'momo', 'vnpay'];
 const simulateMomoPayment = (amount, transactionId) => `https://momo.vn/pay?amount=${amount}&txn=${transactionId}`;
 const simulateVNPayPayment = (amount, transactionId) => `https://vnpay.vn/pay?amount=${amount}&txn=${transactionId}`;
 
-exports.createPayment = async (bookingId, userId, method) => {
+exports.createPayment = async (bookingId, requesterId, userRole, method) => {
   if (!VALID_METHODS.includes(method)) {
     throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
   }
 
   const booking = await Booking.findById(bookingId).populate('packageId');
   if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
-  if (String(booking.userId) !== String(userId)) {
+  if (userRole === 'customer' && String(booking.userId) !== String(requesterId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   if (booking.status === 'cancelled') {
@@ -38,16 +38,18 @@ exports.createPayment = async (bookingId, userId, method) => {
   const existingPending = await Payment.findOne({ bookingId, status: 'pending' });
   if (existingPending) return existingPending;
 
+  const targetUserId = booking.userId;
+
   let payment = await Payment.findOneAndUpdate(
     { bookingId, status: { $nin: ['paid', 'refunded'] } },
-    { bookingId, userId, amount: booking.finalPrice || booking.packageId.price, method, transactionId: generateTransactionId(), status: 'pending' },
+    { bookingId, userId: targetUserId, amount: booking.finalPrice || booking.packageId.price, method, transactionId: generateTransactionId(), status: 'pending' },
     { new: true, upsert: true, runValidators: true }
   );
 
   const amount = payment.amount;
 
   if (booking.voucherCode) {
-    await voucherService.reserveVoucher(booking.voucherCode, userId, bookingId, booking.discountAmount || 0);
+    await voucherService.reserveVoucher(booking.voucherCode, targetUserId, bookingId, booking.discountAmount || 0);
   }
 
   if (method === 'cash') {
@@ -60,7 +62,8 @@ exports.createPayment = async (bookingId, userId, method) => {
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
       
       // Tích điểm
-      await loyaltyService.addPointsFromPayment(userId, amount, bookingId, session);
+      await loyaltyService.addPointsFromPayment(targetUserId, amount, bookingId, session);
+
       
       await session.commitTransaction();
     } catch (err) {
