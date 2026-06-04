@@ -3,6 +3,7 @@ import BookingsHistory from './BookingsHistory.jsx';
 import LoyaltyGifts from './LoyaltyGifts.jsx';
 import RecurringBookingFlow from './RecurringBookingFlow.jsx';
 import SlotPackFlow from './SlotPackFlow.jsx';
+import VoucherPicker from './VoucherPicker.jsx';
 
 const sidebarItems = [
   { id: 'dashboard', label: 'Bảng điều khiển', hint: 'Thành viên & phương tiện', icon: '♡' },
@@ -17,69 +18,9 @@ const sidebarItems = [
 
 // branches will be fetched from API
 
-const vehicles = [
-  { id: 'sh150i', name: 'Honda SH 150i', plate: '59F2-999.99', type: 'Xe máy', points: '2.400 điểm' },
-  { id: 'exciter', name: 'Yamaha Exciter 155', plate: '59K1-888.88', type: 'Xe máy', points: '1.120 điểm' },
-];
 
-const services = [
-  {
-    id: 'standard',
-    name: 'Rửa xe máy Standard',
-    duration: '25 phút thi công',
-    price: 60000,
-    description: 'Rửa bọt tuyết chuyên sâu, xịt gầm chống hút xăng, lau khô, dưỡng lớp đèn bóng mịn màng.',
-  },
-  {
-    id: 'wax',
-    name: 'Rửa bọt tuyết + Wax bóng',
-    duration: '40 phút thi công',
-    price: 130000,
-    description: 'Bao gồm gói Standard kèm phun sáp Nano chống bám bụi và tạo độ bóng tối ưu.',
-  },
-  {
-    id: 'detail',
-    name: 'Vệ sinh chi tiết (Nội thất/Động cơ)',
-    duration: '75 phút thi công',
-    price: 280000,
-    description: 'Làm sạch sâu khoang máy, nhông sên đĩa bằng hóa chất chuyên dụng, xịt dưỡng chống rỉ sét.',
-  },
-  {
-    id: 'ceramic',
-    name: 'Sơn phủ Ceramic chống trầy',
-    duration: '90 phút thi công',
-    price: 450000,
-    description: 'Phết dung dịch phủ thủy tinh Ceramic để tối đa hóa độ dán áo nhựa và chống tác động va quệt.',
-  },
-  {
-    id: 'polish',
-    name: 'Đánh bóng dàn nhựa mờ chuyên sâu',
-    duration: '30 phút thi công',
-    price: 90000,
-    description: 'Tẩy ố mốc sần trên các phần nhựa nhám đen hoặc xám của xe ga lớn, phục hồi màu như mới khui thùng.',
-  },
-  {
-    id: 'helmet',
-    name: 'Xông tinh dầu khử mùi mũ bảo hiểm',
-    duration: '15 phút thi công',
-    price: 50000,
-    description: 'Xử lý vi khuẩn bám lót mũ bảo hiểm 3/4 hoặc fullface bằng máy xông hơi nóng nano bạc kết hợp quế thơm.',
-  },
-  {
-    id: 'wheel',
-    name: 'Tẩy ố vàng vành nan hoa / gầm máy',
-    duration: '45 phút thi công',
-    price: 150000,
-    description: 'Sử dụng dung dịch axit nhẹ đặc chủng hữu cơ làm sạch rỉ sét căm xe, má đùm pô lâu năm.',
-  },
-  {
-    id: 'vip',
-    name: 'Combo Rửa xe toàn diện VIP',
-    duration: '120 phút thi công',
-    price: 500000,
-    description: 'Trải nghiệm đỉnh cao bao gồm rửa chi tiết máy, đánh bóng sườn, phủ sáp SiO2 và vệ sinh sên đĩa.',
-  },
-];
+
+
 
 const timeSlots = [
   '08:00 - 08:30',
@@ -130,7 +71,9 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [selectedBranch, setSelectedBranch] = useState('');
   const vehicleList = userVehicles;
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleList[0]?.id || vehicleList[0]?._id || vehicleList[0]?.licensePlate || '');
-  const [selectedService, setSelectedService] = useState(services[0].id);
+  const [packages, setPackages] = useState([]);
+  const [selectedPackage, setSelectedPackage] = useState('');
+  const [selectedSubServices, setSelectedSubServices] = useState({});
   const [selectedDate, setSelectedDate] = useState(bookingDates[1]?.id || bookingDates[0].id);
   const [selectedTime, setSelectedTime] = useState('');
   const [couponCode, setCouponCode] = useState('');
@@ -143,24 +86,27 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [currentUser, setCurrentUser] = useState(user);
 
   useEffect(() => {
-    async function fetchBranches() {
+    async function fetchData() {
       try {
-        const res = await fetch(`${apiBase}/branches`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const payload = await res.json();
-        const data = payload?.data || payload;
-        const mappedBranches = (Array.isArray(data) ? data : []).map(b => ({
-          ...b,
-          id: b._id || b.id
-        }));
+        const [resBranches, resPackages] = await Promise.all([
+          fetch(`${apiBase}/branches`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${apiBase}/packages`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        const branchesPayload = await resBranches.json();
+        const packagesPayload = await resPackages.json();
+        
+        const dataB = branchesPayload?.data || branchesPayload;
+        const mappedBranches = (Array.isArray(dataB) ? dataB : []).map(b => ({ ...b, id: b._id || b.id }));
         setBranches(mappedBranches);
-        if (mappedBranches.length > 0) {
-          setSelectedBranch(mappedBranches[0].id);
-        }
-      } catch (e) { console.error('Failed to load branches', e); }
+        if (mappedBranches.length > 0) setSelectedBranch(mappedBranches[0].id);
+
+        const dataP = packagesPayload?.data || packagesPayload;
+        const mappedPackages = (Array.isArray(dataP) ? dataP : []).map(p => ({ ...p, id: p._id || p.id }));
+        setPackages(mappedPackages);
+        if (mappedPackages.length > 0) setSelectedPackage(mappedPackages[0].id);
+      } catch (e) { console.error('Failed to load data', e); }
     }
-    if (token) fetchBranches();
+    if (token) fetchData();
   }, [apiBase, token]);
 
   const refreshUser = async () => {
@@ -181,11 +127,27 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
   const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
   const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
-  const service = services.find((item) => item.id === selectedService) || services[0];
+  const pkg = packages.find(p => p.id === selectedPackage);
   const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
 
-  const discount = couponApplied && appliedVoucher ? appliedVoucher.savings : 0;
-  const total = Math.max(0, service.price - discount);
+  const currentSubServices = selectedSubServices[selectedPackage] || [];
+  let extraDuration = 0;
+  let extraPrice = 0;
+  if (pkg && pkg.subServices) {
+    for (const sub of pkg.subServices) {
+      if (currentSubServices.includes(sub.name)) {
+        extraDuration += sub.duration || 0;
+        extraPrice += sub.price || 0;
+      }
+    }
+  }
+
+  const basePrice = pkg ? pkg.price : 0;
+  const totalBase = basePrice + extraPrice;
+  const pkgDuration = pkg ? pkg.duration + extraDuration : 0;
+
+  const discount = appliedVoucher ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value) : 0;
+  const total = Math.max(0, totalBase - discount);
   const points = Math.max(60, Math.round(total / 1000) * 10);
 
   async function applyCoupon() {
@@ -251,23 +213,13 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
         },
         body: JSON.stringify({
           branchId: branch.id,
-          branchName: branch.name,
-          branchAddress: branch.address,
-          vehicleId: vehicle.id || vehicle._id,
-          vehicleName: vehicle.name || `${vehicle.brand || ''} ${vehicle.model || ''}`.trim() || vehicle.licensePlate,
-          vehiclePlate: vehicle.plate || vehicle.licensePlate,
-          vehicleType: vehicle.type || vehicle.vehicleType || 'motorcycle',
-          serviceId: service.id,
-          serviceName: service.name,
-          serviceDuration: service.duration,
-          servicePrice: service.price,
+          packageId: pkg.id,
+          vehicleId: vehicle.id || vehicle._id || vehicle.licensePlate,
           bookingDate: date.iso,
-          timeSlot: selectedTime,
-          couponCode: couponCode.trim().toUpperCase(),
-          discountAmount: discount,
-          totalAmount: total,
-          pointsEarned: points,
-          notes: '',
+          startTime: selectedTime,
+          voucherCode: appliedVoucher?.code || undefined,
+          selectedSubServices: currentSubServices,
+          note: '',
         }),
       });
 
@@ -279,7 +231,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const payload = await response.json();
       const booking = payload?.data || payload;
       setBookingCode(booking?.bookingCode || booking?.code || '');
-      setMessage(`Đã giữ chỗ ${service.name} tại ${branch.name} lúc ${selectedTime}.`);
+      setMessage(`Đã giữ chỗ ${pkg?.name || 'Dịch vụ'} tại ${branch.name} lúc ${selectedTime}.`);
     } catch (error) {
       setMessage(error.message || 'Không thể tạo lịch hẹn');
     } finally {
@@ -418,23 +370,50 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
               <article className="aw-card-section aw-services-panel">
                 <div className="aw-step-title"><span>3</span> CHỌN GÓI DỊCH VỤ RỬA XE</div>
                 <div className="aw-options stacked scrollable">
-                  {services.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={item.id === selectedService ? 'aw-option aw-service active' : 'aw-option aw-service'}
-                      onClick={() => setSelectedService(item.id)}
-                    >
-                      <div className="aw-option-head service-head">
-                        <div>
-                          <strong>{item.name}</strong>
-                          <small>{item.duration}</small>
-                        </div>
-                        <span>{formatCurrency(item.price)}</span>
+                  {packages.map(p => {
+                    const isActive = p.id === selectedPackage;
+                    return (
+                      <div key={p.id} className={isActive ? 'aw-option aw-service active' : 'aw-option aw-service'}>
+                        <button type="button" style={{all: 'unset', width: '100%', cursor: 'pointer'}} onClick={() => setSelectedPackage(p.id)}>
+                          <div className="aw-option-head service-head">
+                            <div><strong>{p.name}</strong><small>{p.duration} phút</small></div>
+                            <span>{formatCurrency(p.price)}</span>
+                          </div>
+                          <p style={{margin: '8px 0'}}>{p.description}</p>
+                        </button>
+                        
+                        {isActive && p.subServices && p.subServices.length > 0 && (
+                          <div style={{ marginTop: '10px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
+                            <strong style={{ fontSize: '0.85rem', color: '#ffb347', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
+                            {p.subServices.map((sub) => {
+                              const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
+                              return (
+                                <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setSelectedSubServices(prev => {
+                                        const current = prev[p.id] || [];
+                                        return {
+                                          ...prev,
+                                          [p.id]: checked ? [...current, sub.name] : current.filter(x => x !== sub.name)
+                                        };
+                                      });
+                                    }}
+                                    disabled={!sub.isOptional}
+                                  />
+                                  <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
+                                  <span style={{ color: '#00f2fe', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                      <p>{item.description}</p>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </article>
 
@@ -495,19 +474,19 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                 <div className="aw-summary-divider" />
 
                 <div className="aw-summary-row price-row">
-                  <span>Gói: {service.name}</span>
-                  <strong>{formatCurrency(service.price)}</strong>
+                  <span>Gói: {pkg ? pkg.name : 'Chưa chọn'}</span>
+                  <strong>{formatCurrency(totalBase)}</strong>
                 </div>
 
-                <label className="aw-summary-label" htmlFor="coupon">HỘP COUPON KHUYẾN MÃI</label>
-                <div className="aw-coupon-row">
-                  <input
-                    id="coupon"
-                    value={couponCode}
-                    onChange={(event) => setCouponCode(event.target.value)}
-                    placeholder="NHẬP MÃ COUPON..."
+                <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+                  <VoucherPicker
+                    apiBase={apiBase}
+                    token={token}
+                    selected={appliedVoucher}
+                    onSelect={setAppliedVoucher}
+                    orderAmount={totalBase}
+                    compact={true}
                   />
-                  <button type="button" onClick={applyCoupon}>Áp dụng</button>
                 </div>
 
                 <div className="aw-pricing">

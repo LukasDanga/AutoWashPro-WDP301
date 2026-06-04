@@ -55,7 +55,7 @@ exports.createBooking = async (data) => {
   session.startTransaction();
 
   try {
-    const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice } = data;
+    const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice, selectedSubServices } = data;
 
     const [pkg, branch, vehicle] = await Promise.all([
       Package.findById(packageId).session(session),
@@ -72,9 +72,26 @@ exports.createBooking = async (data) => {
       throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
     }
 
-    const endTime = computeEndTime(startTime, pkg.duration);
+    // Verify subServices and calculate total extra duration & price
+    let extraDuration = 0;
+    let extraPrice = 0;
+    const validSubServices = [];
+    if (selectedSubServices && Array.isArray(selectedSubServices) && pkg.subServices) {
+      for (const serviceName of selectedSubServices) {
+        const sub = pkg.subServices.find(s => s.name === serviceName);
+        if (sub) {
+          extraDuration += sub.duration || 0;
+          extraPrice += sub.price || 0;
+          validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration });
+        }
+      }
+    }
+
+    const totalDuration = pkg.duration + extraDuration;
+    const endTime = computeEndTime(startTime, totalDuration);
     const endMinutes = parseTime(endTime);
     const closeMinutes = parseTime(branch.closingTime || '20:00');
+
     if (endMinutes > closeMinutes) {
       throw Object.assign(new Error('Booking end time exceeds branch closing time'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
     }
@@ -114,12 +131,13 @@ exports.createBooking = async (data) => {
     }
 
     let computedDiscountAmount = 0;
-    let computedFinalPrice = pkg.price;
+    let computedFinalPrice = pkg.price + extraPrice;
 
     if (voucherCode) {
-      const voucherResult = await voucherService.validateVoucher(voucherCode, { packageId, branchId }, userId);
-      computedDiscountAmount = voucherResult.discountAmount;
-      computedFinalPrice = voucherResult.finalAmount;
+      // Pass the computedBasePrice to voucher validation if needed, assuming voucher validation accepts amount
+      const voucherResult = await voucherService.validateVoucher(voucherCode, { packageId, branchId, amount: computedFinalPrice }, userId);
+      computedDiscountAmount = voucherResult.discountAmount || voucherResult.savings || 0;
+      computedFinalPrice = voucherResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
     }
 
     const booking = new Booking({
@@ -128,6 +146,7 @@ exports.createBooking = async (data) => {
       voucherCode: voucherCode || undefined,
       discountAmount: computedDiscountAmount,
       finalPrice: computedFinalPrice,
+      selectedSubServices: validSubServices,
     });
     await booking.save({ session });
 
@@ -265,6 +284,9 @@ exports.updateBookingStatus = async (id, status) => {
 
   const update = { status };
   if (status === 'cancelled') update.cancelledAt = new Date();
+  if (status === 'completed' && currentBooking.paymentStatus === 'unpaid') {
+    update.paymentStatus = 'pending';
+  }
 
   const booking = await Booking.findOneAndUpdate(
     { _id: id, status: currentBooking.status },
@@ -414,7 +436,7 @@ exports.createRecurringBooking = async (data) => {
   const {
     userId, branchId, packageId, vehicleId,
     weekdays, startTime, weeks,
-    note, voucherCode,
+    note, voucherCode, selectedSubServices,
   } = data;
 
   // --- Validate base entities (ngoài transaction — chỉ đọc) ---
@@ -442,8 +464,24 @@ exports.createRecurringBooking = async (data) => {
     throw Object.assign(new Error('Weeks must be between 1 and 12'), { statusCode: 400, code: 'INVALID_WEEKS' });
   }
 
+  // --- Sub-services ---
+  let extraDuration = 0;
+  let extraPrice = 0;
+  const validSubServices = [];
+  if (selectedSubServices && Array.isArray(selectedSubServices) && pkg.subServices) {
+    for (const serviceName of selectedSubServices) {
+      const sub = pkg.subServices.find(s => s.name === serviceName);
+      if (sub) {
+        extraDuration += sub.duration || 0;
+        extraPrice += sub.price || 0;
+        validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration });
+      }
+    }
+  }
+
   // --- Validate time ---
-  const endTime = computeEndTime(startTime, pkg.duration);
+  const totalDuration = pkg.duration + extraDuration;
+  const endTime = computeEndTime(startTime, totalDuration);
   const endMinutes = parseTime(endTime);
   const closeMinutes = parseTime(branch.closingTime || '20:00');
   if (endMinutes > closeMinutes) {
@@ -455,11 +493,11 @@ exports.createRecurringBooking = async (data) => {
 
   // --- Validate voucher (1 lần, áp cho toàn bộ series) ---
   let computedDiscountAmount = 0;
-  let computedFinalPrice = pkg.price;
+  let computedFinalPrice = pkg.price + extraPrice;
   if (voucherCode) {
-    const vResult = await voucherService.validateVoucher(voucherCode, { packageId, branchId, amount: pkg.price }, userId);
-    computedDiscountAmount = vResult.discountAmount;
-    computedFinalPrice = vResult.finalAmount;
+    const vResult = await voucherService.validateVoucher(voucherCode, { packageId, branchId, amount: computedFinalPrice }, userId);
+    computedDiscountAmount = vResult.discountAmount || vResult.savings || 0;
+    computedFinalPrice = vResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
   }
 
   // --- Build danh sách các ngày cần tạo booking ---
@@ -526,6 +564,7 @@ exports.createRecurringBooking = async (data) => {
         voucherCode: voucherCode ? voucherCode.trim().toUpperCase() : undefined,
         discountAmount: computedDiscountAmount,
         finalPrice: computedFinalPrice,
+        selectedSubServices: validSubServices,
       });
       await booking.save({ session });
       await session.commitTransaction();
@@ -540,9 +579,10 @@ exports.createRecurringBooking = async (data) => {
   }
 
   if (created.length === 0) {
+    const reason = failed.length > 0 ? failed[0].reason : 'Tất cả khung giờ đã bị đặt.';
     throw Object.assign(
-      new Error('Không thể tạo bất kỳ booking nào. Tất cả khung giờ đã bị đặt.'),
-      { statusCode: 409, code: 'ALL_SLOTS_TAKEN' }
+      new Error(`Không thể tạo bất kỳ booking nào. Lý do: ${reason}`),
+      { statusCode: 409, code: 'ALL_SLOTS_TAKEN', failed }
     );
   }
 

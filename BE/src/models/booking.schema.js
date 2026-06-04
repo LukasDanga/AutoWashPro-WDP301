@@ -27,6 +27,13 @@ const bookingSchema = new mongoose.Schema(
     priority: { type: Number, default: 1, min: 1, max: 4 },
     // Ref đến SlotPack nếu là slot_pack_usage
     slotPackId: { type: mongoose.Schema.Types.ObjectId, ref: 'SlotPack' },
+    selectedSubServices: [
+      {
+        name: { type: String, required: true },
+        price: { type: Number, required: true, min: 0 },
+        duration: { type: Number, required: true, min: 0 },
+      },
+    ],
     voucherCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
     finalPrice: { type: Number, min: 0 },

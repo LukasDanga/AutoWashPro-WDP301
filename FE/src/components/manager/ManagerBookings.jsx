@@ -9,6 +9,10 @@ import {
   XCircle,
   Warning,
   ClockCounterClockwise,
+  ArrowLeft,
+  CircleDashed,
+  PlayCircle,
+  Eye,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -117,6 +121,114 @@ function StatusMenu({ bookingId, current, onUpdated }) {
   );
 }
 
+/* ── booking details tab ── */
+function BookingDetailsTab({ booking, onBack, onUpdated }) {
+  const [busy, setBusy] = useState(false);
+  const stages = [
+    { id: 'pending', label: 'Chờ xác nhận' },
+    { id: 'in_progress', label: 'Đang thực hiện' },
+    { id: 'completed', label: 'Hoàn thành' },
+  ];
+
+  const currentStageIndex = stages.findIndex(s => s.id === booking.status);
+
+  const updateStatus = async (newStatus) => {
+    setBusy(true);
+    try {
+      const res = await api(`/bookings/${booking._id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const payload = await res.json();
+      onUpdated(payload?.data ?? payload);
+    } catch (err) {
+      alert(err.message);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+      <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+        <ArrowLeft size={16} /> Quay lại danh sách
+      </button>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+          <h2 className="text-lg font-bold text-slate-800">Chi tiết đơn đặt lịch <span className="text-blue-600 font-mono text-base">#{booking._id.substring(18).toUpperCase()}</span></h2>
+          <StatusBadge status={booking.status} />
+        </div>
+        
+        {/* Stages Tracking */}
+        {booking.status !== 'cancelled' ? (
+          <div className="mb-10 mt-6 relative px-8">
+            <div className="absolute top-1/2 left-10 right-10 h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
+            <div className="relative flex justify-between">
+              {stages.map((stage, idx) => {
+                const isPast = currentStageIndex > idx || booking.status === 'completed';
+                const isCurrent = currentStageIndex === idx;
+                const Icon = isPast ? CheckCircle : isCurrent ? PlayCircle : CircleDashed;
+                const color = isPast ? 'text-emerald-500 bg-emerald-50' : isCurrent ? 'text-blue-500 bg-blue-50 ring-4 ring-blue-100' : 'text-slate-300 bg-white';
+                
+                return (
+                  <div key={stage.id} className="flex flex-col items-center gap-2 bg-white px-4 z-10 min-w-[120px]">
+                    <div className={`rounded-full p-1.5 ${color} transition-all duration-300`}>
+                      <Icon size={24} weight={isPast ? 'fill' : isCurrent ? 'duotone' : 'regular'} />
+                    </div>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isCurrent ? 'text-blue-600' : isPast ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {stage.label}
+                    </span>
+                    {isCurrent && stage.id !== 'completed' && (
+                      <button disabled={busy} onClick={() => updateStatus(stages[idx + 1].id)}
+                        className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 hover:shadow disabled:opacity-50 transition-all">
+                        {busy ? 'Đang cập nhật...' : `Chuyển sang ${stages[idx + 1].label}`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8 rounded-xl bg-rose-50 p-4 border border-rose-100 text-rose-700 flex items-center gap-2">
+            <XCircle size={20} weight="fill" />
+            <span className="text-sm font-medium">Đơn đặt lịch này đã bị hủy.</span>
+          </div>
+        )}
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-2 gap-6 rounded-xl bg-slate-50 p-5 border border-slate-100">
+          <div>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Khách hàng</h3>
+            <p className="font-medium text-slate-800">{booking.userId?.name || '—'}</p>
+            <p className="text-sm text-slate-600">{booking.userId?.phone || '—'}</p>
+            <p className="text-xs text-slate-500 mt-1">{booking.userId?.email || ''}</p>
+          </div>
+          <div>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dịch vụ</h3>
+            <p className="font-medium text-slate-800">{booking.packageId?.name || '—'}</p>
+            <p className="text-sm text-slate-600">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')} lúc {booking.startTime}</p>
+            <p className="text-xs text-slate-500 mt-1">{booking.branchId?.name || '—'}</p>
+          </div>
+          <div>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Chi tiết thanh toán</h3>
+            <p className="text-sm text-slate-700 mb-2">
+              Tổng tiền: <strong className="text-slate-900">{Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫</strong>
+            </p>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+              {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
+            </span>
+          </div>
+          <div>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Ghi chú</h3>
+            <p className="text-sm text-slate-600 italic">{booking.note || 'Không có ghi chú'}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Main ═══ */
 export default function ManagerBookings() {
   const [bookings, setBookings] = useState([]);
@@ -125,6 +237,7 @@ export default function ManagerBookings() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [toast, setToast] = useState(null);
+  const [selectedBooking, setSelectedBooking] = useState(null);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
@@ -156,6 +269,9 @@ export default function ManagerBookings() {
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
+    if (selectedBooking && selectedBooking._id === updated._id) {
+      setSelectedBooking(updated);
+    }
     notify('Đã cập nhật trạng thái đặt lịch');
   };
 
@@ -171,8 +287,12 @@ export default function ManagerBookings() {
     } catch (err) { notify(err.message || 'Hủy thất bại', 'error'); }
   };
 
+  if (selectedBooking) {
+    return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} />;
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-in fade-in duration-300">
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
@@ -238,9 +358,15 @@ export default function ManagerBookings() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} />
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => setSelectedBooking(b)} title="Chi tiết & Tracking"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                        <Eye size={16} />
+                      </button>
+                      <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} />
+                    </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-right">
                     {b.status !== 'cancelled' && b.status !== 'completed' && (
                       <button onClick={() => handleCancel(b._id)}
                         className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">

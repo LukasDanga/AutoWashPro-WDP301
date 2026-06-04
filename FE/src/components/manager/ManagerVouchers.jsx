@@ -10,6 +10,7 @@ import {
   X,
   XCircle,
   PencilSimple,
+  ClockCounterClockwise,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -215,6 +216,64 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
   );
 }
 
+function VoucherUsageModal({ voucherId, onClose }) {
+  const [usages, setUsages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    api(`/vouchers/usage/${voucherId}`)
+      .then(res => { if (!res.ok) throw new Error('Failed to load usage'); return res.json(); })
+      .then(p => { if (mounted) { setUsages(p?.data ?? []); setLoading(false); } })
+      .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
+    return () => { mounted = false; };
+  }, [voucherId]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-slate-800">Lịch sử sử dụng Voucher</h2>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"><X size={16} /></button>
+        </div>
+        <div className="max-h-[72vh] overflow-y-auto p-0">
+          {loading ? (
+             <div className="flex justify-center py-10"><Spinner /></div>
+          ) : error ? (
+             <p className="text-red-500 text-sm text-center py-10">{error}</p>
+          ) : usages.length === 0 ? (
+             <p className="text-slate-500 text-sm text-center py-10">Chưa có ai sử dụng voucher này.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                  <th className="px-4 py-3">Khách hàng</th>
+                  <th className="px-4 py-3">Ngày đặt</th>
+                  <th className="px-4 py-3">Giảm giá</th>
+                  <th className="px-4 py-3">Ngày dùng</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {usages.map((u, i) => (
+                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-slate-800">{u.userId?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
+                    <td className="px-4 py-3 text-emerald-600 font-medium">-{Number(u.discountAmount).toLocaleString('vi-VN')}₫</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{new Date(u.usedAt).toLocaleString('vi-VN')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Main ═══ */
 export default function ManagerVouchers() {
   const [vouchers, setVouchers] = useState([]);
@@ -356,10 +415,16 @@ export default function ManagerVouchers() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button id={`edit-voucher-${v._id}`} onClick={() => { setSelected(v); setModal('edit'); }}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                      <PencilSimple size={14} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => { setSelected(v); setModal('usage'); }} title="Lịch sử dùng"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                        <ClockCounterClockwise size={14} />
+                      </button>
+                      <button id={`edit-voucher-${v._id}`} onClick={() => { setSelected(v); setModal('edit'); }} title="Chỉnh sửa"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                        <PencilSimple size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -373,6 +438,9 @@ export default function ManagerVouchers() {
       )}
       {modal === 'edit' && selected && (
         <VoucherModal initial={selected} onSave={handleUpdate} onClose={() => setModal(null)} saving={saving} />
+      )}
+      {modal === 'usage' && selected && (
+        <VoucherUsageModal voucherId={selected._id} onClose={() => setModal(null)} />
       )}
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
