@@ -10,6 +10,7 @@ function resolvePageMeta(pathname) {
   if (pathname.startsWith('/manager/checkins')) return MANAGER_PAGE_META.checkins;
   if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
   if (pathname.startsWith('/manager/vouchers')) return MANAGER_PAGE_META.vouchers;
+  if (pathname.startsWith('/manager/revenue')) return MANAGER_PAGE_META.revenue;
   if (pathname.startsWith('/manager/profile')) return MANAGER_PAGE_META.profile;
   return MANAGER_PAGE_META.overview;
 }

@@ -8,7 +8,7 @@ const swaggerUi = require('swagger-ui-express');
 
 const swaggerSpec = require('./config/swagger');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
-const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, voucherRoutes, checkinRoutes, notificationRoutes, slotPackRoutes } = require('./routes');
+const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, voucherRoutes, checkinRoutes, notificationRoutes, slotPackRoutes, reportRoutes } = require('./routes');
 
 const app = express();
 
@@ -43,6 +43,7 @@ app.use('/api/vouchers', voucherRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/slot-packs', slotPackRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

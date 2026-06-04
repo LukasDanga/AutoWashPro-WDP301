@@ -5,6 +5,7 @@ import {
   Buildings,
   Tag,
   UserCircle,
+  CurrencyCircleDollar,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -37,6 +38,12 @@ export const MANAGER_MENU_ITEMS = [
     label: 'Chi nhánh của tôi',
     to: '/manager/branch',
     icon: Buildings,
+  },
+  {
+    id: 'revenue',
+    label: 'Doanh thu',
+    to: '/manager/revenue',
+    icon: CurrencyCircleDollar,
   },
   {
     id: 'vouchers',
@@ -72,6 +79,10 @@ export const MANAGER_PAGE_META = {
   vouchers: {
     title: 'Quản lý voucher',
     description: 'Tạo và quản lý mã giảm giá áp dụng tại chi nhánh.',
+  },
+  revenue: {
+    title: 'Báo cáo doanh thu',
+    description: 'Thống kê doanh thu theo thời gian, dịch vụ và khách hàng.',
   },
   profile: {
     title: 'Hồ sơ cá nhân',
