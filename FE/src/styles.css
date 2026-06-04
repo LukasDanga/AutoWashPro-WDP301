@@ -876,3 +876,543 @@ input:focus-visible {
 
 
 }
+
+/* ═══════════════════════════════════════════════════════════
+   RECURRING BOOKING FLOW
+═══════════════════════════════════════════════════════════ */
+
+.rb-wrapper {
+	padding: 4px 0 32px;
+}
+
+.rb-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 8px 2px 20px;
+}
+
+.rb-title {
+	margin: 4px 0 6px;
+	font-size: clamp(1.4rem, 2vw, 2rem);
+	letter-spacing: 0.02em;
+}
+
+.rb-sub {
+	margin: 0;
+	color: var(--muted);
+	line-height: 1.6;
+	max-width: 640px;
+}
+
+.rb-tier-badge {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 14px 20px;
+	border-radius: 20px;
+	border: 2px solid;
+	background: rgba(9, 15, 31, 0.6);
+	font-size: 1.1rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+	min-width: 140px;
+	text-align: center;
+}
+
+.rb-tier-badge small {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.rb-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 400px;
+	gap: 18px;
+}
+
+.rb-flow {
+	display: grid;
+	gap: 18px;
+}
+
+.rb-weekdays {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 10px;
+	margin-bottom: 14px;
+}
+
+.rb-day {
+	display: grid;
+	place-items: center;
+	min-height: 56px;
+	border-radius: 16px;
+	border: 1px solid var(--line-strong);
+	background: rgba(9, 15, 31, 0.76);
+	font-weight: 700;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: all 0.18s ease;
+}
+
+.rb-day.active {
+	background: linear-gradient(180deg, rgba(46, 125, 255, 0.95), rgba(107, 76, 255, 0.9));
+	border-color: rgba(255, 255, 255, 0.1);
+	box-shadow: 0 8px 24px rgba(46, 125, 255, 0.28);
+	transform: translateY(-2px);
+}
+
+.rb-weeks-grid {
+	display: grid;
+	grid-template-columns: repeat(6, 1fr);
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.rb-week-btn {
+	min-height: 48px;
+	padding: 10px 8px;
+	border-radius: 14px;
+	border: 1px solid var(--line-strong);
+	background: rgba(9, 15, 31, 0.76);
+	font-weight: 600;
+	font-size: 0.88rem;
+	cursor: pointer;
+}
+
+.rb-week-btn.active {
+	background: linear-gradient(180deg, rgba(46, 125, 255, 0.9), rgba(107, 76, 255, 0.85));
+	border-color: transparent;
+}
+
+.rb-preview {
+	margin-top: 16px;
+	padding: 14px;
+	border-radius: 16px;
+	background: rgba(9, 15, 31, 0.5);
+	border: 1px solid rgba(177, 194, 255, 0.1);
+}
+
+.rb-preview-title {
+	font-size: 0.8rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: #8bc0ff;
+	margin-bottom: 10px;
+}
+
+.rb-preview-list {
+	display: grid;
+	gap: 6px;
+}
+
+.rb-preview-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 10px;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.03);
+	font-size: 0.88rem;
+}
+
+.rb-preview-item span {
+	color: var(--muted);
+	min-width: 36px;
+}
+
+.rb-preview-more {
+	text-align: center;
+	color: var(--muted);
+	font-size: 0.82rem;
+	padding: 6px;
+}
+
+.rb-coupon-msg {
+	margin-top: 8px;
+	font-size: 0.84rem;
+	color: #10b981;
+}
+
+.rb-error {
+	margin-top: 12px;
+	padding: 10px 14px;
+	border-radius: 14px;
+	background: rgba(239, 68, 68, 0.12);
+	border: 1px solid rgba(239, 68, 68, 0.3);
+	color: #fca5a5;
+	font-size: 0.88rem;
+}
+
+.rb-result {
+	margin-top: 12px;
+	padding: 14px;
+	border-radius: 16px;
+	background: rgba(16, 185, 129, 0.08);
+	border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.rb-result-ok {
+	font-weight: 700;
+	color: #6ee7b7;
+}
+
+.rb-result-warn {
+	margin-top: 6px;
+	color: #fbbf24;
+	font-size: 0.88rem;
+}
+
+.rb-result-failed {
+	margin-top: 8px;
+	font-size: 0.82rem;
+	color: #fca5a5;
+	display: grid;
+	gap: 3px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SLOT PACK FLOW
+═══════════════════════════════════════════════════════════ */
+
+.sp-wrapper {
+	padding: 4px 0 32px;
+}
+
+/* Discount tier banner */
+.sp-discount-banner {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.sp-tier-item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 14px 10px;
+	border-radius: 18px;
+	border: 1px solid var(--line);
+	background: rgba(9, 15, 31, 0.6);
+	text-align: center;
+	transition: all 0.2s ease;
+}
+
+.sp-tier-item.sp-tier-active {
+	border-color: rgba(61, 224, 255, 0.6);
+	background: rgba(61, 224, 255, 0.06);
+	box-shadow: 0 0 24px rgba(61, 224, 255, 0.12);
+}
+
+.sp-tier-range {
+	font-size: 0.8rem;
+	color: var(--muted);
+	font-weight: 600;
+}
+
+.sp-tier-pct {
+	font-size: 1.3rem;
+	font-family: 'Space Grotesk', sans-serif;
+	color: #3de0ff;
+}
+
+.sp-tier-item small {
+	font-size: 0.74rem;
+	color: var(--muted);
+}
+
+/* Tabs */
+.sp-tabs {
+	display: flex;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.sp-tab {
+	padding: 10px 20px;
+	border-radius: 14px;
+	border: 1px solid var(--line-strong);
+	background: rgba(9, 15, 31, 0.76);
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.18s ease;
+}
+
+.sp-tab.active {
+	background: linear-gradient(90deg, rgba(46, 125, 255, 0.96), rgba(107, 76, 255, 0.9));
+	border-color: transparent;
+}
+
+/* Slot counter */
+.sp-slot-selector {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 20px;
+	margin-bottom: 16px;
+}
+
+.sp-slot-btn {
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	border: 2px solid rgba(61, 224, 255, 0.4);
+	background: rgba(61, 224, 255, 0.06);
+	font-size: 1.5rem;
+	font-weight: 700;
+	color: #3de0ff;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.sp-slot-btn:hover {
+	background: rgba(61, 224, 255, 0.15);
+	transform: scale(1.08);
+}
+
+.sp-slot-display {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-width: 80px;
+}
+
+.sp-slot-display strong {
+	font-size: 3rem;
+	font-family: 'Space Grotesk', sans-serif;
+	line-height: 1;
+	color: #edf3ff;
+}
+
+.sp-slot-display span {
+	font-size: 0.88rem;
+	color: var(--muted);
+	margin-top: 2px;
+}
+
+.sp-quick-slots {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: center;
+}
+
+.sp-quick-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 12px;
+	border: 1px solid var(--line-strong);
+	background: rgba(9, 15, 31, 0.76);
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.sp-quick-btn.active {
+	border-color: rgba(61, 224, 255, 0.7);
+	background: rgba(61, 224, 255, 0.1);
+	color: #3de0ff;
+}
+
+.sp-quick-save {
+	font-size: 0.72rem;
+	color: #10b981;
+	background: rgba(16, 185, 129, 0.12);
+	padding: 2px 6px;
+	border-radius: 999px;
+}
+
+.sp-discount-hint {
+	margin-top: 14px;
+	padding: 12px 16px;
+	border-radius: 14px;
+	background: rgba(16, 185, 129, 0.08);
+	border: 1px solid rgba(16, 185, 129, 0.22);
+	color: #d1fae5;
+	font-size: 0.92rem;
+}
+
+.sp-save-tag {
+	margin-top: 10px;
+	padding: 8px 12px;
+	border-radius: 10px;
+	background: rgba(16, 185, 129, 0.08);
+	color: #6ee7b7;
+	font-size: 0.84rem;
+	text-align: center;
+}
+
+.sp-discount-badge {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #10b981, #059669);
+	color: #fff;
+	font-size: 0.76rem;
+	font-weight: 700;
+	margin-top: 6px;
+}
+
+/* My packs */
+.sp-my-packs {
+	padding: 8px 0;
+}
+
+.sp-packs-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+	gap: 16px;
+}
+
+.sp-pack-card {
+	padding: 18px;
+	border-radius: 20px;
+	border: 1px solid rgba(177, 194, 255, 0.1);
+	background: linear-gradient(180deg, rgba(14, 22, 44, 0.96), rgba(9, 14, 30, 0.96));
+	transition: all 0.2s ease;
+}
+
+.sp-pack-card:hover {
+	border-color: rgba(61, 224, 255, 0.25);
+	box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+}
+
+.sp-pack-dimmed {
+	opacity: 0.6;
+}
+
+.sp-pack-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+.sp-pack-code {
+	font-size: 0.96rem;
+	font-weight: 800;
+	font-family: 'Space Grotesk', monospace;
+	color: #3de0ff;
+	letter-spacing: 0.08em;
+}
+
+.sp-pack-name {
+	font-size: 1rem;
+	font-weight: 700;
+	margin-top: 4px;
+}
+
+.sp-pack-branch {
+	font-size: 0.82rem;
+	color: var(--muted);
+	margin-top: 3px;
+}
+
+.sp-pack-right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
+}
+
+/* Status pills */
+.sp-status-pill {
+	padding: 4px 12px;
+	border-radius: 999px;
+	font-size: 0.76rem;
+	font-weight: 700;
+}
+
+.sp-status-active    { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+.sp-status-exhausted { background: rgba(107, 76, 255, 0.18); color: #c4b5fd; border: 1px solid rgba(107, 76, 255, 0.3); }
+.sp-status-expired   { background: rgba(245, 158, 11, 0.18); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3); }
+.sp-status-cancelled { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+/* Slot meter */
+.sp-meter-wrap {
+	margin: 12px 0;
+	display: grid;
+	gap: 6px;
+}
+
+.sp-meter-bar {
+	height: 8px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.07);
+	overflow: hidden;
+}
+
+.sp-meter-fill {
+	height: 100%;
+	border-radius: 999px;
+	transition: width 0.5s ease;
+}
+
+.sp-meter-wrap span {
+	font-size: 0.82rem;
+	color: var(--muted);
+}
+
+.sp-pack-meta {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+	gap: 10px;
+	padding: 12px 0;
+	border-top: 1px solid rgba(177, 194, 255, 0.06);
+}
+
+.sp-pack-meta div {
+	display: grid;
+	gap: 3px;
+}
+
+.sp-pack-meta small {
+	font-size: 0.74rem;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.sp-pack-meta strong {
+	font-size: 0.92rem;
+	font-weight: 700;
+}
+
+.sp-paid   { color: #6ee7b7; }
+.sp-unpaid { color: #fcd34d; }
+
+.sp-voucher-tag {
+	margin-top: 10px;
+	padding: 6px 12px;
+	border-radius: 10px;
+	background: rgba(246, 195, 67, 0.08);
+	border: 1px solid rgba(246, 195, 67, 0.2);
+	color: #fcd34d;
+	font-size: 0.82rem;
+}
+
+.sp-pack-code-display {
+	margin-top: 8px;
+	font-size: 1rem;
+	color: #3de0ff;
+}
+
+.sp-pack-code-display strong {
+	font-family: 'Space Grotesk', monospace;
+	font-size: 1.2rem;
+	letter-spacing: 0.1em;
+}

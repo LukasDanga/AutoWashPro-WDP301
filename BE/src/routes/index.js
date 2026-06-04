@@ -7,6 +7,7 @@ const paymentRoutes = require('./payment.routes');
 const voucherRoutes = require('./voucher.routes');
 const checkinRoutes = require('./checkin.routes');
 const notificationRoutes = require('./notification.routes');
+const slotPackRoutes = require('./slotPack.routes');
 
 module.exports = {
   authRoutes,
@@ -18,4 +19,5 @@ module.exports = {
   voucherRoutes,
   checkinRoutes,
   notificationRoutes,
+  slotPackRoutes,
 };

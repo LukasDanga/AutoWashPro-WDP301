@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { body, param, query } = require('express-validator');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const { validate } = require('../utils/helpers');
 const { bookingValidators } = require('../utils/validators');
@@ -33,6 +34,25 @@ const { ROLES } = require('../config/permissions');
  *         description: Booking created
  */
 router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.create, validate, bookingController.createBooking);
+
+// POST /api/bookings/recurring — Tạo định kỳ
+router.post('/recurring', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+  body('branchId').isMongoId().withMessage('Invalid branch ID'),
+  body('packageId').isMongoId().withMessage('Invalid package ID'),
+  body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
+  body('weekdays').isArray({ min: 1 }).withMessage('weekdays must be a non-empty array'),
+  body('weekdays.*').isInt({ min: 0, max: 6 }).withMessage('Each weekday must be 0-6'),
+  body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
+  body('weeks').isInt({ min: 1, max: 12 }).withMessage('weeks must be between 1 and 12'),
+  body('note').optional().trim().isLength({ max: 500 }),
+  body('voucherCode').optional().trim().isLength({ max: 50 }),
+], validate, bookingController.createRecurringBooking);
+
+// DELETE /api/bookings/recurring/:groupId — Hủy cả loạt định kỳ
+router.post('/recurring/:groupId/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+  param('groupId').isString().notEmpty().withMessage('Group ID required'),
+], validate, bookingController.cancelRecurringGroup);
+
 
 /**
  * @swagger

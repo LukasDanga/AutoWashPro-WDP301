@@ -19,6 +19,14 @@ const bookingSchema = new mongoose.Schema(
     cancelledBy: { type: String, enum: ['customer', 'admin', 'manager', 'system'] },
     cancellationReason: { type: String, trim: true, maxlength: 500 },
     rescheduleCount: { type: Number, default: 0 },
+    // Booking type: 'single' = đặt lịch thường, 'recurring' = định kỳ, 'slot_pack_usage' = dùng gói slot
+    bookingType: { type: String, enum: ['single', 'recurring', 'slot_pack_usage'], default: 'single' },
+    // UUID nhóm các booking trong 1 lần đặt định kỳ
+    recurringGroupId: { type: String, index: true },
+    // Priority dựa theo tier khách hàng: diamond=4, gold=3, silver=2, bronze=1
+    priority: { type: Number, default: 1, min: 1, max: 4 },
+    // Ref đến SlotPack nếu là slot_pack_usage
+    slotPackId: { type: mongoose.Schema.Types.ObjectId, ref: 'SlotPack' },
     voucherCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
     finalPrice: { type: Number, min: 0 },
