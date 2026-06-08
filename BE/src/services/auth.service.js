@@ -83,6 +83,33 @@ exports.getProfile = async (userId) => {
   return user;
 };
 
+exports.getCustomerProfile = async (userId) => {
+  await loyaltyService.checkAndExpirePoints(userId).catch(err => console.error('Point expiration error:', err));
+
+  const Vehicle = require('../models/vehicle.schema');
+  const user = await User.findById(userId);
+  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
+
+  const userObj = user.toJSON();
+  userObj.vehicles = await Vehicle.find({ userId }).sort({ isDefault: -1, createdAt: -1 });
+  return userObj;
+};
+
+exports.updateCustomerProfile = async (userId, updates) => {
+  const allowed = ['name', 'phone', 'avatar', 'dateOfBirth'];
+  const filtered = {};
+  allowed.forEach((k) => { if (updates[k] !== undefined) filtered[k] = updates[k]; });
+
+  const Vehicle = require('../models/vehicle.schema');
+
+  const user = await User.findByIdAndUpdate(userId, filtered, { new: true, runValidators: true });
+  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
+
+  const userObj = user.toJSON();
+  userObj.vehicles = await Vehicle.find({ userId }).sort({ isDefault: -1, createdAt: -1 });
+  return userObj;
+};
+
 exports.updateProfile = async (userId, updates) => {
   const allowed = ['name', 'phone', 'avatar', 'dateOfBirth'];
   const filtered = {};
