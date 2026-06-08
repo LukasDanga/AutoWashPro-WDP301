@@ -109,6 +109,54 @@ router.get('/profile', authenticate, authController.getProfile);
 
 /**
  * @swagger
+ * /api/auth/customer/profile:
+ *   get:
+ *     summary: Get customer profile with vehicles
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Customer profile with vehicles
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/customer/profile', authenticate, authController.getCustomerProfile);
+
+/**
+ * @swagger
+ * /api/auth/customer/profile:
+ *   put:
+ *     summary: Update customer profile
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *     responses:
+ *       200:
+ *         description: Customer profile updated
+ *       401:
+ *         description: Unauthorized
+ */
+router.put('/customer/profile', authenticate, authController.updateCustomerProfile);
+
+/**
+ * @swagger
  * /api/auth/profile:
  *   put:
  *     summary: Update user profile
@@ -122,8 +170,15 @@ router.get('/profile', authenticate, authController.getProfile);
  *           schema:
  *             type: object
  *             properties:
- *               name: { type: string }
- *               phone: { type: string }
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
  *     responses:
  *       200:
  *         description: Profile updated

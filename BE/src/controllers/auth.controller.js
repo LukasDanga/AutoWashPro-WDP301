@@ -28,6 +28,16 @@ exports.getProfile = catchAsync(async (req, res) => {
   success(res, user, 'Profile retrieved');
 });
 
+exports.getCustomerProfile = catchAsync(async (req, res) => {
+  const user = await authService.getCustomerProfile(req.userId);
+  success(res, user, 'Customer profile retrieved');
+});
+
+exports.updateCustomerProfile = catchAsync(async (req, res) => {
+  const user = await authService.updateCustomerProfile(req.userId, req.body);
+  success(res, user, 'Customer profile updated');
+});
+
 exports.updateProfile = catchAsync(async (req, res) => {
   const user = await authService.updateProfile(req.userId, req.body);
   success(res, user, 'Profile updated');

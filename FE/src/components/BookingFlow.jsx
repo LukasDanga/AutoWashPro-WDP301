@@ -3,6 +3,7 @@ import BookingsHistory from './customer/BookingsHistory.jsx';
 import LoyaltyGifts from './customer/LoyaltyGifts.jsx';
 import RecurringBookingFlow from './customer/RecurringBookingFlow.jsx';
 import SlotPackFlow from './customer/SlotPackFlow.jsx';
+import CustomerProfile from './customer/CustomerProfile.jsx';
 import VoucherPicker from './VoucherPicker.jsx';
 
 const sidebarItems = [
@@ -549,6 +550,12 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           {activeNav === 'gifts' ? (
             <div style={{ paddingTop: 8 }}>
               <LoyaltyGifts apiBase={apiBase} token={token} user={currentUser} refreshUser={refreshUser} />
+            </div>
+          ) : null}
+
+          {activeNav === 'profile' ? (
+            <div style={{ paddingTop: 8 }}>
+              <CustomerProfile apiBase={apiBase} token={token} />
             </div>
           ) : null}
 
