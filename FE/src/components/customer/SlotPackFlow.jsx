@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import VoucherPicker from './VoucherPicker.jsx';
+import VoucherPicker from '../VoucherPicker.jsx';
 
 const DISCOUNT_TIERS = [
   { min: 1,  max: 4,  pct: 0,  label: 'Giá gốc' },

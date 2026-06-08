@@ -294,54 +294,6 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
               >
                 {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}
               </button>
-
-              <div className="mt-8">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200"></div>
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-slate-50 px-4 font-medium text-slate-400 uppercase tracking-wider">
-                      Tài khoản trải nghiệm nhanh
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    disabled={loginLoading}
-                    onClick={() => handleQuickCustomerLogin('dong@washpro.vn', 'Password123!')}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-[#c1865a]/30 bg-[#fdfaf6] py-2.5 text-sm font-semibold text-[#a86532] transition-colors hover:bg-[#faeedd]"
-                  >
-                    <Crown size={18} weight="fill" className="text-[#cd7f32]" /> Đồng
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loginLoading}
-                    onClick={() => handleQuickCustomerLogin('kimcuong@washpro.vn', 'Password123!')}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 py-2.5 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
-                  >
-                    <Diamond size={18} weight="fill" className="text-blue-500" /> Kim Cương
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loginLoading}
-                    onClick={handleQuickManagerLogin}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 py-2.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
-                  >
-                    <Storefront size={18} weight="duotone" /> Manager
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loginLoading}
-                    onClick={handleQuickAdminLogin}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                  >
-                    <IdentificationBadge size={18} weight="duotone" /> Admin
-                  </button>
-                </div>
-              </div>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-5">

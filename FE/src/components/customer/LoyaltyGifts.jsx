@@ -7,22 +7,19 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const [loading, setLoading] = useState(true);
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [activeTab, setActiveTab] = useState('exchange'); // 'exchange' | 'my-vouchers'
+  const [activeTab, setActiveTab] = useState('exchange');
 
   const fetchVouchers = async () => {
     setLoading(true);
     try {
-      // Lấy voucher mẫu
       const resTpl = await fetch(`${apiBase}/vouchers`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const dataTpl = await resTpl.json();
       const allVouchers = dataTpl.data || [];
-      // Lọc các voucher mẫu (isTemplate) hoặc public (isTemplate=false nhưng applicableTiers có)
       const templates = allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0);
       setVouchers(templates);
 
-      // Lấy voucher của tôi
       const resMy = await fetch(`${apiBase}/vouchers/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -61,8 +58,8 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
       }
       
       setMessage('✅ Đổi Voucher thành công!');
-      fetchVouchers(); // Refresh list
-      if (refreshUser) refreshUser(); // Refresh points
+      fetchVouchers();
+      if (refreshUser) refreshUser();
     } catch (err) {
       setMessage(`❌ ${err.message}`);
     } finally {
@@ -75,11 +72,11 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
 
   const getTierColor = (tier) => {
     switch (tier) {
-      case 'bronze': return '#cd7f32';
-      case 'silver': return '#c0c0c0';
-      case 'gold': return '#ffd700';
-      case 'diamond': return '#b9f2ff';
-      default: return '#cd7f32';
+      case 'bronze': return '#b45309';
+      case 'silver': return '#64748b';
+      case 'gold': return '#b45309';
+      case 'diamond': return '#0891b2';
+      default: return '#b45309';
     }
   };
 
@@ -97,88 +94,88 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const progress = user?.tier === 'diamond' ? 100 : Math.min(100, ((user?.lifetimePoints || 0) / nextTier.points) * 100);
 
   return (
-    <div className="aw-loyalty-container" style={{ padding: '24px', animation: 'fadeIn 0.3s ease-in-out' }}>
+    <div className="aw-loyalty-container" style={{ padding: '24px' }}>
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .tier-card {
-          background: linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%);
+          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
           border-radius: 16px;
           padding: 24px;
-          color: white;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+          color: #1e293b;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.06);
           position: relative;
           overflow: hidden;
           margin-bottom: 32px;
-          border: 1px solid #333;
+          border: 1px solid rgba(148, 163, 184, 0.2);
         }
         .tier-card::before {
           content: '';
           position: absolute;
           top: -50%; left: -50%; width: 200%; height: 200%;
-          background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 60%);
+          background: radial-gradient(circle, rgba(37, 99, 235, 0.03), transparent 60%);
           transform: rotate(30deg);
         }
         .tier-header { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 2; }
         .tier-badge {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 6px 16px; border-radius: 30px;
-          background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
+          background: #f8fafc; border: 1px solid rgba(148, 163, 184, 0.2);
           font-weight: 700; text-transform: uppercase; font-size: 0.9rem;
         }
         .points-display { font-size: 3rem; font-weight: 800; margin: 16px 0 8px; letter-spacing: -1px; display: flex; align-items: baseline; gap: 8px; position: relative; z-index: 2; }
-        .points-label { font-size: 1rem; color: #aaa; font-weight: 500; }
+        .points-label { font-size: 1rem; color: #64748b; font-weight: 500; }
         .progress-container { margin-top: 24px; position: relative; z-index: 2; }
-        .progress-bar-bg { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+        .progress-bar-bg { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
         .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
-        .progress-text { display: flex; justify-content: space-between; font-size: 0.85rem; color: #888; }
+        .progress-text { display: flex; justify-content: space-between; font-size: 0.85rem; color: #64748b; }
         
-        .tabs { display: flex; gap: 16px; margin-bottom: 24px; border-bottom: 1px solid #333; padding-bottom: 16px; }
+        .tabs { display: flex; gap: 16px; margin-bottom: 24px; border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 16px; }
         .tab-btn {
-          background: transparent; border: none; color: #888; font-size: 1.1rem; font-weight: 600;
+          background: transparent; border: none; color: #64748b; font-size: 1.1rem; font-weight: 600;
           cursor: pointer; padding: 8px 16px; border-radius: 8px; transition: all 0.2s;
         }
-        .tab-btn.active { color: white; background: rgba(255,255,255,0.05); }
-        .tab-btn:hover:not(.active) { color: #ccc; }
+        .tab-btn.active { color: #2563eb; background: #eff6ff; }
+        .tab-btn:hover:not(.active) { color: #1e293b; }
 
         .voucher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
         .v-card {
-          background: #1a1a1a; border-radius: 12px; border: 1px solid #2a2a2a;
+          background: #ffffff; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.2);
           padding: 20px; display: flex; flex-direction: column; gap: 12px;
           transition: transform 0.2s, box-shadow 0.2s;
         }
-        .v-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); border-color: #444; }
+        .v-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); border-color: #2563eb; }
         .v-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .v-title { font-size: 1.1rem; font-weight: 700; color: white; margin-bottom: 4px; }
-        .v-code { font-size: 0.8rem; color: #a855f7; background: rgba(168, 85, 247, 0.1); padding: 4px 8px; border-radius: 4px; font-weight: 700; }
-        .v-desc { color: #888; font-size: 0.9rem; line-height: 1.5; flex-grow: 1; }
-        .v-meta { display: flex; gap: 12px; font-size: 0.8rem; color: #666; margin-top: auto; }
+        .v-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+        .v-code { font-size: 0.8rem; color: #2563eb; background: #eff6ff; padding: 4px 8px; border-radius: 4px; font-weight: 700; }
+        .v-desc { color: #64748b; font-size: 0.9rem; line-height: 1.5; flex-grow: 1; }
+        .v-meta { display: flex; gap: 12px; font-size: 0.8rem; color: #94a3b8; margin-top: auto; }
         .v-meta div { display: flex; align-items: center; gap: 4px; }
         .v-btn {
           width: 100%; padding: 12px; border-radius: 8px; font-weight: 700; border: none;
           cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;
         }
-        .v-btn-primary { background: #a855f7; color: white; }
-        .v-btn-primary:hover:not(:disabled) { background: #9333ea; }
-        .v-btn-primary:disabled { background: #444; color: #888; cursor: not-allowed; }
-        .v-btn-secondary { background: #2a2a2a; color: white; }
+        .v-btn-primary { background: #2563eb; color: white; }
+        .v-btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+        .v-btn-primary:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+        .v-btn-secondary { background: #f1f5f9; color: #1e293b; }
+        .v-btn-secondary:hover { background: #e2e8f0; }
 
         .toast-msg {
-          position: fixed; bottom: 24px; right: 24px; background: #222; border: 1px solid #444;
-          color: white; padding: 16px 24px; border-radius: 8px; font-weight: 600;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 9999; animation: slideUp 0.3s;
+          position: fixed; bottom: 24px; right: 24px; background: #ffffff; border: 1px solid rgba(148, 163, 184, 0.2);
+          color: #1e293b; padding: 16px 24px; border-radius: 8px; font-weight: 600;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.1); z-index: 9999; animation: slideUp 0.3s;
         }
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       `}</style>
 
       {message && <div className="toast-msg">{message}</div>}
 
-      {/* Tier Card */}
       <div className="tier-card">
         <div className="tier-header">
           <div className="tier-badge" style={{ color: getTierColor(user?.tier) }}>
             <Star weight="fill" /> Hạng {user?.tier?.toUpperCase()}
           </div>
-          <div style={{ color: '#888', fontSize: '0.9rem' }}>
+          <div style={{ color: '#64748b', fontSize: '0.9rem' }}>
             <Gift weight="duotone" size={20} style={{ verticalAlign: 'middle', marginRight: 4 }}/> Cửa hàng quà tặng
           </div>
         </div>
@@ -201,7 +198,6 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="tabs">
         <button className={`tab-btn ${activeTab === 'exchange' ? 'active' : ''}`} onClick={() => setActiveTab('exchange')}>
           Đổi Điểm Lấy Quà
@@ -211,13 +207,12 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
         </button>
       </div>
 
-      {/* Content */}
       {loading ? (
-        <div style={{ color: '#888', padding: '40px 0', textAlign: 'center' }}>Đang tải dữ liệu...</div>
+        <div style={{ color: '#64748b', padding: '40px 0', textAlign: 'center' }}>Đang tải dữ liệu...</div>
       ) : activeTab === 'exchange' ? (
         <div className="voucher-grid">
           {vouchers.length === 0 ? (
-            <div style={{ color: '#666', gridColumn: '1 / -1' }}>Chưa có voucher nào khả dụng để đổi điểm lúc này.</div>
+            <div style={{ color: '#94a3b8', gridColumn: '1 / -1' }}>Chưa có voucher nào khả dụng để đổi điểm lúc này.</div>
           ) : (
             vouchers.map(v => (
               <div key={v._id} className="v-card">
@@ -226,7 +221,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
                     <div className="v-title">{v.name}</div>
                     <div className="v-code">{v.code}</div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '20px', fontWeight: '700', color: '#ffd700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ background: '#fffbeb', padding: '6px 12px', borderRadius: '20px', fontWeight: '700', color: '#d97706', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Coins weight="fill" /> {new Intl.NumberFormat('vi-VN').format(v.requiredPoints)}
                   </div>
                 </div>
@@ -251,19 +246,19 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
       ) : (
         <div className="voucher-grid">
           {myVouchers.length === 0 ? (
-            <div style={{ color: '#666', gridColumn: '1 / -1' }}>Bạn chưa có Voucher nào.</div>
+            <div style={{ color: '#94a3b8', gridColumn: '1 / -1' }}>Bạn chưa có Voucher nào.</div>
           ) : (
             myVouchers.map(uv => {
               const v = uv.voucherId;
               if (!v) return null;
               return (
-                <div key={uv._id} className="v-card" style={{ borderColor: 'rgba(168, 85, 247, 0.3)' }}>
+                <div key={uv._id} className="v-card" style={{ borderColor: 'rgba(37, 99, 235, 0.2)' }}>
                   <div className="v-header">
                     <div>
                       <div className="v-title">{v.name}</div>
                       <div className="v-code" style={{ fontSize: '1rem' }}>{v.code}</div>
                     </div>
-                    <CheckCircle weight="fill" size={24} color="#10b981" />
+                    <CheckCircle weight="fill" size={24} color="#16a34a" />
                   </div>
                   <div className="v-desc">{v.description}</div>
                   <div className="v-meta">
