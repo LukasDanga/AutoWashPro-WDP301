@@ -157,6 +157,7 @@ const EMPTY = {
   closingTime: '18:00',
   status: 'active',
   image: '',
+  managerId: '',
 };
 
 function Field({ label, required, error, children }) {
@@ -177,6 +178,25 @@ const inp =
 function BranchForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState({ ...EMPTY, ...initial });
   const [errors, setErrors] = useState({});
+  const [managers, setManagers] = useState([]);
+  const [managersLoading, setManagersLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchManagers() {
+      try {
+        const res = await apiFetch('/auth/users?role=manager&status=active');
+        if (!res.ok) return;
+        const payload = await res.json();
+        const data = payload?.data ?? payload;
+        setManagers(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error('Failed to load managers', e);
+      } finally {
+        setManagersLoading(false);
+      }
+    }
+    fetchManagers();
+  }, []);
 
   const set = (k, v) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -235,6 +255,18 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
       <Field label="URL ảnh đại diện" error={errors.image}>
         <input id="f-img" className={inp} value={form.image}
           onChange={(e) => set('image', e.target.value)} placeholder="https://..." />
+      </Field>
+
+      <Field label="Quản lý chi nhánh" error={errors.managerId}>
+        <select id="f-manager" className={inp} value={form.managerId}
+          onChange={(e) => set('managerId', e.target.value)}>
+          <option value="">{managersLoading ? 'Đang tải...' : '— Chọn quản lý —'}</option>
+          {managers.map((m) => (
+            <option key={m._id} value={m._id}>
+              {m.name} — {m.email}
+            </option>
+          ))}
+        </select>
       </Field>
 
       <Field label="Trạng thái" error={errors.status}>
