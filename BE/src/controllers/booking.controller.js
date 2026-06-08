@@ -38,7 +38,11 @@ exports.updateBooking = catchAsync(async (req, res) => {
 });
 
 exports.updateBookingStatus = catchAsync(async (req, res) => {
-  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status);
+  const updateData = { ...req.body };
+  if (req.body.status === 'checked_in') {
+    updateData.staffId = req.userId;
+  }
+  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData);
   success(res, booking, 'Booking status updated');
 });
 

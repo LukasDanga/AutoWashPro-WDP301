@@ -5,7 +5,6 @@ const packageRoutes = require('./package.routes');
 const bookingRoutes = require('./booking.routes');
 const paymentRoutes = require('./payment.routes');
 const voucherRoutes = require('./voucher.routes');
-const checkinRoutes = require('./checkin.routes');
 const notificationRoutes = require('./notification.routes');
 const slotPackRoutes = require('./slotPack.routes');
 const reportRoutes = require('./report.routes');
@@ -18,7 +17,6 @@ module.exports = {
   bookingRoutes,
   paymentRoutes,
   voucherRoutes,
-  checkinRoutes,
   notificationRoutes,
   slotPackRoutes,
   reportRoutes,

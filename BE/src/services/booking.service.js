@@ -4,10 +4,11 @@ const { Booking, Package, Branch, Vehicle, Payment, User } = require('../models'
 const notificationService = require('./notification.service');
 const voucherService = require('./voucher.service');
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'];
+const VALID_STATUSES = ['pending', 'checked_in', 'in_progress', 'completed', 'cancelled'];
 
 const VALID_TRANSITIONS = {
-  pending: ['in_progress', 'cancelled'],
+  pending: ['checked_in', 'in_progress', 'cancelled'],
+  checked_in: ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
@@ -178,6 +179,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     if (filters.branchId) query.branchId = filters.branchId;
   }
   if (filters.status) query.status = filters.status;
+  if (filters.bookingType) query.bookingType = filters.bookingType;
   if (filters.bookingDate) {
     const d = filters.bookingDate instanceof Date ? filters.bookingDate : new Date(filters.bookingDate);
     const dateStr = d.toISOString().split('T')[0];
@@ -269,7 +271,7 @@ exports.updateBooking = async (id, updates, userRole) => {
   }
 };
 
-exports.updateBookingStatus = async (id, status) => {
+exports.updateBookingStatus = async (id, status, updateData = {}) => {
   if (!VALID_STATUSES.includes(status)) {
     throw Object.assign(new Error('Invalid status'), { statusCode: 400, code: 'INVALID_STATUS' });
   }
@@ -283,10 +285,20 @@ exports.updateBookingStatus = async (id, status) => {
   }
 
   const update = { status };
-  if (status === 'cancelled') update.cancelledAt = new Date();
-  if (status === 'completed' && currentBooking.paymentStatus === 'unpaid') {
-    update.paymentStatus = 'pending';
+  if (status === 'checked_in') {
+    update.checkInTime = new Date();
+    if (updateData.staffId) update.staffId = updateData.staffId;
   }
+  if (status === 'cancelled') update.cancelledAt = new Date();
+  if (status === 'completed') {
+    update.checkOutTime = new Date();
+    if (currentBooking.paymentStatus === 'unpaid') {
+      update.paymentStatus = 'pending';
+    }
+    if (updateData.rating) update.rating = updateData.rating;
+    if (updateData.feedback) update.feedback = updateData.feedback;
+  }
+  if (updateData.note) update.note = updateData.note;
 
   const booking = await Booking.findOneAndUpdate(
     { _id: id, status: currentBooking.status },

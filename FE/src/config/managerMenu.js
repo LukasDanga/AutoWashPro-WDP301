@@ -27,12 +27,7 @@ export const MANAGER_MENU_ITEMS = [
     to: '/manager/bookings',
     icon: CalendarCheck,
   },
-  {
-    id: 'checkins',
-    label: 'Check-in',
-    to: '/manager/checkins',
-    icon: ClipboardText,
-  },
+
   {
     id: 'branch',
     label: 'Chi nhánh của tôi',
@@ -68,10 +63,7 @@ export const MANAGER_PAGE_META = {
     title: 'Quản lý đặt lịch',
     description: 'Xem và cập nhật trạng thái các lịch đặt trong chi nhánh.',
   },
-  checkins: {
-    title: 'Quản lý check-in',
-    description: 'Xác nhận khách đến, cập nhật tiến trình rửa xe.',
-  },
+
   branch: {
     title: 'Chi nhánh của tôi',
     description: 'Xem và chỉnh sửa thông tin chi nhánh bạn phụ trách.',
