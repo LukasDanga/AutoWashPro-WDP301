@@ -274,6 +274,61 @@ function VoucherUsageModal({ voucherId, onClose }) {
   );
 }
 
+/* ── voucher usage report tab ── */
+function VoucherUsageReportTab() {
+  const [report, setReport] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    api('/vouchers/usage-report')
+      .then(res => { if (!res.ok) throw new Error('Failed to load report'); return res.json(); })
+      .then(p => { if (mounted) { setReport(p?.data ?? []); setLoading(false); } })
+      .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
+    return () => { mounted = false; };
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-24 text-slate-400"><Spinner size={24} /></div>;
+  if (error) return <div className="text-red-500 text-center py-10 flex flex-col items-center gap-2"><Warning size={24} />{error}</div>;
+  if (report.length === 0) return <div className="text-slate-500 text-center py-10">Chưa có dữ liệu sử dụng voucher.</div>;
+
+  return (
+    <div className="space-y-4 animate-in fade-in duration-300">
+      {report.map(item => (
+        <div key={item.userId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4 pb-4 border-b border-slate-100">
+            <div>
+              <h3 className="font-bold text-slate-800 text-base">{item.user?.name || 'Khách vãng lai'}</h3>
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">{item.user?.phone || item.user?.email || 'Chưa có thông tin liên hệ'}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-emerald-600">Đã tiết kiệm: {Number(item.totalDiscountAmount).toLocaleString('vi-VN')}₫</p>
+              <p className="text-xs text-slate-500 mt-1">Sử dụng tổng cộng {item.totalUsedVouchers} voucher</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {item.vouchersUsed.map((v, i) => (
+              <div key={i} className="flex justify-between items-center bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 hover:border-slate-200 transition-colors">
+                <div className="flex flex-col gap-1 overflow-hidden pr-2">
+                   <div className="flex items-center gap-1.5">
+                     <span className="font-mono text-[10px] font-bold bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded shadow-sm">{v.code}</span>
+                   </div>
+                   <span className="text-[11px] font-medium text-slate-600 truncate" title={v.name}>{v.name}</span>
+                </div>
+                <div className="text-right flex flex-col shrink-0">
+                   <span className="text-xs font-bold text-emerald-600">-{Number(v.totalDiscount).toLocaleString('vi-VN')}₫</span>
+                   <span className="text-[10px] text-slate-400 mt-0.5">{v.count} lần dùng</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ═══ Main ═══ */
 export default function ManagerVouchers() {
   const [vouchers, setVouchers] = useState([]);
@@ -284,6 +339,7 @@ export default function ManagerVouchers() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('list');
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
   const fetch_ = useCallback(async () => {
@@ -330,107 +386,129 @@ export default function ManagerVouchers() {
   const isActive = (v) => v.status === 'active' && !isExpired(v);
 
   return (
-    <div className="space-y-5">
-      {/* toolbar */}
-      <div className="flex items-center gap-3">
-        <button onClick={fetch_} disabled={loading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
-          <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+    <div className="space-y-5 animate-in fade-in duration-300">
+      {/* tabs */}
+      <div className="flex gap-1 border-b border-slate-200">
+        <button 
+          onClick={() => setActiveTab('list')}
+          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          Danh sách Voucher
         </button>
-        <div className="relative flex-1 max-w-md">
-          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Tìm theo mã hoặc tên voucher..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <button id="create-voucher-btn" onClick={() => { setSelected(null); setModal('create'); }}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm">
-          <Plus size={14} weight="bold" />Tạo voucher
+        <button 
+          onClick={() => setActiveTab('report')}
+          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'report' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          Báo cáo sử dụng
         </button>
       </div>
 
-      {/* content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-24 text-slate-400"><Spinner size={24} /></div>
-      ) : error ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-red-100 bg-red-50 py-16 text-red-500">
-          <Warning size={26} weight="duotone" /><p className="text-sm">{error}</p>
-        </div>
-      ) : vouchers.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20">
-          <Tag size={40} weight="thin" className="text-slate-300" />
-          <p className="text-sm text-slate-500">Chưa có voucher nào</p>
-          <button onClick={() => { setSelected(null); setModal('create'); }}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
-            <Plus size={13} weight="bold" />Tạo voucher đầu tiên
-          </button>
-        </div>
+      {activeTab === 'report' ? (
+        <VoucherUsageReportTab />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
-                <th className="px-4 py-3">Mã</th>
-                <th className="px-4 py-3">Tên</th>
-                <th className="px-4 py-3">Giá trị</th>
-                <th className="px-4 py-3">SL còn lại</th>
-                <th className="px-4 py-3">Hiệu lực</th>
-                <th className="px-4 py-3">Trạng thái</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {vouchers.map((v) => (
-                <tr key={v._id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-slate-700">{v.code}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800">{v.name}</p>
-                    {v.description && <p className="text-[11px] text-slate-400 truncate max-w-[180px]">{v.description}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {v.type === 'percentage' ? `${v.value}%` : `${Number(v.value).toLocaleString('vi-VN')}₫`}
-                    {v.maxDiscount > 0 && <span className="text-[11px] text-slate-400"> (tối đa {Number(v.maxDiscount).toLocaleString('vi-VN')}₫)</span>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{v.remaining ?? v.quantity}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {formatDate(v.startDate)} – {formatDate(v.endDate)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive(v) ? 'bg-emerald-50 text-emerald-700' : isExpired(v) ? 'bg-slate-100 text-slate-400' : 'bg-rose-50 text-rose-600'}`}>
-                      {isActive(v) ? 'Đang hoạt động' : isExpired(v) ? 'Hết hạn' : 'Tắt'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => { setSelected(v); setModal('usage'); }} title="Lịch sử dùng"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
-                        <ClockCounterClockwise size={14} />
-                      </button>
-                      <button id={`edit-voucher-${v._id}`} onClick={() => { setSelected(v); setModal('edit'); }} title="Chỉnh sửa"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <PencilSimple size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* toolbar */}
+          <div className="flex items-center gap-3">
+            <button onClick={fetch_} disabled={loading}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
+              <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <div className="relative flex-1 max-w-md">
+              <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Tìm theo mã hoặc tên voucher..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <button id="create-voucher-btn" onClick={() => { setSelected(null); setModal('create'); }}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm">
+              <Plus size={14} weight="bold" />Tạo voucher
+            </button>
+          </div>
+
+          {/* content */}
+          {loading ? (
+            <div className="flex items-center justify-center py-24 text-slate-400"><Spinner size={24} /></div>
+          ) : error ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-red-100 bg-red-50 py-16 text-red-500">
+              <Warning size={26} weight="duotone" /><p className="text-sm">{error}</p>
+            </div>
+          ) : vouchers.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20">
+              <Tag size={40} weight="thin" className="text-slate-300" />
+              <p className="text-sm text-slate-500">Chưa có voucher nào</p>
+              <button onClick={() => { setSelected(null); setModal('create'); }}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
+                <Plus size={13} weight="bold" />Tạo voucher đầu tiên
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                    <th className="px-4 py-3">Mã</th>
+                    <th className="px-4 py-3">Tên</th>
+                    <th className="px-4 py-3">Giá trị</th>
+                    <th className="px-4 py-3">SL còn lại</th>
+                    <th className="px-4 py-3">Hiệu lực</th>
+                    <th className="px-4 py-3">Trạng thái</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {vouchers.map((v) => (
+                    <tr key={v._id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-slate-700">{v.code}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-800">{v.name}</p>
+                        {v.description && <p className="text-[11px] text-slate-400 truncate max-w-[180px]">{v.description}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {v.type === 'percentage' ? `${v.value}%` : `${Number(v.value).toLocaleString('vi-VN')}₫`}
+                        {v.maxDiscount > 0 && <span className="text-[11px] text-slate-400"> (tối đa {Number(v.maxDiscount).toLocaleString('vi-VN')}₫)</span>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{v.remaining ?? v.quantity}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {formatDate(v.startDate)} – {formatDate(v.endDate)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive(v) ? 'bg-emerald-50 text-emerald-700' : isExpired(v) ? 'bg-slate-100 text-slate-400' : 'bg-rose-50 text-rose-600'}`}>
+                          {isActive(v) ? 'Đang hoạt động' : isExpired(v) ? 'Hết hạn' : 'Tắt'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => { setSelected(v); setModal('usage'); }} title="Lịch sử dùng"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                            <ClockCounterClockwise size={14} />
+                          </button>
+                          <button id={`edit-voucher-${v._id}`} onClick={() => { setSelected(v); setModal('edit'); }} title="Chỉnh sửa"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                            <PencilSimple size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {modal === 'create' && (
