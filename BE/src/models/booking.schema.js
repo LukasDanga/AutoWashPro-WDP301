@@ -42,6 +42,10 @@ const bookingSchema = new mongoose.Schema(
       enum: ['unpaid', 'pending', 'paid', 'refunded'],
       default: 'unpaid',
     },
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'momo', 'vnpay'],
+    },
     paidAt: { type: Date },
     // Check-in related fields
     checkInTime: { type: Date },

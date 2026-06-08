@@ -59,7 +59,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
       payment.status = 'paid';
       payment.paidAt = new Date();
       await payment.save({ session });
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method }).session(session);
       
       // Tích điểm
       await loyaltyService.addPointsFromPayment(targetUserId, amount, bookingId, session);
@@ -133,7 +133,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     payment.paidAt = new Date();
     payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
     await payment.save({ session });
-    await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+    await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
 
     // Tích điểm
     await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
@@ -179,7 +179,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       payment.paidAt = new Date();
       payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
       await payment.save({ session });
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
       
       // Tích điểm
       await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);

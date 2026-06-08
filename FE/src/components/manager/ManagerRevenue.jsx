@@ -6,6 +6,8 @@ import {
   Package,
   CalendarBlank,
   Spinner as PhSpinner,
+  Money,
+  Bank,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -102,7 +104,7 @@ export default function ManagerRevenue() {
       ) : data ? (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={<CurrencyCircleDollar size={24} weight="duotone" className="text-emerald-500" />}
               label="Tổng doanh thu"
@@ -110,8 +112,20 @@ export default function ManagerRevenue() {
               color="bg-emerald-50"
             />
             <StatCard
+              icon={<Money size={24} weight="duotone" className="text-green-500" />}
+              label="Tiền mặt"
+              value={`${(data.cashRevenue || 0).toLocaleString('vi-VN')}đ`}
+              color="bg-green-50"
+            />
+            <StatCard
+              icon={<Bank size={24} weight="duotone" className="text-indigo-500" />}
+              label="Chuyển khoản"
+              value={`${(data.transferRevenue || 0).toLocaleString('vi-VN')}đ`}
+              color="bg-indigo-50"
+            />
+            <StatCard
               icon={<Receipt size={24} weight="duotone" className="text-blue-500" />}
-              label="Số lượt thanh toán (đơn)"
+              label="Số lượt thanh toán"
               value={data.totalBookings || 0}
               color="bg-blue-50"
             />
