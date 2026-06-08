@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import BookingsHistory from './BookingsHistory.jsx';
-import LoyaltyGifts from './LoyaltyGifts.jsx';
-import RecurringBookingFlow from './RecurringBookingFlow.jsx';
-import SlotPackFlow from './SlotPackFlow.jsx';
+import BookingsHistory from './customer/BookingsHistory.jsx';
+import LoyaltyGifts from './customer/LoyaltyGifts.jsx';
+import RecurringBookingFlow from './customer/RecurringBookingFlow.jsx';
+import SlotPackFlow from './customer/SlotPackFlow.jsx';
 import VoucherPicker from './VoucherPicker.jsx';
 
 const sidebarItems = [
@@ -318,7 +318,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                 <div className="aw-step-title"><span>1</span> CHỌN CHI NHÁNH TRUNG TÂM</div>
                 <div className="aw-options two-up">
                   {branches.length === 0 ? (
-                    <div style={{ gridColumn: 'span 2', color: '#888', fontStyle: 'italic', padding: '10px' }}>Không có chi nhánh nào đang hoạt động.</div>
+                    <div style={{ gridColumn: 'span 2', color: '#64748b', fontStyle: 'italic', padding: '10px' }}>Không có chi nhánh nào đang hoạt động.</div>
                   ) : branches.map((item) => (
                     <button
                       key={item.id}
@@ -383,8 +383,8 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                         </button>
                         
                         {isActive && p.subServices && p.subServices.length > 0 && (
-                          <div style={{ marginTop: '10px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-                            <strong style={{ fontSize: '0.85rem', color: '#ffb347', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
+                          <div style={{ marginTop: '10px', padding: '10px', background: '#f1f5f9', borderRadius: '8px' }}>
+                            <strong style={{ fontSize: '0.85rem', color: '#2563eb', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
                             {p.subServices.map((sub) => {
                               const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
                               return (
@@ -405,7 +405,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                                     disabled={!sub.isOptional}
                                   />
                                   <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
-                                  <span style={{ color: '#00f2fe', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                                  <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
                                 </label>
                               );
                             })}
@@ -500,7 +500,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                       <strong>- {formatCurrency(discount)}</strong>
                     </div>
                   )}
-                  <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #333'}}>
+                  <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed rgba(148, 163, 184, 0.3)'}}>
                     <span>TÍCH ĐIỂM SĂM SÉT</span>
                     <strong>+{points} Điểm</strong>
                   </div>

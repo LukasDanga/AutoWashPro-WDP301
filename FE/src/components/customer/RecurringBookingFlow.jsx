@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import VoucherPicker from './VoucherPicker.jsx';
+import VoucherPicker from '../VoucherPicker.jsx';
 
 const WEEKDAYS = [
   { value: 1, label: 'T2', full: 'Thứ 2' },
@@ -242,8 +242,8 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                       </button>
                       
                       {isActive && p.subServices && p.subServices.length > 0 && (
-                        <div style={{ marginTop: '10px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-                          <strong style={{ fontSize: '0.85rem', color: '#ffb347', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
+                        <div style={{ marginTop: '10px', padding: '10px', background: '#f1f5f9', borderRadius: '8px' }}>
+                            <strong style={{ fontSize: '0.85rem', color: '#2563eb', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
                           {p.subServices.map((sub) => {
                             const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
                             return (
@@ -264,7 +264,7 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                                   disabled={!sub.isOptional}
                                 />
                                 <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
-                                <span style={{ color: '#00f2fe', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                                <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
                               </label>
                             );
                           })}

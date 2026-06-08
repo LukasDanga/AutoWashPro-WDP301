@@ -33,6 +33,10 @@
   --font-sans: "Segoe UI", "Outfit", system-ui, sans-serif;
 }
 
+@utility text-wrap-balance {
+  text-wrap: balance;
+}
+
 :root {
   --radius: 0.625rem;
   --background: 210 40% 98%;
