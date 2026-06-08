@@ -30,6 +30,16 @@ exports.getRevenueReport = async (filters, userRole, userBranchId) => {
               _id: null,
               totalRevenue: { $sum: { $ifNull: ['$finalPrice', 0] } },
               totalBookings: { $sum: 1 },
+              cashRevenue: {
+                $sum: {
+                  $cond: [{ $eq: ['$paymentMethod', 'cash'] }, { $ifNull: ['$finalPrice', 0] }, 0],
+                },
+              },
+              transferRevenue: {
+                $sum: {
+                  $cond: [{ $in: ['$paymentMethod', ['momo', 'vnpay']] }, { $ifNull: ['$finalPrice', 0] }, 0],
+                },
+              },
             },
           },
         ],
@@ -96,11 +106,13 @@ exports.getRevenueReport = async (filters, userRole, userBranchId) => {
   const result = await Booking.aggregate(pipeline);
 
   const data = result[0];
-  const totals = data.totals[0] || { totalRevenue: 0, totalBookings: 0 };
+  const totals = data.totals[0] || { totalRevenue: 0, totalBookings: 0, cashRevenue: 0, transferRevenue: 0 };
 
   return {
     totalRevenue: totals.totalRevenue,
     totalBookings: totals.totalBookings,
+    cashRevenue: totals.cashRevenue || 0,
+    transferRevenue: totals.transferRevenue || 0,
     byCustomer: data.byCustomer,
     byPackage: data.byPackage,
   };
