@@ -187,7 +187,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     query.bookingDate = { $gte: gte, $lte: lte };
   }
   return Booking.find(query)
-    .populate('userId', 'name email phone')
+    .populate('userId', 'name email phone tier')
     .populate('branchId', 'name address')
     .populate('packageId', 'name price duration')
     .populate('vehicleId', 'licensePlate vehicleType brand color')
@@ -196,7 +196,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
 exports.getBookingById = async (id, userRole, userId) => {
   const booking = await Booking.findById(id)
-    .populate('userId', 'name email phone')
+    .populate('userId', 'name email phone tier')
     .populate('branchId', 'name address phone')
     .populate('packageId', 'name price duration')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
@@ -304,7 +304,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
     { _id: id, status: currentBooking.status },
     update,
     { new: true }
-  ).populate('userId', 'name email phone')
+  ).populate('userId', 'name email phone tier')
    .populate('branchId', 'name address phone')
    .populate('packageId', 'name price duration')
    .populate('vehicleId', 'licensePlate vehicleType brand color');

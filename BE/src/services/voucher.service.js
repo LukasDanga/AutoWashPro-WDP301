@@ -225,7 +225,7 @@ exports.rollbackVoucher = async (code, userId, bookingId) => {
 
 exports.getVoucherUsage = async (voucherId) => {
   return VoucherUsage.find({ voucherId })
-    .populate('userId', 'name email')
+    .populate('userId', 'name email phone tier')
     .populate('bookingId', 'bookingDate startTime status')
     .sort({ usedAt: -1 });
 };
@@ -280,6 +280,7 @@ exports.getVoucherUsageReport = async () => {
         'user.name': 1,
         'user.email': 1,
         'user.phone': 1,
+        'user.tier': 1,
         totalUsedVouchers: 1,
         totalDiscountAmount: 1,
         vouchersUsed: 1
