@@ -57,14 +57,22 @@ function Toast({ toast, onDismiss }) {
 /* ── status config ── */
 const STATUS_MAP = {
   pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700' },
+  checked_in:  { label: 'Đã check-in', cls: 'bg-cyan-50 text-cyan-700' },
   in_progress: { label: 'Đang thực hiện', cls: 'bg-blue-50 text-blue-700' },
   completed:   { label: 'Hoàn thành', cls: 'bg-emerald-50 text-emerald-700' },
   cancelled:   { label: 'Đã hủy', cls: 'bg-slate-100 text-slate-500' },
 };
 
 const NEXT_STATUS = {
-  pending:     ['in_progress', 'cancelled'],
+  pending:     ['checked_in', 'cancelled'],
+  checked_in:  ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
+};
+
+const TYPE_MAP = {
+  single: { label: 'Đặt 1 lần', cls: 'bg-slate-100 text-slate-600' },
+  recurring: { label: 'Định kỳ', cls: 'bg-indigo-50 text-indigo-700' },
+  slot_pack_usage: { label: 'Gói lượt', cls: 'bg-fuchsia-50 text-fuchsia-700' },
 };
 
 function StatusBadge({ status }) {
@@ -126,6 +134,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
+    { id: 'checked_in', label: 'Đã check-in' },
     { id: 'in_progress', label: 'Đang thực hiện' },
     { id: 'completed', label: 'Hoàn thành' },
   ];
@@ -226,6 +235,11 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <p className="font-medium text-slate-800">{booking.packageId?.name || '—'}</p>
             <p className="text-sm text-slate-600">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')} lúc {booking.startTime}</p>
             <p className="text-xs text-slate-500 mt-1">{booking.branchId?.name || '—'}</p>
+            {booking.checkInTime && (
+              <p className="text-xs text-blue-600 font-medium mt-2 bg-blue-50 px-2 py-1 inline-block rounded">
+                Vào lúc: {new Date(booking.checkInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
           </div>
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Chi tiết thanh toán</h3>
@@ -261,17 +275,19 @@ export default function ManagerBookings() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
-  const fetch_ = useCallback(async (q = search, sf = statusFilter) => {
+  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter) => {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams();
       if (sf) params.set('status', sf);
+      if (tf) params.set('bookingType', tf);
       if (q.trim()) params.set('search', q.trim());
       const res = await api(`/bookings?${params}`);
       if (!res.ok) throw new Error(await readErr(res));
@@ -287,10 +303,11 @@ export default function ManagerBookings() {
   const handleSearch = (v) => {
     setSearch(v);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => fetch_(v, statusFilter), 420);
+    debounce.current = setTimeout(() => fetch_(v, statusFilter, typeFilter), 420);
   };
 
-  const handleFilter = (v) => { setStatusFilter(v); fetch_(search, v); };
+  const handleFilter = (v) => { setStatusFilter(v); fetch_(search, v, typeFilter); };
+  const handleTypeFilter = (v) => { setTypeFilter(v); fetch_(search, statusFilter, v); };
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
@@ -330,9 +347,17 @@ export default function ManagerBookings() {
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
           <option value="">Tất cả trạng thái</option>
           <option value="pending">Chờ xác nhận</option>
+          <option value="checked_in">Đã check-in</option>
           <option value="in_progress">Đang thực hiện</option>
           <option value="completed">Hoàn thành</option>
           <option value="cancelled">Đã hủy</option>
+        </select>
+        <select id="booking-type-filter" value={typeFilter} onChange={(e) => handleTypeFilter(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
+          <option value="">Tất cả loại đơn</option>
+          <option value="single">Đặt 1 lần</option>
+          <option value="recurring">Định kỳ</option>
+          <option value="slot_pack_usage">Gói lượt</option>
         </select>
         <button onClick={() => fetch_()} disabled={loading}
           className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
@@ -372,7 +397,16 @@ export default function ManagerBookings() {
                     <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
                     <p className="text-[11px] text-slate-400">{b.userId?.phone ?? ''}</p>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{b.packageId?.name ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
+                      {b.bookingType && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[b.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>
+                          {TYPE_MAP[b.bookingType]?.label || b.bookingType}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <p className="text-slate-700">{new Date(b.bookingDate).toLocaleDateString('vi-VN')}</p>
                     <p className="text-[11px] text-slate-400">{b.startTime}</p>

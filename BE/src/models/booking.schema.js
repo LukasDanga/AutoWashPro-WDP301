@@ -11,7 +11,7 @@ const bookingSchema = new mongoose.Schema(
     endTime: { type: String, required: true },
     status: {
       type: String,
-      enum: ['pending', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'checked_in', 'in_progress', 'completed', 'cancelled'],
       default: 'pending',
     },
     note: { type: String, trim: true, maxlength: 500 },
@@ -43,6 +43,13 @@ const bookingSchema = new mongoose.Schema(
       default: 'unpaid',
     },
     paidAt: { type: Date },
+    // Check-in related fields
+    checkInTime: { type: Date },
+    checkOutTime: { type: Date },
+    serviceDuration: { type: Number },
+    staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    rating: { type: Number, min: 1, max: 5 },
+    feedback: { type: String, trim: true, maxlength: 1000 },
   },
   { timestamps: true }
 );
