@@ -44,6 +44,20 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
+function TierBadge({ tier }) {
+  if (!tier || tier === 'none') {
+    return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 border border-slate-200">Không có hạng</span>;
+  }
+  if (tier === "silver") {
+    return <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-300 shadow-sm">Bạc</span>;
+  } else if (tier === "gold") {
+    return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-700 border border-yellow-200 shadow-sm">Vàng</span>;
+  } else if (tier === "diamond") {
+    return <span className="inline-flex items-center rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-bold text-cyan-700 border border-cyan-200 shadow-sm">Kim Cương</span>;
+  }
+  return <span className="inline-flex items-center rounded-full bg-amber-100/50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200 shadow-sm">Đồng</span>;
+}
+
 function formatDate(dateString) {
   if (!dateString) return '';
   const d = new Date(dateString);
@@ -259,7 +273,12 @@ function VoucherUsageModal({ voucherId, onClose }) {
               <tbody className="divide-y divide-slate-100">
                 {usages.map((u, i) => (
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">{u.userId?.name || '—'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-800">{u.userId?.name || '—'}</span>
+                        {u.userId?.tier && <TierBadge tier={u.userId.tier} />}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
                     <td className="px-4 py-3 text-emerald-600 font-medium">-{Number(u.discountAmount).toLocaleString('vi-VN')}₫</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{new Date(u.usedAt).toLocaleString('vi-VN')}</td>
@@ -299,7 +318,10 @@ function VoucherUsageReportTab() {
         <div key={item.userId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-4 pb-4 border-b border-slate-100">
             <div>
-              <h3 className="font-bold text-slate-800 text-base">{item.user?.name || 'Khách vãng lai'}</h3>
+              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                {item.user?.name || 'Khách vãng lai'}
+                {item.user?.tier && <TierBadge tier={item.user.tier} />}
+              </h3>
               <p className="text-xs text-slate-500 mt-0.5 font-medium">{item.user?.phone || item.user?.email || 'Chưa có thông tin liên hệ'}</p>
             </div>
             <div className="text-right">

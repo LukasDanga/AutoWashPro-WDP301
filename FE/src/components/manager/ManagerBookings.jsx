@@ -54,6 +54,20 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
+function TierBadge({ tier }) {
+  if (!tier || tier === 'none') {
+    return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 border border-slate-200">Không có hạng</span>;
+  }
+  if (tier === "silver") {
+    return <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-300 shadow-sm">Bạc</span>;
+  } else if (tier === "gold") {
+    return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-700 border border-yellow-200 shadow-sm">Vàng</span>;
+  } else if (tier === "diamond") {
+    return <span className="inline-flex items-center rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-bold text-cyan-700 border border-cyan-200 shadow-sm">Kim Cương</span>;
+  }
+  return <span className="inline-flex items-center rounded-full bg-amber-100/50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200 shadow-sm">Đồng</span>;
+}
+
 /* ── status config ── */
 const STATUS_MAP = {
   pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700' },
@@ -226,7 +240,10 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         <div className="grid grid-cols-2 gap-6 rounded-xl bg-slate-50 p-5 border border-slate-100">
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Khách hàng</h3>
-            <p className="font-medium text-slate-800">{booking.userId?.name || '—'}</p>
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="font-medium text-slate-800">{booking.userId?.name || '—'}</p>
+              {booking.userId?.tier && <TierBadge tier={booking.userId.tier} />}
+            </div>
             <p className="text-sm text-slate-600">{booking.userId?.phone || '—'}</p>
             <p className="text-xs text-slate-500 mt-1">{booking.userId?.email || ''}</p>
           </div>
@@ -394,7 +411,10 @@ export default function ManagerBookings() {
               {bookings.map((b) => (
                 <tr key={b._id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
+                      {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
+                    </div>
                     <p className="text-[11px] text-slate-400">{b.userId?.phone ?? ''}</p>
                   </td>
                   <td className="px-4 py-3">
