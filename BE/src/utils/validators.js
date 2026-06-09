@@ -2,7 +2,7 @@ const { body, param, query } = require('express-validator');
 
 const authValidators = {
   register: [
-    body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }),
+    body('name').optional().trim().isLength({ max: 100 }),
     body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('phone').optional().trim(),
