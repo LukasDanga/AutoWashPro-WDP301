@@ -11,19 +11,16 @@ import {
   PencilSimple,
   Phone,
   Plus,
-  ToggleLeft,
-  ToggleRight,
   Trash,
   Warning,
   X,
   XCircle,
   Package,
-  Tag,
   ClockCountdown,
   Car,
   Money,
   ListChecks,
-  Eye,
+  Tag,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -328,12 +325,15 @@ function ConfirmDelete({ branch, onConfirm, onCancel, deleting }) {
 }
 
 /* ─────────────────────────── Detail View ─────────────────────────── */
-function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, togglingId }) {
-  const toggling = togglingId === branch._id;
-  const active = branch.status === 'active';
+function BranchDetailFull({ branch, onBack, onEdit }) {
   const [packages, setPackages] = useState([]);
   const [pkgLoading, setPkgLoading] = useState(true);
   const [pkgSearch, setPkgSearch] = useState('');
+  const [pkgModal, setPkgModal] = useState(null);
+  const [pkgSaving, setPkgSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
   useEffect(() => {
     let mounted = true;
@@ -364,6 +364,14 @@ function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, toggling
 
   return (
     <div className="space-y-6">
+      {toast && (
+        <div role="alert" className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ring-1 ${toast.type === 'error' ? 'bg-white text-red-600 ring-red-200' : 'bg-white text-emerald-700 ring-emerald-200'}`}>
+          {toast.type === 'error' ? <XCircle size={15} weight="fill" /> : <CheckCircle size={15} weight="fill" />}
+          {toast.message}
+          <button onClick={() => setToast(null)} className="ml-1 opacity-50 hover:opacity-100"><X size={13} /></button>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <button
@@ -376,24 +384,14 @@ function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, toggling
 
         <div className="flex gap-2">
           <button
-            onClick={() => onToggle(branch)}
-            disabled={toggling}
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold !text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm disabled:opacity-50 transition-colors"
-          >
-            {toggling ? <Spinner size={14} /> : active ? <ToggleRight size={16} className="text-emerald-500" /> : <ToggleLeft size={16} className="text-slate-400" />}
-            {active ? 'Tắt hoạt động' : 'Bật hoạt động'}
-          </button>
-          <button
             onClick={() => onEdit(branch)}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold !text-blue-700 hover:bg-blue-100 transition-colors"
           >
             <PencilSimple size={16} /> Sửa
           </button>
-          <button
-            onClick={() => onDelete(branch)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold !text-red-700 hover:bg-red-100 transition-colors"
-          >
-            <Trash size={16} /> Xóa
+          <button onClick={() => setPkgModal('create')}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm font-semibold !text-emerald-700 hover:bg-emerald-100 transition-colors">
+            <Plus size={16} weight="bold" /> Thêm gói
           </button>
         </div>
       </div>
@@ -554,7 +552,129 @@ function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, toggling
           )}
         </div>
       </div>
+
+      {/* ── Package Create Modal ── */}
+      {pkgModal === 'create' && (
+        <Modal title="Thêm gói dịch vụ mới" onClose={() => setPkgModal(null)} wide>
+          <CreatePackageForm onSave={async (data) => {
+            setPkgSaving(true);
+            try {
+              const res = await apiFetch('/packages', { method: 'POST', body: JSON.stringify(data) });
+              if (!res.ok) throw new Error(await readError(res));
+              const payload = await res.json();
+              const created = payload?.data ?? payload;
+              setPackages((p) => [created, ...p]);
+              setPkgModal(null);
+              notify('Tạo gói dịch vụ thành công!');
+            } catch (err) {
+              notify(err.message || 'Tạo thất bại', 'error');
+            } finally { setPkgSaving(false); }
+          }} onCancel={() => setPkgModal(null)} saving={pkgSaving} />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+function CreatePackageForm({ onSave, onCancel, saving }) {
+  const [form, setForm] = useState({
+    name: '', description: '', price: '', duration: '', image: '',
+    status: 'active', category: 'full', vehicleTypes: [], subServices: [],
+  });
+  const [errors, setErrors] = useState({});
+
+  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); };
+
+  const toggleVehicle = (val) => {
+    setForm((f) => ({ ...f, vehicleTypes: f.vehicleTypes.includes(val) ? f.vehicleTypes.filter((v) => v !== val) : [...f.vehicleTypes, val] }));
+  };
+
+  const addSub = () => setForm((f) => ({ ...f, subServices: [...f.subServices, { name: '', price: '', duration: '', isOptional: true }] }));
+  const updSub = (idx, key, val) => setForm((f) => { const s = [...f.subServices]; s[idx] = { ...s[idx], [key]: val }; return { ...f, subServices: s }; });
+  const delSub = (idx) => setForm((f) => ({ ...f, subServices: f.subServices.filter((_, i) => i !== idx) }));
+
+  const submit = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!form.name.trim()) errs.name = 'Vui lòng nhập tên';
+    if (!form.price || Number(form.price) < 0) errs.price = 'Giá không hợp lệ';
+    if (!form.duration || Number(form.duration) < 1) errs.duration = 'Thời lượng không hợp lệ';
+    if (Object.keys(errs).length) return setErrors(errs);
+    onSave({ ...form, price: Number(form.price), duration: Number(form.duration) });
+  };
+
+  const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Tên gói <span className="text-red-500">*</span></label>
+          <input className={inp} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Rửa xe cao cấp" />
+          {errors.name && <p className="mt-1 text-[11px] text-red-500">{errors.name}</p>}
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Danh mục</label>
+          <select className={inp} value={form.category} onChange={(e) => set('category', e.target.value)}>
+            <option value="full">Tổng thể</option><option value="external">Ngoại thất</option><option value="internal">Nội thất</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">Mô tả</label>
+        <textarea rows={2} className={inp + ' resize-none'} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Mô tả gói dịch vụ..." />
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Giá (VNĐ) <span className="text-red-500">*</span></label>
+          <input type="number" min="0" className={inp} value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="150000" />
+          {errors.price && <p className="mt-1 text-[11px] text-red-500">{errors.price}</p>}
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Thời lượng (phút) <span className="text-red-500">*</span></label>
+          <input type="number" min="1" className={inp} value={form.duration} onChange={(e) => set('duration', e.target.value)} placeholder="60" />
+          {errors.duration && <p className="mt-1 text-[11px] text-red-500">{errors.duration}</p>}
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Trạng thái</label>
+          <select className={inp} value={form.status} onChange={(e) => set('status', e.target.value)}>
+            <option value="active">Hoạt động</option><option value="inactive">Ngừng</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">Loại xe áp dụng</label>
+        <div className="flex flex-wrap gap-2">
+          {[{ v: 'sedan', l: 'Sedan' }, { v: 'suv', l: 'SUV' }, { v: 'pickup', l: 'Pickup' }, { v: 'van', l: 'Van' }, { v: 'motorcycle', l: 'Xe máy' }].map((o) => (
+            <button key={o.v} type="button" onClick={() => toggleVehicle(o.v)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.vehicleTypes.includes(o.v) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>{o.l}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium text-slate-600">Dịch vụ chọn thêm</label>
+          <button type="button" onClick={addSub} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"><Plus size={12} weight="bold" /> Thêm</button>
+        </div>
+        <div className="space-y-2">
+          {form.subServices.map((sub, idx) => (
+            <div key={idx} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <input placeholder="Tên DV" className={inp + ' text-xs flex-1'} value={sub.name} onChange={(e) => updSub(idx, 'name', e.target.value)} />
+              <input type="number" placeholder="Giá" className={inp + ' text-xs w-24'} value={sub.price} onChange={(e) => updSub(idx, 'price', e.target.value)} />
+              <input type="number" placeholder="Phút" className={inp + ' text-xs w-20'} value={sub.duration} onChange={(e) => updSub(idx, 'duration', e.target.value)} />
+              <button type="button" onClick={() => delSub(idx)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"><Trash size={13} /></button>
+            </div>
+          ))}
+          {form.subServices.length === 0 && <p className="text-xs text-slate-400 italic">Chưa có dịch vụ chọn thêm</p>}
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+        <button type="button" onClick={onCancel} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Hủy</button>
+        <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+          {saving && <Spinner size={14} className="text-white" />}{saving ? 'Đang lưu…' : 'Lưu'}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -690,9 +810,6 @@ export default function BranchManagement() {
           branch={selected}
           onBack={() => setCurrentView('list')}
           onEdit={(br) => { setSelected(br); setModal('edit'); }}
-          onDelete={(br) => { setSelected(br); setModal('delete'); }}
-          onToggle={handleToggle}
-          togglingId={togglingId}
         />
 
         {/* ── Modals for Detail View ── */}
