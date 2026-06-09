@@ -600,10 +600,15 @@ function CreatePackageForm({ onSave, onCancel, saving }) {
     if (!form.price || Number(form.price) < 0) errs.price = 'Giá không hợp lệ';
     if (!form.duration || Number(form.duration) < 1) errs.duration = 'Thời lượng không hợp lệ';
     if (Object.keys(errs).length) return setErrors(errs);
-    onSave({ ...form, price: Number(form.price), duration: Number(form.duration) });
+    onSave({ ...form, price: Number(String(form.price).replace(/\./g, '')), duration: Number(form.duration) });
   };
 
   const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
+
+  const onPriceChange = (v) => {
+    setForm((f) => ({ ...f, price: v }));
+    setErrors((e) => ({ ...e, price: '' }));
+  };
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -627,7 +632,7 @@ function CreatePackageForm({ onSave, onCancel, saving }) {
       <div className="grid grid-cols-3 gap-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Giá (VNĐ) <span className="text-red-500">*</span></label>
-          <input type="number" min="0" className={inp} value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="150000" />
+          <input type="text" inputMode="numeric" className={inp} value={form.price} onChange={(e) => onPriceChange(e.target.value)} placeholder="80000" />
           {errors.price && <p className="mt-1 text-[11px] text-red-500">{errors.price}</p>}
         </div>
         <div>

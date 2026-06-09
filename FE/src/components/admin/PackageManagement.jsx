@@ -121,6 +121,9 @@ const EMPTY = {
   subServices: [],
 };
 
+const parseVnd = (v) => Number(String(v).replace(/\./g, ''));
+const parseSubServices = (subs) => subs.map((s) => ({ ...s, price: parseVnd(s.price), duration: Number(s.duration) }));
+
 function PackageForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState({ ...EMPTY, ...initial });
   const [errors, setErrors] = useState({});
@@ -162,7 +165,7 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) return setErrors(errs);
-    onSave({ ...form, price: Number(form.price), duration: Number(form.duration) });
+    onSave({ ...form, price: parseVnd(form.price), duration: Number(form.duration), subServices: parseSubServices(form.subServices) });
   };
 
   return (
@@ -178,8 +181,8 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Giá (VNĐ)" required error={errors.price}>
-          <input type="number" min="0" className={inp} value={form.price}
-            onChange={(e) => set('price', e.target.value)} placeholder="150000" />
+          <input type="text" inputMode="numeric" className={inp} value={form.price}
+            onChange={(e) => set('price', e.target.value)} placeholder="80000" />
         </Field>
         <Field label="Thời lượng (phút)" required error={errors.duration}>
           <input type="number" min="1" className={inp} value={form.duration}
@@ -467,11 +470,11 @@ export default function PackageManagement() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={() => { setSelected(pkg); setModal('edit'); }}
-                      className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
                       <PencilSimple size={15} />
                     </button>
                     <button onClick={() => { setSelected(pkg); setModal('delete'); }}
-                      className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                       <Trash size={15} />
                     </button>
                   </div>
