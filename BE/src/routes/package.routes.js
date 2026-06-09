@@ -19,6 +19,16 @@ const { ROLES } = require('../config/permissions');
  *           type: string
  *           enum: [active, inactive]
  *         description: Filter by status
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Search by package name
+ *       - in: query
+ *         name: managerId
+ *         schema:
+ *           type: string
+ *         description: Filter by manager ID
  *     responses:
  *       200:
  *         description: List of packages

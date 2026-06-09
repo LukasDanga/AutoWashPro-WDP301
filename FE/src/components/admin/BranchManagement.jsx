@@ -17,9 +17,15 @@ import {
   Warning,
   X,
   XCircle,
+  Package,
+  Tag,
+  ClockCountdown,
+  Car,
+  Money,
+  ListChecks,
+  Eye,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Map, MapMarker, MapControls, MarkerContent, MarkerPopup } from '@/components/ui/map';
 
 /* ─────────────────────────── API helper ─────────────────────────── */
 async function apiFetch(path, options = {}) {
@@ -325,6 +331,36 @@ function ConfirmDelete({ branch, onConfirm, onCancel, deleting }) {
 function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, togglingId }) {
   const toggling = togglingId === branch._id;
   const active = branch.status === 'active';
+  const [packages, setPackages] = useState([]);
+  const [pkgLoading, setPkgLoading] = useState(true);
+  const [pkgSearch, setPkgSearch] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      setPkgLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set('status', 'active');
+        if (pkgSearch.trim()) params.set('name', pkgSearch.trim());
+        const res = await apiFetch(`/packages?${params}`);
+        if (!res.ok) return;
+        const payload = await res.json();
+        const data = payload?.data ?? payload;
+        if (mounted) setPackages(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error('Failed to load packages', e);
+      } finally {
+        if (mounted) setPkgLoading(false);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [pkgSearch]);
+
+  const VEHICLE_LABELS = {
+    sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', motorcycle: 'Xe máy',
+  };
 
   return (
     <div className="space-y-6">
@@ -377,33 +413,10 @@ function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, toggling
               {branch.name}
               <StatusBadge status={branch.status} />
             </h2>
-            <p className="text-sm text-slate-500 mt-1">Thông tin chi tiết và bản đồ định vị của chi nhánh.</p>
           </div>
         </div>
 
-        {/* ── Middle: Map ── */}
-        <div className="h-[400px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm relative z-0">
-          <Map
-            viewport={{ center: branch.location?.coordinates || [106.700981, 10.776889], zoom: 15 }}
-            className="h-full w-full"
-          >
-            <MapControls position="bottom-right" showZoom showCompass showLocate />
-            <MapMarker
-              longitude={branch.location?.coordinates?.[0] || 106.700981}
-              latitude={branch.location?.coordinates?.[1] || 10.776889}
-            >
-              <MarkerContent />
-              <MarkerPopup>
-                <div className="space-y-1 p-1">
-                  <h4 className="font-semibold text-slate-800 text-sm">{branch.name}</h4>
-                  <p className="text-xs text-slate-500">{branch.address}</p>
-                </div>
-              </MarkerPopup>
-            </MapMarker>
-          </Map>
-        </div>
-
-        {/* ── Bottom: Information Cards ── */}
+        {/* ── Information Cards ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
@@ -446,6 +459,99 @@ function BranchDetailFull({ branch, onBack, onEdit, onDelete, onToggle, toggling
               </p>
             </div>
           </div>
+        </div>
+
+        {/* ── Packages Section ── */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <Package size={16} weight="duotone" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">Gói dịch vụ</h3>
+            </div>
+            <div className="relative">
+              <MagnifyingGlass size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={pkgSearch} onChange={(e) => setPkgSearch(e.target.value)}
+                placeholder="Tìm gói dịch vụ…"
+                className="w-56 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+              />
+            </div>
+          </div>
+
+          {pkgLoading ? (
+            <div className="flex items-center justify-center py-12 text-slate-400">
+              <Spinner size={22} />
+            </div>
+          ) : packages.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
+              <Package size={32} weight="thin" />
+              <p className="text-sm">Không có gói dịch vụ nào</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {packages.map((pkg) => (
+                <div key={pkg._id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-sm font-bold text-slate-800">{pkg.name}</h4>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${pkg.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {pkg.status === 'active' ? 'Hoạt động' : 'Ngừng'}
+                        </span>
+                        {pkg.category && (
+                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 capitalize">
+                            {pkg.category === 'external' ? 'Ngoại thất' : pkg.category === 'internal' ? 'Nội thất' : 'Tổng thể'}
+                          </span>
+                        )}
+                      </div>
+                      {pkg.description && (
+                        <p className="text-[12px] text-slate-500 line-clamp-2 mb-2">{pkg.description}</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Money size={12} weight="bold" className="text-emerald-500" />
+                          <strong className="text-slate-700">{Number(pkg.price).toLocaleString('vi-VN')}₫</strong>
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <ClockCountdown size={12} weight="bold" className="text-amber-500" />
+                          {pkg.duration} phút
+                        </span>
+                        {pkg.vehicleTypes?.length > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <Car size={12} weight="bold" className="text-blue-500" />
+                            {pkg.vehicleTypes.map((vt) => VEHICLE_LABELS[vt] || vt).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      {pkg.subServices?.length > 0 && (
+                        <div className="relative group">
+                          <button className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">
+                            <ListChecks size={12} weight="bold" />
+                            {pkg.subServices.length} DV thêm
+                          </button>
+                          <div className="absolute right-0 top-full mt-1 z-10 min-w-[200px] rounded-xl border border-slate-200 bg-white p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dịch vụ chọn thêm</p>
+                            <div className="space-y-1.5">
+                              {pkg.subServices.map((sub, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-700">{sub.name}</span>
+                                  <span className="font-semibold text-slate-800 ml-2">{Number(sub.price).toLocaleString('vi-VN')}₫</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -9,6 +9,8 @@ exports.createPackage = async (data) => {
 exports.getAllPackages = async (filters = {}) => {
   const query = {};
   if (filters.status) query.status = filters.status;
+  if (filters.name) query.name = { $regex: filters.name, $options: 'i' };
+  if (filters.managerId) query.managerId = filters.managerId;
   return Package.find(query).sort({ price: 1 });
 };
 
