@@ -1,8 +1,12 @@
 const { User, PointHistory } = require('../models');
 
-// Tính điểm dựa trên số tiền (5%)
-const calculatePoints = (amount) => {
-  return Math.floor(amount * 0.05);
+// Tính điểm dựa trên số tiền (5%) kèm hệ số nhân theo hạng
+const calculatePoints = (amount, tier = 'bronze') => {
+  let multiplier = 1;
+  if (tier === 'diamond') multiplier = 2.0;
+  else if (tier === 'gold') multiplier = 1.5;
+  else if (tier === 'silver') multiplier = 1.2;
+  return Math.floor(amount * 0.05 * multiplier);
 };
 
 // Mốc thăng hạng
@@ -25,11 +29,11 @@ const determineTier = (lifetimePoints) => {
  * Xử lý khi thanh toán thành công: cộng điểm, ghi log, thăng hạng
  */
 exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
-  const pointsEarned = calculatePoints(amount);
-  if (pointsEarned <= 0) return null;
-
   const user = await User.findById(userId).session(session);
   if (!user) return null;
+
+  const pointsEarned = calculatePoints(amount, user.tier);
+  if (pointsEarned <= 0) return null;
 
   user.loyaltyPoints += pointsEarned;
   user.lifetimePoints += pointsEarned;

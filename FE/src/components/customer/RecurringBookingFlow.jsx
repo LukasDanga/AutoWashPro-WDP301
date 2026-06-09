@@ -117,6 +117,13 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
 
   const pricePerSession = Math.max(0, totalBase - discountPerSession);
 
+  let pointMultiplier = 1;
+  if (user?.tier === 'diamond') pointMultiplier = 2.0;
+  else if (user?.tier === 'gold') pointMultiplier = 1.5;
+  else if (user?.tier === 'silver') pointMultiplier = 1.2;
+
+  const pointsPerSession = Math.floor(pricePerSession * 0.05 * pointMultiplier);
+
   function toggleWeekday(v) {
     setSelectedWeekdays(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   }
@@ -317,7 +324,7 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                 token={token}
                 selected={appliedVoucher}
                 onSelect={setAppliedVoucher}
-                orderAmount={pkg?.price || 0}
+                orderAmount={totalBase}
               />
             </article>
           </div>
@@ -367,6 +374,12 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                   <span>TỔNG DỰ KIẾN</span>
                   <strong style={{ color: '#ffb86b' }}>{pkg ? formatCurrency(pricePerSession * previewDates.length) : '—'}</strong>
                 </div>
+                {previewDates.length > 0 && pkg && (
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(148, 163, 184, 0.3)', width: '100%', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>TÍCH ĐIỂM DỰ KIẾN</span>
+                    <strong style={{ color: '#3de0ff' }}>+{pointsPerSession * previewDates.length} Điểm</strong>
+                  </div>
+                )}
               </div>
 
               {/* Preview dates */}
@@ -391,11 +404,23 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
 
               {result && (
                 <div className="rb-result">
-                  <div className="rb-result-ok">✓ Đã tạo {result.totalCreated} lịch hẹn!</div>
-                  {result.totalFailed > 0 && <div className="rb-result-warn">⚠ {result.totalFailed} ngày bỏ qua (conflict slot)</div>}
-                  {result.failed?.map((f, i) => (
-                    <div key={i} className="rb-result-failed">✗ {f.date}: {f.reason}</div>
-                  ))}
+                  {result.totalCreated > 0 ? (
+                    <div className="rb-result-ok">✓ Đã tạo {result.totalCreated} lịch hẹn!</div>
+                  ) : null}
+                  {result.totalCreated === 0 && (
+                    <div className="rb-result-warn" style={{ color: '#ef4444', fontWeight: 'bold' }}>✗ Không thể tạo bất kỳ lịch hẹn nào do trùng khung giờ/quá khứ. Vui lòng chọn giờ khác!</div>
+                  )}
+                  {result.totalFailed > 0 && result.totalCreated > 0 && (
+                    <div className="rb-result-warn" style={{ color: '#f59e0b', fontWeight: 'bold', marginTop: '8px' }}>⚠ {result.totalFailed} ngày bị bỏ qua (trùng slot/quá khứ).</div>
+                  )}
+                  <div style={{ marginTop: '8px' }}>
+                    {result.failed?.slice(0, 5).map((f, i) => (
+                      <div key={i} className="rb-result-failed">✗ {f.date}: {f.reason}</div>
+                    ))}
+                    {result.failed?.length > 5 && (
+                      <div className="rb-result-failed">... và {result.failed.length - 5} ngày khác.</div>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -151,7 +151,7 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
 
   async function handleBuy() {
     if (!selectedBranch || !selectedVehicle || !selectedPackage) {
-      setBuyError('Vui lòng chọn đủ chi nhánh, xe và gói dịch vụ.');
+      setBuyError('Vui lòng chọn đủ cấu hình gói lượt (chi nhánh, xe, gói dịch vụ).');
       return;
     }
     setBuyLoading(true);
@@ -162,8 +162,8 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          branchId: selectedBranch,
-          vehicleId: selectedVehicle,
+          branchId: selectedBranch === 'ALL' ? undefined : selectedBranch,
+          vehicleId: selectedVehicle === 'ALL' ? undefined : selectedVehicle,
           packageId: selectedPackage,
           totalSlots: slotCount,
           voucherCode: appliedVoucher?.code || undefined,
@@ -220,6 +220,16 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
             ))}
           </div>
 
+          {(user?.tier === 'diamond' || user?.tier === 'gold') && (
+            <div style={{ padding: '12px 16px', background: 'linear-gradient(90deg, #fffbeb, #fef3c7)', borderRadius: '8px', borderLeft: '4px solid #f59e0b', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '1.5rem' }}>👑</span>
+              <div>
+                <strong style={{ display: 'block', color: '#92400e', marginBottom: '4px' }}>Đặc quyền Hạng {user.tier.toUpperCase()}</strong>
+                <span style={{ color: '#b45309', fontSize: '0.9rem' }}>Bạn được giảm thêm <strong>+{user.tier === 'diamond' ? '10%' : '5%'}</strong> đè lên mức giảm số lượng gốc! Tự động áp dụng khi thanh toán.</span>
+              </div>
+            </div>
+          )}
+
           {/* ─── STEP 1: Chọn địa điểm TRƯỚC ──────────────────────── */}
           <article className="aw-card-section loc-section">
             <div className="aw-step-title loc-title">
@@ -227,6 +237,16 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
               {selectedBranch && <span className="loc-selected-name"> — {branchObj?.name}</span>}
             </div>
             <div className="loc-branches-grid">
+              <button type="button"
+                className={'ALL' === selectedBranch ? 'loc-branch-card active' : 'loc-branch-card'}
+                onClick={() => setSelectedBranch('ALL')}>
+                <div className="loc-branch-icon">🌍</div>
+                <div className="loc-branch-body">
+                  <strong>Áp dụng toàn hệ thống</strong>
+                  <p>Có thể dùng ở bất kỳ chi nhánh nào</p>
+                </div>
+                {'ALL' === selectedBranch && <div className="loc-check">✓</div>}
+              </button>
               {branches.length === 0 ? (
                 <div className="aw-empty-state">Đang tải chi nhánh...</div>
               ) : branches.map(b => (
@@ -259,6 +279,12 @@ export default function SlotPackFlow({ user, vehicles: userVehicles = [], apiBas
                 <article className="aw-card-section">
                   <div className="aw-step-title"><span>2</span> CHỌN XE</div>
                   <div className="aw-options two-up">
+                    <button type="button"
+                      className={'ALL' === selectedVehicle ? 'aw-option active' : 'aw-option'}
+                      onClick={() => setSelectedVehicle('ALL')}>
+                      <div className="aw-option-head"><strong>Tất cả xe của tôi</strong><span>{'ALL' === selectedVehicle ? '●' : '○'}</span></div>
+                      <p>Không khóa cứng vào 1 biển số</p>
+                    </button>
                     {userVehicles.length > 0 ? userVehicles.map(v => {
                       const vid = v._id || v.id;
                       const vname = v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate;

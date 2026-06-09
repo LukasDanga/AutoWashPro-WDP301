@@ -141,33 +141,57 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
   session.startTransaction();
 
   try {
-    // Lock voucher and check all conditions atomically
-    const voucher = await Voucher.findOneAndUpdate(
-      {
-        code: code.toUpperCase(),
-        remaining: { $gt: 0 },
-        status: 'active',
-        startDate: { $lte: new Date() },
-        endDate: { $gte: new Date() },
-      },
-      { $inc: { remaining: -1 } },
-      { new: true, session }
-    );
+    const Booking = mongoose.model('Booking');
+    const booking = await Booking.findById(bookingId).session(session);
+    let isAlreadyReservedForGroup = false;
 
-    if (!voucher) {
-      const existing = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
-      if (!existing) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-      if (existing.remaining <= 0) throw Object.assign(new Error('Voucher fully redeemed'), { statusCode: 400, code: 'VOUCHER_EXHAUSTED' });
-      throw Object.assign(new Error('Voucher is inactive or expired'), { statusCode: 400, code: 'VOUCHER_INVALID' });
+    // Check if the voucher has already been reserved for another booking in the same recurring group
+    if (booking && booking.bookingType === 'recurring' && booking.recurringGroupId) {
+      const voucherDoc = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
+      if (voucherDoc) {
+        const groupBookings = await Booking.find({ recurringGroupId: booking.recurringGroupId }).select('_id').session(session);
+        const groupIds = groupBookings.map(b => b._id);
+        const existingUsage = await VoucherUsage.findOne({ voucherId: voucherDoc._id, userId, bookingId: { $in: groupIds } }).session(session);
+        if (existingUsage) {
+          isAlreadyReservedForGroup = true;
+        }
+      }
     }
 
-    // Check per-user usage limit inside the same transaction
-    if (voucher.maxUsagePerUser > 0) {
-      const usageCount = await VoucherUsage.countDocuments({ voucherId: voucher._id, userId }).session(session);
-      if (usageCount >= voucher.maxUsagePerUser) {
-        // Rollback the decrement we just did
-        await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
-        throw Object.assign(new Error(`You have reached the maximum usage limit for this voucher (${voucher.maxUsagePerUser} time(s))`), { statusCode: 400, code: 'VOUCHER_MAX_USAGE' });
+    let voucher;
+    if (isAlreadyReservedForGroup) {
+      // Just fetch the voucher without decrementing
+      voucher = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
+      if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+    } else {
+      // Lock voucher and check all conditions atomically
+      voucher = await Voucher.findOneAndUpdate(
+        {
+          code: code.toUpperCase(),
+          remaining: { $gt: 0 },
+          status: 'active',
+          startDate: { $lte: new Date() },
+          endDate: { $gte: new Date() },
+        },
+        { $inc: { remaining: -1 } },
+        { new: true, session }
+      );
+
+      if (!voucher) {
+        const existing = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
+        if (!existing) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+        if (existing.remaining <= 0) throw Object.assign(new Error('Voucher fully redeemed'), { statusCode: 400, code: 'VOUCHER_EXHAUSTED' });
+        throw Object.assign(new Error('Voucher is inactive or expired'), { statusCode: 400, code: 'VOUCHER_INVALID' });
+      }
+
+      // Check per-user usage limit inside the same transaction
+      if (voucher.maxUsagePerUser > 0) {
+        const usageCount = await VoucherUsage.countDocuments({ voucherId: voucher._id, userId }).session(session);
+        if (usageCount >= voucher.maxUsagePerUser) {
+          // Rollback the decrement we just did
+          await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
+          throw Object.assign(new Error(`You have reached the maximum usage limit for this voucher (${voucher.maxUsagePerUser} time(s))`), { statusCode: 400, code: 'VOUCHER_MAX_USAGE' });
+        }
       }
     }
 
