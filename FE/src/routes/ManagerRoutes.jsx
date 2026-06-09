@@ -7,6 +7,8 @@ import ManagerBranch from '@/components/manager/ManagerBranch';
 import ManagerVouchers from '@/components/manager/ManagerVouchers';
 import ManagerRevenue from '@/components/manager/ManagerRevenue';
 import ManagerProfile from '@/components/manager/ManagerProfile';
+import ManagerCustomers from '@/components/manager/ManagerCustomers';
+import ManagerFeedbacks from '@/components/manager/ManagerFeedbacks';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
 export default function ManagerRoutes() {
@@ -78,6 +80,8 @@ export default function ManagerRoutes() {
         <Route path="branch" element={<ManagerBranch user={user} />} />
         <Route path="vouchers" element={<ManagerVouchers user={user} />} />
         <Route path="revenue" element={<ManagerRevenue user={user} />} />
+        <Route path="customers" element={<ManagerCustomers user={user} />} />
+        <Route path="feedbacks" element={<ManagerFeedbacks user={user} />} />
         <Route path="profile" element={<ManagerProfile user={user} />} />
         <Route path="*" element={<Navigate to="/manager" replace />} />
       </Route>

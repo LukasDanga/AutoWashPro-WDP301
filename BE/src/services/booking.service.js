@@ -219,6 +219,14 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   const query = {};
   if (userRole === 'customer') {
     query.userId = userId;
+  } else if (userRole === 'manager') {
+    const branch = await Branch.findOne({ managerId: userId });
+    if (branch) {
+      query.branchId = branch._id;
+    } else {
+      return [];
+    }
+    if (filters.userId) query.userId = filters.userId;
   } else {
     if (filters.userId) query.userId = filters.userId;
     if (filters.branchId) query.branchId = filters.branchId;
@@ -756,4 +764,70 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
 
   const cancelled = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
   return { cancelled: cancelled.length, total: bookings.length };
+};
+
+exports.getFeedbacks = async (user, filters = {}) => {
+  const query = {
+    status: 'completed',
+    $or: [{ rating: { $ne: null } }, { feedback: { $ne: null, $ne: '' } }],
+  };
+
+  if (user.role === 'manager') {
+    const branch = await Branch.findOne({ managerId: user.id });
+    if (branch) {
+      query.branchId = branch._id;
+    } else {
+      return [];
+    }
+  }
+
+  return Booking.find(query)
+    .populate('userId', 'name email phone avatar tier')
+    .populate('packageId', 'name')
+    .sort({ createdAt: -1 });
+};
+
+exports.getCustomers = async (user, filters = {}) => {
+  let match = { status: 'completed' };
+
+  if (user.role === 'manager') {
+    const branch = await Branch.findOne({ managerId: user.id });
+    if (branch) {
+      match.branchId = branch._id;
+    } else {
+      return [];
+    }
+  }
+
+  const customers = await Booking.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: '$userId',
+        totalBookings: { $sum: 1 },
+        totalSpent: { $sum: '$finalPrice' },
+        lastBookingDate: { $max: '$bookingDate' },
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    { $unwind: '$user' },
+    {
+      $lookup: {
+        from: 'vehicles',
+        localField: '_id',
+        foreignField: 'userId',
+        as: 'vehicles',
+      },
+    },
+    { $sort: { lastBookingDate: -1 } },
+  ]);
+
+  return customers;
 };

@@ -21,6 +21,7 @@ import {
 } from "@phosphor-icons/react";
 import { getApiBaseUrl, getStoredToken } from "@/lib/authStorage";
 import { userService } from "@/components/services/userService";
+import TierBadge from "@/components/ui/TierBadge";
 
 /* ─────────────────────────── API helper ─────────────────────────── */
 async function apiFetch(path, options = {}) {
@@ -115,29 +116,6 @@ function StatusBadge({ status }) {
   );
 }
 
-function TierBadge({ tier }) {
-  let style = "bg-slate-50 text-slate-600 ring-1 ring-slate-200";
-  let label = "Bronze";
-
-  if (tier === "silver") {
-    style = "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-300";
-    label = "Bạc";
-  } else if (tier === "gold") {
-    style = "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
-    label = "Vàng";
-  } else if (tier === "diamond") {
-    style = "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
-    label = "Kim cương";
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${style}`}
-    >
-      {label}
-    </span>
-  );
-}
 
 /* ─────────────────────────── Toast ───────────────────────────────── */
 function Toast({ toast, onDismiss }) {
