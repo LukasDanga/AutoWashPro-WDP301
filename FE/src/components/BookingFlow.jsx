@@ -129,6 +129,11 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
     } catch (e) { console.error(e); }
   };
 
+  const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
+  const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
+  const pkg = packages.find(p => p.id === selectedPackage);
+  const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
+
   useEffect(() => {
     if (!selectedVehicle && vehicleList[0]) {
       setSelectedVehicle(vehicleList[0].id || vehicleList[0]._id || vehicleList[0].licensePlate || '');
@@ -157,11 +162,6 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
     }
     if (token) fetchSlots();
   }, [selectedBranch, selectedPackage, date?.iso, apiBase, token]);
-
-  const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
-  const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
-  const pkg = packages.find(p => p.id === selectedPackage);
-  const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
 
   const currentSubServices = selectedSubServices[selectedPackage] || [];
   let extraDuration = 0;
