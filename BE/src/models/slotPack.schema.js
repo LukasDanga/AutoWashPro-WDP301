@@ -15,9 +15,9 @@ const mongoose = require('mongoose');
 const slotPackSchema = new mongoose.Schema(
   {
     userId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User',    required: true },
-    branchId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Branch',  required: true },
+    branchId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', required: true },
-    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
+    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle' },
 
     // Số lần mua khi tạo gói
     totalSlots:     { type: Number, required: true, min: 1, max: 50 },

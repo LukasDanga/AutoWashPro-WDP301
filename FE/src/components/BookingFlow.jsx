@@ -78,20 +78,25 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [selectedDate, setSelectedDate] = useState(bookingDates[1]?.id || bookingDates[0].id);
   const [selectedTime, setSelectedTime] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
+  const [mySlotPacks, setMySlotPacks] = useState([]);
+  const [selectedSlotPack, setSelectedSlotPack] = useState(null);
   const [activeNav, setActiveNav] = useState('booking');
   const [currentUser, setCurrentUser] = useState(user);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [resBranches, resPackages] = await Promise.all([
+        const [resBranches, resPackages, resPacks] = await Promise.all([
           fetch(`${apiBase}/branches`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${apiBase}/packages`, { headers: { Authorization: `Bearer ${token}` } })
+          fetch(`${apiBase}/packages`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${apiBase}/slot-packs/my`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
         const branchesPayload = await resBranches.json();
         const packagesPayload = await resPackages.json();
@@ -105,6 +110,10 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
         const mappedPackages = (Array.isArray(dataP) ? dataP : []).map(p => ({ ...p, id: p._id || p.id }));
         setPackages(mappedPackages);
         if (mappedPackages.length > 0) setSelectedPackage(mappedPackages[0].id);
+
+        const packsPayload = await resPacks.json();
+        const mappedPacks = Array.isArray(packsPayload?.data) ? packsPayload.data : [];
+        setMySlotPacks(mappedPacks);
       } catch (e) { console.error('Failed to load data', e); }
     }
     if (token) fetchData();
@@ -125,6 +134,29 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       setSelectedVehicle(vehicleList[0].id || vehicleList[0]._id || vehicleList[0].licensePlate || '');
     }
   }, [selectedVehicle, vehicleList]);
+
+  useEffect(() => {
+    async function fetchSlots() {
+      if (!selectedBranch || !selectedPackage || !date?.iso) return;
+      setSlotsLoading(true);
+      try {
+        const res = await fetch(`${apiBase}/bookings/slots?branchId=${selectedBranch}&date=${date.iso}&packageId=${selectedPackage}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const payload = await res.json();
+        if (res.ok) {
+          setAvailableSlots(payload.data || []);
+        } else {
+          setAvailableSlots([]);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSlotsLoading(false);
+      }
+    }
+    if (token) fetchSlots();
+  }, [selectedBranch, selectedPackage, date?.iso, apiBase, token]);
 
   const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
   const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
@@ -147,9 +179,35 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const totalBase = basePrice + extraPrice;
   const pkgDuration = pkg ? pkg.duration + extraDuration : 0;
 
+  const validPacks = useMemo(() => {
+    return mySlotPacks.filter(p => {
+      if (p.status !== 'active' || p.remainingSlots <= 0) return false;
+      const pPkgId = p.packageId?._id || p.packageId?.id || p.packageId;
+      if (pPkgId !== selectedPackage) return false;
+      const pBranchId = p.branchId?._id || p.branchId?.id || p.branchId;
+      if (pBranchId && pBranchId !== selectedBranch) return false;
+      const pVehicleId = p.vehicleId?._id || p.vehicleId?.id || p.vehicleId;
+      const vId = vehicle?.id || vehicle?._id || vehicle?.licensePlate;
+      if (pVehicleId && pVehicleId !== vId) return false;
+      return true;
+    });
+  }, [mySlotPacks, selectedPackage, selectedBranch, vehicle]);
+
+  useEffect(() => {
+    if (selectedSlotPack && !validPacks.find(p => (p._id || p.id) === selectedSlotPack)) {
+      setSelectedSlotPack(null);
+    }
+  }, [validPacks, selectedSlotPack]);
+
+  let pointMultiplier = 1;
+  if (currentUser?.tier === 'diamond') pointMultiplier = 2.0;
+  else if (currentUser?.tier === 'gold') pointMultiplier = 1.5;
+  else if (currentUser?.tier === 'silver') pointMultiplier = 1.2;
+
   const discount = appliedVoucher ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value) : 0;
-  const total = Math.max(0, totalBase - discount);
-  const points = Math.max(60, Math.round(total / 1000) * 10);
+  const isPayingWithPack = !!selectedSlotPack;
+  const total = isPayingWithPack ? 0 : Math.max(0, totalBase - discount);
+  const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
 
   async function applyCoupon() {
     const normalized = couponCode.trim().toUpperCase();
@@ -218,8 +276,9 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           vehicleId: vehicle.id || vehicle._id || vehicle.licensePlate,
           bookingDate: date.iso,
           startTime: selectedTime,
-          voucherCode: appliedVoucher?.code || undefined,
+          voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined),
           selectedSubServices: currentSubServices,
+          slotPackId: selectedSlotPack || undefined,
           note: '',
         }),
       });
@@ -437,7 +496,30 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
                 <div className="aw-slot-title">KHUNG GIỜ NHẬN XE TẠI LÒ RỬA</div>
                 <div className="aw-time-grid">
-                  {timeSlots.map((slot) => (
+                  {slotsLoading ? <div style={{padding: '20px', gridColumn: '1 / -1', textAlign: 'center'}}>Đang tải lịch trống...</div> : 
+                   availableSlots.length > 0 ? availableSlots.map((slotObj) => {
+                    const timeLabel = slotObj.startTime;
+                    const isDisabled = !slotObj.available;
+                    const isVipOnly = slotObj.vipOnly;
+                    const canBookVip = ['gold', 'diamond'].includes(currentUser?.tier);
+                    const lockVip = isVipOnly && !canBookVip;
+
+                    return (
+                      <button
+                        key={timeLabel}
+                        type="button"
+                        disabled={isDisabled || lockVip}
+                        className={timeLabel === selectedTime ? 'aw-time-card active' : 'aw-time-card'}
+                        onClick={() => setSelectedTime(timeLabel)}
+                        style={{ opacity: (isDisabled || lockVip) ? 0.5 : 1, position: 'relative' }}
+                      >
+                        {timeLabel}
+                        {isVipOnly && <span title="Chỉ VIP" style={{ position: 'absolute', top: -10, right: -10, fontSize: '1.2rem', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>👑</span>}
+                        {isDisabled && !isVipOnly && <span style={{ position: 'absolute', bottom: 2, left: 0, right: 0, fontSize: '0.65rem', color: '#ef4444', textAlign: 'center' }}>Hết chỗ</span>}
+                        {lockVip && <span style={{ position: 'absolute', bottom: 2, left: 0, right: 0, fontSize: '0.65rem', color: '#eab308', fontWeight: 'bold', textAlign: 'center' }}>Chỉ VIP</span>}
+                      </button>
+                    );
+                  }) : timeSlots.map(slot => (
                     <button
                       key={slot}
                       type="button"
@@ -480,14 +562,41 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                 </div>
 
                 <div style={{ marginTop: '16px', marginBottom: '16px' }}>
-                  <VoucherPicker
-                    apiBase={apiBase}
-                    token={token}
-                    selected={appliedVoucher}
-                    onSelect={setAppliedVoucher}
-                    orderAmount={totalBase}
-                    compact={true}
-                  />
+                  {validPacks.length > 0 && (
+                    <div style={{ marginBottom: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#334155', display: 'block', marginBottom: '8px' }}>Thanh toán bằng Gói Lượt:</strong>
+                      <select 
+                        style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                        value={selectedSlotPack || ''}
+                        onChange={(e) => {
+                          setSelectedSlotPack(e.target.value || null);
+                          if (e.target.value) {
+                            setAppliedVoucher(null);
+                            setCouponCode('');
+                            setCouponApplied(false);
+                          }
+                        }}
+                      >
+                        <option value="">Không sử dụng gói lượt</option>
+                        {validPacks.map(p => (
+                          <option key={p._id || p.id} value={p._id || p.id}>
+                            {p.packCode} - Còn {p.remainingSlots} lần
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {!isPayingWithPack && (
+                    <VoucherPicker
+                      apiBase={apiBase}
+                      token={token}
+                      selected={appliedVoucher}
+                      onSelect={setAppliedVoucher}
+                      orderAmount={totalBase}
+                      compact={true}
+                    />
+                  )}
                 </div>
 
                 <div className="aw-pricing">

@@ -58,6 +58,28 @@ export default function BookingsHistory({ apiBase, token }) {
     setStatusFilter('all');
   }
 
+  async function handleCancelGroup(groupId) {
+    if (!window.confirm('Bạn có chắc muốn hủy TOÀN BỘ lịch hẹn chưa diễn ra trong chuỗi định kỳ này?')) return;
+    try {
+      const res = await fetch(`${apiBase}/bookings/recurring/${groupId}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Không thể hủy chuỗi');
+      alert('Đã hủy chuỗi định kỳ thành công.');
+      
+      // Tải lại lịch sử
+      const resRefresh = await fetch(`${apiBase}/bookings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await resRefresh.json();
+      const data = payload?.data || payload;
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   return (
     <div>
       <div className="aw-card-section">
@@ -122,6 +144,9 @@ export default function BookingsHistory({ apiBase, token }) {
               <div className="aw-history-pay">Phương thức t.toán: <strong>Tại quầy</strong> • Trạng thái: <strong className="text-highlight">{b.status === 'pending' ? 'Chờ thanh toán' : b.status === 'confirmed' ? 'Đã xác nhận' : b.status === 'cancelled' ? 'Đã hủy' : b.status === 'completed' ? 'Đã hoàn thành' : 'Chờ xác nhận'}</strong> • <span className="text-muted">tích lũy +{b.pointsEarned || 0} điểm</span></div>
               <div>
                 <button className="aw-btn-cancel" type="button">Hủy đặt lịch</button>
+                {b.bookingType === 'recurring' && b.recurringGroupId && ['pending', 'confirmed'].includes(b.status) && (
+                  <button className="aw-btn-cancel" style={{ marginLeft: 8, borderColor: '#ef4444', color: '#ef4444' }} type="button" onClick={() => handleCancelGroup(b.recurringGroupId)}>Hủy toàn bộ chuỗi</button>
+                )}
                 {/* <button className="aw-btn-detail" type="button" onClick={() => loadDetail(b._id || b.id)}>Xem chi tiết</button> */}
               </div>
             </div>

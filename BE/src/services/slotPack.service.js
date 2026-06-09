@@ -48,34 +48,45 @@ exports.createSlotPack = async (data) => {
     const { userId, branchId, packageId, vehicleId, totalSlots, voucherCode, expiresAt } = data;
 
     // --- Validate entities ---
-    const [pkg, branch, vehicle, user] = await Promise.all([
+    const [pkg, user] = await Promise.all([
       Package.findById(packageId).session(session),
-      Branch.findById(branchId).session(session),
-      Vehicle.findById(vehicleId).session(session),
       User.findById(userId).session(session),
     ]);
 
-    if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-    if (!branch) throw Object.assign(new Error('Branch not found'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-    if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
-    if (!user)   throw Object.assign(new Error('User not found'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
-
-    if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
-    if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
-    if (String(vehicle.userId) !== String(userId)) {
-      throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+    let branch = null;
+    if (branchId) {
+      branch = await Branch.findById(branchId).session(session);
+      if (!branch) throw Object.assign(new Error('Branch not found'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+      if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
     }
+
+    let vehicle = null;
+    if (vehicleId) {
+      vehicle = await Vehicle.findById(vehicleId).session(session);
+      if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+      if (String(vehicle.userId) !== String(userId)) {
+        throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
+    }
+
+    if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+    if (!user)   throw Object.assign(new Error('User not found'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
+    if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
 
     if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
       throw Object.assign(new Error('Total slots must be between 1 and 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
     }
 
-    // --- Chiết khấu theo số lượng ---
+    // --- Chiết khấu theo số lượng và hạng VIP ---
     const unitPrice = pkg.price;
-    const discountPercent = getDiscountPercent(totalSlots);
+    let discountPercent = getDiscountPercent(totalSlots);
+    if (user.tier === 'diamond') discountPercent += 10;
+    else if (user.tier === 'gold') discountPercent += 5;
+    if (discountPercent > 100) discountPercent = 100;
+
     const grossTotal = unitPrice * totalSlots;
     const qtyDiscount = Math.floor(grossTotal * discountPercent / 100);
-    let baseTotal = grossTotal - qtyDiscount; // sau chiết khấu số lượng
+    let baseTotal = grossTotal - qtyDiscount; // sau chiết khấu số lượng + VIP
 
     // --- Priority dựa theo tier ---
     const priority = TIER_PRIORITY[user.tier] || 1;
