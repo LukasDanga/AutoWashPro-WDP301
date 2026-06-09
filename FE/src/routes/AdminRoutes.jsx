@@ -6,6 +6,7 @@ import BranchManagement from '@/components/admin/BranchManagement';
 import ManagerVouchers from '@/components/manager/ManagerVouchers';
 import UserManagement from '@/components/admin/UserManagement';
 import AdminProfile from '@/components/admin/AdminProfile';
+import PackageManagement from '@/components/admin/PackageManagement';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -92,6 +93,7 @@ export default function AdminRoutes() {
         <Route index element={<FeaturePlaceholder title={ADMIN_PAGE_META.overview.title} description={ADMIN_PAGE_META.overview.description} />} />
         <Route path="branches" element={<BranchManagement />} />
         <Route path="users" element={<UserManagement />} />
+        <Route path="packages" element={<PackageManagement />} />
         <Route
           path="reviews"
           element={
