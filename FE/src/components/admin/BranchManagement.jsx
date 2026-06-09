@@ -625,10 +625,17 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
   );
 }
 
-function CreatePackageForm({ onSave, onCancel, saving }) {
+function CreatePackageForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
-    name: '', description: '', price: '', duration: '', image: '',
-    status: 'active', category: 'full', vehicleTypes: [], subServices: [],
+    name: initial?.name ?? '',
+    description: initial?.description ?? '',
+    price: initial?.price ?? '',
+    duration: initial?.duration ?? '',
+    image: initial?.image ?? '',
+    status: initial?.status ?? 'active',
+    category: initial?.category ?? 'full',
+    vehicleTypes: initial?.vehicleTypes ?? [],
+    subServices: initial?.subServices ?? [],
   });
   const [errors, setErrors] = useState({});
 
