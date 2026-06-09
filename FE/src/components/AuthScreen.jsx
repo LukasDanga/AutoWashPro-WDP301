@@ -33,7 +33,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
   const [authMode, setAuthMode] = useState('login');
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
-  
+
   const [authError, setAuthError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -43,16 +43,9 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
   const [showLoginPass, setShowLoginPass] = useState(false);
 
   // Register form state
-  const [regName, setRegName] = useState('');
-  const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPass, setRegPass] = useState('');
   const [showRegPass, setShowRegPass] = useState(false);
-  const [regPlate, setRegPlate] = useState('59F2-999.99');
-  const [regVehicleType, setRegVehicleType] = useState('motorcycle');
-  const [regBrand, setRegBrand] = useState('Honda');
-  const [regModel, setRegModel] = useState('SH 150i');
-  const [regColor, setRegColor] = useState('Đen');
 
   async function handleLogin(event) {
     if (event) event.preventDefault();
@@ -97,7 +90,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
       setLoginLoading(false);
     }
   }
-  
+
   async function handleQuickCustomerLogin(phone, pass) {
     setLoginPhone(phone);
     setLoginPass(pass);
@@ -123,20 +116,10 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
 
     try {
       const data = {
-        name: regName,
         email: regEmail,
-        phone: regPhone,
         password: regPass,
-        vehicle: {
-          licensePlate: normalizePlate(regPlate),
-          vehicleType: regVehicleType,
-          brand: regBrand,
-          model: regModel,
-          color: regColor,
-          isDefault: true,
-        }
       };
-      
+
       await onRegister(data);
       setStatusMessage('Đăng ký thành công, đang mở luồng đặt lịch.');
     } catch (error) {
@@ -164,7 +147,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
         {/* Decorative Gradients */}
         <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-blue-600/20 blur-[100px]" />
         <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[100px]" />
-        
+
         <div className="relative z-10 flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-3xl shadow-lg shadow-blue-500/40">
             💧
@@ -176,7 +159,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
             </span>
           </div>
         </div>
-        
+
         <div className="relative z-10 max-w-lg">
           <h2 className="text-5xl font-extrabold leading-tight tracking-tight">
             Dịch vụ chăm sóc xe <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">thế hệ mới.</span>
@@ -185,7 +168,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
             Trải nghiệm đặt lịch nhanh chóng, quản lý phương tiện thông minh và nhận các ưu đãi độc quyền dành riêng cho bạn.
           </p>
         </div>
-        
+
         <div className="relative z-10 text-sm font-medium text-slate-600">
           &copy; 2026 AutoWash Pro. All rights reserved.
         </div>
@@ -194,7 +177,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
       {/* ── Right Side: Form Container ── */}
       <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-20 xl:px-32 relative">
         <div className="mx-auto w-full max-w-md">
-          
+
           {/* Mobile Header */}
           <div className="mb-10 flex items-center gap-3 lg:hidden">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-xl shadow-md">
@@ -297,37 +280,6 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">Họ và tên</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-                      <User size={18} weight="duotone" />
-                    </div>
-                    <input
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Bảo Khang"
-                      className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm text-slate-800 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 placeholder:text-slate-400"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">Điện thoại</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-                      <Phone size={18} weight="duotone" />
-                    </div>
-                    <input
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      placeholder="0901234567"
-                      className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm text-slate-800 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 placeholder:text-slate-400"
-                    />
-                  </div>
-                </div>
-              </div>
-
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">Email</label>
                 <div className="relative">
@@ -366,76 +318,12 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-100/50 p-5">
-                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-800">
-                  <CarProfile size={20} weight="duotone" className="text-blue-600" />
-                  Phương tiện mặc định
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Biển số</label>
-                    <input
-                      value={regPlate}
-                      onChange={(e) => setRegPlate(normalizePlate(e.target.value))}
-                      placeholder="59F2-999.99"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Hãng xe</label>
-                    <input
-                      value={regBrand}
-                      onChange={(e) => setRegBrand(e.target.value)}
-                      placeholder="Honda"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Dòng xe</label>
-                    <input
-                      value={regModel}
-                      onChange={(e) => setRegModel(e.target.value)}
-                      placeholder="SH 150i"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Màu xe</label>
-                    <input
-                      value={regColor}
-                      onChange={(e) => setRegColor(e.target.value)}
-                      placeholder="Đen"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">Phân loại</label>
-                  <select
-                    value={regVehicleType}
-                    onChange={(e) => setRegVehicleType(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="motorcycle">Xe máy</option>
-                    <option value="sedan">Sedan</option>
-                    <option value="suv">SUV</option>
-                    <option value="pickup">Pickup</option>
-                    <option value="van">Van</option>
-                  </select>
-                </div>
-              </div>
-
               <button
                 type="submit"
                 disabled={registerLoading}
                 className="mt-2 w-full rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition-all hover:bg-blue-700 hover:shadow-blue-600/40 focus:ring-4 focus:ring-blue-600/20 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {registerLoading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG KÝ VÀ VÀO LUỒNG ĐẶT LỊCH'}
+                {registerLoading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG KÝ'}
               </button>
             </form>
           )}

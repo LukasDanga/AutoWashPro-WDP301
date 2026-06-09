@@ -65,6 +65,10 @@ router.post('/recurring/:groupId/cancel', authenticate, authorize(ROLES.ADMIN, R
  */
 router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getAllBookings);
 
+router.get('/feedbacks', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getFeedbacks);
+
+router.get('/customers', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getCustomers);
+
 /**
  * @swagger
  * /api/bookings/my:

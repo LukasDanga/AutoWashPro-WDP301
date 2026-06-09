@@ -68,6 +68,7 @@ exports.getRevenueReport = async (filters, userRole, userBranchId) => {
               'user.name': 1,
               'user.email': 1,
               'user.phone': 1,
+              'user.tier': 1,
             },
           },
           { $sort: { totalRevenue: -1 } },

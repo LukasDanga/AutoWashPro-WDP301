@@ -6,6 +6,8 @@ import {
   Tag,
   UserCircle,
   CurrencyCircleDollar,
+  Star,
+  Users,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -47,6 +49,18 @@ export const MANAGER_MENU_ITEMS = [
     icon: Tag,
   },
   {
+    id: 'customers',
+    label: 'Khách hàng',
+    to: '/manager/customers',
+    icon: Users,
+  },
+  {
+    id: 'feedbacks',
+    label: 'Đánh giá',
+    to: '/manager/feedbacks',
+    icon: Star,
+  },
+  {
     id: 'profile',
     label: 'Hồ sơ',
     to: '/manager/profile',
@@ -71,6 +85,14 @@ export const MANAGER_PAGE_META = {
   vouchers: {
     title: 'Quản lý voucher',
     description: 'Tạo và quản lý mã giảm giá áp dụng tại chi nhánh.',
+  },
+  customers: {
+    title: 'Quản lý khách hàng',
+    description: 'Danh sách khách hàng đã sử dụng dịch vụ tại chi nhánh.',
+  },
+  feedbacks: {
+    title: 'Đánh giá từ khách hàng',
+    description: 'Phản hồi và đánh giá chất lượng dịch vụ của chi nhánh.',
   },
   revenue: {
     title: 'Báo cáo doanh thu',

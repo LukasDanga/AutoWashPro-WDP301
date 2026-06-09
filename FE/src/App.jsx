@@ -135,9 +135,7 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: data.name,
         email: data.email,
-        phone: data.phone,
         password: data.password,
       }),
     });
@@ -149,21 +147,6 @@ export default function App() {
     const registerPayload = await registerResponse.json();
     const registerData = registerPayload?.data || registerPayload;
     applySession(registerData?.accessToken, registerData?.refreshToken);
-
-    if (data.vehicle?.licensePlate && registerData?.accessToken) {
-      const vehicleResponse = await fetch(`${apiBase}/vehicles`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${registerData.accessToken}`,
-        },
-        body: JSON.stringify(data.vehicle),
-      });
-
-      if (!vehicleResponse.ok) {
-        throw new Error(await readApiError(vehicleResponse));
-      }
-    }
 
     await loadSession(registerData?.accessToken);
   }

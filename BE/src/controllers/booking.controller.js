@@ -101,3 +101,13 @@ exports.confirmPaymentCallback = catchAsync(async (req, res) => {
   const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId, success);
   success(res, payment, success ? 'Payment confirmed' : 'Payment failed');
 });
+
+exports.getFeedbacks = catchAsync(async (req, res) => {
+  const feedbacks = await bookingService.getFeedbacks(req.user, req.query);
+  success(res, feedbacks, 'Feedbacks retrieved');
+});
+
+exports.getCustomers = catchAsync(async (req, res) => {
+  const customers = await bookingService.getCustomers(req.user, req.query);
+  success(res, customers, 'Customers retrieved');
+});
