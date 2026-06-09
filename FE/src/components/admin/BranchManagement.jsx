@@ -566,6 +566,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
                       <Trash size={15} />
                     </button>
                   </div>
+                  </div>
                 </div>
               ))}
             </div>
