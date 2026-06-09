@@ -565,8 +565,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                       <Trash size={15} />
                     </button>
-                   </div>
-                  </div>
+                    </div>
                   </div>
                 </div>
               ))}
