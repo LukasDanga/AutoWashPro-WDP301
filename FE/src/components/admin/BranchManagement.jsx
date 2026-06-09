@@ -331,6 +331,8 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
   const [pkgSearch, setPkgSearch] = useState('');
   const [pkgModal, setPkgModal] = useState(null);
   const [pkgSaving, setPkgSaving] = useState(false);
+  const [pkgSelected, setPkgSelected] = useState(null);
+  const [pkgDeleting, setPkgDeleting] = useState(false);
   const [toast, setToast] = useState(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
@@ -357,6 +359,36 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
     load();
     return () => { mounted = false; };
   }, [pkgSearch]);
+
+  const handlePkgUpdate = async (data) => {
+    setPkgSaving(true);
+    try {
+      const res = await apiFetch(`/packages/${pkgSelected._id}`, { method: 'PUT', body: JSON.stringify(data) });
+      if (!res.ok) throw new Error(await readError(res));
+      const payload = await res.json();
+      const updated = payload?.data ?? payload;
+      setPackages((p) => p.map((b) => (b._id === updated._id ? updated : b)));
+      setPkgModal(null);
+      setPkgSelected(null);
+      notify('Cập nhật gói thành công!');
+    } catch (err) {
+      notify(err.message || 'Cập nhật thất bại', 'error');
+    } finally { setPkgSaving(false); }
+  };
+
+  const handlePkgDelete = async () => {
+    setPkgDeleting(true);
+    try {
+      const res = await apiFetch(`/packages/${pkgSelected._id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await readError(res));
+      setPackages((p) => p.filter((b) => b._id !== pkgSelected._id));
+      setPkgModal(null);
+      setPkgSelected(null);
+      notify('Đã xóa gói dịch vụ.');
+    } catch (err) {
+      notify(err.message || 'Xóa thất bại', 'error');
+    } finally { setPkgDeleting(false); }
+  };
 
   const VEHICLE_LABELS = {
     sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', motorcycle: 'Xe máy',
@@ -523,28 +555,16 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
                           </span>
                         )}
                       </div>
-                    </div>
-                    <div className="shrink-0">
-                      {pkg.subServices?.length > 0 && (
-                        <div className="relative group">
-                          <button className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">
-                            <ListChecks size={12} weight="bold" />
-                            {pkg.subServices.length} DV thêm
-                          </button>
-                          <div className="absolute right-0 top-full mt-1 z-10 min-w-[200px] rounded-xl border border-slate-200 bg-white p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dịch vụ chọn thêm</p>
-                            <div className="space-y-1.5">
-                              {pkg.subServices.map((sub, idx) => (
-                                <div key={idx} className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-700">{sub.name}</span>
-                                  <span className="font-semibold text-slate-800 ml-2">{Number(sub.price).toLocaleString('vi-VN')}₫</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => { setPkgSelected(pkg); setPkgModal('edit'); }}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                      <PencilSimple size={15} />
+                    </button>
+                    <button onClick={() => { setPkgSelected(pkg); setPkgModal('delete'); }}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                      <Trash size={15} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -570,6 +590,34 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
               notify(err.message || 'Tạo thất bại', 'error');
             } finally { setPkgSaving(false); }
           }} onCancel={() => setPkgModal(null)} saving={pkgSaving} />
+        </Modal>
+      )}
+
+      {/* ── Package Edit Modal ── */}
+      {pkgModal === 'edit' && pkgSelected && (
+        <Modal title={`Chỉnh sửa: ${pkgSelected.name}`} onClose={() => { setPkgModal(null); setPkgSelected(null); }} wide>
+          <CreatePackageForm initial={pkgSelected} onSave={handlePkgUpdate} onCancel={() => { setPkgModal(null); setPkgSelected(null); }} saving={pkgSaving} />
+        </Modal>
+      )}
+
+      {/* ── Package Delete Modal ── */}
+      {pkgModal === 'delete' && pkgSelected && (
+        <Modal title="Xác nhận xóa" onClose={() => { setPkgModal(null); setPkgSelected(null); }}>
+          <div className="space-y-4">
+            <div className="flex gap-3 rounded-xl bg-red-50 p-4 ring-1 ring-red-100">
+              <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-red-500" />
+              <p className="text-sm text-red-700">Bạn chắc chắn muốn xóa gói <strong>"{pkgSelected.name}"</strong>? Hành động này không thể hoàn tác.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setPkgModal(null); setPkgSelected(null); }} disabled={pkgDeleting}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">Hủy</button>
+              <button onClick={handlePkgDelete} disabled={pkgDeleting}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors">
+                {pkgDeleting && <Spinner size={14} className="text-white" />}
+                {pkgDeleting ? 'Đang xóa…' : 'Xóa gói'}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
