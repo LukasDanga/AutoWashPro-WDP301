@@ -8,6 +8,7 @@ function resolvePageMeta(pathname) {
   if (pathname === '/admin' || pathname === '/admin/') {
     return ADMIN_PAGE_META.overview;
   }
+  if (pathname.startsWith('/admin/branches')) return ADMIN_PAGE_META.branches;
   if (pathname.startsWith('/admin/users')) return ADMIN_PAGE_META.users;
   if (pathname.startsWith('/admin/reviews')) return ADMIN_PAGE_META.reviews;
   if (pathname.startsWith('/admin/rewards')) return ADMIN_PAGE_META.rewards;

@@ -61,7 +61,7 @@ router.post('/', authenticate, authorize(ROLES.ADMIN), branchValidators.create, 
  *       200:
  *         description: List of branches
  */
-router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF), branchController.getAllBranches);
+router.get('/', authenticate, branchController.getAllBranches);
 
 /**
  * @swagger
@@ -83,7 +83,7 @@ router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF)
  *       404:
  *         description: Branch not found
  */
-router.get('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF), branchController.getBranchById);
+router.get('/:id', authenticate, branchController.getBranchById);
 
 /**
  * @swagger

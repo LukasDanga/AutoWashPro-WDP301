@@ -1,91 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import BookingsHistory from './BookingsHistory.jsx';
+import BookingsHistory from './customer/BookingsHistory.jsx';
+import LoyaltyGifts from './customer/LoyaltyGifts.jsx';
+import RecurringBookingFlow from './customer/RecurringBookingFlow.jsx';
+import SlotPackFlow from './customer/SlotPackFlow.jsx';
+import CustomerProfile from './customer/CustomerProfile.jsx';
+import VoucherPicker from './VoucherPicker.jsx';
 
 const sidebarItems = [
   { id: 'dashboard', label: 'Bảng điều khiển', hint: 'Thành viên & phương tiện', icon: '♡' },
-  { id: 'booking', label: 'Đặt lịch trực tuyến', hint: 'Hẹn rửa xe 24/7', icon: '📅' },
+  { id: 'booking', label: 'Đặt lịch thường', hint: 'Hẹn rửa xe 24/7', icon: '📅' },
+  { id: 'recurring', label: 'Đặt lịch định kỳ', hint: 'Lặp lại hằng tuần', icon: '🔁' },
+  { id: 'slot_pack', label: 'Gói slot rửa xe', hint: 'Mua trước — dùng dần', icon: '🎫' },
   { id: 'history', label: 'Lịch sử & đánh giá', hint: 'Mã đơn rửa, feedback', icon: '⟲', badge: '1' },
   { id: 'gifts', label: 'Cửa hàng quà tặng', hint: 'Săn chơi đổi thưởng', icon: '🎁' },
   { id: 'maps', label: 'Hệ thống bản đồ', hint: 'Định vị cơ sở rửa', icon: '⌖' },
   { id: 'profile', label: 'Hồ sơ cá nhân', hint: 'Chỉnh sửa tài khoản', icon: '👤' },
 ];
 
-const branches = [
-  {
-    id: 'q5',
-    name: 'AutoWash Quận 5',
-    address: '188 Nguyễn Văn Cừ, Quận 5, TP. Hồ Chí Minh',
-  },
-  {
-    id: 'binh-thanh',
-    name: 'AutoWash Bình Thạnh',
-    address: '345 Điện Biên Phủ, Quận Bình Thạnh, TP. Hồ Chí Minh',
-  },
-];
+// branches will be fetched from API
 
-const vehicles = [
-  { id: 'sh150i', name: 'Honda SH 150i', plate: '59F2-999.99', type: 'Xe máy', points: '2.400 điểm' },
-  { id: 'exciter', name: 'Yamaha Exciter 155', plate: '59K1-888.88', type: 'Xe máy', points: '1.120 điểm' },
-];
 
-const services = [
-  {
-    id: 'standard',
-    name: 'Rửa xe máy Standard',
-    duration: '25 phút thi công',
-    price: 60000,
-    description: 'Rửa bọt tuyết chuyên sâu, xịt gầm chống hút xăng, lau khô, dưỡng lớp đèn bóng mịn màng.',
-  },
-  {
-    id: 'wax',
-    name: 'Rửa bọt tuyết + Wax bóng',
-    duration: '40 phút thi công',
-    price: 130000,
-    description: 'Bao gồm gói Standard kèm phun sáp Nano chống bám bụi và tạo độ bóng tối ưu.',
-  },
-  {
-    id: 'detail',
-    name: 'Vệ sinh chi tiết (Nội thất/Động cơ)',
-    duration: '75 phút thi công',
-    price: 280000,
-    description: 'Làm sạch sâu khoang máy, nhông sên đĩa bằng hóa chất chuyên dụng, xịt dưỡng chống rỉ sét.',
-  },
-  {
-    id: 'ceramic',
-    name: 'Sơn phủ Ceramic chống trầy',
-    duration: '90 phút thi công',
-    price: 450000,
-    description: 'Phết dung dịch phủ thủy tinh Ceramic để tối đa hóa độ dán áo nhựa và chống tác động va quệt.',
-  },
-  {
-    id: 'polish',
-    name: 'Đánh bóng dàn nhựa mờ chuyên sâu',
-    duration: '30 phút thi công',
-    price: 90000,
-    description: 'Tẩy ố mốc sần trên các phần nhựa nhám đen hoặc xám của xe ga lớn, phục hồi màu như mới khui thùng.',
-  },
-  {
-    id: 'helmet',
-    name: 'Xông tinh dầu khử mùi mũ bảo hiểm',
-    duration: '15 phút thi công',
-    price: 50000,
-    description: 'Xử lý vi khuẩn bám lót mũ bảo hiểm 3/4 hoặc fullface bằng máy xông hơi nóng nano bạc kết hợp quế thơm.',
-  },
-  {
-    id: 'wheel',
-    name: 'Tẩy ố vàng vành nan hoa / gầm máy',
-    duration: '45 phút thi công',
-    price: 150000,
-    description: 'Sử dụng dung dịch axit nhẹ đặc chủng hữu cơ làm sạch rỉ sét căm xe, má đùm pô lâu năm.',
-  },
-  {
-    id: 'vip',
-    name: 'Combo Rửa xe toàn diện VIP',
-    duration: '120 phút thi công',
-    price: 500000,
-    description: 'Trải nghiệm đỉnh cao bao gồm rửa chi tiết máy, đánh bóng sườn, phủ sáp SiO2 và vệ sinh sên đĩa.',
-  },
-];
+
+
 
 const timeSlots = [
   '08:00 - 08:30',
@@ -132,18 +68,71 @@ function buildBookingDates() {
 
 export default function BookingFlow({ user, vehicles: userVehicles = [], onLogout, apiBase, token }) {
   const bookingDates = useMemo(() => buildBookingDates(), []);
-  const [selectedBranch, setSelectedBranch] = useState(branches[0].id);
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
   const vehicleList = userVehicles;
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleList[0]?.id || vehicleList[0]?._id || vehicleList[0]?.licensePlate || '');
-  const [selectedService, setSelectedService] = useState(services[0].id);
+  const [packages, setPackages] = useState([]);
+  const [selectedPackage, setSelectedPackage] = useState('');
+  const [selectedSubServices, setSelectedSubServices] = useState({});
   const [selectedDate, setSelectedDate] = useState(bookingDates[1]?.id || bookingDates[0].id);
   const [selectedTime, setSelectedTime] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
+  const [mySlotPacks, setMySlotPacks] = useState([]);
+  const [selectedSlotPack, setSelectedSlotPack] = useState(null);
   const [activeNav, setActiveNav] = useState('booking');
+  const [currentUser, setCurrentUser] = useState(user);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [resBranches, resPackages, resPacks] = await Promise.all([
+          fetch(`${apiBase}/branches`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${apiBase}/packages`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${apiBase}/slot-packs/my`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        const branchesPayload = await resBranches.json();
+        const packagesPayload = await resPackages.json();
+        
+        const dataB = branchesPayload?.data || branchesPayload;
+        const mappedBranches = (Array.isArray(dataB) ? dataB : []).map(b => ({ ...b, id: b._id || b.id }));
+        setBranches(mappedBranches);
+        if (mappedBranches.length > 0) setSelectedBranch(mappedBranches[0].id);
+
+        const dataP = packagesPayload?.data || packagesPayload;
+        const mappedPackages = (Array.isArray(dataP) ? dataP : []).map(p => ({ ...p, id: p._id || p.id }));
+        setPackages(mappedPackages);
+        if (mappedPackages.length > 0) setSelectedPackage(mappedPackages[0].id);
+
+        const packsPayload = await resPacks.json();
+        const mappedPacks = Array.isArray(packsPayload?.data) ? packsPayload.data : [];
+        setMySlotPacks(mappedPacks);
+      } catch (e) { console.error('Failed to load data', e); }
+    }
+    if (token) fetchData();
+  }, [apiBase, token]);
+
+  const refreshUser = async () => {
+    try {
+      const res = await fetch(`${apiBase}/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.data) setCurrentUser(data.data);
+    } catch (e) { console.error(e); }
+  };
+
+  const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
+  const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
+  const pkg = packages.find(p => p.id === selectedPackage);
+  const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
 
   useEffect(() => {
     if (!selectedVehicle && vehicleList[0]) {
@@ -151,32 +140,112 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
     }
   }, [selectedVehicle, vehicleList]);
 
-  const branch = branches.find((item) => item.id === selectedBranch) || branches[0];
-  const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
-  const service = services.find((item) => item.id === selectedService) || services[0];
-  const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
+  useEffect(() => {
+    async function fetchSlots() {
+      if (!selectedBranch || !selectedPackage || !date?.iso) return;
+      setSlotsLoading(true);
+      try {
+        const res = await fetch(`${apiBase}/bookings/slots?branchId=${selectedBranch}&date=${date.iso}&packageId=${selectedPackage}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const payload = await res.json();
+        if (res.ok) {
+          setAvailableSlots(payload.data || []);
+        } else {
+          setAvailableSlots([]);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSlotsLoading(false);
+      }
+    }
+    if (token) fetchSlots();
+  }, [selectedBranch, selectedPackage, date?.iso, apiBase, token]);
 
-  const discount = couponApplied ? Math.round(service.price * 0.1) : 0;
-  const total = service.price - discount;
-  const points = Math.max(60, Math.round(total / 1000) * 10);
+  const currentSubServices = selectedSubServices[selectedPackage] || [];
+  let extraDuration = 0;
+  let extraPrice = 0;
+  if (pkg && pkg.subServices) {
+    for (const sub of pkg.subServices) {
+      if (currentSubServices.includes(sub.name)) {
+        extraDuration += sub.duration || 0;
+        extraPrice += sub.price || 0;
+      }
+    }
+  }
 
-  function applyCoupon() {
+  const basePrice = pkg ? pkg.price : 0;
+  const totalBase = basePrice + extraPrice;
+  const pkgDuration = pkg ? pkg.duration + extraDuration : 0;
+
+  const validPacks = useMemo(() => {
+    return mySlotPacks.filter(p => {
+      if (p.status !== 'active' || p.remainingSlots <= 0) return false;
+      const pPkgId = p.packageId?._id || p.packageId?.id || p.packageId;
+      if (pPkgId !== selectedPackage) return false;
+      const pBranchId = p.branchId?._id || p.branchId?.id || p.branchId;
+      if (pBranchId && pBranchId !== selectedBranch) return false;
+      const pVehicleId = p.vehicleId?._id || p.vehicleId?.id || p.vehicleId;
+      const vId = vehicle?.id || vehicle?._id || vehicle?.licensePlate;
+      if (pVehicleId && pVehicleId !== vId) return false;
+      return true;
+    });
+  }, [mySlotPacks, selectedPackage, selectedBranch, vehicle]);
+
+  useEffect(() => {
+    if (selectedSlotPack && !validPacks.find(p => (p._id || p.id) === selectedSlotPack)) {
+      setSelectedSlotPack(null);
+    }
+  }, [validPacks, selectedSlotPack]);
+
+  let pointMultiplier = 1;
+  if (currentUser?.tier === 'diamond') pointMultiplier = 2.0;
+  else if (currentUser?.tier === 'gold') pointMultiplier = 1.5;
+  else if (currentUser?.tier === 'silver') pointMultiplier = 1.2;
+
+  const discount = appliedVoucher ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value) : 0;
+  const isPayingWithPack = !!selectedSlotPack;
+  const total = isPayingWithPack ? 0 : Math.max(0, totalBase - discount);
+  const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
+
+  async function applyCoupon() {
     const normalized = couponCode.trim().toUpperCase();
 
     if (!normalized) {
       setCouponApplied(false);
+      setAppliedVoucher(null);
       setMessage('Nhập mã coupon để áp dụng ưu đãi.');
       return;
     }
 
-    if (normalized === 'VIP10' || normalized === 'AUTOWASH10') {
-      setCouponApplied(true);
-      setMessage('Đã áp dụng mã ưu đãi 10%.');
-      return;
-    }
+    try {
+      const res = await fetch(`${apiBase}/vouchers/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          code: normalized,
+          bookingData: {
+            packageId: service.id,
+            branchId: branch.id,
+            amount: service.price
+          }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Mã ưu đãi không hợp lệ');
 
-    setCouponApplied(false);
-    setMessage('Mã coupon chưa hợp lệ.');
+      setCouponApplied(true);
+      setAppliedVoucher(data.data);
+      setMessage(`Đã áp dụng mã: Giảm ${formatCurrency(data.data.savings)}`);
+    } catch (err) {
+      setCouponApplied(false);
+      setAppliedVoucher(null);
+      setMessage(err.message);
+    }
   }
 
   async function confirmBooking() {
@@ -203,23 +272,14 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
         },
         body: JSON.stringify({
           branchId: branch.id,
-          branchName: branch.name,
-          branchAddress: branch.address,
-          vehicleId: vehicle.id || vehicle._id,
-          vehicleName: vehicle.name || `${vehicle.brand || ''} ${vehicle.model || ''}`.trim() || vehicle.licensePlate,
-          vehiclePlate: vehicle.plate || vehicle.licensePlate,
-          vehicleType: vehicle.type || vehicle.vehicleType || 'motorcycle',
-          serviceId: service.id,
-          serviceName: service.name,
-          serviceDuration: service.duration,
-          servicePrice: service.price,
+          packageId: pkg.id,
+          vehicleId: vehicle.id || vehicle._id || vehicle.licensePlate,
           bookingDate: date.iso,
-          timeSlot: selectedTime,
-          couponCode: couponCode.trim().toUpperCase(),
-          discountAmount: discount,
-          totalAmount: total,
-          pointsEarned: points,
-          notes: '',
+          startTime: selectedTime,
+          voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined),
+          selectedSubServices: currentSubServices,
+          slotPackId: selectedSlotPack || undefined,
+          note: '',
         }),
       });
 
@@ -231,7 +291,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const payload = await response.json();
       const booking = payload?.data || payload;
       setBookingCode(booking?.bookingCode || booking?.code || '');
-      setMessage(`Đã giữ chỗ ${service.name} tại ${branch.name} lúc ${selectedTime}.`);
+      setMessage(`Đã giữ chỗ ${pkg?.name || 'Dịch vụ'} tại ${branch.name} lúc ${selectedTime}.`);
     } catch (error) {
       setMessage(error.message || 'Không thể tạo lịch hẹn');
     } finally {
@@ -256,11 +316,11 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           <div className="aw-user-chip">
           <div className="aw-avatar" aria-hidden="true">BK</div>
           <div className="aw-user-meta">
-            <strong>{user?.name ? `Anh/Chị: ${user.name}` : 'Anh/Chị: Bảo Khang'}</strong>
+            <strong>{currentUser?.name ? `Anh/Chị: ${currentUser.name}` : 'Anh/Chị: Bảo Khang'}</strong>
             <div>
-              <span className="aw-tier">{user?.role ? user.role.toUpperCase() : 'TẬP ĐOÀN GOLD'}</span>
+              <span className="aw-tier">{currentUser?.tier ? currentUser.tier.toUpperCase() : (currentUser?.role ? currentUser.role.toUpperCase() : 'TẬP ĐOÀN GOLD')}</span>
               <span className="aw-divider">|</span>
-              <span>{user?.phone || '0901234567'}</span>
+              <span>{currentUser?.phone || '0901234567'}</span>
             </div>
           </div>
           <button className="aw-icon-button" type="button" aria-label="Đăng xuất" onClick={onLogout}>↗</button>
@@ -269,7 +329,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
       <div className="aw-layout">
           <aside className="aw-sidebar">
-          <div className="aw-sidebar-greeting">Xin chào, {user?.name || 'Bảo Khang'}!</div>
+          <div className="aw-sidebar-greeting">Xin chào, {currentUser?.name || 'Bảo Khang'}!</div>
           {sidebarItems.map((item) => (
             <button
               key={item.id}
@@ -317,7 +377,9 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
               <article className="aw-card-section">
                 <div className="aw-step-title"><span>1</span> CHỌN CHI NHÁNH TRUNG TÂM</div>
                 <div className="aw-options two-up">
-                  {branches.map((item) => (
+                  {branches.length === 0 ? (
+                    <div style={{ gridColumn: 'span 2', color: '#64748b', fontStyle: 'italic', padding: '10px' }}>Không có chi nhánh nào đang hoạt động.</div>
+                  ) : branches.map((item) => (
                     <button
                       key={item.id}
                       type="button"
@@ -368,23 +430,50 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
               <article className="aw-card-section aw-services-panel">
                 <div className="aw-step-title"><span>3</span> CHỌN GÓI DỊCH VỤ RỬA XE</div>
                 <div className="aw-options stacked scrollable">
-                  {services.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={item.id === selectedService ? 'aw-option aw-service active' : 'aw-option aw-service'}
-                      onClick={() => setSelectedService(item.id)}
-                    >
-                      <div className="aw-option-head service-head">
-                        <div>
-                          <strong>{item.name}</strong>
-                          <small>{item.duration}</small>
-                        </div>
-                        <span>{formatCurrency(item.price)}</span>
+                  {packages.map(p => {
+                    const isActive = p.id === selectedPackage;
+                    return (
+                      <div key={p.id} className={isActive ? 'aw-option aw-service active' : 'aw-option aw-service'}>
+                        <button type="button" style={{all: 'unset', width: '100%', cursor: 'pointer'}} onClick={() => setSelectedPackage(p.id)}>
+                          <div className="aw-option-head service-head">
+                            <div><strong>{p.name}</strong><small>{p.duration} phút</small></div>
+                            <span>{formatCurrency(p.price)}</span>
+                          </div>
+                          <p style={{margin: '8px 0'}}>{p.description}</p>
+                        </button>
+                        
+                        {isActive && p.subServices && p.subServices.length > 0 && (
+                          <div style={{ marginTop: '10px', padding: '10px', background: '#f1f5f9', borderRadius: '8px' }}>
+                            <strong style={{ fontSize: '0.85rem', color: '#2563eb', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
+                            {p.subServices.map((sub) => {
+                              const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
+                              return (
+                                <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setSelectedSubServices(prev => {
+                                        const current = prev[p.id] || [];
+                                        return {
+                                          ...prev,
+                                          [p.id]: checked ? [...current, sub.name] : current.filter(x => x !== sub.name)
+                                        };
+                                      });
+                                    }}
+                                    disabled={!sub.isOptional}
+                                  />
+                                  <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
+                                  <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                      <p>{item.description}</p>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </article>
 
@@ -407,7 +496,30 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
                 <div className="aw-slot-title">KHUNG GIỜ NHẬN XE TẠI LÒ RỬA</div>
                 <div className="aw-time-grid">
-                  {timeSlots.map((slot) => (
+                  {slotsLoading ? <div style={{padding: '20px', gridColumn: '1 / -1', textAlign: 'center'}}>Đang tải lịch trống...</div> : 
+                   availableSlots.length > 0 ? availableSlots.map((slotObj) => {
+                    const timeLabel = slotObj.startTime;
+                    const isDisabled = !slotObj.available;
+                    const isVipOnly = slotObj.vipOnly;
+                    const canBookVip = ['gold', 'diamond'].includes(currentUser?.tier);
+                    const lockVip = isVipOnly && !canBookVip;
+
+                    return (
+                      <button
+                        key={timeLabel}
+                        type="button"
+                        disabled={isDisabled || lockVip}
+                        className={timeLabel === selectedTime ? 'aw-time-card active' : 'aw-time-card'}
+                        onClick={() => setSelectedTime(timeLabel)}
+                        style={{ opacity: (isDisabled || lockVip) ? 0.5 : 1, position: 'relative' }}
+                      >
+                        {timeLabel}
+                        {isVipOnly && <span title="Chỉ VIP" style={{ position: 'absolute', top: -10, right: -10, fontSize: '1.2rem', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>👑</span>}
+                        {isDisabled && !isVipOnly && <span style={{ position: 'absolute', bottom: 2, left: 0, right: 0, fontSize: '0.65rem', color: '#ef4444', textAlign: 'center' }}>Hết chỗ</span>}
+                        {lockVip && <span style={{ position: 'absolute', bottom: 2, left: 0, right: 0, fontSize: '0.65rem', color: '#eab308', fontWeight: 'bold', textAlign: 'center' }}>Chỉ VIP</span>}
+                      </button>
+                    );
+                  }) : timeSlots.map(slot => (
                     <button
                       key={slot}
                       type="button"
@@ -445,19 +557,46 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                 <div className="aw-summary-divider" />
 
                 <div className="aw-summary-row price-row">
-                  <span>Gói: {service.name}</span>
-                  <strong>{formatCurrency(service.price)}</strong>
+                  <span>Gói: {pkg ? pkg.name : 'Chưa chọn'}</span>
+                  <strong>{formatCurrency(totalBase)}</strong>
                 </div>
 
-                <label className="aw-summary-label" htmlFor="coupon">HỘP COUPON KHUYẾN MÃI</label>
-                <div className="aw-coupon-row">
-                  <input
-                    id="coupon"
-                    value={couponCode}
-                    onChange={(event) => setCouponCode(event.target.value)}
-                    placeholder="NHẬP MÃ COUPON..."
-                  />
-                  <button type="button" onClick={applyCoupon}>Áp dụng</button>
+                <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+                  {validPacks.length > 0 && (
+                    <div style={{ marginBottom: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#334155', display: 'block', marginBottom: '8px' }}>Thanh toán bằng Gói Lượt:</strong>
+                      <select 
+                        style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                        value={selectedSlotPack || ''}
+                        onChange={(e) => {
+                          setSelectedSlotPack(e.target.value || null);
+                          if (e.target.value) {
+                            setAppliedVoucher(null);
+                            setCouponCode('');
+                            setCouponApplied(false);
+                          }
+                        }}
+                      >
+                        <option value="">Không sử dụng gói lượt</option>
+                        {validPacks.map(p => (
+                          <option key={p._id || p.id} value={p._id || p.id}>
+                            {p.packCode} - Còn {p.remainingSlots} lần
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {!isPayingWithPack && (
+                    <VoucherPicker
+                      apiBase={apiBase}
+                      token={token}
+                      selected={appliedVoucher}
+                      onSelect={setAppliedVoucher}
+                      orderAmount={totalBase}
+                      compact={true}
+                    />
+                  )}
                 </div>
 
                 <div className="aw-pricing">
@@ -465,7 +604,13 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                     <span>THỰC THU TẠI TIỆM</span>
                     <strong>{formatCurrency(total)}</strong>
                   </div>
-                  <div>
+                  {discount > 0 && (
+                    <div style={{color: '#10b981', marginTop: '4px'}}>
+                      <span>KHUYẾN MÃI TỪ VOUCHER</span>
+                      <strong>- {formatCurrency(discount)}</strong>
+                    </div>
+                  )}
+                  <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed rgba(148, 163, 184, 0.3)'}}>
                     <span>TÍCH ĐIỂM SĂM SÉT</span>
                     <strong>+{points} Điểm</strong>
                   </div>
@@ -483,9 +628,43 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           </>
           ) : null}
 
+          {activeNav === 'recurring' ? (
+            <div style={{ paddingTop: 8 }}>
+              <RecurringBookingFlow
+                user={currentUser}
+                vehicles={vehicleList}
+                apiBase={apiBase}
+                token={token}
+              />
+            </div>
+          ) : null}
+
+          {activeNav === 'slot_pack' ? (
+            <div style={{ paddingTop: 8 }}>
+              <SlotPackFlow
+                user={currentUser}
+                vehicles={vehicleList}
+                apiBase={apiBase}
+                token={token}
+              />
+            </div>
+          ) : null}
+
           {activeNav === 'history' ? (
             <div style={{ paddingTop: 8 }}>
               <BookingsHistory apiBase={apiBase} token={token} />
+            </div>
+          ) : null}
+
+          {activeNav === 'gifts' ? (
+            <div style={{ paddingTop: 8 }}>
+              <LoyaltyGifts apiBase={apiBase} token={token} user={currentUser} refreshUser={refreshUser} />
+            </div>
+          ) : null}
+
+          {activeNav === 'profile' ? (
+            <div style={{ paddingTop: 8 }}>
+              <CustomerProfile apiBase={apiBase} token={token} />
             </div>
           ) : null}
 

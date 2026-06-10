@@ -1,7 +1,9 @@
 import {
+  Buildings,
   ChartLine,
   ClockCounterClockwise,
   Gift,
+  Package,
   Star,
   UserCircle,
   Users,
@@ -21,10 +23,22 @@ export const ADMIN_MENU_ITEMS = [
     end: true,
   },
   {
+    id: 'branches',
+    label: 'Quản lý chi nhánh',
+    to: '/admin/branches',
+    icon: Buildings,
+  },
+  {
     id: 'users',
     label: 'Quản lý người dùng',
     to: '/admin/users',
     icon: Users,
+  },
+  {
+    id: 'packages',
+    label: 'Quản lý gói dịch vụ',
+    to: '/admin/packages',
+    icon: Package,
   },
   {
     id: 'reviews',
@@ -57,9 +71,17 @@ export const ADMIN_PAGE_META = {
     title: 'Giám sát tổng quan',
     description: 'Theo dõi hoạt động hệ thống rửa xe theo thời gian thực.',
   },
+  branches: {
+    title: 'Quản lý chi nhánh',
+    description: 'Xem, thêm, sửa và quản lý trạng thái các chi nhánh rửa xe.',
+  },
   users: {
     title: 'Quản lý người dùng',
     description: 'Quản lý tài khoản khách hàng, nhân viên và phân quyền.',
+  },
+  packages: {
+    title: 'Quản lý gói dịch vụ',
+    description: 'Xem, thêm, sửa và quản lý các gói dịch vụ rửa xe.',
   },
   reviews: {
     title: 'Đánh giá của khách hàng',

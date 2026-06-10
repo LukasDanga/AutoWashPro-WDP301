@@ -1,0 +1,335 @@
+const mongoose = require('mongoose');
+const { SlotPack, Package, Branch, Vehicle, User, Booking } = require('../models');
+const voucherService = require('./voucher.service');
+const notificationService = require('./notification.service');
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Ánh xạ tier → priority number */
+const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4 };
+
+/** Tính % chiết khấu dựa theo số lượng slot */
+function getDiscountPercent(totalSlots) {
+  if (totalSlots >= 20) return 15;
+  if (totalSlots >= 10) return 10;
+  if (totalSlots >= 5)  return 5;
+  return 0;
+}
+
+/** Sinh mã pack duy nhất: SP-XXXXXX */
+function generatePackCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = 'SP-';
+  for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+  return code;
+}
+
+/** Đảm bảo mã pack unique (thử lại tối đa 5 lần) */
+async function generateUniquePackCode() {
+  for (let i = 0; i < 5; i++) {
+    const code = generatePackCode();
+    const exists = await SlotPack.findOne({ packCode: code });
+    if (!exists) return code;
+  }
+  throw new Error('Cannot generate unique pack code, please try again');
+}
+
+// ─── Create ───────────────────────────────────────────────────────────────────
+
+/**
+ * Tạo gói slot mới.
+ * Chiết khấu tự động theo số lượng, sau đó áp thêm voucher nếu có.
+ */
+exports.createSlotPack = async (data) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { userId, branchId, packageId, vehicleId, totalSlots, voucherCode, expiresAt } = data;
+
+    // --- Validate entities ---
+    const [pkg, user] = await Promise.all([
+      Package.findById(packageId).session(session),
+      User.findById(userId).session(session),
+    ]);
+
+    let branch = null;
+    if (branchId) {
+      branch = await Branch.findById(branchId).session(session);
+      if (!branch) throw Object.assign(new Error('Branch not found'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+      if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
+    }
+
+    let vehicle = null;
+    if (vehicleId) {
+      vehicle = await Vehicle.findById(vehicleId).session(session);
+      if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+      if (String(vehicle.userId) !== String(userId)) {
+        throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
+    }
+
+    if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+    if (!user)   throw Object.assign(new Error('User not found'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
+    if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+
+    if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
+      throw Object.assign(new Error('Total slots must be between 1 and 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
+    }
+
+    // --- Chiết khấu theo số lượng và hạng VIP ---
+    const unitPrice = pkg.price;
+    let discountPercent = getDiscountPercent(totalSlots);
+    if (user.tier === 'diamond') discountPercent += 10;
+    else if (user.tier === 'gold') discountPercent += 5;
+    if (discountPercent > 100) discountPercent = 100;
+
+    const grossTotal = unitPrice * totalSlots;
+    const qtyDiscount = Math.floor(grossTotal * discountPercent / 100);
+    let baseTotal = grossTotal - qtyDiscount; // sau chiết khấu số lượng + VIP
+
+    // --- Priority dựa theo tier ---
+    const priority = TIER_PRIORITY[user.tier] || 1;
+
+    // --- Voucher (áp trên baseTotal) ---
+    let voucherDiscount = 0;
+    let finalPriceAfterVoucher = baseTotal;
+    let appliedVoucherCode = null;
+
+    if (voucherCode) {
+      const vResult = await voucherService.validateVoucher(voucherCode, { amount: baseTotal }, userId);
+      voucherDiscount = vResult.discountAmount;
+      finalPriceAfterVoucher = Math.max(0, baseTotal - voucherDiscount);
+      appliedVoucherCode = voucherCode.trim().toUpperCase();
+    }
+
+    // --- Sinh mã pack ---
+    const packCode = await generateUniquePackCode();
+
+    // --- Tạo SlotPack ---
+    const slotPack = new SlotPack({
+      userId, branchId, packageId, vehicleId,
+      totalSlots,
+      remainingSlots: totalSlots,
+      usedSlots: 0,
+      unitPrice,
+      discountPercent,
+      discountAmount: qtyDiscount,
+      finalPrice: baseTotal,
+      voucherCode: appliedVoucherCode,
+      voucherDiscount,
+      finalPriceAfterVoucher,
+      priority,
+      packCode,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      status: 'active',
+      paymentStatus: 'unpaid',
+    });
+
+    await slotPack.save({ session });
+
+    // Reserve voucher nếu có
+    if (appliedVoucherCode) {
+      await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount);
+    }
+
+    await session.commitTransaction();
+
+    notificationService.send(
+      userId,
+      'Đã mua gói slot thành công',
+      `Gói ${totalSlots} lần rửa xe ${pkg.name} — Mã: ${packCode}. ${discountPercent > 0 ? `Chiết khấu ${discountPercent}% số lượng.` : ''}`,
+      'slot_pack_created',
+      { slotPackId: slotPack._id }
+    ).catch(() => {});
+
+    return slotPack;
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+};
+
+// ─── Read ─────────────────────────────────────────────────────────────────────
+
+exports.getMySlotPacks = async (userId, filters = {}) => {
+  const query = { userId };
+  if (filters.status) query.status = filters.status;
+  if (filters.branchId) query.branchId = filters.branchId;
+
+  return SlotPack.find(query)
+    .populate('branchId',  'name address')
+    .populate('packageId', 'name price duration')
+    .populate('vehicleId', 'licensePlate vehicleType brand color')
+    .sort({ createdAt: -1 });
+};
+
+exports.getAllSlotPacks = async (filters = {}) => {
+  const query = {};
+  if (filters.userId)   query.userId   = filters.userId;
+  if (filters.branchId) query.branchId = filters.branchId;
+  if (filters.status)   query.status   = filters.status;
+
+  return SlotPack.find(query)
+    .populate('userId',    'name email phone tier')
+    .populate('branchId',  'name address')
+    .populate('packageId', 'name price duration')
+    .populate('vehicleId', 'licensePlate vehicleType brand color')
+    .sort({ priority: -1, createdAt: -1 }); // ưu tiên cao lên trước
+};
+
+exports.getSlotPackById = async (id, userId, userRole) => {
+  const pack = await SlotPack.findById(id)
+    .populate('userId',    'name email phone tier')
+    .populate('branchId',  'name address')
+    .populate('packageId', 'name price duration')
+    .populate('vehicleId', 'licensePlate vehicleType brand color');
+
+  if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (userRole === 'customer' && String(pack.userId._id || pack.userId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  return pack;
+};
+
+exports.getSlotPackByCode = async (packCode, userRole) => {
+  if (userRole !== 'admin' && userRole !== 'manager') {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const pack = await SlotPack.findOne({ packCode: packCode.toUpperCase() })
+    .populate('userId',    'name email phone tier')
+    .populate('branchId',  'name address')
+    .populate('packageId', 'name price duration')
+    .populate('vehicleId', 'licensePlate vehicleType brand color');
+
+  if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  return pack;
+};
+
+// ─── Use Slot (Manager checkin) ───────────────────────────────────────────────
+
+/**
+ * Dùng 1 slot: giảm remainingSlots, tạo Booking record tham chiếu.
+ * Chỉ manager/admin gọi được.
+ */
+exports.useSlot = async (packId, staffId, data = {}) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Lock & decrement atomically
+    const pack = await SlotPack.findOneAndUpdate(
+      { _id: packId, status: 'active', remainingSlots: { $gt: 0 } },
+      { $inc: { remainingSlots: -1, usedSlots: 1 } },
+      { new: true, session }
+    ).populate('packageId').populate('userId');
+
+    if (!pack) {
+      const existing = await SlotPack.findById(packId).session(session);
+      if (!existing) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+      if (existing.status !== 'active') throw Object.assign(new Error(`Slot pack is ${existing.status}`), { statusCode: 400, code: 'SLOT_PACK_INACTIVE' });
+      throw Object.assign(new Error('No slots remaining'), { statusCode: 400, code: 'NO_SLOTS_REMAINING' });
+    }
+
+    // Kiểm tra hạn
+    if (pack.expiresAt && new Date() > pack.expiresAt) {
+      // Rollback
+      await SlotPack.findByIdAndUpdate(packId, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
+      throw Object.assign(new Error('Slot pack has expired'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
+    }
+
+    // Nếu hết slot → đánh dấu exhausted
+    if (pack.remainingSlots === 0) {
+      await SlotPack.findByIdAndUpdate(packId, { status: 'exhausted' }, { session });
+    }
+
+    // Tính ngày và giờ dùng
+    const now = new Date();
+    const bookingDateStr = now.toISOString().split('T')[0];
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const startTime = `${h}:${m}`;
+    const duration = pack.packageId?.duration || 30;
+    const endMinutes = now.getHours() * 60 + now.getMinutes() + duration;
+    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+    // Tạo Booking record (slot_pack_usage)
+    const booking = new Booking({
+      userId:    pack.userId._id || pack.userId,
+      branchId:  pack.branchId,
+      packageId: pack.packageId._id || pack.packageId,
+      vehicleId: pack.vehicleId,
+      bookingDate: now,
+      startTime,
+      endTime,
+      status: 'in_progress',
+      bookingType: 'slot_pack_usage',
+      slotPackId: pack._id,
+      priority: pack.priority,
+      finalPrice: 0, // đã thanh toán khi mua gói
+      paymentStatus: 'paid',
+      note: data.note || `Slot pack usage — ${pack.totalSlots - pack.remainingSlots}/${pack.totalSlots}`,
+    });
+    await booking.save({ session });
+
+    await session.commitTransaction();
+
+    notificationService.send(
+      pack.userId._id || pack.userId,
+      'Đã dùng 1 slot rửa xe',
+      `Còn lại ${pack.remainingSlots} lần. Mã gói: ${pack.packCode}.`,
+      'slot_used',
+      { slotPackId: packId, bookingId: booking._id }
+    ).catch(() => {});
+
+    return { slotPack: pack, booking };
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+};
+
+// ─── Cancel ───────────────────────────────────────────────────────────────────
+
+exports.cancelSlotPack = async (packId, userId, userRole) => {
+  const pack = await SlotPack.findById(packId);
+  if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (userRole === 'customer' && String(pack.userId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (pack.status !== 'active') {
+    throw Object.assign(new Error(`Cannot cancel a ${pack.status} slot pack`), { statusCode: 400, code: 'INVALID_STATUS' });
+  }
+  if (pack.usedSlots > 0 && userRole === 'customer') {
+    throw Object.assign(new Error('Cannot cancel a partially used slot pack. Please contact support.'), { statusCode: 400, code: 'PARTIALLY_USED' });
+  }
+  pack.status = 'cancelled';
+  await pack.save();
+
+  // Rollback voucher nếu có và chưa dùng
+  if (pack.voucherCode && pack.usedSlots === 0) {
+    await voucherService.rollbackVoucher(pack.voucherCode, userId, pack._id).catch(() => {});
+  }
+  return pack;
+};
+
+// ─── Preview chiết khấu (không lưu DB) ───────────────────────────────────────
+
+exports.previewDiscount = (totalSlots, unitPrice) => {
+  const discountPercent = getDiscountPercent(totalSlots);
+  const gross = unitPrice * totalSlots;
+  const discount = Math.floor(gross * discountPercent / 100);
+  return {
+    totalSlots,
+    unitPrice,
+    gross,
+    discountPercent,
+    discountAmount: discount,
+    finalPrice: gross - discount,
+    savings: discount,
+  };
+};

@@ -7,7 +7,7 @@ exports.createBranch = catchAsync(async (req, res) => {
 });
 
 exports.getAllBranches = catchAsync(async (req, res) => {
-  const branches = await branchService.getAllBranches(req.query);
+  const branches = await branchService.getAllBranches(req.query, req.user);
   success(res, branches, 'Branches retrieved');
 });
 
@@ -27,6 +27,6 @@ exports.deleteBranch = catchAsync(async (req, res) => {
 });
 
 exports.updateStatus = catchAsync(async (req, res) => {
-  const branch = await branchService.updateStatus(req.params.id, req.body.trangThai);
+  const branch = await branchService.updateStatus(req.params.id, req.body.status);
   success(res, branch, 'Branch status updated');
 });

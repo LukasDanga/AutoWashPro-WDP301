@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AdminLayout from '@/components/admin/AdminLayout';
 import FeaturePlaceholder from '@/components/admin/FeaturePlaceholder';
+import BranchManagement from '@/components/admin/BranchManagement';
+import ManagerVouchers from '@/components/manager/ManagerVouchers';
+import UserManagement from '@/components/admin/UserManagement';
+import AdminProfile from '@/components/admin/AdminProfile';
+import PackageManagement from '@/components/admin/PackageManagement';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -85,24 +90,10 @@ export default function AdminRoutes() {
   return (
     <Routes>
       <Route element={<AdminLayout user={user} onLogout={handleLogout} />}>
-        <Route
-          index
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.overview.title}
-              description={ADMIN_PAGE_META.overview.description}
-            />
-          }
-        />
-        <Route
-          path="users"
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.users.title}
-              description={ADMIN_PAGE_META.users.description}
-            />
-          }
-        />
+        <Route index element={<FeaturePlaceholder title={ADMIN_PAGE_META.overview.title} description={ADMIN_PAGE_META.overview.description} />} />
+        <Route path="branches" element={<BranchManagement />} />
+        <Route path="users" element={<UserManagement />} />
+        <Route path="packages" element={<PackageManagement />} />
         <Route
           path="reviews"
           element={
@@ -114,12 +105,7 @@ export default function AdminRoutes() {
         />
         <Route
           path="rewards"
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.rewards.title}
-              description={ADMIN_PAGE_META.rewards.description}
-            />
-          }
+          element={<ManagerVouchers />}
         />
         <Route
           path="activity"
@@ -130,15 +116,7 @@ export default function AdminRoutes() {
             />
           }
         />
-        <Route
-          path="profile"
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.profile.title}
-              description={ADMIN_PAGE_META.profile.description}
-            />
-          }
-        />
+        <Route path="profile" element={<AdminProfile user={user} />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
