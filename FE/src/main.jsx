@@ -5,6 +5,7 @@ import App from './App';
 import AdminRoutes from './routes/AdminRoutes';
 import './index.css';
 import './styles.css';
+import './overrides.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
