@@ -7,6 +7,7 @@ const packageSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     duration: { type: Number, required: true, min: 1 },
     image: { type: String },
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     category: { type: String, enum: ['external', 'internal', 'full'], default: 'full' },
     vehicleTypes: [{ type: String, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }],
@@ -14,7 +15,7 @@ const packageSchema = new mongoose.Schema(
       {
         name: { type: String, required: true },
         price: { type: Number, required: true, min: 0 },
-        duration: { type: Number, required: true, min: 0 }, // minutes
+        duration: { type: Number, required: true, min: 0 },
         isOptional: { type: Boolean, default: true },
       },
     ],
@@ -24,5 +25,6 @@ const packageSchema = new mongoose.Schema(
 
 packageSchema.index({ status: 1 });
 packageSchema.index({ category: 1 });
+packageSchema.index({ branchId: 1 });
 
 module.exports = mongoose.model('Package', packageSchema);

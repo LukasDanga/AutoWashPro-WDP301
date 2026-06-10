@@ -2,7 +2,11 @@ const packageService = require('../services/package.service');
 const { catchAsync, success } = require('../utils/helpers');
 
 exports.createPackage = catchAsync(async (req, res) => {
-  const pkg = await packageService.createPackage(req.body);
+  const data = { ...req.body };
+  if (req.user.role === 'manager') {
+    data.branchId = req.user.branchId;
+  }
+  const pkg = await packageService.createPackage(data);
   success(res, pkg, 'Package created', 201);
 });
 

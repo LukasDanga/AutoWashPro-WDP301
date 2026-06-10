@@ -131,7 +131,8 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
   const branch = branches.find((item) => item.id === selectedBranch) || branches[0] || { id: '', name: 'Đang tải chi nhánh...', address: '' };
   const vehicle = vehicleList.find((item) => (item.id || item._id || item.licensePlate) === selectedVehicle) || vehicleList[0] || null;
-  const pkg = packages.find(p => p.id === selectedPackage);
+  const branchPackages = packages.filter((p) => !p.branchId || p.branchId === branch.id);
+  const pkg = branchPackages.find(p => p.id === selectedPackage);
   const date = bookingDates.find((item) => item.id === selectedDate) || bookingDates[0];
 
   useEffect(() => {
@@ -139,6 +140,13 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       setSelectedVehicle(vehicleList[0].id || vehicleList[0]._id || vehicleList[0].licensePlate || '');
     }
   }, [selectedVehicle, vehicleList]);
+
+  useEffect(() => {
+    const firstAvailable = branchPackages.find((p) => p.id === selectedPackage);
+    if (!firstAvailable && branchPackages.length > 0) {
+      setSelectedPackage(branchPackages[0].id);
+    }
+  }, [selectedBranch, packages]);
 
   useEffect(() => {
     async function fetchSlots() {
@@ -430,7 +438,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
               <article className="aw-card-section aw-services-panel">
                 <div className="aw-step-title"><span>3</span> CHỌN GÓI DỊCH VỤ RỬA XE</div>
                 <div className="aw-options stacked scrollable">
-                  {packages.map(p => {
+                  {branchPackages.map(p => {
                     const isActive = p.id === selectedPackage;
                     return (
                       <div key={p.id} className={isActive ? 'aw-option aw-service active' : 'aw-option aw-service'}>
