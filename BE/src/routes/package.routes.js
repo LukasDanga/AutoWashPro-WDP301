@@ -25,10 +25,10 @@ const { ROLES } = require('../config/permissions');
  *           type: string
  *         description: Search by package name
  *       - in: query
- *         name: managerId
+ *         name: branchId
  *         schema:
  *           type: string
- *         description: Filter by manager ID
+ *         description: Filter by branch ID
  *     responses:
  *       200:
  *         description: List of packages
@@ -89,6 +89,9 @@ router.get('/:id', authenticate, packageController.getPackageById);
  *                 description: Duration in minutes
  *               image:
  *                 type: string
+ *               branchId:
+ *                 type: string
+ *                 description: Branch ID (auto-set for manager)
  *               status:
  *                 type: string
  *                 enum: [active, inactive]
@@ -159,6 +162,9 @@ router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), packageVal
  *                 description: Duration in minutes
  *               image:
  *                 type: string
+ *               branchId:
+ *                 type: string
+ *                 description: Branch ID (auto-set for manager)
  *               status:
  *                 type: string
  *                 enum: [active, inactive]
