@@ -30,7 +30,7 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-accent: hsl(var(--sidebar-accent));
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --font-sans: "Segoe UI", "Outfit", system-ui, sans-serif;
+  --font-sans: "Outfit", "Segoe UI", system-ui, sans-serif;
 }
 
 @utility text-wrap-balance {

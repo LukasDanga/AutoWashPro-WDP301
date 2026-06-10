@@ -28,7 +28,7 @@ function normalizePlate(value) {
   return value.replace(/[^0-9A-Za-z.-]/g, '').toUpperCase();
 }
 
-export default function AuthScreen({ authLoading, onLogin, onRegister }) {
+export default function AuthScreen({ authLoading, onLogin, onRegister, onBack }) {
   const location = useLocation();
   const [authMode, setAuthMode] = useState('login');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -186,6 +186,17 @@ export default function AuthScreen({ authLoading, onLogin, onRegister }) {
             <h1 className="text-xl font-bold tracking-widest text-slate-800">AUTOWASH PRO</h1>
           </div>
 
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mb-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              Quay lại
+            </button>
+          )}
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-slate-900">
               {authMode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản'}
