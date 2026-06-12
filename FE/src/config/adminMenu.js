@@ -3,7 +3,6 @@ import {
   ChartLine,
   ClockCounterClockwise,
   Gift,
-  Package,
   Star,
   UserCircle,
   Users,
@@ -33,12 +32,6 @@ export const ADMIN_MENU_ITEMS = [
     label: 'Quản lý người dùng',
     to: '/admin/users',
     icon: Users,
-  },
-  {
-    id: 'packages',
-    label: 'Quản lý gói dịch vụ',
-    to: '/admin/packages',
-    icon: Package,
   },
   {
     id: 'reviews',
@@ -78,10 +71,6 @@ export const ADMIN_PAGE_META = {
   users: {
     title: 'Quản lý người dùng',
     description: 'Quản lý tài khoản khách hàng, nhân viên và phân quyền.',
-  },
-  packages: {
-    title: 'Quản lý gói dịch vụ',
-    description: 'Xem, thêm, sửa và quản lý các gói dịch vụ rửa xe.',
   },
   reviews: {
     title: 'Đánh giá của khách hàng',

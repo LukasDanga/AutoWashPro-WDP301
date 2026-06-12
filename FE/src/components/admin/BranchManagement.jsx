@@ -344,6 +344,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
       try {
         const params = new URLSearchParams();
         params.set('status', 'active');
+        params.set('branchId', branch._id);
         if (pkgSearch.trim()) params.set('name', pkgSearch.trim());
         const res = await apiFetch(`/packages?${params}`);
         if (!res.ok) return;
@@ -580,7 +581,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
           <CreatePackageForm onSave={async (data) => {
             setPkgSaving(true);
             try {
-              const res = await apiFetch('/packages', { method: 'POST', body: JSON.stringify(data) });
+              const res = await apiFetch('/packages', { method: 'POST', body: JSON.stringify({ ...data, branchId: branch._id }) });
               if (!res.ok) throw new Error(await readError(res));
               const payload = await res.json();
               const created = payload?.data ?? payload;

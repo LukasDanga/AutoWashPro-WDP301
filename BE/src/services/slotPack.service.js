@@ -72,6 +72,9 @@ exports.createSlotPack = async (data) => {
     if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
     if (!user)   throw Object.assign(new Error('User not found'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
     if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+    if (pkg.branchId && branchId && String(pkg.branchId) !== String(branchId)) {
+      throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+    }
 
     if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
       throw Object.assign(new Error('Total slots must be between 1 and 50'), { statusCode: 400, code: 'INVALID_SLOTS' });

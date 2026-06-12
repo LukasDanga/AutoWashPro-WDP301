@@ -67,6 +67,9 @@ exports.createBooking = async (data) => {
 
     if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
     if (pkg.status === 'inactive') throw Object.assign(new Error('Package unavailable'), { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+    if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
+      throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+    }
     if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
     if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'), { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
     if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
@@ -281,6 +284,10 @@ exports.updateBooking = async (id, updates, userRole) => {
       const pkgId = filtered.packageId || booking.packageId;
       const pkg = await Package.findById(pkgId).session(session);
       if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+      const bid = String(filtered.branchId || booking.branchId);
+      if (pkg.branchId && String(pkg.branchId) !== bid) {
+        throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+      }
 
       const startT = filtered.startTime || booking.startTime;
       const endTime = computeEndTime(startT, pkg.duration);
@@ -288,7 +295,6 @@ exports.updateBooking = async (id, updates, userRole) => {
 
       const dateObj = filtered.bookingDate ? new Date(filtered.bookingDate) : booking.bookingDate;
       const dateStr = dateObj.toISOString().split('T')[0];
-      const bid = filtered.branchId || booking.branchId;
       const { gte, lte } = getDayBounds(dateStr);
 
       const conflicting = await Booking.find({
@@ -450,6 +456,9 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+  if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
+    throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+  }
 
   const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
   const { gte, lte } = getDayBounds(dateStr);
@@ -526,6 +535,9 @@ exports.createRecurringBooking = async (data) => {
   if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
   if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
   if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
+  if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
+    throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+  }
   if (String(vehicle.userId) !== String(userId)) {
     throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
   }
