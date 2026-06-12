@@ -4,7 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Navbar({ onOpenAuth }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const navItems = ['Dịch vụ', 'Cách hoạt động', 'Khách hàng', 'Liên hệ'];
+  const navItems = [
+    { label: 'Đặt lịch', href: '#booking' },
+    { label: 'Gói slot', href: '#packages' },
+    { label: 'Quà tặng', href: '#giftstore' },
+    { label: 'Cửa hàng', href: '#map' },
+  ];
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50">
@@ -13,11 +18,11 @@ export default function Navbar({ onOpenAuth }) {
           <div className="hidden md:flex items-center gap-8">
             {navItems.map((item) => (
               <a
-                key={item}
-                href={`#${item.toLowerCase()}`}
+                key={item.href}
+                href={item.href}
                 className="text-sm text-white/80 hover:text-emerald-300 transition-colors duration-200 font-medium drop-shadow-sm"
               >
-                {item}
+                {item.label}
               </a>
             ))}
           </div>
@@ -56,12 +61,12 @@ export default function Navbar({ onOpenAuth }) {
             <div className="px-5 py-3 space-y-2.5">
               {navItems.map((item) => (
                 <a
-                  key={item}
-                  href={`#${item.toLowerCase()}`}
+                  key={item.href}
+                  href={item.href}
                   onClick={() => setIsOpen(false)}
                   className="block text-white/70 hover:text-emerald-300 text-sm font-medium transition-colors drop-shadow-sm"
                 >
-                  {item}
+                  {item.label}
                 </a>
               ))}
             </div>
