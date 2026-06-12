@@ -1,22 +1,22 @@
-/* Overrides to enforce brown/cream palette where other rules may still apply */
+/* Overrides to enforce emerald palette */
 :root {
-  --override-accent: #b46a45;
-  --override-accent-2: #7a3f2b;
-  --override-cream: #fff1e9;
+  --override-accent: #10b981;
+  --override-accent-2: #059669;
+  --override-cream: #ecfdf5;
 }
 
 body {
-  background: radial-gradient(circle at 10% 12%, rgba(180,110,78,0.14), transparent 22%) !important;
+  background: radial-gradient(circle at 10% 12%, rgba(16,185,129,0.14), transparent 22%) !important;
 }
 
-.aw-shell::before { background: radial-gradient(circle, rgba(180,110,78,0.20), transparent 60%) !important; }
-.aw-shell::after  { background: radial-gradient(circle, rgba(122,63,43,0.16), transparent 60%) !important; }
-.aw-logo, .aw-auth-logo { background: linear-gradient(180deg, var(--override-accent), var(--override-accent-2)) !important; box-shadow: 0 10px 28px rgba(122,63,43,0.22) !important; }
+.aw-shell::before { background: radial-gradient(circle, rgba(16,185,129,0.20), transparent 60%) !important; }
+.aw-shell::after  { background: radial-gradient(circle, rgba(5,150,105,0.16), transparent 60%) !important; }
+.aw-logo, .aw-auth-logo { background: linear-gradient(180deg, var(--override-accent), var(--override-accent-2)) !important; box-shadow: 0 10px 28px rgba(5,150,105,0.22) !important; }
 .aw-topbar { border-bottom-color: var(--line) !important; }
-.aw-nav.selected { background: linear-gradient(90deg, var(--override-accent), var(--override-accent-2)) !important; box-shadow: 0 14px 30px rgba(122,63,43,0.22) !important; }
+.aw-nav.selected { background: linear-gradient(90deg, var(--override-accent), var(--override-accent-2)) !important; box-shadow: 0 14px 30px rgba(5,150,105,0.22) !important; }
 .aw-step-title span, .aw-step-title .badge { background: linear-gradient(180deg, var(--override-accent), var(--override-accent-2)) !important; }
-.aw-date-card.active, .aw-time-card.active { background: linear-gradient(180deg, rgba(180,110,78,0.98), rgba(122,63,43,0.92)) !important; border-color: rgba(255,230,210,0.08) !important; }
+.aw-date-card.active, .aw-time-card.active { background: linear-gradient(180deg, rgba(16,185,129,0.98), rgba(5,150,105,0.92)) !important; border-color: rgba(167,243,208,0.08) !important; }
 .aw-coupon-row button, .aw-primary, .aw-confirm { background: linear-gradient(90deg, var(--override-accent), var(--override-accent-2)) !important; color: #fff6f2 !important; }
-.aw-toast { background: rgba(180,110,78,0.06) !important; border-color: rgba(180,110,78,0.18) !important; color: var(--text) !important; }
-.aw-badge, .aw-auth-title-row span { background: rgba(180,110,78,0.14) !important; border-color: rgba(170,90,50,0.22) !important; color: var(--accent-3) !important; }
-.aw-avatar { background: linear-gradient(180deg, rgba(255,190,160,0.96), rgba(180,110,78,0.92)) !important; }
+.aw-toast { background: rgba(16,185,129,0.06) !important; border-color: rgba(16,185,129,0.18) !important; color: var(--text) !important; }
+.aw-badge, .aw-auth-title-row span { background: rgba(16,185,129,0.14) !important; border-color: rgba(16,129,89,0.22) !important; color: var(--accent-3) !important; }
+.aw-avatar { background: linear-gradient(180deg, rgba(167,243,208,0.96), rgba(16,185,129,0.92)) !important; }

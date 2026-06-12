@@ -45,7 +45,7 @@
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 217 91% 53%;
+  --primary: 160 84% 39%;
   --primary-foreground: 0 0% 100%;
   --secondary: 214 32% 95%;
   --secondary-foreground: 222 47% 11%;
@@ -56,12 +56,16 @@
   --destructive: 0 72% 51%;
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 217 91% 53%;
+  --ring: 160 84% 39%;
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 222 47% 11%;
   --sidebar-border: 214 32% 91%;
-  --sidebar-accent: 214 100% 97%;
-  --sidebar-accent-foreground: 217 91% 40%;
+  --sidebar-accent: 160 50% 95%;
+  --sidebar-accent-foreground: 160 84% 35%;
+  --shadow-input:
+    0px 2px 3px -1px rgba(0, 0, 0, 0.1),
+    0px 1px 0px 0px rgba(25, 28, 33, 0.02),
+    0px 0px 0px 1px rgba(25, 28, 33, 0.08);
 }
 
 @layer base {

@@ -8,9 +8,9 @@
 	--line-strong: rgba(148, 163, 184, 0.35);
 	--text: #1e293b;
 	--muted: #64748b;
-	--accent: #2563eb;
-	--accent-2: #4f46e5;
-	--accent-3: #06b6d4;
+	--accent: #10b981;
+	--accent-2: #059669;
+	--accent-3: #34d399;
 	--warning: #ef4444;
 	--shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
@@ -58,7 +58,7 @@ body {
 .aw-shell::before {
 	top: -240px;
 	left: -210px;
-	background: radial-gradient(circle, rgba(37, 99, 235, 0.06), transparent 60%);
+	background: radial-gradient(circle, rgba(16, 185, 129, 0.06), transparent 60%);
 }
 
 .aw-shell::after {
@@ -92,7 +92,7 @@ body {
 	border-radius: 18px;
 	background: linear-gradient(180deg, var(--accent), var(--accent-2));
 	font-size: 24px;
-	box-shadow: 0 8px 24px rgba(37, 99, 235, 0.2);
+	box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
 }
 
 .aw-title-row {
@@ -128,8 +128,8 @@ body {
 	display: inline-flex;
 	align-items: center;
 	border-radius: 999px;
-	background: rgba(37, 99, 235, 0.08);
-	border: 1px solid rgba(37, 99, 235, 0.2);
+	background: rgba(16, 185, 129, 0.08);
+	border: 1px solid rgba(16, 185, 129, 0.2);
 	color: var(--accent);
 	font-size: 0.72rem;
 	letter-spacing: 0.12em;
@@ -176,7 +176,7 @@ body {
 }
 
 .aw-tier {
-	color: #b45309;
+	color: #059669;
 	font-weight: 700;
 }
 
@@ -246,7 +246,7 @@ body {
 .aw-nav.selected {
 	background: linear-gradient(90deg, var(--accent), var(--accent-2));
 	border-color: transparent;
-	box-shadow: 0 8px 24px rgba(37, 99, 235, 0.2);
+	box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
 }
 
 .aw-nav:not(.selected):hover {
@@ -446,17 +446,17 @@ body {
 .pill-pending { background: linear-gradient(90deg,#f59e0b,#d97706); }
 .pill-cancel { background: linear-gradient(90deg,#ef4444,#dc2626); }
 .pill-paid { background: linear-gradient(90deg,#10b981,#059669); }
-.pill-completed { background: linear-gradient(90deg,#3b82f6,#2563eb); }
+.pill-completed { background: linear-gradient(90deg,#10b981,#059669); }
 
 .aw-history-body { margin-top:12px; padding:10px 0; border-top:1px solid var(--line); }
 .aw-history-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; align-items:center; }
 .aw-history-col small { display:block; color:var(--muted); font-size:0.8rem; }
 .aw-history-strong { font-weight:800; margin-top:6px; color: var(--text); }
-.aw-history-strong.amount { color: #b45309; }
+.aw-history-strong.amount { color: #059669; }
 
 .aw-history-footer { display:flex; justify-content:space-between; align-items:center; margin-top:12px; border-top:1px solid var(--line); padding-top:12px; }
 .aw-history-pay { color:var(--muted); }
-.text-highlight { color:#b45309; font-weight:700; }
+.text-highlight { color:#059669; font-weight:700; }
 .text-muted { color:var(--muted); }
 .aw-btn-cancel { background: linear-gradient(90deg,#dc2626,#ef4444); color:#fff; border:none; padding:8px 12px; border-radius:8px; margin-right:8px; cursor: pointer; }
 .aw-btn-detail { background: transparent; border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:8px; cursor: pointer; }
@@ -527,13 +527,13 @@ body {
 
 .aw-option:hover {
 	border-color: var(--accent);
-	box-shadow: 0 2px 12px rgba(37, 99, 235, 0.08);
+	box-shadow: 0 2px 12px rgba(16, 185, 129, 0.08);
 }
 
 .aw-option.active {
-	background: linear-gradient(180deg, #eff6ff, #faf5ff);
+	background: linear-gradient(180deg, #ecfdf5, #faf5ff);
 	border-color: var(--accent);
-	box-shadow: 0 4px 16px rgba(37, 99, 235, 0.1);
+	box-shadow: 0 4px 16px rgba(16, 185, 129, 0.1);
 }
 
 .aw-option-head {
@@ -593,7 +593,7 @@ body {
 }
 
 .aw-service .service-head span {
-	color: #b45309;
+	color: #059669;
 	font-family: 'Space Grotesk', 'Inter', sans-serif;
 	font-weight: 700;
 }
@@ -630,7 +630,7 @@ body {
 .aw-date-card.active {
 	background: linear-gradient(180deg, var(--accent), var(--accent-2));
 	border-color: transparent;
-	box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
+	box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
 }
 
 .aw-date-card span,
@@ -684,7 +684,7 @@ body {
 	background: linear-gradient(180deg, var(--accent), var(--accent-2));
 	border-color: transparent;
 	color: #fff;
-	box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
+	box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
 }
 
 .aw-summary {
@@ -761,7 +761,7 @@ body {
 .aw-coupon-row button {
 	padding: 0 14px;
 	border-radius: 16px;
-	background: rgba(37, 99, 235, 0.08);
+	background: rgba(16, 185, 129, 0.08);
 	color: var(--accent);
 }
 
@@ -818,14 +818,14 @@ body {
 	border-radius: 18px;
 	background: linear-gradient(90deg, var(--accent), var(--accent-2));
 	color: #fff;
-	box-shadow: 0 8px 24px rgba(37, 99, 235, 0.25);
+	box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
 	letter-spacing: 0.04em;
 	transition: all 0.15s;
 }
 
 .aw-confirm:hover:not(:disabled) {
 	transform: translateY(-1px);
-	box-shadow: 0 12px 32px rgba(37, 99, 235, 0.3);
+	box-shadow: 0 12px 32px rgba(16, 185, 129, 0.3);
 }
 
 .aw-confirm:disabled {
@@ -998,7 +998,7 @@ body {
 	background: linear-gradient(180deg, var(--accent), var(--accent-2));
 	border-color: transparent;
 	color: #fff;
-	box-shadow: 0 8px 24px rgba(37, 99, 235, 0.2);
+	box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
 	transform: translateY(-2px);
 }
 
@@ -1464,8 +1464,8 @@ body {
 ═══════════════════════════════════════════════════════════ */
 
 .loc-section {
-	background: linear-gradient(180deg, #eff6ff, var(--panel));
-	border-color: rgba(37, 99, 235, 0.15) !important;
+	background: linear-gradient(180deg, #ecfdf5, var(--panel));
+	border-color: rgba(16, 185, 129, 0.15) !important;
 	margin-bottom: 20px;
 }
 
@@ -1508,15 +1508,15 @@ body {
 }
 
 .loc-branch-card:hover {
-	border-color: rgba(37, 99, 235, 0.3);
+	border-color: rgba(16, 185, 129, 0.3);
 	background: #f8fafc;
 	transform: translateY(-2px);
 }
 
 .loc-branch-card.active {
 	border-color: var(--accent);
-	background: #eff6ff;
-	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1), 0 4px 16px rgba(37, 99, 235, 0.12);
+	background: #ecfdf5;
+	box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1), 0 4px 16px rgba(16, 185, 129, 0.12);
 }
 
 .loc-branch-icon {
@@ -1821,13 +1821,13 @@ body {
 
 .vc-card:hover:not(.vc-card-disabled) {
 	border-color: var(--accent);
-	background: #eff6ff;
+	background: #ecfdf5;
 }
 
 .vc-card-selected {
 	border-color: var(--accent) !important;
-	background: #eff6ff !important;
-	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+	background: #ecfdf5 !important;
+	box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
 }
 
 .vc-card-disabled {
