@@ -1,19 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 const branches = [
-  { id: 'hn1', city: 'Hà Nội', name: 'Cầu Giấy', address: '122 Cầu Giấy, Q. Cầu Giấy', phone: '0888.123.456', hours: '06:00 - 20:00', cx: 555, cy: 175 },
-  { id: 'hn2', city: 'Hà Nội', name: 'Thanh Xuân', address: 'Nguyễn Trãi, Q. Thanh Xuân', phone: '0888.123.457', hours: '06:00 - 20:00', cx: 535, cy: 190 },
-  { id: 'hcm1', city: 'TP.HCM', name: 'Quận 1', address: 'Lê Lợi, P. Bến Nghé', phone: '0888.123.458', hours: '06:00 - 21:00', cx: 555, cy: 645 },
-  { id: 'hcm2', city: 'TP.HCM', name: 'Thủ Đức', address: 'Võ Văn Ngân, P. Linh Chiểu', phone: '0888.123.459', hours: '06:00 - 21:00', cx: 590, cy: 660 },
-  { id: 'dn1', city: 'Đà Nẵng', name: 'Hải Châu', address: 'Nguyễn Văn Linh, Q. Hải Châu', phone: '0888.123.460', hours: '06:00 - 20:00', cx: 495, cy: 370 },
+  { id: 'hn1', city: 'Hà Nội', name: 'Cầu Giấy', address: '122 Cầu Giấy, Q. Cầu Giấy', phone: '0888.123.456', hours: '06:00 - 20:00', cx: 190, cy: 128 },
+  { id: 'hn2', city: 'Hà Nội', name: 'Thanh Xuân', address: 'Nguyễn Trãi, Q. Thanh Xuân', phone: '0888.123.457', hours: '06:00 - 20:00', cx: 197, cy: 135 },
+  { id: 'hcm1', city: 'TP.HCM', name: 'Quận 1', address: 'Lê Lợi, P. Bến Nghé', phone: '0888.123.458', hours: '06:00 - 21:00', cx: 236, cy: 684 },
+  { id: 'hcm2', city: 'TP.HCM', name: 'Thủ Đức', address: 'Võ Văn Ngân, P. Linh Chiểu', phone: '0888.123.459', hours: '06:00 - 21:00', cx: 246, cy: 673 },
+  { id: 'dn1', city: 'Đà Nẵng', name: 'Hải Châu', address: 'Nguyễn Văn Linh, Q. Hải Châu', phone: '0888.123.460', hours: '06:00 - 20:00', cx: 309, cy: 403 },
 ];
 
 const cities = ['Tất cả', 'Hà Nội', 'TP.HCM', 'Đà Nẵng'];
 
+function parseSvgPaths(svgText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, 'image/svg+xml');
+  const paths = doc.querySelectorAll('path');
+  return Array.from(paths).map(p => ({
+    id: p.getAttribute('id') || '',
+    name: p.getAttribute('name') || '',
+    d: p.getAttribute('d') || '',
+  }));
+}
+
 export default function MapSection({ onSelectBranch }) {
   const [activeCity, setActiveCity] = useState('Tất cả');
   const [selectedId, setSelectedId] = useState(null);
+  const [provincePaths, setProvincePaths] = useState([]);
+  const [hoveredProvince, setHoveredProvince] = useState(null);
+
+  useEffect(() => {
+    fetch('/assets/vietnam.svg')
+      .then(r => r.text())
+      .then(text => {
+        const paths = parseSvgPaths(text);
+        setProvincePaths(paths);
+      })
+      .catch(() => {});
+  }, []);
 
   const filtered = activeCity === 'Tất cả' ? branches : branches.filter((b) => b.city === activeCity);
   const selected = branches.find((b) => b.id === selectedId);
@@ -85,35 +108,72 @@ export default function MapSection({ onSelectBranch }) {
           </div>
 
           <div className="lg:col-span-3">
-            <div className="relative w-full rounded-2xl border border-neutral-800 bg-neutral-900/50 overflow-hidden backdrop-blur-sm">
-              <svg viewBox="0 0 800 850" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+            <div className="relative w-full rounded-2xl border border-neutral-800 bg-neutral-950 overflow-hidden backdrop-blur-sm"
+              style={{
+                boxShadow: 'inset 0 0 80px rgba(16,185,129,0.04), 0 0 60px rgba(16,185,129,0.02)',
+              }}
+            >
+              <svg viewBox="0 0 812 872" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
                 <defs>
-                  <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(16,185,129,0.15)" />
+                  <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1" />
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur3" />
+                    <feMerge>
+                      <feMergeNode in="blur3" />
+                      <feMergeNode in="blur2" />
+                      <feMergeNode in="blur1" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <filter id="neon-glow-intense" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur2" />
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="25" result="blur3" />
+                    <feMerge>
+                      <feMergeNode in="blur3" />
+                      <feMergeNode in="blur2" />
+                      <feMergeNode in="blur1" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <filter id="marker-glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <radialGradient id="bg-glow" cx="50%" cy="50%" r="60%">
+                    <stop offset="0%" stopColor="rgba(16,185,129,0.06)" />
                     <stop offset="100%" stopColor="rgba(16,185,129,0)" />
                   </radialGradient>
                 </defs>
 
-                <rect width="800" height="850" fill="url(#glow)" />
+                <rect width="812" height="872" fill="url(#bg-glow)" />
+
+                {provincePaths.map((p) => (
+                  <path
+                    key={p.id}
+                    d={p.d}
+                    fill={hoveredProvince === p.id ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.02)'}
+                    stroke={hoveredProvince === p.id ? '#34d399' : 'rgba(16,185,129,0.25)'}
+                    strokeWidth={hoveredProvince === p.id ? '1.2' : '0.5'}
+                    filter={hoveredProvince === p.id ? 'url(#neon-glow)' : undefined}
+                    onMouseEnter={() => setHoveredProvince(p.id)}
+                    onMouseLeave={() => setHoveredProvince(null)}
+                    style={{ transition: 'all 0.2s ease', cursor: 'default' }}
+                  />
+                ))}
 
                 <path
-                  d="M520 108 L555 120 L570 140 L580 160 L575 180 L565 195 L555 210 L545 220 L535 235 L530 250
-                     L525 270 L520 290 L515 310 L510 330 L505 350 L500 370 L495 385 L490 400 L485 415
-                     L480 430 L475 445 L470 460 L465 475 L460 490 L455 505 L450 520 L445 535 L440 550
-                     L435 565 L430 580 L425 590 L420 600 L415 610 L410 620 L405 630 L400 640
-                     L395 650 L390 655 L385 660 L380 665 L375 668 L370 670 L365 672 L360 674
-                     L355 675 L350 676 L345 677 L340 676 L335 674 L330 672 L325 668 L320 664
-                     L315 658 L310 650 L305 640 L300 628 L295 615 L290 600 L285 585 L280 570
-                     L275 555 L270 540 L265 525 L260 510 L255 495 L250 480 L245 465 L240 450
-                     L235 435 L230 420 L225 405 L220 390 L215 375 L210 358 L205 340 L200 320
-                     L195 300 L190 280 L185 260 L180 242 L178 225 L177 210 L178 195 L180 180
-                     L185 165 L190 152 L198 140 L208 130 L220 122 L235 116 L250 112 L265 110
-                     L280 109 L295 108 L310 108 L325 107 L340 107 L355 107 L370 107 L385 107
-                     L400 107 L415 107 L430 107 L445 107 L460 107 L475 107 L490 107 L505 107
-                     L520 108Z"
-                  fill="rgba(16,185,129,0.06)"
-                  stroke="rgba(16,185,129,0.3)"
-                  strokeWidth="1.5"
+                  id="coastline-highlight"
+                  d={provincePaths.filter(p => ['quang-ninh', 'hai-phong', 'thai-binh', 'nam-dinh', 'ninh-binh', 'thanh-hoa', 'nghe-an', 'ha-tinh', 'quang-binh', 'quang-tri', 'thua-thien-hue', 'da-nang', 'quang-nam', 'quang-ngai', 'binh-dinh', 'phu-yen', 'khanh-hoa', 'ninh-thuan', 'binh-thuan', 'ba-ria-vung-tau', 'ho-chi-minh', 'tien-giang', 'ben-tre', 'tra-vinh', 'soc-trang', 'bac-lieu', 'ca-mau', 'kien-giang', 'an-giang', 'dong-thap', 'long-an'].includes(p.id)).map(p => p.d).join(' ')}
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="1.8"
+                  filter="url(#neon-glow)"
+                  opacity="0.7"
                 />
 
                 {branches.map((b) => (
@@ -121,24 +181,51 @@ export default function MapSection({ onSelectBranch }) {
                     <circle
                       cx={b.cx}
                       cy={b.cy}
-                      r={selectedId === b.id ? 10 : 7}
-                      fill={selectedId === b.id ? 'rgba(16,185,129,0.2)' : 'transparent'}
+                      r={selectedId === b.id ? 14 : 10}
+                      fill="transparent"
+                      stroke={selectedId === b.id ? '#10b981' : 'transparent'}
+                      strokeWidth="2"
+                      filter={selectedId === b.id ? 'url(#marker-glow)' : undefined}
                     />
                     <circle
                       cx={b.cx}
                       cy={b.cy}
-                      r={selectedId === b.id ? 5 : 3.5}
+                      r={selectedId === b.id ? 6 : 4}
                       fill={selectedId === b.id ? '#10b981' : '#34d399'}
-                      stroke="white"
+                      stroke="#059669"
                       strokeWidth="1.5"
+                      filter="url(#marker-glow)"
                     />
+                    <circle
+                      cx={b.cx}
+                      cy={b.cy}
+                      r={selectedId === b.id ? 8 : 6}
+                      fill="rgba(16,185,129,0.15)"
+                      stroke="none"
+                    />
+                    {selectedId === b.id && (
+                      <>
+                        <circle
+                          cx={b.cx}
+                          cy={b.cy}
+                          r="18"
+                          fill="none"
+                          stroke="rgba(16,185,129,0.3)"
+                          strokeWidth="1"
+                        >
+                          <animate attributeName="r" values="14;22;14" dur="2s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite" />
+                        </circle>
+                      </>
+                    )}
                     <text
                       x={b.cx}
-                      y={b.cy - 8}
+                      y={b.cy - (selectedId === b.id ? 14 : 10)}
                       textAnchor="middle"
-                      className="text-[6px]"
+                      className="text-[5px]"
                       fill={selectedId === b.id ? '#10b981' : '#6ee7b7'}
                       fontWeight={selectedId === b.id ? 'bold' : 'normal'}
+                      filter={selectedId === b.id ? 'url(#marker-glow)' : undefined}
                     >
                       {b.name}
                     </text>
@@ -150,7 +237,7 @@ export default function MapSection({ onSelectBranch }) {
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="absolute bottom-4 left-4 right-4 p-5 rounded-2xl bg-neutral-900 border border-neutral-800 shadow-lg backdrop-blur-xl"
+                  className="absolute bottom-4 left-4 right-4 p-5 rounded-2xl bg-neutral-900/95 border border-neutral-800 shadow-lg backdrop-blur-xl"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
