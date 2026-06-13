@@ -250,7 +250,7 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                       
                       {isActive && p.subServices && p.subServices.length > 0 && (
                         <div style={{ marginTop: '10px', padding: '10px', background: '#f1f5f9', borderRadius: '8px' }}>
-                            <strong style={{ fontSize: '0.85rem', color: '#2563eb', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
+                            <strong style={{ fontSize: '0.85rem', color: '#10b981', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
                           {p.subServices.map((sub) => {
                             const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
                             return (
@@ -271,7 +271,7 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                                   disabled={!sub.isOptional}
                                 />
                                 <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
-                                <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                                <span style={{ color: '#10b981', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
                               </label>
                             );
                           })}

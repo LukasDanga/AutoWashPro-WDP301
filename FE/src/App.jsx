@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import BookingFlow from './components/BookingFlow.jsx';
 import AuthScreen from './components/AuthScreen.jsx';
+import LandingPage from './components/landing/LandingPage.jsx';
 import {
   clearSession as clearStoredSession,
   getApiBaseUrl,
@@ -20,6 +21,7 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [user, setUser] = useState(null);
   const [vehicles, setVehicles] = useState([]);
+  const [showAuth, setShowAuth] = useState(false);
 
   async function loadSession(accessToken) {
     if (!accessToken) return;
@@ -178,13 +180,18 @@ export default function App() {
   }
 
   if (!token || !user) {
-    return (
-      <AuthScreen 
-        authLoading={authLoading}
-        onLogin={loginWithCredentials}
-        onRegister={registerUser}
-      />
-    );
+    if (showAuth) {
+      return (
+        <AuthScreen 
+          authLoading={authLoading}
+          onLogin={loginWithCredentials}
+          onRegister={registerUser}
+          onBack={() => setShowAuth(false)}
+        />
+      );
+    }
+
+    return <LandingPage onOpenAuth={() => setShowAuth(true)} />;
   }
 
   return <BookingFlow user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} />;
