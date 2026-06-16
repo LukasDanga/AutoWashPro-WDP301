@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import BookingFlow from './components/BookingFlow.jsx';
 import AuthScreen from './components/AuthScreen.jsx';
 import LandingPage from './components/landing/LandingPage.jsx';
+import ProfilePage from './components/landing/ProfilePage.jsx';
+import HistoryPage from './components/landing/HistoryPage.jsx';
 import {
   clearSession as clearStoredSession,
   getApiBaseUrl,
@@ -22,6 +24,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [vehicles, setVehicles] = useState([]);
   const [showAuth, setShowAuth] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   async function loadSession(accessToken) {
     if (!accessToken) return;
@@ -191,8 +195,16 @@ export default function App() {
       );
     }
 
-    return <LandingPage onOpenAuth={() => setShowAuth(true)} />;
+    return <LandingPage onOpenAuth={() => setShowAuth(true)} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} />;
   }
 
-  return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} />;
+  if (showHistory) {
+    return <HistoryPage onBack={() => setShowHistory(false)} />;
+  }
+
+  if (showProfile) {
+    return <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => setShowProfile(false)} />;
+  }
+
+  return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} />;
 }

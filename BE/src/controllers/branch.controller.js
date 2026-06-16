@@ -11,6 +11,11 @@ exports.getAllBranches = catchAsync(async (req, res) => {
   success(res, branches, 'Branches retrieved');
 });
 
+exports.getPublicBranches = catchAsync(async (req, res) => {
+  const branches = await branchService.getAllBranches({ status: 'active' }, null);
+  success(res, branches, 'Branches retrieved');
+});
+
 exports.getBranchById = catchAsync(async (req, res) => {
   const branch = await branchService.getBranchById(req.params.id);
   success(res, branch, 'Branch retrieved');

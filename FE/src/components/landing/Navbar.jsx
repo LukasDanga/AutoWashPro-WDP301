@@ -1,8 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Navbar({ onOpenAuth, user, onLogout }) {
+export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    function handleClick(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [profileOpen]);
   const [visible, setVisible] = useState(true);
   const [prevScroll, setPrevScroll] = useState(0);
 
@@ -55,16 +66,55 @@ export default function Navbar({ onOpenAuth, user, onLogout }) {
           <div className="h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
 
           {user ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs md:text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                {user.name || user.email}
-              </span>
-              <button
-                onClick={onLogout}
-                className="relative rounded-full border border-neutral-300 px-3 py-1.5 text-xs md:text-sm font-medium text-neutral-600 transition-all hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            <div ref={profileRef} className="relative">
+              <button onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-3.5 py-2 text-xs md:text-sm font-medium text-neutral-700 transition-all hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
               >
-                Thoát
+                <svg className="w-3.5 h-3.5 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 10-16 0" />
+                </svg>
+                {user.name || user.email}
+                <svg className={`w-3 h-3 text-neutral-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
               </button>
+              <AnimatePresence>
+                {profileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-neutral-200 bg-white/90 backdrop-blur-xl shadow-lg dark:border-neutral-700 dark:bg-neutral-900/90 overflow-hidden"
+                  >
+                    <button onClick={() => { setProfileOpen(false); onGoToProfile?.(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 10-16 0" />
+                      </svg>
+                      Hồ sơ
+                    </button>
+                    <button onClick={() => { setProfileOpen(false); onGoToHistory?.(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+                      </svg>
+                      Lịch sử
+                    </button>
+                    <div className="h-px bg-neutral-200 dark:bg-neutral-700" />
+                    <button onClick={onLogout}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                      </svg>
+                      Thoát
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ) : (
             <button
