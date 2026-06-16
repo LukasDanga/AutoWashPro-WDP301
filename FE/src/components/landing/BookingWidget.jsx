@@ -1,45 +1,81 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import VoucherPicker from '../VoucherPicker.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const timeSlots = ['07:00', '08:00', '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
-
+const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
 const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-
-function formatPrice(v) {
-  if (!v) return '0đ';
-  return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
-}
 
 function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
 
-export default function BookingWidget({ onOpenAuth }) {
+function buildBookingDates() {
+  const weekdayFormatter = new Intl.DateTimeFormat('vi-VN', { weekday: 'short' });
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() + index);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return {
+      id: `${date.getFullYear()}-${month}-${day}`,
+      label: index === 0 ? 'Hôm nay' : weekdayFormatter.format(date).toUpperCase(),
+      day, month, iso: `${date.getFullYear()}-${month}-${day}`,
+    };
+  });
+}
+
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory }) {
+  const isLoggedIn = !!user && !!token;
+  const bookingDates = useMemo(() => buildBookingDates(), []);
+
   const [tab, setTab] = useState('regular');
   const [step, setStep] = useState(1);
+
+  // Data from API
   const [branches, setBranches] = useState([]);
   const [packages, setPackages] = useState([]);
+  const [mySlotPacks, setMySlotPacks] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+
+  // Selections
   const [selectedBranch, setSelectedBranch] = useState(null);
+  const [selectedVehicle, setSelectedVehicle] = useState('');
   const [selectedPackage, setSelectedPackage] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
+  const [selectedSubServices, setSelectedSubServices] = useState({});
+  const [selectedDate, setSelectedDate] = useState(bookingDates[1]?.id || bookingDates[0]?.id);
+  const [selectedTime, setSelectedTime] = useState('');
   const [selectedDays, setSelectedDays] = useState([]);
   const [startDate, setStartDate] = useState(null);
+  const [weeks, setWeeks] = useState(4);
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
+  const [selectedSlotPack, setSelectedSlotPack] = useState(null);
 
+  // Booking state
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingCode, setBookingCode] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastBooking, setLastBooking] = useState(null);
+
+  // Load branches (public)
   useEffect(() => {
     async function loadBranches() {
       try {
-        const res = await fetch(`${API_BASE}/branches`);
+        const res = await fetch(`${API_BASE}/branches/public`);
         const payload = await res.json();
         const data = payload?.data || payload || [];
         setBranches(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) setSelectedBranch(data[0]);
       } catch (e) { console.error('Failed to load branches', e); }
     }
     loadBranches();
   }, []);
 
+  // Load packages when branch changes
   useEffect(() => {
     if (!selectedBranch) { setPackages([]); return; }
     async function loadPackages() {
@@ -58,42 +94,221 @@ export default function BookingWidget({ onOpenAuth }) {
     loadPackages();
   }, [selectedBranch]);
 
-  const today = new Date();
-  const dates = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  // Load slot packs (when logged in)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    async function loadPacks() {
+      try {
+        const res = await fetch(`${apiBase}/slot-packs/my`, { headers: { Authorization: `Bearer ${token}` } });
+        const payload = await res.json();
+        setMySlotPacks(Array.isArray(payload?.data) ? payload.data : []);
+      } catch (e) { console.error(e); }
+    }
+    loadPacks();
+  }, [isLoggedIn, apiBase, token]);
+
+  // Auto-select first vehicle
+  useEffect(() => {
+    if (!selectedVehicle && userVehicles[0]) {
+      setSelectedVehicle(userVehicles[0]._id || userVehicles[0].id || '');
+    }
+  }, [userVehicles, selectedVehicle]);
+
+  // Fetch available slots
+  const currentDate = bookingDates.find(d => d.id === selectedDate) || bookingDates[0];
+  useEffect(() => {
+    if (!selectedBranch || !selectedPackage || !currentDate?.iso) return;
+    async function fetchSlots() {
+      setSlotsLoading(true);
+      try {
+        const branchId = selectedBranch._id || selectedBranch.id;
+        const pkgId = selectedPackage._id || selectedPackage.id;
+        const url = `${API_BASE}/bookings/slots?branchId=${branchId}&date=${currentDate.iso}&packageId=${pkgId}`;
+        const res = isLoggedIn
+          ? await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+          : await fetch(url);
+        const payload = await res.json();
+        if (res.ok) setAvailableSlots(payload.data || []);
+        else setAvailableSlots([]);
+      } catch (err) { console.error(err); }
+      finally { setSlotsLoading(false); }
+    }
+    fetchSlots();
+  }, [selectedBranch, selectedPackage, currentDate?.iso, isLoggedIn, apiBase, token]);
+
+  // Sub-services
+  const pkg = selectedPackage;
+  const currentSubServices = selectedSubServices[pkg?._id || pkg?.id] || [];
+  let extraDuration = 0, extraPrice = 0;
+  if (pkg && pkg.subServices) {
+    for (const sub of pkg.subServices) {
+      if (currentSubServices.includes(sub.name)) {
+        extraDuration += sub.duration || 0;
+        extraPrice += sub.price || 0;
+      }
+    }
+  }
+  const basePrice = pkg ? pkg.price : 0;
+  const totalBase = basePrice + extraPrice;
+
+  // Valid slot packs for current selection
+  const validPacks = useMemo(() => {
+    if (!isLoggedIn) return [];
+    return mySlotPacks.filter(p => {
+      if (p.status !== 'active' || p.remainingSlots <= 0) return false;
+      const pPkgId = p.packageId?._id || p.packageId?.id || p.packageId;
+      const selPkgId = pkg?._id || pkg?.id;
+      if (pPkgId !== selPkgId) return false;
+      const branchId = selectedBranch?._id || selectedBranch?.id;
+      const pBranchId = p.branchId?._id || p.branchId?.id || p.branchId;
+      if (pBranchId && pBranchId !== branchId) return false;
+      return true;
+    });
+  }, [mySlotPacks, pkg, selectedBranch, isLoggedIn]);
+
+  useEffect(() => {
+    if (selectedSlotPack && !validPacks.find(p => (p._id || p.id) === selectedSlotPack)) {
+      setSelectedSlotPack(null);
+    }
+  }, [validPacks, selectedSlotPack]);
+
+  let pointMultiplier = 1;
+  if (user?.tier === 'diamond') pointMultiplier = 2.0;
+  else if (user?.tier === 'gold') pointMultiplier = 1.5;
+  else if (user?.tier === 'silver') pointMultiplier = 1.2;
+
+  const discount = appliedVoucher
+    ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value)
+    : 0;
+  const isPayingWithPack = !!selectedSlotPack;
+  const total = isPayingWithPack ? 0 : Math.max(0, totalBase - discount);
+  const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
+
+  const vehicle = userVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
+
+  // Recurring preview
+  const previewDates = useMemo(() => {
+    if (tab !== 'recurring' || selectedDays.length === 0) return [];
+    const dates = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let w = 0; w < weeks; w++) {
+      for (let d = 0; d < 7; d++) {
+        const c = new Date(today);
+        c.setDate(today.getDate() + w * 7 + d);
+        if (selectedDays.includes(c.getDay()) && c >= today) dates.push(c);
+      }
+    }
+    return dates;
+  }, [selectedDays, weeks]);
 
   const toggleDay = (day) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
+    setSelectedDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
   };
 
   const reset = () => {
     setStep(1);
-    setSelectedBranch(null);
+    setSelectedVehicle('');
     setSelectedPackage(null);
-    setSelectedDate(null);
-    setSelectedTime(null);
+    setSelectedSubServices({});
+    setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
+    setSelectedTime('');
     setSelectedDays([]);
     setStartDate(null);
+    setWeeks(4);
+    setAppliedVoucher(null);
+    setSelectedSlotPack(null);
+    setMessage('');
+    setError('');
+    setBookingCode('');
   };
+
+  // Determine total steps based on login state
+  const totalSteps = isLoggedIn ? 5 : 4;
 
   const canNextStep = () => {
     if (step === 1) return selectedBranch;
     if (step === 2) return selectedPackage;
     if (step === 3) {
+      if (isLoggedIn) return selectedVehicle;
+      if (tab === 'regular') return selectedDate && selectedTime;
+      return startDate && selectedDays.length > 0 && selectedTime;
+    }
+    if (step === 4) {
       if (tab === 'regular') return selectedDate && selectedTime;
       return startDate && selectedDays.length > 0 && selectedTime;
     }
     return true;
   };
 
+  async function confirmBooking() {
+    if (!isLoggedIn) { onOpenAuth(); return; }
+    if (!selectedTime) { setError('Vui lòng chọn khung giờ.'); return; }
+    if (!vehicle) { setError('Vui lòng chọn xe.'); return; }
+    setBookingLoading(true); setMessage(''); setError(''); setBookingCode('');
+
+    try {
+      const branchId = selectedBranch._id || selectedBranch.id;
+      const pkgId = pkg._id || pkg.id;
+      const body = {
+        branchId,
+        packageId: pkgId,
+        vehicleId: vehicle._id || vehicle.id || vehicle.licensePlate,
+        bookingDate: currentDate.iso,
+        startTime: selectedTime,
+        voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined),
+        selectedSubServices: currentSubServices,
+        slotPackId: selectedSlotPack || undefined,
+        note: '',
+      };
+      const res = await fetch(`${apiBase}/bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || errData?.error || 'Không thể tạo lịch hẹn');
+      }
+      const payload = await res.json();
+      const booking = payload?.data || payload;
+      setBookingCode(booking?.bookingCode || booking?.code || '');
+      setLastBooking({
+        branch: selectedBranch,
+        vehicle,
+        pkg,
+        currentDate,
+        selectedTime,
+        total,
+        discount,
+        points,
+        isPayingWithPack,
+        bookingCode: booking?.bookingCode || booking?.code || '',
+        subServices: currentSubServices,
+      });
+      setShowSuccessModal(true);
+    } catch (err) {
+      setError(err.message || 'Không thể tạo lịch hẹn');
+    } finally {
+      setBookingLoading(false);
+    }
+  }
+
+  const datesList = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, []);
+
+  const branchId = selectedBranch?._id || selectedBranch?.id;
+  const pkgId = pkg?._id || pkg?.id;
+
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center gap-2 mb-10">
-      {[1, 2, 3, 4].map((s) => (
+      {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
         <div key={s} className="flex items-center gap-2">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
             step === s
@@ -104,7 +319,7 @@ export default function BookingWidget({ onOpenAuth }) {
           }`}>
             {step > s ? '✓' : s}
           </div>
-          {s < 4 && <div className={`w-8 md:w-12 h-0.5 ${step > s ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
+          {s < totalSteps && <div className={`w-8 md:w-12 h-0.5 ${step > s ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
         </div>
       ))}
     </div>
@@ -116,9 +331,7 @@ export default function BookingWidget({ onOpenAuth }) {
 
       <div className="relative z-10 max-w-[1000px] mx-auto px-6 md:px-12">
         <div className="text-center mb-12">
-          <span className="text-emerald-600 text-sm font-medium tracking-widest uppercase mb-4 block">
-            Đặt lịch
-          </span>
+          <span className="text-emerald-600 text-sm font-medium tracking-widest uppercase mb-4 block">Đặt lịch</span>
           <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-slate-900 mb-4">
             Trải nghiệm đặt lịch
           </h2>
@@ -127,92 +340,118 @@ export default function BookingWidget({ onOpenAuth }) {
 
         <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-6 md:p-10">
           <div className="flex items-center gap-1 bg-white rounded-xl p-1 border border-slate-200 w-fit mx-auto mb-8">
-            <button
-              onClick={() => { setTab('regular'); reset(); }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-                tab === 'regular' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
+            <button onClick={() => { setTab('regular'); reset(); }}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'regular' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
               Đặt lịch thường
             </button>
-            <button
-              onClick={() => { setTab('recurring'); reset(); }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-                tab === 'recurring' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
+            <button onClick={() => { setTab('recurring'); reset(); }}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'recurring' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
               Đặt lịch định kì
             </button>
           </div>
 
           {renderStepIndicator()}
 
-          {/* STEP 1: Chọn chi nhánh */}
+          {/* STEP 1: Chi nhánh */}
           {step === 1 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn chi nhánh</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {branches.length === 0 ? (
                   <div className="col-span-2 text-center text-slate-400 py-8">Đang tải danh sách chi nhánh...</div>
-                ) : branches.map((b) => {
-                  const branchId = b._id || b.id;
-                  return (
-                    <button
-                      key={branchId}
-                      onClick={() => setSelectedBranch(b)}
-                      className={`text-left p-5 rounded-xl border transition-all ${
-                        selectedBranch?._id === b._id || selectedBranch?.id === b.id
-                          ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="10" r="3" />
-                          <path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
-                        </svg>
-                        <div>
-                          <div className="font-semibold text-slate-800 text-sm">{b.name}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">{b.address}</div>
-                          {b.openingTime && (
-                            <div className="text-xs text-slate-400 mt-1">⏰ {b.openingTime} – {b.closingTime}</div>
-                          )}
-                        </div>
+                ) : branches.map((b) => (
+                  <button key={b._id || b.id} onClick={() => setSelectedBranch(b)}
+                    className={`text-left p-5 rounded-xl border transition-all ${
+                      (selectedBranch?._id || selectedBranch?.id) === (b._id || b.id)
+                        ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}>
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
+                      </svg>
+                      <div>
+                        <div className="font-semibold text-slate-800 text-sm">{b.name}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{b.address}</div>
+                        {b.openingTime && <div className="text-xs text-slate-400 mt-1">⏰ {b.openingTime} – {b.closingTime}</div>}
                       </div>
-                    </button>
-                  );
-                })}
+                    </div>
+                  </button>
+                ))}
               </div>
             </motion.div>
           )}
 
-          {/* STEP 2: Chọn gói dịch vụ (theo chi nhánh) */}
-          {step === 2 && (
+          {/* STEP 2: Gói dịch vụ */}
+          {step === 2 ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <h3 className="text-lg font-semibold text-slate-800 mb-6">
-                Chọn gói dịch vụ tại {selectedBranch?.name || 'chi nhánh'}
+                Chọn gói dịch vụ{isLoggedIn && selectedBranch ? ` tại ${selectedBranch.name}` : ''}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {packages.length === 0 ? (
                   <div className="col-span-2 text-center text-slate-400 py-8">Chi nhánh này chưa có gói dịch vụ nào.</div>
-                ) : packages.map((p) => {
-                  const pkgId = p._id || p.id;
+                ) : packages.map(p => {
+                  const pId = p._id || p.id;
+                  const isActive = pId === (selectedPackage?._id || selectedPackage?.id);
                   return (
-                    <button
-                      key={pkgId}
-                      onClick={() => setSelectedPackage(p)}
+                    <div key={pId}
+                      className={`rounded-xl border transition-all ${isActive ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white'}`}>
+                      <button onClick={() => setSelectedPackage(p)}
+                        className="w-full text-left p-5">
+                        <div className="flex items-start justify-between mb-2">
+                          <span className="font-semibold text-slate-800">{p.name}</span>
+                          <span className="text-emerald-600 font-bold">{formatCurrency(p.price)}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-1">{p.description}</p>
+                        <span className="text-xs text-slate-400">{p.duration} phút</span>
+                      </button>
+                      {isActive && p.subServices && p.subServices.length > 0 && (
+                        <div className="px-5 pb-4 pt-2 border-t border-slate-100">
+                          <strong className="text-xs text-emerald-600 block mb-2">Dịch vụ chọn thêm:</strong>
+                          {p.subServices.map(sub => {
+                            const checked = currentSubServices.includes(sub.name);
+                            return (
+                              <label key={sub.name} className="flex items-center gap-2 py-1 cursor-pointer text-sm">
+                                <input type="checkbox" checked={checked} disabled={!sub.isOptional}
+                                  onChange={() => {
+                                    setSelectedSubServices(prev => {
+                                      const key = pId;
+                                      const current = prev[key] || [];
+                                      return { ...prev, [key]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] };
+                                    });
+                                  }} />
+                                <span className="flex-1 text-slate-700">{sub.name}</span>
+                                <span className="text-emerald-600 font-medium text-xs">{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          ) : null}
+
+          {/* STEP 3: Xe (chỉ hiện khi đã login) */}
+          {step === 3 && isLoggedIn && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn xe</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {userVehicles.length === 0 ? (
+                  <div className="col-span-2 text-center text-slate-400 py-8">Chưa có xe nào. Vui lòng thêm xe trong hồ sơ.</div>
+                ) : userVehicles.map(v => {
+                  const vId = v._id || v.id;
+                  return (
+                    <button key={vId} onClick={() => setSelectedVehicle(vId)}
                       className={`text-left p-5 rounded-xl border transition-all ${
-                        (selectedPackage?._id === p._id || selectedPackage?.id === p.id)
-                          ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="font-semibold text-slate-800">{p.name}</span>
-                        <span className="text-emerald-600 font-bold">{formatCurrency(p.price)}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 mb-2">{p.description}</p>
-                      <span className="text-xs text-slate-400">{p.duration} phút</span>
+                        selectedVehicle === vId ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}>
+                      <div className="font-semibold text-slate-800 text-sm">{v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate}</div>
+                      <div className="text-xs text-slate-400 mt-1">{v.licensePlate || v.plate}</div>
+                      <div className="text-xs text-slate-400">{v.vehicleType || v.type || ''}</div>
                     </button>
                   );
                 })}
@@ -220,8 +459,8 @@ export default function BookingWidget({ onOpenAuth }) {
             </motion.div>
           )}
 
-          {/* STEP 3: Chọn thời gian */}
-          {step === 3 && (
+          {/* STEP 4: Thời gian */}
+          {step === 4 ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn thời gian</h3>
 
@@ -229,18 +468,11 @@ export default function BookingWidget({ onOpenAuth }) {
                 <div className="mb-8">
                   <label className="text-sm text-slate-500 block mb-3">Các ngày trong tuần</label>
                   <div className="flex gap-2">
-                    {weekDays.map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => toggleDay(d)}
+                    {weekDays.map((d, idx) => (
+                      <button key={idx} onClick={() => toggleDay(idx)}
                         className={`w-10 h-10 rounded-xl text-xs font-medium transition-all ${
-                          selectedDays.includes(d)
-                            ? 'bg-emerald-600 text-white shadow-sm'
-                            : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
-                        }`}
-                      >
-                        {d}
-                      </button>
+                          selectedDays.includes(idx) ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}>{d}</button>
                     ))}
                   </div>
                 </div>
@@ -251,67 +483,75 @@ export default function BookingWidget({ onOpenAuth }) {
                   {tab === 'regular' ? 'Chọn ngày' : 'Chọn ngày bắt đầu'}
                 </label>
                 <div className="flex gap-2 overflow-x-auto pb-2">
-                  {dates.map((d) => {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const isSelected = tab === 'regular'
-                      ? selectedDate === dateStr
-                      : startDate === dateStr;
-                    return (
-                      <button
-                        key={dateStr}
-                        onClick={() => {
-                          if (tab === 'regular') setSelectedDate(dateStr);
-                          else setStartDate(dateStr);
-                        }}
-                        className={`min-w-[60px] p-3 rounded-xl border text-center transition-all ${
-                          isSelected
-                            ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="text-xs text-slate-400 font-medium">
-                          {d.toLocaleDateString('vi-VN', { weekday: 'narrow' })}
-                        </div>
-                        <div className="text-base font-bold text-slate-800 mt-1">
-                          {d.getDate()}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {d.toLocaleDateString('vi-VN', { month: 'numeric' })}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-500 block mb-3">Chọn khung giờ</label>
-                <div className="flex flex-wrap gap-2">
-                  {timeSlots.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setSelectedTime(t)}
-                      className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-                        selectedTime === t
-                          ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm'
-                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                      }`}
-                    >
-                      {t}
+                  {bookingDates.map((d) => (
+                    <button key={d.id} onClick={() => setSelectedDate(d.id)}
+                      className={`min-w-[60px] p-3 rounded-xl border text-center transition-all ${
+                        selectedDate === d.id ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}>
+                      <div className="text-xs text-slate-400 font-medium">{d.label}</div>
+                      <div className="text-base font-bold text-slate-800 mt-1">{d.day}</div>
+                      <div className="text-xs text-slate-400">Thg {d.month}</div>
                     </button>
                   ))}
                 </div>
               </div>
-            </motion.div>
-          )}
 
-          {/* STEP 4: Xác nhận */}
-          {step === 4 && (
+              {tab === 'recurring' && (
+                <div className="mb-8">
+                  <label className="text-sm text-slate-500 block mb-3">Số tuần lặp lại</label>
+                  <div className="flex gap-2">
+                    {WEEKS_OPTIONS.map(w => (
+                      <button key={w} onClick={() => setWeeks(w)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          weeks === w ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}>{w} tuần</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm text-slate-500 block mb-3">Chọn khung giờ</label>
+                <div className="flex flex-wrap gap-2">
+                  {slotsLoading ? (
+                    <div className="text-slate-400 text-sm py-2">Đang tải lịch trống...</div>
+                  ) : availableSlots.length > 0 ? (
+                    availableSlots.map(s => {
+                      const timeLabel = s.startTime;
+                      const isDisabled = !s.available;
+                      return (
+                        <button key={timeLabel} disabled={isDisabled}
+                          onClick={() => setSelectedTime(timeLabel)}
+                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                            selectedTime === timeLabel
+                              ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm'
+                              : isDisabled
+                                ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                          }`}>
+                          {timeLabel}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    ['07:00','08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
+                      <button key={t} onClick={() => setSelectedTime(t)}
+                        className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                          selectedTime === t ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                        }`}>{t}</button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+
+          {/* STEP 5: Xác nhận */}
+          {(step === 5 && isLoggedIn) || (step === 4 && !isLoggedIn) ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
               <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-6">
                 <svg className="w-8 h-8 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                  <path d="M22 4L12 14.01l-3-3" />
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
                 </svg>
               </div>
               <h3 className="text-xl font-semibold text-slate-800 mb-2">Xác nhận đặt lịch</h3>
@@ -321,71 +561,172 @@ export default function BookingWidget({ onOpenAuth }) {
                   <span className="text-slate-500 text-sm">Chi nhánh</span>
                   <span className="text-slate-800 font-medium text-sm">{selectedBranch?.name}</span>
                 </div>
+                {isLoggedIn && vehicle && (
+                  <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
+                    <span className="text-slate-500 text-sm">Xe</span>
+                    <span className="text-slate-800 font-medium text-sm">{vehicle.licensePlate || vehicle.name}</span>
+                  </div>
+                )}
                 <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
                   <span className="text-slate-500 text-sm">Gói dịch vụ</span>
-                  <span className="text-slate-800 font-medium text-sm">{selectedPackage?.name}</span>
+                  <span className="text-slate-800 font-medium text-sm">{pkg?.name}</span>
                 </div>
                 <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
                   <span className="text-slate-500 text-sm">Thời gian</span>
                   <span className="text-slate-800 font-medium text-sm">
                     {tab === 'regular'
-                      ? `${new Date(selectedDate).toLocaleDateString('vi-VN')} ${selectedTime}`
-                      : `${new Date(startDate).toLocaleDateString('vi-VN')} ${selectedTime} (${selectedDays.join(', ')})`}
+                      ? `${currentDate?.label} ${selectedTime}`
+                      : `${startDate || '...'} ${selectedTime} (${selectedDays.map(d => weekDays[d]).join(', ')})`}
                   </span>
                 </div>
-                <div className="flex justify-between p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-emerald-700 font-semibold text-sm">Tổng cộng</span>
-                  <span className="text-emerald-700 font-bold">{formatCurrency(selectedPackage?.price)}</span>
+
+                {/* Voucher (only for logged-in) */}
+                {isLoggedIn && (
+                  <div className="pt-4 border-t border-slate-200 space-y-3">
+                    {validPacks.length > 0 && (
+                      <div className="p-4 rounded-xl bg-white border border-slate-200">
+                        <label className="text-xs text-slate-500 block mb-2">Thanh toán bằng Gói Lượt:</label>
+                        <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                          value={selectedSlotPack || ''}
+                          onChange={e => { setSelectedSlotPack(e.target.value || null); if (e.target.value) setAppliedVoucher(null); }}>
+                          <option value="">Không sử dụng gói lượt</option>
+                          {validPacks.map(p => (
+                            <option key={p._id || p.id} value={p._id || p.id}>Còn {p.remainingSlots} lần</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {!isPayingWithPack && (
+                      <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={setAppliedVoucher} orderAmount={totalBase} compact />
+                    )}
+                  </div>
+                )}
+
+                {/* Pricing */}
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-emerald-700 font-semibold text-sm">Tổng cộng</span>
+                    <span className="text-emerald-700 font-bold">{formatCurrency(total)}</span>
+                  </div>
+                  {isLoggedIn && discount > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600">Khuyến mãi</span>
+                      <span className="text-emerald-600">-{formatCurrency(discount)}</span>
+                    </div>
+                  )}
+                  {isLoggedIn && points > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600">Tích điểm</span>
+                      <span className="text-emerald-600">+{points} điểm</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <button
-                onClick={onOpenAuth}
-                className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm
-                  shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)]
-                  hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)]
-                  transition-all duration-300"
-              >
-                Đăng nhập để xác nhận
-              </button>
-              <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch</p>
-            </motion.div>
-          )}
+              {message && <div className="mt-4 text-emerald-600 font-medium text-sm">{message}</div>}
+              {error && <div className="mt-4 text-red-500 font-medium text-sm">{error}</div>}
+              {bookingCode && <div className="mt-2 text-emerald-700 font-bold text-sm">Mã đặt chỗ: {bookingCode}</div>}
 
+              <button onClick={confirmBooking} disabled={bookingLoading}
+                className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm
+                  shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)]
+                  transition-all duration-300 disabled:opacity-50">
+                {bookingLoading ? 'Đang tạo...' : isLoggedIn ? 'Xác nhận đặt chỗ' : 'Đăng nhập để xác nhận'}
+              </button>
+              {!isLoggedIn && <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch</p>}
+            </motion.div>
+          ) : null}
+
+          {/* Navigation */}
           <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-200">
             {step > 1 ? (
-              <button
-                onClick={() => setStep(step - 1)}
-                className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium
-                  hover:bg-slate-50 transition-colors"
-              >
+              <button onClick={() => setStep(step - 1)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
                 Quay lại
               </button>
             ) : <div />}
-            {step < 4 ? (
-              <button
-                onClick={() => setStep(step + 1)}
-                disabled={!canNextStep()}
+            {step < totalSteps ? (
+              <button onClick={() => setStep(step + 1)} disabled={!canNextStep()}
                 className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                  canNextStep()
-                    ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500'
-                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                }`}
-              >
+                  canNextStep() ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                }`}>
                 Tiếp theo
               </button>
             ) : (
-              <button
-                onClick={reset}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium
-                  hover:bg-slate-50 transition-colors"
-              >
+              <button onClick={reset}
+                className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
                 Đặt lại
               </button>
             )}
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showSuccessModal && lastBooking && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={() => { setShowSuccessModal(false); reset(); }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[1.5rem] w-full max-w-lg p-8 shadow-xl max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}>
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-7 h-7 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">Đặt lịch thành công!</h3>
+                <p className="text-sm text-slate-500 mt-1">Mã đặt chỗ: <span className="font-semibold text-emerald-600">{lastBooking.bookingCode}</span></p>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500">Chi nhánh</span>
+                  <span className="font-medium text-slate-800">{lastBooking.branch?.name}</span>
+                </div>
+                {lastBooking.vehicle && (
+                  <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-slate-500">Xe</span>
+                    <span className="font-medium text-slate-800">{lastBooking.vehicle.licensePlate || lastBooking.vehicle.name}</span>
+                  </div>
+                )}
+                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500">Gói dịch vụ</span>
+                  <span className="font-medium text-slate-800">{lastBooking.pkg?.name}</span>
+                </div>
+                {lastBooking.subServices?.length > 0 && (
+                  <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-slate-500">DV chọn thêm</span>
+                    <span className="font-medium text-slate-800">{lastBooking.subServices.join(', ')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500">Thời gian</span>
+                  <span className="font-medium text-slate-800">
+                    {lastBooking.currentDate?.label} {lastBooking.selectedTime}
+                  </span>
+                </div>
+                <div className="flex justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <span className="text-emerald-700 font-semibold">Tổng thanh toán</span>
+                  <span className="text-emerald-700 font-bold">{formatCurrency(lastBooking.total)}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                <button onClick={() => { setShowSuccessModal(false); reset(); }}
+                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                  Đóng
+                </button>
+                <button onClick={() => { setShowSuccessModal(false); reset(); onGoToHistory?.(); }}
+                  className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">
+                  Lịch sử đặt
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
