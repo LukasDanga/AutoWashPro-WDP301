@@ -150,7 +150,7 @@ exports.createBooking = async (data) => {
       computedFinalPrice = voucherResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
     }
 
-    let bookingType = 'standard';
+    let bookingType = 'single';
     let paymentStatus = 'unpaid';
 
     if (slotPackId) {

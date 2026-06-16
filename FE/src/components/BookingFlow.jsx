@@ -70,21 +70,15 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   useEffect(() => {
     async function fetchData() {
       try {
-        const [resBranches, resPackages, resPacks] = await Promise.all([
+        const [resBranches, resPacks] = await Promise.all([
           fetch(`${apiBase}/branches`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${apiBase}/packages`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${apiBase}/slot-packs/my`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
         const branchesPayload = await resBranches.json();
-        const packagesPayload = await resPackages.json();
         const dataB = branchesPayload?.data || branchesPayload;
         const mappedBranches = (Array.isArray(dataB) ? dataB : []).map(b => ({ ...b, id: b._id || b.id }));
         setBranches(mappedBranches);
         if (mappedBranches.length > 0) setSelectedBranch(mappedBranches[0].id);
-        const dataP = packagesPayload?.data || packagesPayload;
-        const mappedPackages = (Array.isArray(dataP) ? dataP : []).map(p => ({ ...p, id: p._id || p.id }));
-        setPackages(mappedPackages);
-        if (mappedPackages.length > 0) setSelectedPackage(mappedPackages[0].id);
         const packsPayload = await resPacks.json();
         const mappedPacks = Array.isArray(packsPayload?.data) ? packsPayload.data : [];
         setMySlotPacks(mappedPacks);
@@ -92,6 +86,25 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
     }
     if (token) fetchData();
   }, [apiBase, token]);
+
+  useEffect(() => {
+    if (!selectedBranch) return;
+    async function fetchPackagesByBranch() {
+      try {
+        const res = await fetch(`${apiBase}/packages?branchId=${selectedBranch}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const payload = await res.json();
+        const dataP = payload?.data || payload;
+        const mappedPackages = (Array.isArray(dataP) ? dataP : []).map(p => ({ ...p, id: p._id || p.id }));
+        setPackages(mappedPackages);
+        if (mappedPackages.length > 0 && !mappedPackages.find(p => p.id === selectedPackage)) {
+          setSelectedPackage(mappedPackages[0].id);
+        }
+      } catch (e) { console.error('Failed to load packages', e); }
+    }
+    fetchPackagesByBranch();
+  }, [selectedBranch, apiBase, token]);
 
   const refreshUser = async () => {
     try {
@@ -287,8 +300,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                   ) : branches.map((item) => (
                     <button key={item.id} type="button"
                       className={item.id === selectedBranch ? 'aw-option active' : 'aw-option'}
-                      onClick={() => setSelectedBranch(item.id)}
-                      style={item.id === selectedBranch ? { borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.04)' } : {}}>
+                      onClick={() => setSelectedBranch(item.id)}>
                       <div className="aw-option-head"><strong>{item.name}</strong></div>
                       <p>{item.address}</p>
                     </button>
@@ -305,8 +317,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                     return (
                     <button key={vehicleKey} type="button"
                       className={vehicleKey === selectedVehicle ? 'aw-option active' : 'aw-option'}
-                      onClick={() => setSelectedVehicle(vehicleKey)}
-                      style={vehicleKey === selectedVehicle ? { borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.04)' } : {}}>
+                      onClick={() => setSelectedVehicle(vehicleKey)}>
                       <div className="aw-option-head"><strong>{vehicleName}</strong></div>
                       <p>{item.plate || item.licensePlate}</p>
                       <small>{item.type || item.vehicleType || 'Xe máy'}</small>
@@ -324,8 +335,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                   {branchPackages.map(p => {
                     const isActive = p.id === selectedPackage;
                     return (
-                      <div key={p.id} className={isActive ? 'aw-option aw-service active' : 'aw-option aw-service'}
-                        style={isActive ? { borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.04)' } : {}}>
+                      <div key={p.id} className={isActive ? 'aw-option aw-service active' : 'aw-option aw-service'}>
                         <button type="button" style={{all: 'unset', width: '100%', cursor: 'pointer'}} onClick={() => setSelectedPackage(p.id)}>
                           <div className="aw-option-head service-head">
                             <div><strong>{p.name}</strong><small>{p.duration} phút</small></div>

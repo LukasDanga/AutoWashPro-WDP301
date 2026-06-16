@@ -21,12 +21,10 @@ exports.getAllBranches = async (filters = {}, user) => {
     ];
   }
 
-  if (user) {
-    if (user.role === 'manager') {
-      query.managerId = user.id;
-    } else if (user.role === 'customer') {
-      query.status = 'active';
-    }
+  if (!user || user.role === 'customer') {
+    query.status = 'active';
+  } else if (user.role === 'manager') {
+    query.managerId = user.id;
   }
 
   return Branch.find(query).sort({ createdAt: -1 });

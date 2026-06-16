@@ -129,7 +129,7 @@ const bookingValidators = {
   ],
   updateStatus: [
     param('id').isMongoId().withMessage('Invalid booking ID'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'in_progress', 'completed', 'cancelled']),
+    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'checked_in', 'in_progress', 'completed', 'cancelled']),
   ],
   slots: [
     query('branchId').isMongoId().withMessage('Invalid branch ID'),

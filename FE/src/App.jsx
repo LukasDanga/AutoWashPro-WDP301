@@ -194,5 +194,5 @@ export default function App() {
     return <LandingPage onOpenAuth={() => setShowAuth(true)} />;
   }
 
-  return <BookingFlow user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} />;
+  return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} />;
 }
