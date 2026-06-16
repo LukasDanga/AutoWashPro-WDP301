@@ -58,21 +58,32 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
   useEffect(() => {
     async function load() {
       try {
-        const [bRes, pRes] = await Promise.all([
-          fetch(`${apiBase}/branches`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${apiBase}/packages`, { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
+        const bRes = await fetch(`${apiBase}/branches`, { headers: { Authorization: `Bearer ${token}` } });
         const bData = await bRes.json();
-        const pData = await pRes.json();
         const bList = (bData?.data || bData || []).map(b => ({ ...b, id: b._id || b.id }));
-        const pList = (pData?.data || pData || []).filter(p => p.status === 'active').map(p => ({ ...p, id: p._id || p.id }));
         setBranches(Array.isArray(bList) ? bList : []);
-        setPackages(Array.isArray(pList) ? pList : []);
-        if (pList[0]) setSelectedPackage(pList[0].id);
       } catch (e) { console.error(e); }
     }
     if (token) load();
   }, [apiBase, token]);
+
+  useEffect(() => {
+    if (!selectedBranch) { setPackages([]); return; }
+    async function loadPackages() {
+      try {
+        const pRes = await fetch(`${apiBase}/packages?branchId=${selectedBranch}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const pData = await pRes.json();
+        const pList = (pData?.data || pData || []).filter(p => p.status === 'active').map(p => ({ ...p, id: p._id || p.id }));
+        setPackages(Array.isArray(pList) ? pList : []);
+        if (pList.length > 0 && !pList.find(p => p.id === selectedPackage)) {
+          setSelectedPackage(pList[0].id);
+        }
+      } catch (e) { console.error(e); }
+    }
+    loadPackages();
+  }, [selectedBranch, apiBase, token]);
 
   useEffect(() => {
     if (!selectedVehicle && userVehicles[0]) {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Navbar({ onOpenAuth }) {
+export default function Navbar({ onOpenAuth, user, onLogout }) {
   const [isOpen, setIsOpen] = useState(false);
   const [visible, setVisible] = useState(true);
   const [prevScroll, setPrevScroll] = useState(0);
@@ -54,12 +54,26 @@ export default function Navbar({ onOpenAuth }) {
 
           <div className="h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
 
-          <button
-            onClick={onOpenAuth}
-            className="relative rounded-full bg-neutral-900 px-4 py-2 text-xs md:text-sm font-medium text-white transition-all hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
-          >
-            Đăng nhập
-          </button>
+          {user ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs md:text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {user.name || user.email}
+              </span>
+              <button
+                onClick={onLogout}
+                className="relative rounded-full border border-neutral-300 px-3 py-1.5 text-xs md:text-sm font-medium text-neutral-600 transition-all hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+              >
+                Thoát
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenAuth}
+              className="relative rounded-full bg-neutral-900 px-4 py-2 text-xs md:text-sm font-medium text-white transition-all hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
+            >
+              Đăng nhập
+            </button>
+          )}
 
           <button
             onClick={() => setIsOpen(!isOpen)}

@@ -9,22 +9,22 @@ import MapSection from './MapSection';
 import CTASection from './CTASection';
 import Footer from './Footer';
 
-export default function LandingPage({ onOpenAuth }) {
+export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiBase, token }) {
   const scrollToBooking = () => {
     document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
     <div className="bg-white">
-      <Navbar onOpenAuth={onOpenAuth} />
-      <HeroSection onOpenAuth={onOpenAuth} />
-      <BookingWidget onOpenAuth={onOpenAuth} />
+      <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} />
+      <HeroSection onOpenAuth={onOpenAuth} user={user} />
+      <BookingWidget onOpenAuth={onOpenAuth} user={user} apiBase={apiBase} token={token} />
       <HowItWorksSection />
       <PackagesSection />
       <GiftStoreSection />
       <TestimonialsSection />
       <MapSection onSelectBranch={() => scrollToBooking()} />
-      <CTASection onOpenAuth={onOpenAuth} />
+      <CTASection onOpenAuth={onOpenAuth} user={user} />
       <Footer />
     </div>
   );

@@ -1,38 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-const services = [
-  { id: 'basic', name: 'Rửa cơ bản', price: 99000, duration: '30 phút', desc: 'Xịt áp lực cao, rửa xà phòng, lau khô' },
-  { id: 'premium', name: 'Rửa cao cấp', price: 249000, duration: '60 phút', desc: 'Rửa ngoại thất, hút bụi nội thất, đánh bóng nhanh' },
-  { id: 'interior', name: 'Vệ sinh nội thất', price: 399000, duration: '90 phút', desc: 'Giặt ghế, vệ sinh trần, bảng điều khiển, khử mùi' },
-  { id: 'ceramic', name: 'Phủ ceramic', price: 1490000, duration: '180 phút', desc: 'Phủ lớp bảo vệ sơn, giữ bóng 12 tháng' },
-];
-
-const branches = [
-  { id: 'hn1', name: 'Hà Nội - Cầu Giấy', address: '122 Cầu Giấy, Q. Cầu Giấy', distance: '1.2 km' },
-  { id: 'hn2', name: 'Hà Nội - Thanh Xuân', address: 'Nguyễn Trãi, Q. Thanh Xuân', distance: '3.5 km' },
-  { id: 'hcm1', name: 'TP.HCM - Q.1', address: 'Lê Lợi, P. Bến Nghé', distance: '0.8 km' },
-  { id: 'hcm2', name: 'TP.HCM - Thủ Đức', address: 'Võ Văn Ngân, P. Linh Chiểu', distance: '5.2 km' },
-  { id: 'dn1', name: 'Đà Nẵng - Hải Châu', address: 'Nguyễn Văn Linh, Q. Hải Châu', distance: '1.0 km' },
-];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const timeSlots = ['07:00', '08:00', '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
 const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 function formatPrice(v) {
+  if (!v) return '0đ';
   return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
+}
+
+function formatCurrency(v) {
+  return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
 
 export default function BookingWidget({ onOpenAuth }) {
   const [tab, setTab] = useState('regular');
   const [step, setStep] = useState(1);
-  const [selectedService, setSelectedService] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
+  const [selectedPackage, setSelectedPackage] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
   const [selectedDays, setSelectedDays] = useState([]);
   const [startDate, setStartDate] = useState(null);
+
+  useEffect(() => {
+    async function loadBranches() {
+      try {
+        const res = await fetch(`${API_BASE}/branches`);
+        const payload = await res.json();
+        const data = payload?.data || payload || [];
+        setBranches(Array.isArray(data) ? data : []);
+      } catch (e) { console.error('Failed to load branches', e); }
+    }
+    loadBranches();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedBranch) { setPackages([]); return; }
+    async function loadPackages() {
+      try {
+        const branchId = selectedBranch._id || selectedBranch.id;
+        const res = await fetch(`${API_BASE}/packages?branchId=${branchId}`);
+        const payload = await res.json();
+        const data = payload?.data || payload || [];
+        const activePkgs = (Array.isArray(data) ? data : []).filter(p => p.status === 'active');
+        setPackages(activePkgs);
+        if (activePkgs.length > 0 && !activePkgs.find(p => (p._id || p.id) === (selectedPackage?._id || selectedPackage?.id))) {
+          setSelectedPackage(activePkgs[0]);
+        }
+      } catch (e) { console.error('Failed to load packages', e); }
+    }
+    loadPackages();
+  }, [selectedBranch]);
 
   const today = new Date();
   const dates = Array.from({ length: 14 }, (_, i) => {
@@ -49,8 +73,8 @@ export default function BookingWidget({ onOpenAuth }) {
 
   const reset = () => {
     setStep(1);
-    setSelectedService(null);
     setSelectedBranch(null);
+    setSelectedPackage(null);
     setSelectedDate(null);
     setSelectedTime(null);
     setSelectedDays([]);
@@ -58,8 +82,8 @@ export default function BookingWidget({ onOpenAuth }) {
   };
 
   const canNextStep = () => {
-    if (step === 1) return selectedService;
-    if (step === 2) return selectedBranch;
+    if (step === 1) return selectedBranch;
+    if (step === 2) return selectedPackage;
     if (step === 3) {
       if (tab === 'regular') return selectedDate && selectedTime;
       return startDate && selectedDays.length > 0 && selectedTime;
@@ -98,7 +122,7 @@ export default function BookingWidget({ onOpenAuth }) {
           <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-slate-900 mb-4">
             Trải nghiệm đặt lịch
           </h2>
-          <p className="text-slate-500 max-w-lg mx-auto">Chọn dịch vụ, chọn chi nhánh, chọn thời gian - và chúng tôi lo phần còn lại.</p>
+          <p className="text-slate-500 max-w-lg mx-auto">Chọn chi nhánh, chọn gói dịch vụ, chọn thời gian - và chúng tôi lo phần còn lại.</p>
         </div>
 
         <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-6 md:p-10">
@@ -123,63 +147,80 @@ export default function BookingWidget({ onOpenAuth }) {
 
           {renderStepIndicator()}
 
+          {/* STEP 1: Chọn chi nhánh */}
           {step === 1 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn dịch vụ</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {services.map((svc) => (
-                  <button
-                    key={svc.id}
-                    onClick={() => setSelectedService(svc)}
-                    className={`text-left p-5 rounded-xl border transition-all ${
-                      selectedService?.id === svc.id
-                        ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="font-semibold text-slate-800">{svc.name}</span>
-                      <span className="text-emerald-600 font-bold">{formatPrice(svc.price)}</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mb-2">{svc.desc}</p>
-                    <span className="text-xs text-slate-400">{svc.duration}</span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {step === 2 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn chi nhánh</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {branches.map((b) => (
-                  <button
-                    key={b.id}
-                    onClick={() => setSelectedBranch(b)}
-                    className={`text-left p-5 rounded-xl border transition-all ${
-                      selectedBranch?.id === b.id
-                        ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="10" r="3" />
-                        <path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
-                      </svg>
-                      <div>
-                        <div className="font-semibold text-slate-800 text-sm">{b.name}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{b.address}</div>
-                        <div className="text-xs text-emerald-600 mt-1">{b.distance}</div>
+                {branches.length === 0 ? (
+                  <div className="col-span-2 text-center text-slate-400 py-8">Đang tải danh sách chi nhánh...</div>
+                ) : branches.map((b) => {
+                  const branchId = b._id || b.id;
+                  return (
+                    <button
+                      key={branchId}
+                      onClick={() => setSelectedBranch(b)}
+                      className={`text-left p-5 rounded-xl border transition-all ${
+                        selectedBranch?._id === b._id || selectedBranch?.id === b.id
+                          ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="10" r="3" />
+                          <path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
+                        </svg>
+                        <div>
+                          <div className="font-semibold text-slate-800 text-sm">{b.name}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{b.address}</div>
+                          {b.openingTime && (
+                            <div className="text-xs text-slate-400 mt-1">⏰ {b.openingTime} – {b.closingTime}</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </motion.div>
           )}
 
+          {/* STEP 2: Chọn gói dịch vụ (theo chi nhánh) */}
+          {step === 2 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h3 className="text-lg font-semibold text-slate-800 mb-6">
+                Chọn gói dịch vụ tại {selectedBranch?.name || 'chi nhánh'}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {packages.length === 0 ? (
+                  <div className="col-span-2 text-center text-slate-400 py-8">Chi nhánh này chưa có gói dịch vụ nào.</div>
+                ) : packages.map((p) => {
+                  const pkgId = p._id || p.id;
+                  return (
+                    <button
+                      key={pkgId}
+                      onClick={() => setSelectedPackage(p)}
+                      className={`text-left p-5 rounded-xl border transition-all ${
+                        (selectedPackage?._id === p._id || selectedPackage?.id === p.id)
+                          ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="font-semibold text-slate-800">{p.name}</span>
+                        <span className="text-emerald-600 font-bold">{formatCurrency(p.price)}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mb-2">{p.description}</p>
+                      <span className="text-xs text-slate-400">{p.duration} phút</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* STEP 3: Chọn thời gian */}
           {step === 3 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn thời gian</h3>
@@ -264,6 +305,7 @@ export default function BookingWidget({ onOpenAuth }) {
             </motion.div>
           )}
 
+          {/* STEP 4: Xác nhận */}
           {step === 4 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
               <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-6">
@@ -276,12 +318,12 @@ export default function BookingWidget({ onOpenAuth }) {
 
               <div className="max-w-sm mx-auto mt-8 space-y-3 text-left">
                 <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
-                  <span className="text-slate-500 text-sm">Dịch vụ</span>
-                  <span className="text-slate-800 font-medium text-sm">{selectedService?.name}</span>
-                </div>
-                <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
                   <span className="text-slate-500 text-sm">Chi nhánh</span>
                   <span className="text-slate-800 font-medium text-sm">{selectedBranch?.name}</span>
+                </div>
+                <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
+                  <span className="text-slate-500 text-sm">Gói dịch vụ</span>
+                  <span className="text-slate-800 font-medium text-sm">{selectedPackage?.name}</span>
                 </div>
                 <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
                   <span className="text-slate-500 text-sm">Thời gian</span>
@@ -293,7 +335,7 @@ export default function BookingWidget({ onOpenAuth }) {
                 </div>
                 <div className="flex justify-between p-4 rounded-xl bg-emerald-50 border border-emerald-200">
                   <span className="text-emerald-700 font-semibold text-sm">Tổng cộng</span>
-                  <span className="text-emerald-700 font-bold">{formatPrice(selectedService?.price)}</span>
+                  <span className="text-emerald-700 font-bold">{formatCurrency(selectedPackage?.price)}</span>
                 </div>
               </div>
 

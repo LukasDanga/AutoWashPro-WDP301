@@ -531,9 +531,11 @@ body {
 }
 
 .aw-option.active {
-	background: linear-gradient(180deg, #ecfdf5, #faf5ff);
+	background: #f0fdf4;
 	border-color: var(--accent);
-	box-shadow: 0 4px 16px rgba(16, 185, 129, 0.1);
+	border-left: 4px solid var(--accent);
+	box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+	transform: scale(1.02);
 }
 
 .aw-option-head {
@@ -1515,8 +1517,10 @@ body {
 
 .loc-branch-card.active {
 	border-color: var(--accent);
-	background: #ecfdf5;
+	border-left: 4px solid var(--accent);
+	background: #f0fdf4;
 	box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1), 0 4px 16px rgba(16, 185, 129, 0.12);
+	transform: scale(1.02);
 }
 
 .loc-branch-icon {
