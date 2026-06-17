@@ -20,3 +20,38 @@ body {
 .aw-toast { background: rgba(16,185,129,0.06) !important; border-color: rgba(16,185,129,0.18) !important; color: var(--text) !important; }
 .aw-badge, .aw-auth-title-row span { background: rgba(16,185,129,0.14) !important; border-color: rgba(16,129,89,0.22) !important; color: var(--accent-3) !important; }
 .aw-avatar { background: linear-gradient(180deg, rgba(167,243,208,0.96), rgba(16,185,129,0.92)) !important; }
+
+/* ─── Profile Toast ───────────────────────────────────────── */
+.awp-toast-container {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.awp-toast-message {
+  pointer-events: auto;
+  padding: 14px 28px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  animation: awpToastIn 0.3s ease-out;
+}
+.awp-toast-success {
+  background: #f0fdf4 !important;
+  border: 1px solid #bbf7d0 !important;
+  color: #16a34a !important;
+}
+.awp-toast-error {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #dc2626 !important;
+}
+@keyframes awpToastIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

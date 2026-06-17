@@ -242,12 +242,34 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     const { gte, lte } = getDayBounds(dateStr);
     query.bookingDate = { $gte: gte, $lte: lte };
   }
-  return Booking.find(query)
-    .populate('userId', 'name email phone tier')
-    .populate('branchId', 'name address')
-    .populate('packageId', 'name price duration')
-    .populate('vehicleId', 'licensePlate vehicleType brand color')
-    .sort({ bookingDate: -1, startTime: -1 });
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Booking.find(query)
+      .populate('userId', 'name email phone tier')
+      .populate('branchId', 'name address')
+      .populate('packageId', 'name price duration')
+      .populate('vehicleId', 'licensePlate vehicleType brand color')
+      .sort({ bookingDate: -1, startTime: -1 })
+      .skip(skip)
+      .limit(limit),
+    Booking.countDocuments(query),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
 };
 
 exports.getBookingById = async (id, userRole, userId) => {
