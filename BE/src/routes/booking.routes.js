@@ -152,6 +152,26 @@ router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER),
  */
 router.post('/:id/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.cancel, validate, bookingController.cancelBooking);
 
+// PATCH /api/bookings/:id/feedback — Customer submits rating + review
+router.patch('/:id/feedback', authenticate, authorize(ROLES.CUSTOMER), [
+  param('id').isMongoId(),
+  body('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Rating must be 1-5'),
+  body('feedback').optional().trim().isLength({ max: 1000 }),
+], validate, bookingController.submitFeedback);
+
+// PATCH /api/bookings/:id/feedback/reply — Manager replies to review
+router.patch('/:id/feedback/reply', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId(),
+  body('reply').trim().notEmpty().isLength({ max: 1000 }).withMessage('Reply is required (max 1000 chars)'),
+], validate, bookingController.replyToFeedback);
+
+// POST /api/bookings/:id/rebook — Clone booking with new date/time
+router.post('/:id/rebook', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+  param('id').isMongoId(),
+  body('bookingDate').notEmpty().withMessage('bookingDate is required'),
+  body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
+], validate, bookingController.rebookBooking);
+
 /**
  * @swagger
  * /api/bookings/{id}:

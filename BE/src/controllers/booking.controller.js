@@ -111,3 +111,20 @@ exports.getCustomers = catchAsync(async (req, res) => {
   const customers = await bookingService.getCustomers(req.user, req.query);
   success(res, customers, 'Customers retrieved');
 });
+
+exports.submitFeedback = catchAsync(async (req, res) => {
+  const { rating, feedback } = req.body;
+  const booking = await bookingService.submitFeedback(req.params.id, req.userId, { rating, feedback });
+  success(res, booking, 'Feedback submitted');
+});
+
+exports.replyToFeedback = catchAsync(async (req, res) => {
+  const booking = await bookingService.replyToFeedback(req.params.id, req.userId, req.body.reply);
+  success(res, booking, 'Reply submitted');
+});
+
+exports.rebookBooking = catchAsync(async (req, res) => {
+  const { bookingDate, startTime } = req.body;
+  const booking = await bookingService.rebookBooking(req.params.id, req.userId, req.user.role, { bookingDate, startTime });
+  success(res, booking, 'Booking rebooked', 201);
+});

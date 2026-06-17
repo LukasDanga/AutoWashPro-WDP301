@@ -13,6 +13,8 @@ import {
   CircleDashed,
   PlayCircle,
   Eye,
+  CalendarPlus,
+  Star,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -131,9 +133,88 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
   );
 }
 
+/* ── rebook modal ── */
+function RebookModal({ booking, onClose, onRebooked, notify }) {
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })();
+  const [date, setDate] = useState(tomorrow);
+  const [time, setTime] = useState(booking.startTime || '09:00');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit() {
+    if (!date || !time) return;
+    setBusy(true); setErr('');
+    try {
+      const res = await api(`/bookings/${booking._id}/rebook`, {
+        method: 'POST',
+        body: JSON.stringify({ bookingDate: date, startTime: time }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Đặt lại thất bại');
+      onRebooked(data.data || data);
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+            <CalendarPlus size={18} className="text-blue-500" />
+            Đặt lại lịch
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-sm space-y-1">
+            <p className="font-medium text-slate-700">{booking.packageId?.name || 'Dịch vụ'}</p>
+            <p className="text-xs text-slate-500">{booking.userId?.name} · {booking.vehicleId?.licensePlate}</p>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Ngày đặt mới</label>
+              <input type="date" value={date} min={tomorrow}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Giờ bắt đầu</label>
+              <input type="time" value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            </div>
+          </div>
+
+          {err && <p className="text-sm text-red-500">{err}</p>}
+        </div>
+
+        <div className="border-t border-slate-100 px-6 py-4 flex gap-3 justify-end">
+          <button onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            Hủy
+          </button>
+          <button onClick={submit} disabled={busy || !date || !time}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+            {busy ? '...' : <><CalendarPlus size={14} /> Đặt lại</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── booking details tab ── */
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
+  const [showRebook, setShowRebook] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
@@ -268,7 +349,53 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <p className="text-sm text-slate-600 italic">{booking.note || 'Không có ghi chú'}</p>
           </div>
         </div>
+
+        {/* Rating + Review (completed) */}
+        {booking.status === 'completed' && (booking.rating || booking.feedback) && (
+          <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-4 space-y-2">
+            <h3 className="text-[10px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1">
+              <Star size={11} weight="fill" /> Đánh giá từ khách hàng
+            </h3>
+            {booking.rating && (
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(s => (
+                  <Star key={s} size={16} weight={s <= booking.rating ? 'fill' : 'regular'}
+                    className={s <= booking.rating ? 'text-amber-400' : 'text-slate-200'} />
+                ))}
+              </div>
+            )}
+            {booking.feedback && (
+              <p className="text-sm text-amber-800 italic">"{booking.feedback}"</p>
+            )}
+            {booking.managerReply && (
+              <div className="mt-2 border-t border-amber-200 pt-2">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">Phản hồi chi nhánh</p>
+                <p className="text-xs text-emerald-800">{booking.managerReply}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        {(booking.status === 'completed' || booking.status === 'cancelled') && (
+          <div className="mt-4 flex justify-end">
+            <button onClick={() => setShowRebook(true)}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
+              <CalendarPlus size={15} />
+              Đặt lại lịch
+            </button>
+          </div>
+        )}
       </div>
+
+      {showRebook && (
+        <RebookModal
+          booking={booking}
+          onClose={() => setShowRebook(false)}
+          onRebooked={(newB) => { notify('Đã đặt lại lịch thành công!'); onBack(); }}
+          notify={notify}
+        />
+      )}
     </div>
   );
 }

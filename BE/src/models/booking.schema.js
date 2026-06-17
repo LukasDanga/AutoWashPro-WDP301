@@ -54,6 +54,11 @@ const bookingSchema = new mongoose.Schema(
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     rating: { type: Number, min: 1, max: 5 },
     feedback: { type: String, trim: true, maxlength: 1000 },
+    feedbackAt: { type: Date },
+    managerReply: { type: String, trim: true, maxlength: 1000 },
+    managerReplyAt: { type: Date },
+    // For rebook tracking
+    rebookedFromId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
   },
   { timestamps: true }
 );
