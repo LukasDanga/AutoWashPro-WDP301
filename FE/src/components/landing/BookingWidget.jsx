@@ -5,6 +5,7 @@ import VoucherPicker from '../VoucherPicker.jsx';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
+const TIME_SLOTS = ['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'];
 const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 function formatCurrency(v) {
@@ -48,7 +49,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [selectedDate, setSelectedDate] = useState(bookingDates[1]?.id || bookingDates[0]?.id);
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedDays, setSelectedDays] = useState([]);
-  const [startDate, setStartDate] = useState(null);
   const [weeks, setWeeks] = useState(4);
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
@@ -60,6 +60,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [error, setError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastBooking, setLastBooking] = useState(null);
+  const [result, setResult] = useState(null);
 
   // Load branches (public)
   useEffect(() => {
@@ -214,13 +215,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
     setSelectedTime('');
     setSelectedDays([]);
-    setStartDate(null);
     setWeeks(4);
     setAppliedVoucher(null);
     setSelectedSlotPack(null);
     setMessage('');
     setError('');
     setBookingCode('');
+    setResult(null);
   };
 
   // Determine total steps based on login state
@@ -232,11 +233,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     if (step === 3) {
       if (isLoggedIn) return selectedVehicle;
       if (tab === 'regular') return selectedDate && selectedTime;
-      return startDate && selectedDays.length > 0 && selectedTime;
+      return selectedDays.length > 0 && selectedTime;
     }
     if (step === 4) {
       if (tab === 'regular') return selectedDate && selectedTime;
-      return startDate && selectedDays.length > 0 && selectedTime;
+      return selectedDays.length > 0 && selectedTime;
     }
     return true;
   };
@@ -289,6 +290,63 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       setShowSuccessModal(true);
     } catch (err) {
       setError(err.message || 'Không thể tạo lịch hẹn');
+    } finally {
+      setBookingLoading(false);
+    }
+  }
+
+  async function confirmRecurringBooking() {
+    if (!isLoggedIn) { onOpenAuth(); return; }
+    if (!selectedBranch || !selectedPackage || selectedDays.length === 0 || !selectedTime) {
+      setError('Vui lòng điền đầy đủ thông tin.');
+      return;
+    }
+    if (isLoggedIn && !selectedVehicle) { setError('Vui lòng chọn xe.'); return; }
+    setBookingLoading(true); setError(''); setResult(null); setShowSuccessModal(false);
+
+    try {
+      const branchId = selectedBranch._id || selectedBranch.id;
+      const pkgId = pkg._id || pkg.id;
+      const body = {
+        branchId,
+        packageId: pkgId,
+        vehicleId: vehicle?._id || vehicle?.id || '',
+        weekdays: selectedDays,
+        startTime: selectedTime,
+        weeks,
+        voucherCode: appliedVoucher?.code || undefined,
+        selectedSubServices: currentSubServices,
+        note: '',
+      };
+      const res = await fetch(`${apiBase}/bookings/recurring`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi tạo lịch định kỳ');
+      const resultData = data.data || data;
+      setResult(resultData);
+      if (resultData.totalCreated > 0) {
+        setLastBooking({
+          branch: selectedBranch,
+          vehicle,
+          pkg,
+          currentDate: null,
+          selectedTime,
+          total: (totalBase - discount) * resultData.totalCreated,
+          discount: discount * resultData.totalCreated,
+          points: points * resultData.totalCreated,
+          isPayingWithPack: false,
+          bookingCode: resultData.recurringGroupId || '',
+          subServices: currentSubServices,
+          recurringCount: resultData.totalCreated,
+        });
+        setBookingCode(resultData.recurringGroupId || '');
+        setShowSuccessModal(true);
+      }
+    } catch (err) {
+      setError(err.message);
     } finally {
       setBookingLoading(false);
     }
@@ -462,9 +520,27 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           {/* STEP 4: Thời gian */}
           {step === 4 ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn thời gian</h3>
+              <h3 className="text-lg font-semibold text-slate-800 mb-6">
+                {tab === 'regular' ? 'Chọn thời gian' : 'Lịch định kỳ'}
+              </h3>
 
-              {tab === 'recurring' && (
+              {tab === 'regular' ? (
+                <div className="mb-8">
+                  <label className="text-sm text-slate-500 block mb-3">Chọn ngày</label>
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {bookingDates.map((d) => (
+                      <button key={d.id} onClick={() => setSelectedDate(d.id)}
+                        className={`min-w-[60px] p-3 rounded-xl border text-center transition-all ${
+                          selectedDate === d.id ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}>
+                        <div className="text-xs text-slate-400 font-medium">{d.label}</div>
+                        <div className="text-base font-bold text-slate-800 mt-1">{d.day}</div>
+                        <div className="text-xs text-slate-400">Thg {d.month}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
                 <div className="mb-8">
                   <label className="text-sm text-slate-500 block mb-3">Các ngày trong tuần</label>
                   <div className="flex gap-2">
@@ -479,25 +555,50 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               )}
 
               <div className="mb-8">
-                <label className="text-sm text-slate-500 block mb-3">
-                  {tab === 'regular' ? 'Chọn ngày' : 'Chọn ngày bắt đầu'}
-                </label>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {bookingDates.map((d) => (
-                    <button key={d.id} onClick={() => setSelectedDate(d.id)}
-                      className={`min-w-[60px] p-3 rounded-xl border text-center transition-all ${
-                        selectedDate === d.id ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}>
-                      <div className="text-xs text-slate-400 font-medium">{d.label}</div>
-                      <div className="text-base font-bold text-slate-800 mt-1">{d.day}</div>
-                      <div className="text-xs text-slate-400">Thg {d.month}</div>
-                    </button>
-                  ))}
+                <label className="text-sm text-slate-500 block mb-3">Chọn khung giờ{tab === 'recurring' ? ' cố định' : ''}</label>
+                <div className="flex flex-wrap gap-2">
+                  {tab === 'regular' ? (
+                    slotsLoading ? (
+                      <div className="text-slate-400 text-sm py-2">Đang tải lịch trống...</div>
+                    ) : availableSlots.length > 0 ? (
+                      availableSlots.map(s => {
+                        const timeLabel = s.startTime;
+                        const isDisabled = !s.available;
+                        return (
+                          <button key={timeLabel} disabled={isDisabled}
+                            onClick={() => setSelectedTime(timeLabel)}
+                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                              selectedTime === timeLabel
+                                ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm'
+                                : isDisabled
+                                  ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                            }`}>
+                            {timeLabel}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      ['07:00','08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
+                        <button key={t} onClick={() => setSelectedTime(t)}
+                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                            selectedTime === t ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                          }`}>{t}</button>
+                      ))
+                    )
+                  ) : (
+                    TIME_SLOTS.map(t => (
+                      <button key={t} onClick={() => setSelectedTime(t)}
+                        className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                          selectedTime === t ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                        }`}>{t}</button>
+                    ))
+                  )}
                 </div>
               </div>
 
               {tab === 'recurring' && (
-                <div className="mb-8">
+                <div>
                   <label className="text-sm text-slate-500 block mb-3">Số tuần lặp lại</label>
                   <div className="flex gap-2">
                     {WEEKS_OPTIONS.map(w => (
@@ -507,42 +608,21 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         }`}>{w} tuần</button>
                     ))}
                   </div>
-                </div>
-              )}
-
-              <div>
-                <label className="text-sm text-slate-500 block mb-3">Chọn khung giờ</label>
-                <div className="flex flex-wrap gap-2">
-                  {slotsLoading ? (
-                    <div className="text-slate-400 text-sm py-2">Đang tải lịch trống...</div>
-                  ) : availableSlots.length > 0 ? (
-                    availableSlots.map(s => {
-                      const timeLabel = s.startTime;
-                      const isDisabled = !s.available;
-                      return (
-                        <button key={timeLabel} disabled={isDisabled}
-                          onClick={() => setSelectedTime(timeLabel)}
-                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-                            selectedTime === timeLabel
-                              ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm'
-                              : isDisabled
-                                ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
-                                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                          }`}>
-                          {timeLabel}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    ['07:00','08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
-                      <button key={t} onClick={() => setSelectedTime(t)}
-                        className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-                          selectedTime === t ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                        }`}>{t}</button>
-                    ))
+                  {previewDates.length > 0 && (
+                    <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                      <p className="text-xs text-slate-500 mb-2">📋 Dự kiến: <strong className="text-slate-700">{previewDates.length} buổi</strong></p>
+                      <div className="flex flex-wrap gap-1">
+                        {previewDates.slice(0, 10).map((d, i) => (
+                          <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                            {d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })}
+                          </span>
+                        ))}
+                        {previewDates.length > 10 && <span className="text-[10px] text-slate-400">+{previewDates.length - 10}</span>}
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
             </motion.div>
           ) : null}
 
@@ -576,14 +656,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   <span className="text-slate-800 font-medium text-sm">
                     {tab === 'regular'
                       ? `${currentDate?.label} ${selectedTime}`
-                      : `${startDate || '...'} ${selectedTime} (${selectedDays.map(d => weekDays[d]).join(', ')})`}
+                      : `${selectedTime} (${selectedDays.map(d => weekDays[d]).join(', ')}) · ${weeks} tuần · ${previewDates.length} buổi`
+                    }
                   </span>
                 </div>
 
                 {/* Voucher (only for logged-in) */}
                 {isLoggedIn && (
                   <div className="pt-4 border-t border-slate-200 space-y-3">
-                    {validPacks.length > 0 && (
+                    {tab === 'regular' && validPacks.length > 0 && (
                       <div className="p-4 rounded-xl bg-white border border-slate-200">
                         <label className="text-xs text-slate-500 block mb-2">Thanh toán bằng Gói Lượt:</label>
                         <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -620,19 +701,46 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <span className="text-emerald-600">+{points} điểm</span>
                     </div>
                   )}
+                  {tab === 'recurring' && pkg && previewDates.length > 0 && (
+                    <>
+                      <div className="border-t border-emerald-200 pt-2 mt-2" />
+                      <div className="flex justify-between text-xs">
+                        <span className="text-emerald-600">Tổng dự kiến ({previewDates.length} buổi)</span>
+                        <span className="text-emerald-600 font-bold">{formatCurrency((totalBase - discount) * previewDates.length)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {message && <div className="mt-4 text-emerald-600 font-medium text-sm">{message}</div>}
-              {error && <div className="mt-4 text-red-500 font-medium text-sm">{error}</div>}
-              {bookingCode && <div className="mt-2 text-emerald-700 font-bold text-sm">Mã đặt chỗ: {bookingCode}</div>}
+              {result && tab === 'recurring' && (
+                <div className="mt-4 space-y-1">
+                  {result.totalCreated > 0 && (
+                    <div className="text-sm text-emerald-600 font-semibold">✓ Đã tạo {result.totalCreated} lịch hẹn!</div>
+                  )}
+                  {result.totalFailed > 0 && (
+                    <div className="text-sm text-amber-500 font-medium">⚠ {result.totalFailed} ngày bị bỏ qua.</div>
+                  )}
+                </div>
+              )}
 
-              <button onClick={confirmBooking} disabled={bookingLoading}
-                className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm
-                  shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)]
-                  transition-all duration-300 disabled:opacity-50">
-                {bookingLoading ? 'Đang tạo...' : isLoggedIn ? 'Xác nhận đặt chỗ' : 'Đăng nhập để xác nhận'}
-              </button>
+              {error && <div className="mt-4 text-red-500 font-medium text-sm">{error}</div>}
+
+              {tab === 'regular' ? (
+                <button onClick={confirmBooking} disabled={bookingLoading}
+                  className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm
+                    shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)]
+                    transition-all duration-300 disabled:opacity-50">
+                  {bookingLoading ? 'Đang tạo...' : isLoggedIn ? 'Xác nhận đặt chỗ' : 'Đăng nhập để xác nhận'}
+                </button>
+              ) : (
+                <button onClick={confirmRecurringBooking} disabled={bookingLoading || previewDates.length === 0}
+                  className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm
+                    shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)]
+                    transition-all duration-300 disabled:opacity-50">
+                  {bookingLoading ? 'Đang tạo lịch...' : `Xác nhận ${previewDates.length} buổi`}
+                </button>
+              )}
               {!isLoggedIn && <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch</p>}
             </motion.div>
           ) : null}
@@ -704,7 +812,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="text-slate-500">Thời gian</span>
                   <span className="font-medium text-slate-800">
-                    {lastBooking.currentDate?.label} {lastBooking.selectedTime}
+                    {lastBooking.currentDate
+                      ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
+                      : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
                   </span>
                 </div>
                 <div className="flex justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
