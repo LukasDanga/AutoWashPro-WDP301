@@ -8,6 +8,8 @@ import {
   CurrencyCircleDollar,
   Star,
   Users,
+  Package,
+  Ticket,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -55,6 +57,18 @@ export const MANAGER_MENU_ITEMS = [
     icon: Users,
   },
   {
+    id: 'packages',
+    label: 'Gói dịch vụ',
+    to: '/manager/packages',
+    icon: Package,
+  },
+  {
+    id: 'slot-packs',
+    label: 'Gói lượt',
+    to: '/manager/slot-packs',
+    icon: Ticket,
+  },
+  {
     id: 'feedbacks',
     label: 'Đánh giá',
     to: '/manager/feedbacks',
@@ -97,6 +111,14 @@ export const MANAGER_PAGE_META = {
   revenue: {
     title: 'Báo cáo doanh thu',
     description: 'Thống kê doanh thu theo thời gian, dịch vụ và khách hàng.',
+  },
+  packages: {
+    title: 'Gói dịch vụ',
+    description: 'Tạo và quản lý gói dịch vụ rửa xe tại chi nhánh.',
+  },
+  'slot-packs': {
+    title: 'Gói lượt',
+    description: 'Quản lý gói lượt rửa xe đã mua và tra cứu theo mã.',
   },
   profile: {
     title: 'Hồ sơ cá nhân',
