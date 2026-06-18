@@ -16,10 +16,11 @@ import {
   CalendarPlus,
   Star,
   QrCode,
+  Lightning,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import ManagerQRScanner from '@/components/manager/ManagerQRScanner';
+import ManagerQuickCheckin from '@/components/manager/ManagerQuickCheckin';
 
 /* ── helpers ── */
 function api(path, opts = {}) {
@@ -213,10 +214,63 @@ function RebookModal({ booking, onClose, onRebooked, notify }) {
   );
 }
 
+/* ── QR display modal ── */
+function QRDisplayModal({ booking, onClose }) {
+  const [qrUrl, setQrUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api(`/bookings/${booking._id}/qr`)
+      .then((r) => r.json())
+      .then((d) => { setQrUrl(d?.data?.qrDataUrl || null); })
+      .catch(() => setErr('Không thể tạo QR'))
+      .finally(() => setLoading(false));
+  }, [booking._id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <QrCode size={18} weight="fill" className="text-blue-600" />
+            <h2 className="font-semibold text-slate-800">QR Check-in</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+        </div>
+        <div className="p-6 flex flex-col items-center gap-4">
+          <p className="text-sm text-slate-500 text-center">
+            Cho khách hàng dùng điện thoại quét mã này để xác nhận lịch hẹn.
+          </p>
+          {loading && <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />}
+          {err && <p className="text-sm text-red-500">{err}</p>}
+          {qrUrl && (
+            <div className="rounded-2xl border-4 border-slate-100 bg-white p-3 shadow-inner">
+              <img src={qrUrl} alt="QR check-in" className="w-64 h-64 object-contain" />
+            </div>
+          )}
+          <div className="text-center space-y-0.5">
+            <p className="text-xs font-semibold text-slate-700">{booking.userId?.name || '—'}</p>
+            <p className="text-xs text-slate-500">
+              {booking.packageId?.name} · {booking.startTime}–{booking.endTime}
+            </p>
+            <p className="font-mono text-[10px] text-slate-400 mt-1">#{String(booking._id).slice(-8).toUpperCase()}</p>
+          </div>
+          <button onClick={onClose}
+            className="w-full rounded-xl bg-slate-800 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── booking details tab ── */
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
   const [showRebook, setShowRebook] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
@@ -379,15 +433,23 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         )}
 
         {/* Action buttons */}
-        {(booking.status === 'completed' || booking.status === 'cancelled') && (
-          <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-wrap items-center gap-2 justify-end">
+          {/* Hiển thị QR cho khách scan — chỉ khi chưa completed/cancelled */}
+          {!['completed', 'cancelled'].includes(booking.status) && (
+            <button onClick={() => setShowQR(true)}
+              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+              <QrCode size={15} />
+              Hiển thị QR cho khách
+            </button>
+          )}
+          {(booking.status === 'completed' || booking.status === 'cancelled') && (
             <button onClick={() => setShowRebook(true)}
               className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
               <CalendarPlus size={15} />
               Đặt lại lịch
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {showRebook && (
@@ -398,6 +460,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           notify={notify}
         />
       )}
+      {showQR && <QRDisplayModal booking={booking} onClose={() => setShowQR(false)} />}
     </div>
   );
 }
@@ -418,7 +481,7 @@ export default function ManagerBookings() {
   const [todayOnly, setTodayOnly] = useState(false);
   const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
-  const [showQR, setShowQR] = useState(false);
+  const [showCheckin, setShowCheckin] = useState(false);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
@@ -512,9 +575,9 @@ export default function ManagerBookings() {
           className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
-        <button onClick={() => setShowQR(true)}
+        <button onClick={() => setShowCheckin(true)}
           className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
-          <QrCode size={14} /> Scan QR
+          <Lightning size={14} /> Check-in nhanh
         </button>
       </div>
       {todayOnly && (
@@ -603,11 +666,10 @@ export default function ManagerBookings() {
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
 
-      {showQR && (
-        <ManagerQRScanner
-          onClose={() => setShowQR(false)}
+      {showCheckin && (
+        <ManagerQuickCheckin
+          onClose={() => setShowCheckin(false)}
           onCheckedIn={(b) => {
-            setShowQR(false);
             setToast({ type: 'success', message: `Check-in thành công: ${b?.userId?.name || 'khách hàng'}` });
             fetch_(search, statusFilter, typeFilter, todayOnly);
           }}
