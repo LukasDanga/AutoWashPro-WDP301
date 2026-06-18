@@ -118,47 +118,59 @@ const STAR_FILTERS = [
   { value: '1', label: '1-2 sao' },
 ];
 
+const PAGE_SIZE = 18;
+
 export default function ManagerFeedbacks() {
   const [feedbacks, setFeedbacks] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState({ total: 0, avgRating: '—', repliedCount: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [starFilter, setStarFilter] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (rating = starFilter, pg = 1) => {
     setLoading(true); setError('');
     try {
-      const res = await api('/bookings/feedbacks');
+      const params = new URLSearchParams({ page: pg, limit: PAGE_SIZE });
+      if (rating) params.set('rating', rating);
+      const res = await api(`/bookings/feedbacks?${params}`);
       if (!res.ok) throw new Error('Không thể tải đánh giá');
-      const data = await res.json();
-      setFeedbacks(data?.data || []);
+      const p = await res.json();
+      const data = p?.data ?? p;
+      const list = data?.feedbacks ?? (Array.isArray(data) ? data : []);
+      setFeedbacks(list);
+      setTotal(data?.total ?? list.length);
+      setPage(data?.page ?? pg);
+      setTotalPages(data?.totalPages ?? 1);
+
+      // stats: only on unfiltered first load
+      if (!rating && pg === 1) {
+        const withRating = list.filter((f) => f.rating);
+        const avg = withRating.length
+          ? (withRating.reduce((s, f) => s + f.rating, 0) / withRating.length).toFixed(1)
+          : '—';
+        setStats({ total: data?.total ?? list.length, avgRating: avg, repliedCount: list.filter(f => f.managerReply).length });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load('', 1); }, [load]);
+
+  const handleStarFilter = (v) => { setStarFilter(v); setPage(1); load(v, 1); };
+  const handlePage = (pg) => { setPage(pg); load(starFilter, pg); };
 
   function handleReplied(updated) {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
   }
 
-  // Stats
-  const total = feedbacks.length;
-  const withRating = feedbacks.filter((f) => f.rating);
-  const avgRating = withRating.length
-    ? (withRating.reduce((s, f) => s + f.rating, 0) / withRating.length).toFixed(1)
-    : '—';
-  const repliedCount = feedbacks.filter((f) => f.managerReply).length;
-
-  // Filter
-  const displayed = starFilter === ''
-    ? feedbacks
-    : starFilter === '1'
-      ? feedbacks.filter((f) => f.rating <= 2)
-      : feedbacks.filter((f) => f.rating === Number(starFilter));
+  const displayed = feedbacks;
 
   return (
     <div className="space-y-6">
@@ -166,9 +178,9 @@ export default function ManagerFeedbacks() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Tổng đánh giá', value: total },
-          { label: 'Điểm trung bình', value: avgRating === '—' ? '—' : `${avgRating} ⭐` },
-          { label: 'Đã phản hồi', value: `${repliedCount}/${total}` },
+          { label: 'Tổng đánh giá', value: stats.total },
+          { label: 'Điểm trung bình', value: stats.avgRating === '—' ? '—' : `${stats.avgRating} ⭐` },
+          { label: 'Đã phản hồi', value: `${stats.repliedCount}/${stats.total}` },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-center">
             <p className="text-2xl font-bold text-slate-800">{value}</p>
@@ -180,7 +192,7 @@ export default function ManagerFeedbacks() {
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
         {STAR_FILTERS.map((f) => (
-          <button key={f.value} onClick={() => setStarFilter(f.value)}
+          <button key={f.value} onClick={() => handleStarFilter(f.value)}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
               starFilter === f.value
                 ? 'bg-amber-500 text-white'
@@ -189,7 +201,10 @@ export default function ManagerFeedbacks() {
             {f.label}
           </button>
         ))}
-        <button onClick={load} disabled={loading}
+        {total > 0 && (
+          <span className="ml-2 text-xs text-slate-400">{total} đánh giá</span>
+        )}
+        <button onClick={() => { setStarFilter(''); load('', 1); }} disabled={loading}
           className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} />
           Làm mới
@@ -272,6 +287,34 @@ export default function ManagerFeedbacks() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} đánh giá</p>
+          <div className="flex items-center gap-1">
+            <button onClick={() => handlePage(page - 1)} disabled={page <= 1 || loading}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+              ← Trước
+            </button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const pg = Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
+              return (
+                <button key={pg} onClick={() => handlePage(pg)} disabled={loading}
+                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                    pg === page ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}>
+                  {pg}
+                </button>
+              );
+            })}
+            <button onClick={() => handlePage(page + 1)} disabled={page >= totalPages || loading}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+              Sau →
+            </button>
+          </div>
         </div>
       )}
 

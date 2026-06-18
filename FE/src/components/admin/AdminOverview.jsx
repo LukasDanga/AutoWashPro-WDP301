@@ -70,7 +70,7 @@ export default function AdminOverview() {
         setReport(reportData);
         setBranches(Array.isArray(branchesData) ? branchesData : []);
         setUsers(Array.isArray(usersData) ? usersData : []);
-        setBookings(Array.isArray(bookingsData) ? bookingsData : []);
+        setBookings(bookingsData?.bookings ?? (Array.isArray(bookingsData) ? bookingsData : []));
       } catch (e) {
         console.error('Failed to load overview data', e);
       } finally {

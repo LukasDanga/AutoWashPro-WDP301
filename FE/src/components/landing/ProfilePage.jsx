@@ -27,7 +27,8 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
           headers: { Authorization: `Bearer ${token}` },
         });
         const payload = await res.json();
-        setBookings(Array.isArray(payload?.data) ? payload.data : []);
+        const bData = payload?.data;
+        setBookings(bData?.bookings ?? (Array.isArray(bData) ? bData : []));
       } catch (e) { console.error(e); }
       finally { setBookingsLoading(false); }
     }
