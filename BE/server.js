@@ -2,6 +2,8 @@ require('dotenv').config();
 const app = require('./src/app');
 const config = require('./src/config');
 const { connectDB } = require('./src/config/db');
+const { startReminderJob } = require('./src/jobs/reminder.job');
+const { startBirthdayJob } = require('./src/jobs/birthday.job');
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
@@ -14,6 +16,10 @@ const startServer = async () => {
     console.log(`Server running on port ${config.PORT} [${config.NODE_ENV}]`);
     console.log(`Swagger UI: http://localhost:${config.PORT}/api-docs`);
   });
+
+  // Start background jobs
+  startReminderJob();
+  startBirthdayJob();
 };
 
 startServer();

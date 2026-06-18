@@ -13,9 +13,14 @@ import {
   CircleDashed,
   PlayCircle,
   Eye,
+  CalendarPlus,
+  Star,
+  QrCode,
+  Lightning,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import ManagerQuickCheckin from '@/components/manager/ManagerQuickCheckin';
 
 /* ── helpers ── */
 function api(path, opts = {}) {
@@ -131,9 +136,141 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
   );
 }
 
+/* ── rebook modal ── */
+function RebookModal({ booking, onClose, onRebooked, notify }) {
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })();
+  const [date, setDate] = useState(tomorrow);
+  const [time, setTime] = useState(booking.startTime || '09:00');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit() {
+    if (!date || !time) return;
+    setBusy(true); setErr('');
+    try {
+      const res = await api(`/bookings/${booking._id}/rebook`, {
+        method: 'POST',
+        body: JSON.stringify({ bookingDate: date, startTime: time }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Đặt lại thất bại');
+      onRebooked(data.data || data);
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+            <CalendarPlus size={18} className="text-blue-500" />
+            Đặt lại lịch
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-sm space-y-1">
+            <p className="font-medium text-slate-700">{booking.packageId?.name || 'Dịch vụ'}</p>
+            <p className="text-xs text-slate-500">{booking.userId?.name} · {booking.vehicleId?.licensePlate}</p>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Ngày đặt mới</label>
+              <input type="date" value={date} min={tomorrow}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Giờ bắt đầu</label>
+              <input type="time" value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            </div>
+          </div>
+
+          {err && <p className="text-sm text-red-500">{err}</p>}
+        </div>
+
+        <div className="border-t border-slate-100 px-6 py-4 flex gap-3 justify-end">
+          <button onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            Hủy
+          </button>
+          <button onClick={submit} disabled={busy || !date || !time}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+            {busy ? '...' : <><CalendarPlus size={14} /> Đặt lại</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── QR display modal ── */
+function QRDisplayModal({ booking, onClose }) {
+  const [qrUrl, setQrUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api(`/bookings/${booking._id}/qr`)
+      .then((r) => r.json())
+      .then((d) => { setQrUrl(d?.data?.qrDataUrl || null); })
+      .catch(() => setErr('Không thể tạo QR'))
+      .finally(() => setLoading(false));
+  }, [booking._id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <QrCode size={18} weight="fill" className="text-blue-600" />
+            <h2 className="font-semibold text-slate-800">QR Check-in</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+        </div>
+        <div className="p-6 flex flex-col items-center gap-4">
+          <p className="text-sm text-slate-500 text-center">
+            Cho khách hàng dùng điện thoại quét mã này để xác nhận lịch hẹn.
+          </p>
+          {loading && <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />}
+          {err && <p className="text-sm text-red-500">{err}</p>}
+          {qrUrl && (
+            <div className="rounded-2xl border-4 border-slate-100 bg-white p-3 shadow-inner">
+              <img src={qrUrl} alt="QR check-in" className="w-64 h-64 object-contain" />
+            </div>
+          )}
+          <div className="text-center space-y-0.5">
+            <p className="text-xs font-semibold text-slate-700">{booking.userId?.name || '—'}</p>
+            <p className="text-xs text-slate-500">
+              {booking.packageId?.name} · {booking.startTime}–{booking.endTime}
+            </p>
+            <p className="font-mono text-[10px] text-slate-400 mt-1">#{String(booking._id).slice(-8).toUpperCase()}</p>
+          </div>
+          <button onClick={onClose}
+            className="w-full rounded-xl bg-slate-800 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── booking details tab ── */
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
+  const [showRebook, setShowRebook] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
@@ -268,12 +405,72 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <p className="text-sm text-slate-600 italic">{booking.note || 'Không có ghi chú'}</p>
           </div>
         </div>
+
+        {/* Rating + Review (completed) */}
+        {booking.status === 'completed' && (booking.rating || booking.feedback) && (
+          <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-4 space-y-2">
+            <h3 className="text-[10px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1">
+              <Star size={11} weight="fill" /> Đánh giá từ khách hàng
+            </h3>
+            {booking.rating && (
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(s => (
+                  <Star key={s} size={16} weight={s <= booking.rating ? 'fill' : 'regular'}
+                    className={s <= booking.rating ? 'text-amber-400' : 'text-slate-200'} />
+                ))}
+              </div>
+            )}
+            {booking.feedback && (
+              <p className="text-sm text-amber-800 italic">"{booking.feedback}"</p>
+            )}
+            {booking.managerReply && (
+              <div className="mt-2 border-t border-amber-200 pt-2">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">Phản hồi chi nhánh</p>
+                <p className="text-xs text-emerald-800">{booking.managerReply}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 justify-end">
+          {/* Hiển thị QR cho khách scan — chỉ khi chưa completed/cancelled */}
+          {!['completed', 'cancelled'].includes(booking.status) && (
+            <button onClick={() => setShowQR(true)}
+              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+              <QrCode size={15} />
+              Hiển thị QR cho khách
+            </button>
+          )}
+          {(booking.status === 'completed' || booking.status === 'cancelled') && (
+            <button onClick={() => setShowRebook(true)}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
+              <CalendarPlus size={15} />
+              Đặt lại lịch
+            </button>
+          )}
+        </div>
       </div>
+
+      {showRebook && (
+        <RebookModal
+          booking={booking}
+          onClose={() => setShowRebook(false)}
+          onRebooked={(newB) => { notify('Đã đặt lại lịch thành công!'); onBack(); }}
+          notify={notify}
+        />
+      )}
+      {showQR && <QRDisplayModal booking={booking} onClose={() => setShowQR(false)} />}
     </div>
   );
 }
 
 /* ═══ Main ═══ */
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function ManagerBookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -281,19 +478,22 @@ export default function ManagerBookings() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [todayOnly, setTodayOnly] = useState(false);
   const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showCheckin, setShowCheckin] = useState(false);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
-  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter) => {
+  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly) => {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams();
       if (sf) params.set('status', sf);
       if (tf) params.set('bookingType', tf);
       if (q.trim()) params.set('search', q.trim());
+      if (today) params.set('bookingDate', getTodayStr());
       const res = await api(`/bookings?${params}`);
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
@@ -308,11 +508,12 @@ export default function ManagerBookings() {
   const handleSearch = (v) => {
     setSearch(v);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => fetch_(v, statusFilter, typeFilter), 420);
+    debounce.current = setTimeout(() => fetch_(v, statusFilter, typeFilter, todayOnly), 420);
   };
 
-  const handleFilter = (v) => { setStatusFilter(v); fetch_(search, v, typeFilter); };
-  const handleTypeFilter = (v) => { setTypeFilter(v); fetch_(search, statusFilter, v); };
+  const handleFilter = (v) => { setStatusFilter(v); fetch_(search, v, typeFilter, todayOnly); };
+  const handleTypeFilter = (v) => { setTypeFilter(v); fetch_(search, statusFilter, v, todayOnly); };
+  const handleTodayToggle = () => { const next = !todayOnly; setTodayOnly(next); fetch_(search, statusFilter, typeFilter, next); };
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
@@ -364,11 +565,26 @@ export default function ManagerBookings() {
           <option value="recurring">Định kỳ</option>
           <option value="slot_pack_usage">Gói lượt</option>
         </select>
-        <button onClick={() => fetch_()} disabled={loading}
+        <button onClick={handleTodayToggle}
+          className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
+            todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+          }`}>
+          📅 Hôm nay
+        </button>
+        <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly)} disabled={loading}
           className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
+        <button onClick={() => setShowCheckin(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+          <Lightning size={14} /> Check-in nhanh
+        </button>
       </div>
+      {todayOnly && (
+        <p className="text-xs text-emerald-600 font-medium">
+          Đang xem lịch hôm nay ({new Date().toLocaleDateString('vi-VN')}) — {bookings.length} lịch hẹn
+        </p>
+      )}
 
       {/* table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -449,6 +665,16 @@ export default function ManagerBookings() {
       </div>
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
+
+      {showCheckin && (
+        <ManagerQuickCheckin
+          onClose={() => setShowCheckin(false)}
+          onCheckedIn={(b) => {
+            setToast({ type: 'success', message: `Check-in thành công: ${b?.userId?.name || 'khách hàng'}` });
+            fetch_(search, statusFilter, typeFilter, todayOnly);
+          }}
+        />
+      )}
     </div>
   );
 }

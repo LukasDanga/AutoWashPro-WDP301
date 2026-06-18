@@ -2,9 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   CalendarCheck,
   CheckCircle,
-  ClipboardText,
-  CurrencyCircleDollar,
-  Spinner as PhSpinner,
   ArrowClockwise,
   TrendUp,
   Clock,
@@ -66,24 +63,16 @@ function StatusPill({ status }) {
 
 export default function ManagerOverview() {
   const [bookings, setBookings] = useState([]);
-  const [checkinStats, setCheckinStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
     try {
-      const [bRes, cRes] = await Promise.all([
-        api('/bookings?limit=5'),
-        api('/checkins/stats'),
-      ]);
+      const bRes = await api('/bookings');
       if (bRes.ok) {
         const p = await bRes.json();
         const data = p?.data ?? p;
-        setBookings(Array.isArray(data) ? data.slice(0, 6) : []);
-      }
-      if (cRes.ok) {
-        const p = await cRes.json();
-        setCheckinStats(p?.data ?? p);
+        setBookings(Array.isArray(data) ? data : []);
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
@@ -91,22 +80,22 @@ export default function ManagerOverview() {
 
   useEffect(() => { load(); }, []);
 
-  const today = bookings.filter((b) => {
-    const d = new Date(b.bookingDate);
-    const now = new Date();
-    return d.toDateString() === now.toDateString();
-  });
+  const now = new Date();
+  const todayStr = now.toDateString();
 
-  const pending = bookings.filter((b) => b.status === 'pending').length;
-  const inProgress = bookings.filter((b) => b.status === 'in_progress').length;
-  const completed = bookings.filter((b) => b.status === 'completed').length;
+  const today = bookings.filter((b) => new Date(b.bookingDate).toDateString() === todayStr);
+  const pending = today.filter((b) => b.status === 'pending').length;
+  const inProgress = today.filter((b) => b.status === 'in_progress').length;
+  const completed = today.filter((b) => b.status === 'completed').length;
+  const cancelled = today.filter((b) => b.status === 'cancelled').length;
+  const recentBookings = bookings.slice(0, 6);
 
   return (
     <div className="space-y-6">
       {/* header refresh */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">
-          Hôm nay: <strong className="text-slate-700">{new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</strong>
+          Hôm nay: <strong className="text-slate-700">{now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</strong>
         </p>
         <button onClick={load} disabled={loading}
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors">
@@ -115,46 +104,35 @@ export default function ManagerOverview() {
         </button>
       </div>
 
-      {/* stat cards */}
+      {/* today's stat cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard icon={<CalendarCheck size={20} weight="duotone" className="text-blue-500" />}
-          label="Tổng đặt lịch" value={bookings.length} color="bg-blue-50" />
+          label="Đặt lịch hôm nay" value={today.length} sub="Tổng số lịch hẹn" color="bg-blue-50" />
         <StatCard icon={<Clock size={20} weight="duotone" className="text-amber-500" />}
-          label="Chờ xác nhận" value={pending} color="bg-amber-50" />
+          label="Chờ xác nhận" value={pending} sub="Cần xử lý" color="bg-amber-50" />
         <StatCard icon={<TrendUp size={20} weight="duotone" className="text-violet-500" />}
-          label="Đang thực hiện" value={inProgress} color="bg-violet-50" />
+          label="Đang thực hiện" value={inProgress} sub="Đang rửa xe" color="bg-violet-50" />
         <StatCard icon={<CheckCircle size={20} weight="duotone" className="text-emerald-500" />}
-          label="Hoàn thành" value={completed} color="bg-emerald-50" />
+          label="Hoàn thành" value={completed} sub={cancelled > 0 ? `${cancelled} đã hủy` : undefined} color="bg-emerald-50" />
       </div>
-
-      {/* checkin stats */}
-      {checkinStats && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard icon={<ClipboardText size={20} weight="duotone" className="text-cyan-500" />}
-            label="Check-in hôm nay" value={checkinStats.today ?? checkinStats.total ?? '—'} color="bg-cyan-50" />
-          <StatCard icon={<CurrencyCircleDollar size={20} weight="duotone" className="text-green-500" />}
-            label="Check-in hoàn thành" value={checkinStats.completed ?? '—'} color="bg-green-50" />
-          <StatCard icon={<XCircle size={20} weight="duotone" className="text-slate-400" />}
-            label="Đang xử lý" value={checkinStats.in_progress ?? checkinStats.inProgress ?? '—'} color="bg-slate-100" />
-        </div>
-      )}
 
       {/* recent bookings */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-3.5">
+        <div className="border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700">Lịch đặt gần đây</h2>
+          <span className="text-xs text-slate-400">Tổng: {bookings.length}</span>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-14"><Spinner /></div>
-        ) : bookings.length === 0 ? (
+        ) : recentBookings.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-14 text-slate-400">
             <CalendarCheck size={32} weight="thin" />
             <p className="text-sm">Chưa có lịch đặt nào</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {bookings.map((b) => (
+            {recentBookings.map((b) => (
               <div key={b._id} className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-800">

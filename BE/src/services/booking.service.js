@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const { Booking, Package, Branch, Vehicle, Payment, User, SlotPack } = require('../models');
+const { Booking, Package, Branch, Vehicle, Payment, User, SlotPack, PointHistory } = require('../models');
 const notificationService = require('./notification.service');
 const voucherService = require('./voucher.service');
+const loyaltyService = require('./loyalty.service');
+const sseService = require('./sse.service');
 
 const VALID_STATUSES = ['pending', 'checked_in', 'in_progress', 'completed', 'cancelled'];
 
@@ -209,6 +211,14 @@ exports.createBooking = async (data) => {
       { bookingId: booking._id }
     ).catch(() => {});
 
+    // Push SSE event to manager so their bell updates in real-time
+    sseService.broadcastToManagers(branchId, 'booking_new', {
+      bookingId: booking._id,
+      branchId,
+      packageName: pkg.name,
+      startTime,
+    });
+
     return booking;
   } catch (err) {
     await session.abortTransaction();
@@ -392,6 +402,34 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
   if (!booking) {
     throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
   }
+
+  // Post-completion side effects (async, non-blocking)
+  if (status === 'completed') {
+    setImmediate(async () => {
+      try {
+        // Notify customer
+        const plate = booking.vehicleId?.licensePlate || '';
+        const branch = booking.branchId?.name || 'chi nhánh';
+        await notificationService.send(
+          booking.userId?._id || currentBooking.userId,
+          'Dịch vụ đã hoàn thành',
+          `Xe ${plate} đã rửa xong tại ${branch}. Cảm ơn bạn — hãy để lại đánh giá nhé!`,
+          'booking_completed',
+          { bookingId: id }
+        );
+        // Award loyalty points for slot_pack bookings (cash/online already handled in payment service)
+        if (currentBooking.bookingType === 'slot_pack_usage' || currentBooking.paymentStatus === 'paid') {
+          if ((currentBooking.finalPrice || 0) > 0) {
+            const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
+            if (!alreadyAwarded) {
+              await loyaltyService.addPointsFromPayment(currentBooking.userId, currentBooking.finalPrice, currentBooking._id, null);
+            }
+          }
+        }
+      } catch { /* silent — side effects must not fail the main response */ }
+    });
+  }
+
   return booking;
 };
 
@@ -819,6 +857,145 @@ exports.getFeedbacks = async (user, filters = {}) => {
     .populate('userId', 'name email phone avatar tier')
     .populate('packageId', 'name')
     .sort({ createdAt: -1 });
+};
+
+// ─── Submit / update feedback (customer, on completed booking) ───────────────
+exports.submitFeedback = async (bookingId, userId, { rating, feedback }) => {
+  const booking = await Booking.findById(bookingId);
+  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (String(booking.userId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (booking.status !== 'completed') {
+    throw Object.assign(new Error('Chỉ có thể đánh giá booking đã hoàn thành'), { statusCode: 400, code: 'INVALID_STATUS' });
+  }
+
+  const update = { feedbackAt: new Date() };
+  if (rating !== undefined) {
+    const r = Number(rating);
+    if (!Number.isInteger(r) || r < 1 || r > 5) throw Object.assign(new Error('Rating must be 1-5'), { statusCode: 400 });
+    update.rating = r;
+  }
+  if (feedback !== undefined) {
+    update.feedback = String(feedback).trim().slice(0, 1000);
+  }
+  if (!update.rating && !update.feedback) {
+    throw Object.assign(new Error('Cần nhập rating hoặc feedback'), { statusCode: 400 });
+  }
+
+  return Booking.findByIdAndUpdate(bookingId, update, { new: true })
+    .populate('userId', 'name email phone tier')
+    .populate('packageId', 'name price')
+    .populate('branchId', 'name')
+    .populate('vehicleId', 'licensePlate vehicleType brand');
+};
+
+// ─── Manager reply to feedback ────────────────────────────────────────────────
+exports.replyToFeedback = async (bookingId, managerId, reply) => {
+  const booking = await Booking.findById(bookingId).populate('branchId');
+  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (!booking.feedback && !booking.rating) {
+    throw Object.assign(new Error('Booking chưa có đánh giá để phản hồi'), { statusCode: 400 });
+  }
+
+  // Ensure manager belongs to the same branch
+  const branch = await Branch.findOne({ managerId });
+  if (branch && String(branch._id) !== String(booking.branchId._id || booking.branchId)) {
+    throw Object.assign(new Error('Bạn không phụ trách chi nhánh này'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+
+  const updated = await Booking.findByIdAndUpdate(
+    bookingId,
+    { managerReply: String(reply).trim().slice(0, 1000), managerReplyAt: new Date() },
+    { new: true }
+  ).populate('userId', 'name email phone tier')
+   .populate('packageId', 'name')
+   .populate('branchId', 'name');
+
+  notificationService.send(
+    booking.userId,
+    'Chi nhánh đã phản hồi đánh giá của bạn',
+    `Quản lý ${updated.branchId?.name || 'chi nhánh'} đã trả lời đánh giá của bạn: "${reply.slice(0, 80)}${reply.length > 80 ? '…' : ''}"`,
+    'system',
+    { bookingId }
+  ).catch(() => {});
+
+  return updated;
+};
+
+// ─── Rebook: clone a booking with new date/time ───────────────────────────────
+exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime }) => {
+  const src = await Booking.findById(bookingId)
+    .populate('packageId')
+    .populate('branchId');
+  if (!src) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+
+  // Authorization: customer can only rebook own, manager/admin can rebook any
+  if (userRole === 'customer' && String(src.userId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (!['completed', 'cancelled'].includes(src.status)) {
+    throw Object.assign(new Error('Chỉ có thể đặt lại đơn đã hoàn thành hoặc đã hủy'), { statusCode: 400 });
+  }
+
+  const pkg = src.packageId;
+  const branch = src.branchId;
+  if (!pkg || pkg.status === 'inactive') throw Object.assign(new Error('Gói dịch vụ không còn hoạt động'), { statusCode: 400 });
+  if (!branch || branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh không còn hoạt động'), { statusCode: 400 });
+
+  // Compute endTime
+  const totalDuration = pkg.duration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
+  const endTime = computeEndTime(startTime, totalDuration);
+
+  // Check slot conflict
+  const bookingDateObj = new Date(bookingDate);
+  const { gte, lte } = getDayBounds(bookingDate instanceof Date ? bookingDate.toISOString().split('T')[0] : bookingDate);
+  const startMins = parseTime(startTime);
+  const endMins = parseTime(endTime);
+  const conflicts = await Booking.find({
+    branchId: src.branchId,
+    bookingDate: { $gte: gte, $lte: lte },
+    status: { $in: ['pending', 'checked_in', 'in_progress'] },
+  }).select('startTime endTime');
+  const hasConflict = conflicts.some(c => isSlotOverlap(startMins, endMins, parseTime(c.startTime), parseTime(c.endTime)));
+  if (hasConflict) throw Object.assign(new Error('Khung giờ này đã được đặt'), { statusCode: 409, code: 'SLOT_TAKEN' });
+
+  // Get user for priority
+  const user = await User.findById(src.userId);
+  const priority = TIER_PRIORITY[user?.tier] || 1;
+
+  const newBooking = await Booking.create({
+    userId: src.userId,
+    branchId: src.branchId,
+    packageId: src.packageId,
+    vehicleId: src.vehicleId,
+    bookingDate: bookingDateObj,
+    startTime,
+    endTime,
+    bookingType: src.bookingType === 'recurring' ? 'single' : src.bookingType,
+    selectedSubServices: src.selectedSubServices || [],
+    note: src.note,
+    priority,
+    rebookedFromId: src._id,
+    finalPrice: src.finalPrice,
+    discountAmount: src.discountAmount || 0,
+    voucherCode: undefined,
+    paymentStatus: 'unpaid',
+  });
+
+  notificationService.send(
+    src.userId,
+    'Đặt lại lịch thành công',
+    `Lịch hẹn mới của bạn: ${pkg.name} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
+    'booking_created',
+    { bookingId: newBooking._id }
+  ).catch(() => {});
+
+  return Booking.findById(newBooking._id)
+    .populate('userId', 'name email phone tier')
+    .populate('packageId', 'name price duration')
+    .populate('branchId', 'name address')
+    .populate('vehicleId', 'licensePlate vehicleType brand color');
 };
 
 exports.getCustomers = async (user, filters = {}) => {

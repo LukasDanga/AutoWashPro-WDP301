@@ -1,8 +1,11 @@
 const { Notification } = require('../models');
+const sseService = require('./sse.service');
 
 const create = async (userId, title, message, type, data = {}) => {
   const notification = new Notification({ userId, title, message, type, data });
   await notification.save();
+  // Push real-time to connected client
+  sseService.sendToUser(userId, 'notification', { title, message, type });
   return notification;
 };
 
