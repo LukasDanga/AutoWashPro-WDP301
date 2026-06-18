@@ -10,6 +10,7 @@ import {
   Users,
   Package,
   Ticket,
+  CalendarBlank,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -30,6 +31,12 @@ export const MANAGER_MENU_ITEMS = [
     label: 'Đặt lịch',
     to: '/manager/bookings',
     icon: CalendarCheck,
+  },
+  {
+    id: 'schedule',
+    label: 'Lịch theo ngày',
+    to: '/manager/schedule',
+    icon: CalendarBlank,
   },
 
   {
@@ -92,6 +99,10 @@ export const MANAGER_PAGE_META = {
     description: 'Xem và cập nhật trạng thái các lịch đặt trong chi nhánh.',
   },
 
+  schedule: {
+    title: 'Lịch theo ngày',
+    description: 'Xem toàn bộ slot trong ngày dạng timeline — ai đặt giờ nào, còn trống không.',
+  },
   branch: {
     title: 'Chi nhánh của tôi',
     description: 'Xem và chỉnh sửa thông tin chi nhánh bạn phụ trách.',
