@@ -172,6 +172,9 @@ router.post('/:id/rebook', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, R
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
 ], validate, bookingController.rebookBooking);
 
+// GET /api/bookings/:id/qr — Generate QR code for check-in
+router.get('/:id/qr', authenticate, [param('id').isMongoId()], validate, bookingController.getBookingQR);
+
 /**
  * @swagger
  * /api/bookings/{id}:

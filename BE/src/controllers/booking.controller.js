@@ -1,6 +1,7 @@
 const bookingService = require('../services/booking.service');
 const paymentService = require('../services/payment.service');
 const { catchAsync, success } = require('../utils/helpers');
+const QRCode = require('qrcode');
 
 exports.createBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.createBooking({ ...req.body, userId: req.userId });
@@ -127,4 +128,13 @@ exports.rebookBooking = catchAsync(async (req, res) => {
   const { bookingDate, startTime } = req.body;
   const booking = await bookingService.rebookBooking(req.params.id, req.userId, req.user.role, { bookingDate, startTime });
   success(res, booking, 'Booking rebooked', 201);
+});
+
+exports.getBookingQR = catchAsync(async (req, res) => {
+  const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId);
+  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404 });
+  // QR payload: JSON with bookingId + branchId for cross-validation
+  const payload = JSON.stringify({ bookingId: String(booking._id), branchId: String(booking.branchId?._id || booking.branchId) });
+  const dataUrl = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 2, width: 300 });
+  success(res, { qrDataUrl: dataUrl, bookingId: booking._id }, 'QR generated');
 });

@@ -15,9 +15,11 @@ import {
   Eye,
   CalendarPlus,
   Star,
+  QrCode,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import ManagerQRScanner from '@/components/manager/ManagerQRScanner';
 
 /* ── helpers ── */
 function api(path, opts = {}) {
@@ -416,6 +418,7 @@ export default function ManagerBookings() {
   const [todayOnly, setTodayOnly] = useState(false);
   const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showQR, setShowQR] = useState(false);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
@@ -509,6 +512,10 @@ export default function ManagerBookings() {
           className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
+        <button onClick={() => setShowQR(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+          <QrCode size={14} /> Scan QR
+        </button>
       </div>
       {todayOnly && (
         <p className="text-xs text-emerald-600 font-medium">
@@ -595,6 +602,17 @@ export default function ManagerBookings() {
       </div>
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
+
+      {showQR && (
+        <ManagerQRScanner
+          onClose={() => setShowQR(false)}
+          onCheckedIn={(b) => {
+            setShowQR(false);
+            setToast({ type: 'success', message: `Check-in thành công: ${b?.userId?.name || 'khách hàng'}` });
+            fetch_(search, statusFilter, typeFilter, todayOnly);
+          }}
+        />
+      )}
     </div>
   );
 }
