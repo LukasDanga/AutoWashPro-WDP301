@@ -22,7 +22,6 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
   const [editFormVehicle, setEditFormVehicle] = useState({ licensePlate: '', vehicleType: 'car', brand: '', model: '', color: '', year: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
-  // Profile edit
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
   const [editSaving, setEditSaving] = useState(false);

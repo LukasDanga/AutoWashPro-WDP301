@@ -234,11 +234,8 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     query.userId = userId;
   } else if (userRole === 'manager') {
     const branch = await Branch.findOne({ managerId: userId });
-    if (branch) {
-      query.branchId = branch._id;
-    } else {
-      return [];
-    }
+    if (!branch) return { bookings: [], total: 0, page: 1, totalPages: 0 };
+    query.branchId = branch._id;
     if (filters.userId) query.userId = filters.userId;
   } else {
     if (filters.userId) query.userId = filters.userId;
@@ -246,18 +243,40 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   }
   if (filters.status) query.status = filters.status;
   if (filters.bookingType) query.bookingType = filters.bookingType;
-  if (filters.bookingDate) {
-    const d = filters.bookingDate instanceof Date ? filters.bookingDate : new Date(filters.bookingDate);
-    const dateStr = d.toISOString().split('T')[0];
+
+  // date range (dateFrom/dateTo) or single bookingDate
+  if (filters.dateFrom || filters.dateTo) {
+    query.bookingDate = {};
+    if (filters.dateFrom) query.bookingDate.$gte = getDayBounds(filters.dateFrom).gte;
+    if (filters.dateTo)   query.bookingDate.$lte = getDayBounds(filters.dateTo).lte;
+  } else if (filters.bookingDate) {
+    const dateStr = filters.bookingDate instanceof Date
+      ? filters.bookingDate.toISOString().split('T')[0]
+      : filters.bookingDate;
     const { gte, lte } = getDayBounds(dateStr);
     query.bookingDate = { $gte: gte, $lte: lte };
+  }
+
+  // search: match by customer name/phone or license plate
+  if (filters.search && filters.search.trim()) {
+    const re = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const [matchedUsers, matchedVehicles] = await Promise.all([
+      User.find({ $or: [{ name: re }, { phone: re }] }, '_id'),
+      Vehicle.find({ licensePlate: re }, 'userId'),
+    ]);
+    const ids = new Set([
+      ...matchedUsers.map(u => String(u._id)),
+      ...matchedVehicles.map(v => String(v.userId)),
+    ]);
+    if (ids.size === 0) return { bookings: [], total: 0, page: 1, totalPages: 0 };
+    query.userId = { $in: [...ids].map(id => new mongoose.Types.ObjectId(id)) };
   }
 
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
   const skip = (page - 1) * limit;
 
-  const [data, total] = await Promise.all([
+  const [bookings, total] = await Promise.all([
     Booking.find(query)
       .populate('userId', 'name email phone tier')
       .populate('branchId', 'name address')
@@ -270,7 +289,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   ]);
 
   return {
-    data,
+    bookings,
     pagination: {
       page,
       limit,
@@ -841,22 +860,37 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
 exports.getFeedbacks = async (user, filters = {}) => {
   const query = {
     status: 'completed',
-    $or: [{ rating: { $ne: null } }, { feedback: { $ne: null, $ne: '' } }],
+    $or: [{ rating: { $exists: true, $ne: null } }, { feedback: { $exists: true, $ne: '' } }],
   };
 
   if (user.role === 'manager') {
     const branch = await Branch.findOne({ managerId: user.id });
-    if (branch) {
-      query.branchId = branch._id;
-    } else {
-      return [];
-    }
+    if (!branch) return { feedbacks: [], total: 0, page: 1, totalPages: 0 };
+    query.branchId = branch._id;
   }
 
-  return Booking.find(query)
-    .populate('userId', 'name email phone avatar tier')
-    .populate('packageId', 'name')
-    .sort({ createdAt: -1 });
+  if (filters.rating) {
+    const r = parseInt(filters.rating);
+    query.rating = r <= 2 ? { $lte: 2 } : r;
+  }
+  if (filters.replied === 'true')  query.managerReply = { $exists: true, $ne: '' };
+  if (filters.replied === 'false') query.$and = [...(query.$and || []), { $or: [{ managerReply: { $exists: false } }, { managerReply: '' }] }];
+
+  const page  = Math.max(1, parseInt(filters.page)  || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit) || 20));
+  const skip  = (page - 1) * limit;
+
+  const [feedbacks, total] = await Promise.all([
+    Booking.find(query)
+      .populate('userId', 'name email phone avatar tier')
+      .populate('packageId', 'name')
+      .sort({ feedbackAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Booking.countDocuments(query),
+  ]);
+
+  return { feedbacks, total, page, totalPages: Math.ceil(total / limit) };
 };
 
 // ─── Submit / update feedback (customer, on completed booking) ───────────────
@@ -999,46 +1033,41 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
 };
 
 exports.getCustomers = async (user, filters = {}) => {
-  let match = { status: 'completed' };
+  const match = { status: 'completed' };
 
   if (user.role === 'manager') {
     const branch = await Branch.findOne({ managerId: user.id });
-    if (branch) {
-      match.branchId = branch._id;
-    } else {
-      return [];
-    }
+    if (!branch) return { customers: [], total: 0, page: 1, totalPages: 0 };
+    match.branchId = branch._id;
   }
 
-  const customers = await Booking.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: '$userId',
-        totalBookings: { $sum: 1 },
-        totalSpent: { $sum: '$finalPrice' },
-        lastBookingDate: { $max: '$bookingDate' },
-      },
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'user',
-      },
-    },
-    { $unwind: '$user' },
-    {
-      $lookup: {
-        from: 'vehicles',
-        localField: '_id',
-        foreignField: 'userId',
-        as: 'vehicles',
-      },
-    },
-    { $sort: { lastBookingDate: -1 } },
-  ]);
+  const page  = Math.max(1, parseInt(filters.page)  || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit) || 20));
+  const skip  = (page - 1) * limit;
 
-  return customers;
+  const postMatch = [];
+  if (filters.tier)   postMatch.push({ $match: { 'user.tier': filters.tier } });
+  if (filters.search && filters.search.trim()) {
+    const re = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    postMatch.push({ $match: { $or: [{ 'user.name': re }, { 'user.phone': re }, { 'user.email': re }] } });
+  }
+
+  const pipeline = [
+    { $match: match },
+    { $group: { _id: '$userId', totalBookings: { $sum: 1 }, totalSpent: { $sum: '$finalPrice' }, lastBookingDate: { $max: '$bookingDate' } } },
+    { $lookup: { from: 'users',    localField: '_id', foreignField: '_id',    as: 'user' } },
+    { $unwind: '$user' },
+    { $lookup: { from: 'vehicles', localField: '_id', foreignField: 'userId', as: 'vehicles' } },
+    ...postMatch,
+    { $sort: { lastBookingDate: -1 } },
+    { $facet: {
+      data:  [{ $skip: skip }, { $limit: limit }],
+      count: [{ $count: 'total' }],
+    }},
+  ];
+
+  const [result] = await Booking.aggregate(pipeline);
+  const customers = result?.data  || [];
+  const total     = result?.count?.[0]?.total || 0;
+  return { customers, total, page, totalPages: Math.ceil(total / limit) };
 };

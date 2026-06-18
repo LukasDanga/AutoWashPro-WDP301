@@ -471,8 +471,13 @@ function getTodayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+const PAGE_SIZE = 20;
+
 export default function ManagerBookings() {
   const [bookings, setBookings] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -486,19 +491,22 @@ export default function ManagerBookings() {
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
-  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly) => {
+  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, pg = 1) => {
     setLoading(true); setError('');
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: pg, limit: PAGE_SIZE });
       if (sf) params.set('status', sf);
       if (tf) params.set('bookingType', tf);
       if (q.trim()) params.set('search', q.trim());
-      if (today) params.set('bookingDate', getTodayStr());
+      if (today) { const d = getTodayStr(); params.set('dateFrom', d); params.set('dateTo', d); }
       const res = await api(`/bookings?${params}`);
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const data = p?.data ?? p;
-      setBookings(Array.isArray(data) ? data : []);
+      setBookings(data?.bookings ?? (Array.isArray(data) ? data : []));
+      setTotal(data?.total ?? 0);
+      setPage(data?.page ?? pg);
+      setTotalPages(data?.totalPages ?? 1);
     } catch (err) { setError(err.message || 'Không thể tải dữ liệu'); }
     finally { setLoading(false); }
   }, []); // eslint-disable-line
@@ -508,12 +516,13 @@ export default function ManagerBookings() {
   const handleSearch = (v) => {
     setSearch(v);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => fetch_(v, statusFilter, typeFilter, todayOnly), 420);
+    debounce.current = setTimeout(() => { setPage(1); fetch_(v, statusFilter, typeFilter, todayOnly, 1); }, 420);
   };
 
-  const handleFilter = (v) => { setStatusFilter(v); fetch_(search, v, typeFilter, todayOnly); };
-  const handleTypeFilter = (v) => { setTypeFilter(v); fetch_(search, statusFilter, v, todayOnly); };
-  const handleTodayToggle = () => { const next = !todayOnly; setTodayOnly(next); fetch_(search, statusFilter, typeFilter, next); };
+  const handleFilter = (v) => { setStatusFilter(v); setPage(1); fetch_(search, v, typeFilter, todayOnly, 1); };
+  const handleTypeFilter = (v) => { setTypeFilter(v); setPage(1); fetch_(search, statusFilter, v, todayOnly, 1); };
+  const handleTodayToggle = () => { const next = !todayOnly; setTodayOnly(next); setPage(1); fetch_(search, statusFilter, typeFilter, next, 1); };
+  const handlePageChange = (pg) => { setPage(pg); fetch_(search, statusFilter, typeFilter, todayOnly, pg); };
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
@@ -580,11 +589,13 @@ export default function ManagerBookings() {
           <Lightning size={14} /> Check-in nhanh
         </button>
       </div>
-      {todayOnly && (
-        <p className="text-xs text-emerald-600 font-medium">
-          Đang xem lịch hôm nay ({new Date().toLocaleDateString('vi-VN')}) — {bookings.length} lịch hẹn
-        </p>
-      )}
+      {/* filter info */}
+      <p className="text-xs text-slate-400">
+        {todayOnly
+          ? `Lịch hôm nay (${new Date().toLocaleDateString('vi-VN')}) — `
+          : ''}
+        {total > 0 ? `${total} lịch hẹn` : ''}
+      </p>
 
       {/* table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -663,6 +674,36 @@ export default function ManagerBookings() {
           </table>
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">
+            Trang {page}/{totalPages} · {total} lịch hẹn
+          </p>
+          <div className="flex items-center gap-1">
+            <button onClick={() => handlePageChange(page - 1)} disabled={page <= 1 || loading}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+              ← Trước
+            </button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const pg = Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
+              return (
+                <button key={pg} onClick={() => handlePageChange(pg)} disabled={loading}
+                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                    pg === page ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}>
+                  {pg}
+                </button>
+              );
+            })}
+            <button onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages || loading}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+              Sau →
+            </button>
+          </div>
+        </div>
+      )}
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
 
