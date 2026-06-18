@@ -9,8 +9,7 @@ function resolvePageMeta(pathname) {
   if (pathname === '/manager' || pathname === '/manager/') return MANAGER_PAGE_META.overview;
   if (pathname.startsWith('/manager/bookings')) return MANAGER_PAGE_META.bookings;
   if (pathname.startsWith('/manager/schedule')) return MANAGER_PAGE_META.schedule;
-  if (pathname.startsWith('/manager/checkins')) return MANAGER_PAGE_META.checkins;
-  if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
+if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
   if (pathname.startsWith('/manager/vouchers')) return MANAGER_PAGE_META.vouchers;
   if (pathname.startsWith('/manager/customers')) return MANAGER_PAGE_META.customers;
   if (pathname.startsWith('/manager/feedbacks')) return MANAGER_PAGE_META.feedbacks;
