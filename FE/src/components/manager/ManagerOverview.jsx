@@ -72,7 +72,7 @@ export default function ManagerOverview() {
       if (bRes.ok) {
         const p = await bRes.json();
         const data = p?.data ?? p;
-        setBookings(Array.isArray(data) ? data : []);
+        setBookings(data?.bookings ?? (Array.isArray(data) ? data : []));
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
