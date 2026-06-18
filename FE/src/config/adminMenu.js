@@ -47,7 +47,7 @@ export const ADMIN_MENU_ITEMS = [
   },
   {
     id: 'activity',
-    label: 'Lịch sử hoạt động',
+    label: 'Quản lý đặt lịch',
     to: '/admin/activity',
     icon: ClockCounterClockwise,
   },
@@ -81,8 +81,8 @@ export const ADMIN_PAGE_META = {
     description: 'Cấu hình chương trình tích điểm và đổi quà.',
   },
   activity: {
-    title: 'Lịch sử hoạt động',
-    description: 'Nhật ký thao tác và sự kiện quan trọng trên hệ thống.',
+    title: 'Quản lý đặt lịch',
+    description: 'Xem và quản lý toàn bộ đặt lịch trên tất cả chi nhánh.',
   },
   profile: {
     title: 'Hồ sơ',

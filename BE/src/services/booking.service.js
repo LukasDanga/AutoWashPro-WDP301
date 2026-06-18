@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const { Booking, Package, Branch, Vehicle, Payment, User, SlotPack } = require('../models');
+const { Booking, Package, Branch, Vehicle, Payment, User, SlotPack, PointHistory } = require('../models');
 const notificationService = require('./notification.service');
 const voucherService = require('./voucher.service');
+const loyaltyService = require('./loyalty.service');
+const sseService = require('./sse.service');
 
 const VALID_STATUSES = ['pending', 'checked_in', 'in_progress', 'completed', 'cancelled'];
 
@@ -209,6 +211,14 @@ exports.createBooking = async (data) => {
       { bookingId: booking._id }
     ).catch(() => {});
 
+    // Push SSE event to manager so their bell updates in real-time
+    sseService.broadcastToManagers(branchId, 'booking_new', {
+      bookingId: booking._id,
+      branchId,
+      packageName: pkg.name,
+      startTime,
+    });
+
     return booking;
   } catch (err) {
     await session.abortTransaction();
@@ -370,6 +380,34 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
   if (!booking) {
     throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
   }
+
+  // Post-completion side effects (async, non-blocking)
+  if (status === 'completed') {
+    setImmediate(async () => {
+      try {
+        // Notify customer
+        const plate = booking.vehicleId?.licensePlate || '';
+        const branch = booking.branchId?.name || 'chi nhánh';
+        await notificationService.send(
+          booking.userId?._id || currentBooking.userId,
+          'Dịch vụ đã hoàn thành',
+          `Xe ${plate} đã rửa xong tại ${branch}. Cảm ơn bạn — hãy để lại đánh giá nhé!`,
+          'booking_completed',
+          { bookingId: id }
+        );
+        // Award loyalty points for slot_pack bookings (cash/online already handled in payment service)
+        if (currentBooking.bookingType === 'slot_pack_usage' || currentBooking.paymentStatus === 'paid') {
+          if ((currentBooking.finalPrice || 0) > 0) {
+            const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
+            if (!alreadyAwarded) {
+              await loyaltyService.addPointsFromPayment(currentBooking.userId, currentBooking.finalPrice, currentBooking._id, null);
+            }
+          }
+        }
+      } catch { /* silent — side effects must not fail the main response */ }
+    });
+  }
+
   return booking;
 };
 

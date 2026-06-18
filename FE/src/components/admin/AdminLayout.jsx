@@ -3,6 +3,7 @@ import { Drop } from '@phosphor-icons/react';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { ADMIN_BRAND, ADMIN_MENU_ITEMS, ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession } from '@/lib/authStorage';
+import NotificationBell from '@/components/ui/NotificationBell';
 
 function resolvePageMeta(pathname) {
   if (pathname === '/admin' || pathname === '/admin/') {
@@ -41,9 +42,12 @@ export default function AdminLayout({ user, onLogout }) {
       }}
       onLogout={handleLogout}
       header={
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">{meta.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">{meta.title}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
+          </div>
+          <NotificationBell />
         </div>
       }
     >
