@@ -17,6 +17,11 @@ import {
   Star,
   QrCode,
   Lightning,
+  Receipt,
+  Car,
+  Clock,
+  CurrencyCircleDollar,
+  Printer,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -266,11 +271,313 @@ function QRDisplayModal({ booking, onClose }) {
   );
 }
 
+/* ── print receipt modal ── */
+function PrintReceiptModal({ booking, onClose }) {
+  function fmt(n)    { return Number(n || 0).toLocaleString('vi-VN'); }
+  function dateFmt(d){ return d ? new Date(d).toLocaleDateString('vi-VN') : '—'; }
+  function timeFmt(d){ return d ? new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''; }
+
+  const shortId   = String(booking._id).slice(-8).toUpperCase();
+  const receiptNo = `HD-${new Date().getFullYear()}-${shortId}`;
+  const datePaid  = dateFmt(booking.checkOutTime || booking.updatedAt || booking.bookingDate);
+  const basePrice = booking.packageId?.price || booking.finalPrice || 0;
+  const discount  = booking.discountAmount || 0;
+  const finalAmt  = booking.finalPrice || 0;
+  const payLabel  = booking.paymentMethod === 'cash' ? 'Tiền mặt'
+                  : booking.paymentMethod === 'momo'  ? 'Ví MoMo'
+                  : booking.paymentMethod === 'card'  ? 'Thẻ ngân hàng'
+                  : (booking.paymentMethod || 'Tiền mặt');
+  const checkIn   = timeFmt(booking.checkInTime)  || booking.startTime || '—';
+  const checkOut  = timeFmt(booking.checkOutTime) || booking.endTime   || '';
+  const printedAt = new Date().toLocaleString('vi-VN');
+
+  function handleExportPDF() {
+    const win = window.open('', '_blank', 'width=820,height=1050,scrollbars=yes');
+    win.document.write(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<title>Hóa đơn ${receiptNo}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @page{size:A4;margin:20mm 18mm}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+       font-size:13px;color:#111;background:#fff;line-height:1.5}
+  .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
+  .hd h1{font-size:32px;font-weight:800;letter-spacing:-.5px}
+  .logo-box{width:54px;height:54px;background:#111;border-radius:10px;
+            display:flex;align-items:center;justify-content:center}
+  .logo-box svg{fill:#fff}
+  .meta{margin-bottom:28px}
+  .meta p{margin-bottom:3px;font-size:13px;color:#555}
+  .meta span{color:#111;font-weight:600}
+  .parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;
+           margin-bottom:28px;padding-top:20px;border-top:1px solid #e5e7eb}
+  .plabel{font-size:11px;font-weight:700;text-transform:uppercase;
+          letter-spacing:.08em;color:#9ca3af;margin-bottom:6px}
+  .pname{font-weight:700;font-size:14px;margin-bottom:2px}
+  .party p{font-size:13px;color:#555;margin-bottom:1px}
+  .amount-h{font-size:24px;font-weight:800;margin:0 0 4px}
+  .amount-sub{font-size:13px;color:#6b7280;margin-bottom:28px}
+  table{width:100%;border-collapse:collapse;margin-bottom:0}
+  thead tr{border-top:2px solid #e5e7eb;border-bottom:2px solid #e5e7eb}
+  thead th{padding:9px 8px;text-align:left;font-size:11px;font-weight:700;
+           text-transform:uppercase;letter-spacing:.06em;color:#9ca3af}
+  th.r,td.r{text-align:right}
+  tbody tr{border-bottom:1px solid #f3f4f6}
+  tbody td{padding:12px 8px;font-size:13px;color:#374151;vertical-align:top}
+  .desc-main{font-weight:600;color:#111}
+  .desc-sub{font-size:12px;color:#9ca3af;margin-top:2px}
+  .totals{border-top:2px solid #e5e7eb}
+  .totals td{padding:5px 8px;font-size:13px;color:#374151}
+  .totals tr.final td{font-weight:800;font-size:14px;color:#111;
+                      border-top:2px solid #e5e7eb;padding-top:10px}
+  .ph-title{font-size:18px;font-weight:800;margin:32px 0 12px}
+  .ph thead tr{border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}
+  .ph thead th{font-size:11px;font-weight:700;text-transform:uppercase;
+               letter-spacing:.06em;color:#9ca3af;padding:8px 8px 8px 0}
+  .ph tbody td{padding:10px 8px 10px 0;font-size:13px;color:#374151;
+               border-bottom:1px solid #f3f4f6}
+  .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;
+          font-size:11px;color:#d1d5db;display:flex;justify-content:space-between}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .no-print{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="hd">
+  <h1>Hóa đơn</h1>
+  <div class="logo-box">
+    <svg width="28" height="28" viewBox="0 0 24 24"><path d="M12 2C8 7 4 10 4 14a8 8 0 0016 0c0-4-4-7-8-12z"/></svg>
+  </div>
+</div>
+<div class="meta">
+  <p>Mã đặt lịch &nbsp;<span>#${shortId}</span></p>
+  <p>Số hóa đơn &nbsp;&nbsp;<span>${receiptNo}</span></p>
+  <p>Ngày thanh toán &nbsp;<span>${datePaid}</span></p>
+</div>
+<div class="parties">
+  <div class="party">
+    <div class="plabel">Chi nhánh</div>
+    <div class="pname">AutoWash Pro</div>
+    <p>${booking.branchId?.name || ''}</p>
+    <p>${booking.branchId?.address || ''}</p>
+    <p>autowashpro.vn</p>
+  </div>
+  <div class="party">
+    <div class="plabel">Khách hàng</div>
+    <div class="pname">${booking.userId?.name || 'Khách hàng'}</div>
+    <p>${booking.userId?.phone || ''}</p>
+    <p>${booking.userId?.email || ''}</p>
+    <p>Xe: ${booking.vehicleId?.licensePlate || '—'}${booking.vehicleId?.brand ? ` (${booking.vehicleId.brand} ${booking.vehicleId.color || ''})` : ''}</p>
+  </div>
+</div>
+<div class="amount-h">${fmt(finalAmt)}đ đã thanh toán ngày ${datePaid}</div>
+<div class="amount-sub">Trạng thái: <strong>${booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</strong></div>
+<table>
+  <thead>
+    <tr><th style="width:50%">Mô tả</th><th class="r" style="width:10%">SL</th><th class="r" style="width:20%">Đơn giá</th><th class="r" style="width:20%">Thành tiền</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><div class="desc-main">${booking.packageId?.name || 'Dịch vụ rửa xe'}</div>
+          <div class="desc-sub">${dateFmt(booking.bookingDate)} · Vào ${checkIn}${checkOut ? ' → Ra ' + checkOut : ''}</div></td>
+      <td class="r">1</td><td class="r">${fmt(basePrice)}đ</td><td class="r">${fmt(basePrice)}đ</td>
+    </tr>
+    ${discount > 0 ? `<tr>
+      <td><div class="desc-main">Giảm giá voucher</div>
+          <div class="desc-sub">${booking.voucherCode ? 'Mã: ' + booking.voucherCode : 'Khuyến mãi'}</div></td>
+      <td class="r">1</td><td class="r">-${fmt(discount)}đ</td><td class="r">-${fmt(discount)}đ</td>
+    </tr>` : ''}
+  </tbody>
+</table>
+<div class="totals">
+  <table>
+    <tbody>
+      <tr><td>Tạm tính</td><td></td><td></td><td class="r">${fmt(basePrice)}đ</td></tr>
+      ${discount > 0 ? `<tr><td>Giảm giá</td><td></td><td></td><td class="r">-${fmt(discount)}đ</td></tr>` : ''}
+      <tr><td>Tổng cộng</td><td></td><td></td><td class="r">${fmt(finalAmt)}đ</td></tr>
+      <tr class="final"><td><strong>Đã thanh toán</strong></td><td></td><td></td>
+        <td class="r"><strong>${booking.paymentStatus === 'paid' ? fmt(finalAmt) : '0'}đ</strong></td></tr>
+    </tbody>
+  </table>
+</div>
+<h2 class="ph-title">Lịch sử thanh toán</h2>
+<table class="ph">
+  <thead><tr>
+    <th>Phương thức</th><th>Ngày</th><th class="r">Số tiền</th><th class="r">Mã giao dịch</th>
+  </tr></thead>
+  <tbody><tr>
+    <td>${payLabel}</td><td>${datePaid}</td>
+    <td class="r">${booking.paymentStatus === 'paid' ? fmt(finalAmt) + 'đ' : '—'}</td>
+    <td class="r">#${shortId}</td>
+  </tr></tbody>
+</table>
+<div class="footer"><span>In lúc: ${printedAt}</span><span>Trang 1 / 1</span></div>
+<script>window.onload=()=>{setTimeout(()=>{window.print()},300)}<\/script>
+</body></html>`);
+    win.document.close();
+  }
+
+  /* ── preview in modal (scaled A4 layout) ── */
+  const th = (txt, right = false) => (
+    <th style={{ padding: '9px 8px', textAlign: right ? 'right' : 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9ca3af' }}>{txt}</th>
+  );
+  const td = (txt, right = false, extra = {}) => (
+    <td style={{ padding: '11px 8px', textAlign: right ? 'right' : 'left', ...extra }}>{txt}</td>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" style={{ maxHeight: '92vh' }}
+        onClick={(e) => e.stopPropagation()}>
+
+        {/* modal header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Printer size={18} className="text-slate-600" weight="duotone" />
+            <span className="font-semibold text-slate-800">Xem trước hóa đơn</span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+        </div>
+
+        {/* A4 preview */}
+        <div className="flex-1 overflow-y-auto bg-slate-200 p-6">
+          <div style={{ maxWidth: 595, margin: '0 auto', background: '#fff', padding: '40px 48px', boxShadow: '0 4px 20px rgba(0,0,0,.18)', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif', fontSize: 13, color: '#111', lineHeight: 1.6 }}>
+
+            {/* header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
+              <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.5px' }}>Hóa đơn</h1>
+              <div style={{ width: 52, height: 52, background: '#111', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M12 2C8 7 4 10 4 14a8 8 0 0016 0c0-4-4-7-8-12z"/></svg>
+              </div>
+            </div>
+
+            {/* meta */}
+            <div style={{ marginBottom: 24 }}>
+              {[['Mã đặt lịch', `#${shortId}`], ['Số hóa đơn', receiptNo], ['Ngày thanh toán', datePaid]].map(([k, v]) => (
+                <p key={k} style={{ marginBottom: 3, color: '#555' }}>
+                  {k} <span style={{ marginLeft: 8, fontWeight: 600, color: '#111' }}>{v}</span>
+                </p>
+              ))}
+            </div>
+
+            {/* parties */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, borderTop: '1px solid #e5e7eb', paddingTop: 20, marginBottom: 24 }}>
+              {[
+                { label: 'Chi nhánh', name: 'AutoWash Pro', lines: [booking.branchId?.name, booking.branchId?.address, 'autowashpro.vn'] },
+                { label: 'Khách hàng', name: booking.userId?.name || 'Khách hàng', lines: [booking.userId?.phone, booking.userId?.email, `Xe: ${booking.vehicleId?.licensePlate || '—'}${booking.vehicleId?.brand ? ` (${booking.vehicleId.brand})` : ''}`] },
+              ].map(({ label, name, lines }) => (
+                <div key={label}>
+                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#9ca3af', marginBottom: 6 }}>{label}</p>
+                  <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{name}</p>
+                  {lines.filter(Boolean).map((l, i) => <p key={i} style={{ fontSize: 13, color: '#555', marginBottom: 1 }}>{l}</p>)}
+                </div>
+              ))}
+            </div>
+
+            {/* amount paid */}
+            <p style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{fmt(finalAmt)}đ đã thanh toán ngày {datePaid}</p>
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>
+              Trạng thái: <strong style={{ color: '#111' }}>{booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</strong>
+            </p>
+
+            {/* line items */}
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderTop: '2px solid #e5e7eb', borderBottom: '2px solid #e5e7eb' }}>
+                  {th('Mô tả')}{th('SL', true)}{th('Đơn giá', true)}{th('Thành tiền', true)}
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
+                    <div style={{ fontWeight: 600 }}>{booking.packageId?.name || 'Dịch vụ rửa xe'}</div>
+                    <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{dateFmt(booking.bookingDate)} · Vào {checkIn}{checkOut ? ` → Ra ${checkOut}` : ''}</div>
+                  </td>
+                  {td('1', true)}{td(`${fmt(basePrice)}đ`, true)}{td(`${fmt(basePrice)}đ`, true)}
+                </tr>
+                {discount > 0 && (
+                  <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
+                      <div style={{ fontWeight: 600 }}>Giảm giá voucher</div>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{booking.voucherCode ? `Mã: ${booking.voucherCode}` : 'Khuyến mãi'}</div>
+                    </td>
+                    {td('1', true)}{td(`-${fmt(discount)}đ`, true)}{td(`-${fmt(discount)}đ`, true)}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* totals */}
+            <div style={{ borderTop: '2px solid #e5e7eb' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr><td style={{ padding: '5px 8px', color: '#374151' }}>Tạm tính</td><td /><td /><td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{fmt(basePrice)}đ</td></tr>
+                  {discount > 0 && <tr><td style={{ padding: '5px 8px', color: '#374151' }}>Giảm giá</td><td /><td /><td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>-{fmt(discount)}đ</td></tr>}
+                  <tr><td style={{ padding: '5px 8px', color: '#374151' }}>Tổng cộng</td><td /><td /><td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{fmt(finalAmt)}đ</td></tr>
+                  <tr style={{ borderTop: '2px solid #e5e7eb' }}>
+                    <td style={{ padding: '10px 8px', fontWeight: 800, fontSize: 14 }}>Đã thanh toán</td><td /><td />
+                    <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 800, fontSize: 14 }}>
+                      {booking.paymentStatus === 'paid' ? `${fmt(finalAmt)}đ` : '0đ'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* payment history */}
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: '28px 0 12px' }}>Lịch sử thanh toán</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+                  {['Phương thức', 'Ngày', 'Số tiền', 'Mã GD'].map((h, i) => (
+                    <th key={h} style={{ padding: '8px', textAlign: i > 1 ? 'right' : 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9ca3af' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '10px 8px', fontSize: 13 }}>{payLabel}</td>
+                  <td style={{ padding: '10px 8px', fontSize: 13 }}>{datePaid}</td>
+                  <td style={{ padding: '10px 8px', fontSize: 13, textAlign: 'right' }}>{booking.paymentStatus === 'paid' ? `${fmt(finalAmt)}đ` : '—'}</td>
+                  <td style={{ padding: '10px 8px', fontSize: 13, textAlign: 'right' }}>#{shortId}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ marginTop: 32, paddingTop: 14, borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#d1d5db' }}>
+              <span>In lúc: {printedAt}</span>
+              <span>Trang 1 / 1</span>
+            </div>
+          </div>
+        </div>
+
+        {/* actions */}
+        <div className="flex shrink-0 gap-3 border-t border-slate-100 px-6 py-4">
+          <button onClick={onClose}
+            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            Đóng
+          </button>
+          <button onClick={handleExportPDF}
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors">
+            <Printer size={15} weight="fill" />
+            Xuất PDF / In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── booking details tab ── */
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
   const [showRebook, setShowRebook] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
@@ -406,6 +713,126 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
         </div>
 
+        {/* ── INVOICE (completed only) ── */}
+        {booking.status === 'completed' && (
+          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 overflow-hidden">
+            {/* Invoice header */}
+            <div className="flex items-center justify-between bg-emerald-600 px-5 py-3">
+              <div className="flex items-center gap-2 text-white">
+                <Receipt size={18} weight="fill" />
+                <span className="font-bold text-sm tracking-wide">HÓA ĐƠN DỊCH VỤ</span>
+              </div>
+              <span className="font-mono text-xs text-emerald-100">
+                #{String(booking._id).slice(-8).toUpperCase()}
+              </span>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Customer + Vehicle row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Khách hàng</p>
+                  <p className="font-semibold text-slate-800">{booking.userId?.name || '—'}</p>
+                  <p className="text-xs text-slate-500">{booking.userId?.phone || ''}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                    <Car size={10} /> Phương tiện
+                  </p>
+                  <p className="font-mono font-semibold text-slate-800">{booking.vehicleId?.licensePlate || '—'}</p>
+                  <p className="text-xs text-slate-500 capitalize">{booking.vehicleId?.vehicleType} · {booking.vehicleId?.brand} {booking.vehicleId?.color}</p>
+                </div>
+              </div>
+
+              {/* Time row */}
+              <div className="grid grid-cols-2 gap-4 rounded-xl bg-white border border-emerald-100 p-3">
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                    <Clock size={10} /> Giờ vào
+                  </p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {booking.checkInTime
+                      ? new Date(booking.checkInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                      : booking.startTime || '—'}
+                  </p>
+                  <p className="text-xs text-slate-400">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                    <Clock size={10} /> Giờ ra
+                  </p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {booking.checkOutTime
+                      ? new Date(booking.checkOutTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                      : booking.endTime || '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Price breakdown */}
+              <div className="space-y-1.5 border-t border-emerald-200 pt-3">
+                <div className="flex justify-between text-sm text-slate-600">
+                  <span>{booking.packageId?.name || 'Dịch vụ'}</span>
+                  <span>{Number(booking.packageId?.price || booking.finalPrice || 0).toLocaleString('vi-VN')}₫</span>
+                </div>
+                {(booking.discountAmount > 0) && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span>Voucher {booking.voucherCode ? `(${booking.voucherCode})` : ''}</span>
+                    <span>-{Number(booking.discountAmount).toLocaleString('vi-VN')}₫</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center border-t border-emerald-200 pt-2 mt-1">
+                  <span className="font-bold text-slate-800">Thành tiền</span>
+                  <span className="text-lg font-bold text-emerald-700">
+                    {Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment status */}
+              <div className="flex items-center justify-between rounded-xl bg-white border border-emerald-100 px-4 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <CurrencyCircleDollar size={16} className="text-emerald-600" weight="fill" />
+                  <span>Thanh toán</span>
+                  {booking.paymentMethod && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 capitalize">
+                      {booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'momo' ? 'MoMo' : booking.paymentMethod}
+                    </span>
+                  )}
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  booking.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                </span>
+              </div>
+
+              {/* Confirm cash if not yet paid */}
+              {booking.paymentStatus !== 'paid' && (
+                <button disabled={busy} onClick={handleCashPayment}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                  <CurrencyCircleDollar size={15} weight="fill" />
+                  Xác nhận thu tiền mặt
+                </button>
+              )}
+
+              {/* Invoice action buttons — trong invoice, không bị chatbot đè */}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowPrint(true)}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                  <Printer size={15} />
+                  In hóa đơn
+                </button>
+                <button onClick={() => setShowRebook(true)}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
+                  <CalendarPlus size={15} />
+                  Đặt lại lịch
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Rating + Review (completed) */}
         {booking.status === 'completed' && (booking.rating || booking.feedback) && (
           <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-4 space-y-2">
@@ -432,35 +859,37 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
         )}
 
-        {/* Action buttons */}
-        <div className="mt-4 flex flex-wrap items-center gap-2 justify-end">
-          {/* Hiển thị QR cho khách scan — chỉ khi chưa completed/cancelled */}
-          {!['completed', 'cancelled'].includes(booking.status) && (
-            <button onClick={() => setShowQR(true)}
-              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
-              <QrCode size={15} />
-              Hiển thị QR cho khách
-            </button>
-          )}
-          {(booking.status === 'completed' || booking.status === 'cancelled') && (
-            <button onClick={() => setShowRebook(true)}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
-              <CalendarPlus size={15} />
-              Đặt lại lịch
-            </button>
-          )}
-        </div>
+        {/* Action buttons — cancelled: nút đặt lại lịch, pending: nút QR */}
+        {(booking.status === 'cancelled' || booking.status === 'pending') && (
+          <div className="mt-4 flex items-center gap-2">
+            {booking.status === 'pending' && (
+              <button onClick={() => setShowQR(true)}
+                className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+                <QrCode size={15} />
+                Hiển thị QR cho khách
+              </button>
+            )}
+            {booking.status === 'cancelled' && (
+              <button onClick={() => setShowRebook(true)}
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
+                <CalendarPlus size={15} />
+                Đặt lại lịch
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {showRebook && (
         <RebookModal
           booking={booking}
           onClose={() => setShowRebook(false)}
-          onRebooked={(newB) => { notify('Đã đặt lại lịch thành công!'); onBack(); }}
+          onRebooked={() => { notify('Đã đặt lại lịch thành công!'); onBack(); }}
           notify={notify}
         />
       )}
-      {showQR && <QRDisplayModal booking={booking} onClose={() => setShowQR(false)} />}
+      {showQR    && <QRDisplayModal      booking={booking} onClose={() => setShowQR(false)} />}
+      {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
     </div>
   );
 }
@@ -677,10 +1106,7 @@ export default function ManagerBookings() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-slate-400">
-            Trang {page}/{totalPages} · {total} lịch hẹn
-          </p>
+        <div className="flex flex-col items-center gap-2">
           <div className="flex items-center gap-1">
             <button onClick={() => handlePageChange(page - 1)} disabled={page <= 1 || loading}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
@@ -702,6 +1128,7 @@ export default function ManagerBookings() {
               Sau →
             </button>
           </div>
+          <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} lịch hẹn</p>
         </div>
       )}
 
