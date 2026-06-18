@@ -24,8 +24,8 @@ exports.getAllBookings = catchAsync(async (req, res) => {
 });
 
 exports.getMyBookings = catchAsync(async (req, res) => {
-  const bookings = await bookingService.getAllBookings({}, 'customer', req.userId);
-  success(res, bookings, 'My bookings retrieved');
+  const result = await bookingService.getAllBookings(req.query, 'customer', req.userId);
+  success(res, result, 'My bookings retrieved');
 });
 
 exports.getBookingById = catchAsync(async (req, res) => {

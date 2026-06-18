@@ -96,6 +96,8 @@ const STAR_FILTERS = [
   { value: '1', label: '1-2 sao' },
 ];
 
+const PAGE_SIZE = 9;
+
 export default function AdminReviews() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -104,6 +106,7 @@ export default function AdminReviews() {
   const [starFilter, setStarFilter] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -114,7 +117,8 @@ export default function AdminReviews() {
       ]);
       if (!fbRes.ok) throw new Error('Không thể tải đánh giá');
       const fbData = await fbRes.json();
-      setFeedbacks(fbData?.data || []);
+      const fbResult = fbData?.data || fbData;
+      setFeedbacks(Array.isArray(fbResult) ? fbResult : (fbResult?.feedbacks || []));
       if (brRes.ok) {
         const brData = await brRes.json();
         setBranches(brData?.data?.branches || brData?.data || []);
@@ -136,17 +140,30 @@ export default function AdminReviews() {
     return { ...br, reviewCount: items.length, avgRating: avg };
   }).filter((b) => b.reviewCount > 0);
 
+  function onBranchFilter(value) {
+    setBranchFilter(value);
+    setPage(1);
+  }
+
+  function onStarFilter(value) {
+    setStarFilter(value);
+    setPage(1);
+  }
+
   // Filters
-  const displayed = feedbacks.filter((f) => {
+  const filtered = feedbacks.filter((f) => {
     if (branchFilter && String(f.branchId?._id || f.branchId) !== branchFilter) return false;
     if (starFilter === '1') return f.rating <= 2;
     if (starFilter) return f.rating === Number(starFilter);
     return f.rating; // only show reviews with ratings
   });
 
-  const total = displayed.length;
-  const avgRating = total ? (displayed.reduce((s, f) => s + f.rating, 0) / total).toFixed(1) : '—';
-  const repliedCount = displayed.filter((f) => f.managerReply).length;
+  const total = filtered.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const avgRating = total ? (filtered.reduce((s, f) => s + f.rating, 0) / total).toFixed(1) : '—';
+  const repliedCount = filtered.filter((f) => f.managerReply).length;
 
   return (
     <div className="space-y-6">
@@ -193,7 +210,7 @@ export default function AdminReviews() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
-        <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}
+        <select value={branchFilter} onChange={(e) => onBranchFilter(e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
           <option value="">Tất cả chi nhánh</option>
           {branches.map((br) => (
@@ -201,7 +218,7 @@ export default function AdminReviews() {
           ))}
         </select>
         {STAR_FILTERS.map((f) => (
-          <button key={f.value} onClick={() => setStarFilter(f.value)}
+          <button key={f.value} onClick={() => onStarFilter(f.value)}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
               starFilter === f.value ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
             }`}>
@@ -220,14 +237,15 @@ export default function AdminReviews() {
         <div className="flex justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
         </div>
-      ) : displayed.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 py-20 text-slate-400">
           <ChatText size={48} weight="duotone" />
           <p className="text-sm">Chưa có đánh giá nào.</p>
         </div>
       ) : (
+        <>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {displayed.map((fb) => (
+          {paginated.map((fb) => (
             <div key={fb._id} className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-5 pt-5 pb-4 border-b border-slate-50">
                 <div className="flex items-start justify-between gap-2">
@@ -276,8 +294,32 @@ export default function AdminReviews() {
                 </button>
               </div>
             </div>
-          ))}
+            ))}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <button disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              ‹ Trước
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)}
+                className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                  safePage === p
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                {p}
+              </button>
+            ))}
+            <button disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              Sau ›
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {replyTarget && (

@@ -152,27 +152,159 @@ router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER),
  */
 router.post('/:id/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.cancel, validate, bookingController.cancelBooking);
 
-// PATCH /api/bookings/:id/feedback — Customer submits rating + review
+/**
+ * @swagger
+ * /api/bookings/{id}/feedback:
+ *   patch:
+ *     summary: Submit rating & review for a completed booking (customer)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               rating:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 5
+ *                 description: Rating 1-5
+ *               feedback:
+ *                 type: string
+ *                 maxLength: 1000
+ *                 description: Review text
+ *     responses:
+ *       200:
+ *         description: Feedback submitted
+ *       400:
+ *         description: Invalid status or validation error
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Booking not found
+ */
 router.patch('/:id/feedback', authenticate, authorize(ROLES.CUSTOMER), [
   param('id').isMongoId(),
   body('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Rating must be 1-5'),
   body('feedback').optional().trim().isLength({ max: 1000 }),
 ], validate, bookingController.submitFeedback);
 
-// PATCH /api/bookings/:id/feedback/reply — Manager replies to review
+/**
+ * @swagger
+ * /api/bookings/{id}/feedback/reply:
+ *   patch:
+ *     summary: Reply to a customer review (admin/manager)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reply]
+ *             properties:
+ *               reply:
+ *                 type: string
+ *                 maxLength: 1000
+ *                 description: Manager reply text
+ *     responses:
+ *       200:
+ *         description: Reply submitted
+ *       400:
+ *         description: No review to reply to
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Booking not found
+ */
 router.patch('/:id/feedback/reply', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
   param('id').isMongoId(),
   body('reply').trim().notEmpty().isLength({ max: 1000 }).withMessage('Reply is required (max 1000 chars)'),
 ], validate, bookingController.replyToFeedback);
 
-// POST /api/bookings/:id/rebook — Clone booking with new date/time
+/**
+ * @swagger
+ * /api/bookings/{id}/rebook:
+ *   post:
+ *     summary: Clone a booking with new date/time (rebook)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Original booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [bookingDate, startTime]
+ *             properties:
+ *               bookingDate:
+ *                 type: string
+ *                 format: date
+ *               startTime:
+ *                 type: string
+ *                 example: "09:00"
+ *     responses:
+ *       201:
+ *         description: Booking rebooked
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Booking not found
+ */
 router.post('/:id/rebook', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   param('id').isMongoId(),
   body('bookingDate').notEmpty().withMessage('bookingDate is required'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
 ], validate, bookingController.rebookBooking);
 
-// GET /api/bookings/:id/qr — Generate QR code for check-in
+/**
+ * @swagger
+ * /api/bookings/{id}/qr:
+ *   get:
+ *     summary: Generate QR code for check-in
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: QR code generated (base64 data URL)
+ *       404:
+ *         description: Booking not found
+ */
 router.get('/:id/qr', authenticate, [param('id').isMongoId()], validate, bookingController.getBookingQR);
 
 /**

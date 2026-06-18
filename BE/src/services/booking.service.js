@@ -272,9 +272,24 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     query.userId = { $in: [...ids].map(id => new mongoose.Types.ObjectId(id)) };
   }
 
-  const page  = Math.max(1, parseInt(filters.page)  || 1);
-  const limit = Math.min(500, Math.max(1, parseInt(filters.limit) || 20));
-  const skip  = (page - 1) * limit;
+  // keyword: search package name OR branch name
+  if (filters.keyword && filters.keyword.trim()) {
+    const re = new RegExp(filters.keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const [matchedPackages, matchedBranches] = await Promise.all([
+      Package.find({ name: re }, '_id'),
+      Branch.find({ name: re }, '_id'),
+    ]);
+    const orClauses = [];
+    if (matchedPackages.length > 0) orClauses.push({ packageId: { $in: matchedPackages.map(p => p._id) } });
+    if (matchedBranches.length > 0) orClauses.push({ branchId: { $in: matchedBranches.map(b => b._id) } });
+    if (orClauses.length === 0) return { bookings: [], total: 0, page: 1, totalPages: 0 };
+    if (query.$or) query.$or = [...query.$or, ...orClauses];
+    else query.$or = orClauses;
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
 
   const [bookings, total] = await Promise.all([
     Booking.find(query)
@@ -288,7 +303,17 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     Booking.countDocuments(query),
   ]);
 
-  return { bookings, total, page, totalPages: Math.ceil(total / limit) };
+  return {
+    bookings,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
 };
 
 exports.getBookingById = async (id, userRole, userId) => {

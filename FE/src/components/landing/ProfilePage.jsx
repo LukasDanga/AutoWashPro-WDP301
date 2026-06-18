@@ -10,30 +10,22 @@ const TIER_MAP = {
   bronze: { label: 'Đồng', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200', min: 0 },
 };
 
-export default function ProfilePage({ user, vehicles: initialVehicles, onLogout, apiBase, token, onBack }) {
+export default function ProfilePage({ user, vehicles: initialVehicles, onLogout, apiBase, token, onBack, onUserUpdate }) {
   const isLoggedIn = !!user && !!token;
   const [activeTab, setActiveTab] = useState('info');
   const [vehicles, setVehicles] = useState(initialVehicles || []);
-  const [bookings, setBookings] = useState([]);
-  const [bookingsLoading, setBookingsLoading] = useState(true);
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [form, setForm] = useState({ licensePlate: '', vehicleType: 'car', brand: '', model: '', color: '', year: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [showEditVehicle, setShowEditVehicle] = useState(false);
+  const [editVehicle, setEditVehicle] = useState(null);
+  const [editFormVehicle, setEditFormVehicle] = useState({ licensePlate: '', vehicleType: 'car', brand: '', model: '', color: '', year: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
-  useEffect(() => {
-    async function loadBookings() {
-      try {
-        const res = await fetch(`${apiBase || API_BASE}/bookings/my`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const payload = await res.json();
-        const bData = payload?.data;
-        setBookings(bData?.bookings ?? (Array.isArray(bData) ? bData : []));
-      } catch (e) { console.error(e); }
-      finally { setBookingsLoading(false); }
-    }
-    if (isLoggedIn) loadBookings();
-  }, [isLoggedIn, apiBase, token]);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '' });
 
   async function handleAddVehicle(e) {
     e.preventDefault();
@@ -63,6 +55,71 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
       });
       setVehicles(prev => prev.filter(v => (v._id || v.id) !== vId));
     } catch (e) { alert(e.message); }
+  }
+
+  async function handleUpdateProfile(e) {
+    e.preventDefault();
+    setEditSaving(true);
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/auth/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(editForm),
+      });
+      if (!res.ok) throw new Error('Cập nhật thất bại');
+      const payload = await res.json();
+      const updated = payload?.data || payload;
+      setEditing(false);
+      showToast('Đã cập nhật thành công');
+      if (onUserUpdate) onUserUpdate(updated);
+    } catch (e) {
+      showToast(e.message);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleUpdateVehicle(e) {
+    e.preventDefault();
+    const vId = editVehicle?._id || editVehicle?.id;
+    if (!vId) return;
+    setEditSubmitting(true);
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/vehicles/${vId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(editFormVehicle),
+      });
+      if (!res.ok) throw new Error('Cập nhật xe thất bại');
+      const payload = await res.json();
+      const updated = payload?.data || payload;
+      setVehicles(prev => prev.map(v => ((v._id || v.id) === vId ? updated : v)));
+      setShowEditVehicle(false);
+      setEditVehicle(null);
+      showToast('Đã cập nhật xe thành công');
+    } catch (e) {
+      showToast(e.message);
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
+  function openEditVehicle(v) {
+    setEditVehicle(v);
+    setEditFormVehicle({
+      licensePlate: v.licensePlate || '',
+      vehicleType: v.vehicleType || 'car',
+      brand: v.brand || '',
+      model: v.model || '',
+      color: v.color || '',
+      year: v.year || '',
+    });
+    setShowEditVehicle(true);
+  }
+
+  function showToast(message) {
+    setToast({ show: true, message });
+    setTimeout(() => setToast({ show: false, message: '' }), 3000);
   }
 
   const tier = TIER_MAP[user?.tier] || TIER_MAP.bronze;
@@ -95,6 +152,14 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
         </div>
       </header>
 
+      {toast.show && (
+        <div className="awp-toast-container">
+          <div className={`awp-toast-message ${toast.message === 'Đã cập nhật thành công' ? 'awp-toast-success' : 'awp-toast-error'}`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
+
       <main className="max-w-4xl mx-auto px-6 py-10">
         <div className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden">
           <div className="p-8 md:p-10">
@@ -115,7 +180,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200">
                 <p className="text-xs text-emerald-600 font-medium uppercase tracking-wider">Điểm tích lũy</p>
                 <p className="text-2xl font-bold text-emerald-700 mt-1">{user?.loyaltyPoints || 0}</p>
@@ -123,10 +188,6 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
               <div className="p-5 rounded-xl bg-blue-50 border border-blue-200">
                 <p className="text-xs text-blue-600 font-medium uppercase tracking-wider">Xe đã đăng ký</p>
                 <p className="text-2xl font-bold text-blue-700 mt-1">{vehicles.length}</p>
-              </div>
-              <div className="p-5 rounded-xl bg-purple-50 border border-purple-200">
-                <p className="text-xs text-purple-600 font-medium uppercase tracking-wider">Tổng lượt đặt</p>
-                <p className="text-2xl font-bold text-purple-700 mt-1">{bookings.length}</p>
               </div>
             </div>
 
@@ -143,12 +204,12 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
             )}
 
             <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit mb-8">
-              {['info', 'vehicles', 'bookings'].map(tab => (
+              {['info', 'vehicles'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}>
-                  {tab === 'info' ? 'Thông tin' : tab === 'vehicles' ? 'Xe của tôi' : 'Lịch sử đặt'}
+                  {tab === 'info' ? 'Thông tin' : 'Xe của tôi'}
                 </button>
               ))}
             </div>
@@ -156,28 +217,69 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
             <AnimatePresence mode="wait">
               {activeTab === 'info' && (
                 <motion.div key="info" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-xl bg-white border border-slate-200">
-                        <p className="text-xs text-slate-400">Tên</p>
-                        <p className="text-sm font-medium text-slate-800 mt-1">{user?.name || 'Chưa cập nhật'}</p>
+                  {editing ? (
+                    <form onSubmit={handleUpdateProfile} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-slate-500 block mb-1.5">Tên</label>
+                          <input required value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-500 block mb-1.5">Email</label>
+                          <input value={user?.email || ''} disabled
+                            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm bg-slate-50 text-slate-400 cursor-not-allowed" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-500 block mb-1.5">Số điện thoại</label>
+                          <input required value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-500 block mb-1.5">Ngày tham gia</label>
+                          <input value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '...'} disabled
+                            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm bg-slate-50 text-slate-400 cursor-not-allowed" />
+                        </div>
                       </div>
-                      <div className="p-4 rounded-xl bg-white border border-slate-200">
-                        <p className="text-xs text-slate-400">Email</p>
-                        <p className="text-sm font-medium text-slate-800 mt-1">{user?.email}</p>
+                      <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => { setEditing(false); setEditForm({ name: user?.name || '', phone: user?.phone || '' }); }}
+                          className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                          Hủy
+                        </button>
+                        <button type="submit" disabled={editSaving}
+                          className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50">
+                          {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                        </button>
                       </div>
-                      <div className="p-4 rounded-xl bg-white border border-slate-200">
-                        <p className="text-xs text-slate-400">Số điện thoại</p>
-                        <p className="text-sm font-medium text-slate-800 mt-1">{user?.phone || 'Chưa cập nhật'}</p>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-white border border-slate-200">
+                          <p className="text-xs text-slate-400">Tên</p>
+                          <p className="text-sm font-medium text-slate-800 mt-1">{user?.name || 'Chưa cập nhật'}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-white border border-slate-200">
+                          <p className="text-xs text-slate-400">Email</p>
+                          <p className="text-sm font-medium text-slate-800 mt-1">{user?.email}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-white border border-slate-200">
+                          <p className="text-xs text-slate-400">Số điện thoại</p>
+                          <p className="text-sm font-medium text-slate-800 mt-1">{user?.phone || 'Chưa cập nhật'}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-white border border-slate-200">
+                          <p className="text-xs text-slate-400">Ngày tham gia</p>
+                          <p className="text-sm font-medium text-slate-800 mt-1">
+                            {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '...'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="p-4 rounded-xl bg-white border border-slate-200">
-                        <p className="text-xs text-slate-400">Ngày tham gia</p>
-                        <p className="text-sm font-medium text-slate-800 mt-1">
-                          {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '...'}
-                        </p>
-                      </div>
+                      <button onClick={() => setEditing(true)}
+                        className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">
+                        Chỉnh sửa thông tin
+                      </button>
                     </div>
-                  </div>
+                  )}
                 </motion.div>
               )}
 
@@ -202,12 +304,21 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                               <p className="text-xs text-slate-400">{v.licensePlate} · {v.vehicleType} · {v.color}</p>
                             </div>
                           </div>
-                          <button onClick={() => handleDeleteVehicle(vId)}
-                            className="text-red-400 hover:text-red-600 transition-colors p-1">
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => openEditVehicle(v)}
+                              className="text-slate-400 hover:text-emerald-600 transition-colors p-1.5">
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                            <button onClick={() => handleDeleteVehicle(vId)}
+                              className="text-red-400 hover:text-red-600 transition-colors p-1.5">
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -222,39 +333,6 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                 </motion.div>
               )}
 
-              {activeTab === 'bookings' && (
-                <motion.div key="bookings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-                  {bookingsLoading ? (
-                    <div className="text-center py-8 text-slate-400 text-sm">Đang tải...</div>
-                  ) : bookings.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400 text-sm">Chưa có lịch đặt nào.</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {bookings.slice(0, 10).map(b => {
-                        const bId = b._id || b.id;
-                        return (
-                          <div key={bId} className="flex items-center justify-between p-4 rounded-xl bg-white border border-slate-200">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-800">{b.packageId?.name || b.packageName || 'Dịch vụ'}</p>
-                              <p className="text-xs text-slate-400">
-                                {b.branchId?.name || b.branchName || ''} · {b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : ''} {b.startTime || ''}
-                              </p>
-                            </div>
-                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                              b.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
-                              b.status === 'confirmed' ? 'bg-blue-50 text-blue-600' :
-                              b.status === 'cancelled' ? 'bg-red-50 text-red-500' :
-                              'bg-slate-100 text-slate-500'
-                            }`}>
-                              {b.status === 'completed' ? 'Hoàn thành' : b.status === 'confirmed' ? 'Đã xác nhận' : b.status === 'cancelled' ? 'Đã hủy' : b.status}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
         </div>
@@ -315,6 +393,69 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                   <button type="submit" disabled={submitting}
                     className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50">
                     {submitting ? 'Đang thêm...' : 'Thêm xe'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showEditVehicle && editVehicle && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={() => { setShowEditVehicle(false); setEditVehicle(null); }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[1.5rem] w-full max-w-md p-8 shadow-xl"
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-slate-900 mb-6">Chỉnh sửa xe</h3>
+              <form onSubmit={handleUpdateVehicle} className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-500 block mb-1.5">Biển số xe *</label>
+                  <input required value={editFormVehicle.licensePlate} onChange={e => setEditFormVehicle(f => ({ ...f, licensePlate: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1.5">Loại xe *</label>
+                    <select required value={editFormVehicle.vehicleType} onChange={e => setEditFormVehicle(f => ({ ...f, vehicleType: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400">
+                      <option value="car">Xe con</option>
+                      <option value="suv">SUV</option>
+                      <option value="truck">Xe tải</option>
+                      <option value="motorcycle">Xe máy</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1.5">Năm sản xuất</label>
+                    <input type="number" value={editFormVehicle.year} onChange={e => setEditFormVehicle(f => ({ ...f, year: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 block mb-1.5">Hãng xe *</label>
+                  <input required value={editFormVehicle.brand} onChange={e => setEditFormVehicle(f => ({ ...f, brand: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 block mb-1.5">Dòng xe</label>
+                  <input value={editFormVehicle.model} onChange={e => setEditFormVehicle(f => ({ ...f, model: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 block mb-1.5">Màu xe *</label>
+                  <input required value={editFormVehicle.color} onChange={e => setEditFormVehicle(f => ({ ...f, color: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowEditVehicle(false); setEditVehicle(null); }}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                    Hủy
+                  </button>
+                  <button type="submit" disabled={editSubmitting}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50">
+                    {editSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
                   </button>
                 </div>
               </form>

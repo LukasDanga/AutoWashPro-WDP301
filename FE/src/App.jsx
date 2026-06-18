@@ -27,6 +27,10 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
+  function handleUserUpdate(updated) {
+    setUser(prev => ({ ...prev, ...updated }));
+  }
+
   async function loadSession(accessToken) {
     if (!accessToken) return;
 
@@ -199,11 +203,11 @@ export default function App() {
   }
 
   if (showHistory) {
-    return <HistoryPage onBack={() => setShowHistory(false)} />;
+    return <HistoryPage onBack={() => setShowHistory(false)} apiBase={apiBase} token={token} />;
   }
 
   if (showProfile) {
-    return <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => setShowProfile(false)} />;
+    return <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => setShowProfile(false)} onUserUpdate={handleUserUpdate} />;
   }
 
   return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} />;
