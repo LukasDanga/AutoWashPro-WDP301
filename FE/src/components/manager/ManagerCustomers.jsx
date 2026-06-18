@@ -173,8 +173,7 @@ export default function ManagerCustomers() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} khách hàng</p>
+            <div className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-1">
                 <button onClick={() => handlePage(page - 1)} disabled={page <= 1 || loading}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
@@ -196,6 +195,7 @@ export default function ManagerCustomers() {
                   Sau →
                 </button>
               </div>
+              <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} khách hàng</p>
             </div>
           )}
         </>
