@@ -7,6 +7,8 @@ import UserManagement from '@/components/admin/UserManagement';
 import AdminOverview from '@/components/admin/AdminOverview';
 import FeaturePlaceholder from '@/components/admin/FeaturePlaceholder';
 import AdminProfile from '@/components/admin/AdminProfile';
+import AdminReviews from '@/components/admin/AdminReviews';
+import AdminBookings from '@/components/admin/AdminBookings';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -93,28 +95,12 @@ export default function AdminRoutes() {
         <Route index element={<AdminOverview />} />
         <Route path="branches" element={<BranchManagement />} />
         <Route path="users" element={<UserManagement />} />
-        <Route
-          path="reviews"
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.reviews.title}
-              description={ADMIN_PAGE_META.reviews.description}
-            />
-          }
-        />
+        <Route path="reviews" element={<AdminReviews />} />
         <Route
           path="rewards"
           element={<ManagerVouchers />}
         />
-        <Route
-          path="activity"
-          element={
-            <FeaturePlaceholder
-              title={ADMIN_PAGE_META.activity.title}
-              description={ADMIN_PAGE_META.activity.description}
-            />
-          }
-        />
+        <Route path="activity" element={<AdminBookings />} />
         <Route path="profile" element={<AdminProfile user={user} />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
