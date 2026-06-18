@@ -9,6 +9,7 @@ const notificationRoutes = require('./notification.routes');
 const slotPackRoutes = require('./slotPack.routes');
 const reportRoutes = require('./report.routes');
 const chatbotRoutes = require('./chatbot.routes');
+const sseRoutes = require('./sse.routes');
 
 module.exports = {
   authRoutes,
@@ -22,4 +23,5 @@ module.exports = {
   slotPackRoutes,
   reportRoutes,
   chatbotRoutes,
+  sseRoutes,
 };
