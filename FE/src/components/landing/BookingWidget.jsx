@@ -167,6 +167,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   useEffect(() => {
     if (!pendingBooking || !isLoggedIn || processingPending) return;
     const pb = pendingBooking;
+    if (pb.tab) setTab(pb.tab);
     const restoreBranch = branches.find(b => (b._id || b.id) === pb.branchId);
     if (restoreBranch) setSelectedBranch(restoreBranch);
     const restorePkg = packages.find(p => (p._id || p.id) === pb.packageId);
@@ -279,9 +280,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         pkg: pkg || { name: '' },
         currentDate: pb.selectedDate ? bookingDates.find(d => d.id === pb.selectedDate) : null,
         selectedTime: pb.selectedTime,
-        total: booking?.totalAmount || 0,
-        discount: 0,
-        points: booking?.pointsEarned || 0,
+        total: pb.tab === 'recurring' ? (totalBase - discount) * (booking?.totalCreated || 1) : total,
+        discount: pb.tab === 'recurring' ? discount * (booking?.totalCreated || 1) : discount,
+        points: pb.tab === 'recurring' ? points * (booking?.totalCreated || 1) : points,
         isPayingWithPack: false,
         bookingCode: code,
         subServices: pb.selectedSubServices || [],

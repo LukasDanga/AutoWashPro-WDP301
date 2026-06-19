@@ -1030,6 +1030,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     bookingDate: bookingDateObj,
     startTime,
     endTime,
+    bookingCode: generateBookingCode(),
     bookingType: src.bookingType === 'recurring' ? 'single' : src.bookingType,
     selectedSubServices: src.selectedSubServices || [],
     note: src.note,
