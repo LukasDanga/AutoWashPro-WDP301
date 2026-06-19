@@ -7,7 +7,6 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
 
-// Correct getDay() values: Mon=1, Tue=2, ..., Sat=6, Sun=0
 const WEEKDAY_OPTIONS = [
   { label: 'T2', value: 1 },
   { label: 'T3', value: 2 },
@@ -39,7 +38,15 @@ function buildBookingDates() {
   });
 }
 
-export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory }) {
+const VEHICLE_TYPES = [
+  { value: 'sedan', label: 'Sedan' },
+  { value: 'suv', label: 'SUV' },
+  { value: 'pickup', label: 'Pickup' },
+  { value: 'van', label: 'Van' },
+  { value: 'motorcycle', label: 'Xe máy' },
+];
+
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -65,6 +72,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
 
+  // Guest vehicle form
+  const [guestVehicle, setGuestVehicle] = useState({ licensePlate: '', brand: '', model: '', type: 'sedan' });
+  const [vehicleError, setVehicleError] = useState('');
+
   // Booking state
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
@@ -73,6 +84,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastBooking, setLastBooking] = useState(null);
   const [result, setResult] = useState(null);
+
+  // Process pending booking after login
+  const [processingPending, setProcessingPending] = useState(false);
 
   // Load branches (public)
   useEffect(() => {
@@ -149,6 +163,142 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     fetchSlots();
   }, [selectedBranch, selectedPackage, currentDate?.iso, isLoggedIn, apiBase, token]);
 
+  // Restore pending booking selections after login, show step 5 for review
+  useEffect(() => {
+    if (!pendingBooking || !isLoggedIn || processingPending) return;
+    const pb = pendingBooking;
+    const restoreBranch = branches.find(b => (b._id || b.id) === pb.branchId);
+    if (restoreBranch) setSelectedBranch(restoreBranch);
+    const restorePkg = packages.find(p => (p._id || p.id) === pb.packageId);
+    if (restorePkg) setSelectedPackage(restorePkg);
+    if (pb.selectedDate) setSelectedDate(pb.selectedDate);
+    if (pb.selectedTime) setSelectedTime(pb.selectedTime);
+    if (pb.selectedDays) setSelectedDays(pb.selectedDays);
+    if (pb.weeks) setWeeks(pb.weeks);
+    if (pb.selectedSubServices) setSelectedSubServices(pb.selectedSubServices);
+    setStep(5);
+  }, [pendingBooking, isLoggedIn, branches, packages]);
+
+  async function processPendingBooking() {
+    const pb = pendingBooking;
+    if (!pb) return;
+    setProcessingPending(true);
+    setBookingLoading(true);
+    setError('');
+
+    try {
+      // Create vehicle if guest provided info
+      let vehicleId = '';
+      const gv = pb.guestVehicle;
+      if (gv && gv.licensePlate && gv.licensePlate.trim()) {
+        // Check if vehicle already exists (from a previous failed attempt)
+        const existing = userVehicles.find(v =>
+          (v.licensePlate || '').replace(/\s+/g, '').toUpperCase() === gv.licensePlate.trim().replace(/\s+/g, '').toUpperCase()
+        );
+        if (existing) {
+          vehicleId = existing._id || existing.id || '';
+        }
+        if (!vehicleId) {
+          const vehRes = await fetch(`${apiBase}/vehicles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              licensePlate: gv.licensePlate.trim(),
+              brand: gv.brand?.trim() || 'Khác',
+              model: gv.model?.trim() || '',
+              vehicleType: gv.type || 'sedan',
+              color: 'Khác',
+            }),
+          });
+          if (!vehRes.ok) {
+            const errData = await vehRes.json().catch(() => null);
+            // If duplicate, vehicle was already created — fetch it
+            if (vehRes.status === 409) {
+              const found = userVehicles.find(v =>
+                (v.licensePlate || '').replace(/\s+/g, '').toUpperCase() === gv.licensePlate.trim().replace(/\s+/g, '').toUpperCase()
+              );
+              if (found) {
+                vehicleId = found._id || found.id || '';
+              } else {
+                throw new Error('Xe đã tồn tại nhưng không tìm thấy trong danh sách');
+              }
+            } else {
+              console.error('Vehicle creation failed:', vehRes.status, errData);
+              throw new Error(errData?.message || 'Không thể lưu thông tin xe');
+            }
+          } else {
+            const vehData = await vehRes.json();
+            const newVehicle = vehData?.data || vehData;
+            vehicleId = newVehicle?._id || newVehicle?.id || '';
+            if (onVehicleCreated && newVehicle) onVehicleCreated(newVehicle);
+          }
+        }
+      } else {
+        // Use selected or first existing vehicle
+        vehicleId = selectedVehicle || userVehicles[0]?._id || userVehicles[0]?.id || '';
+      }
+
+      // Create booking
+      const body = {
+        branchId: pb.branchId,
+        packageId: pb.packageId,
+        vehicleId,
+        bookingDate: pb.selectedDate || undefined,
+        startTime: pb.selectedTime,
+        voucherCode: pb.appliedVoucher?.code || undefined,
+        selectedSubServices: pb.selectedSubServices || [],
+        note: '',
+      };
+
+      const endpoint = pb.tab === 'recurring' ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(pb.tab === 'recurring' ? {
+          ...body,
+          weekdays: pb.selectedDays,
+          weeks: pb.weeks,
+          vehicleId: vehicleId || undefined,
+          selectedSubServices: pb.selectedSubServices || [],
+        } : body),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        console.error('Pending booking creation failed:', res.status, JSON.stringify(errData));
+        throw new Error(errData?.message || errData?.error || 'Không thể tạo lịch hẹn');
+      }
+
+      const payload = await res.json();
+      const booking = payload?.data || payload;
+      const code = booking?.bookingCode || booking?.code || '';
+      setBookingCode(code);
+      setLastBooking({
+        branch: selectedBranch || { name: '' },
+        vehicle: { licensePlate: gv?.licensePlate || '', name: gv?.brand || '' },
+        pkg: pkg || { name: '' },
+        currentDate: pb.selectedDate ? bookingDates.find(d => d.id === pb.selectedDate) : null,
+        selectedTime: pb.selectedTime,
+        total: booking?.totalAmount || 0,
+        discount: 0,
+        points: booking?.pointsEarned || 0,
+        isPayingWithPack: false,
+        bookingCode: code,
+        subServices: pb.selectedSubServices || [],
+        recurringCount: pb.tab === 'recurring' ? booking?.totalCreated || 0 : undefined,
+      });
+      setShowSuccessModal(true);
+      onSetPendingBooking(null);
+    } catch (err) {
+      console.error('processPendingBooking error:', err);
+      setError(err.message || 'Không thể tạo lịch hẹn');
+      onSetPendingBooking(null);
+    } finally {
+      setBookingLoading(false);
+      setProcessingPending(false);
+    }
+  }
+
   // Sub-services
   const pkg = selectedPackage;
   const currentSubServices = selectedSubServices[pkg?._id || pkg?.id] || [];
@@ -164,7 +314,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const basePrice = pkg ? pkg.price : 0;
   const totalBase = basePrice + extraPrice;
 
-  // Valid slot packs for current selection
   const validPacks = useMemo(() => {
     if (!isLoggedIn) return [];
     return mySlotPacks.filter(p => {
@@ -199,7 +348,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const vehicle = userVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
 
-  // Recurring preview — uses correct getDay() values now
   const previewDates = useMemo(() => {
     if (tab !== 'recurring' || selectedDays.length === 0) return [];
     const dates = [];
@@ -219,32 +367,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedDays(prev => prev.includes(value) ? prev.filter(d => d !== value) : [...prev, value]);
   };
 
-  const reset = () => {
-    setStep(1);
-    setSelectedVehicle('');
-    setSelectedPackage(null);
-    setSelectedSubServices({});
-    setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
-    setSelectedTime('');
-    setSelectedDays([]);
-    setWeeks(4);
-    setAppliedVoucher(null);
-    setSelectedSlotPack(null);
-    setMessage('');
-    setError('');
-    setBookingCode('');
-    setResult(null);
-  };
-
-  const totalSteps = isLoggedIn ? 5 : 4;
+  const totalSteps = 5;
 
   const canNextStep = () => {
     if (step === 1) return selectedBranch;
     if (step === 2) return selectedPackage;
     if (step === 3) {
-      if (isLoggedIn) return selectedVehicle;
-      if (tab === 'regular') return selectedDate && selectedTime;
-      return selectedDays.length > 0 && selectedTime;
+      if (isLoggedIn) return selectedVehicle || userVehicles.length > 0;
+      return guestVehicle.licensePlate.trim().length > 0 && guestVehicle.brand.trim().length > 0;
     }
     if (step === 4) {
       if (tab === 'regular') return selectedDate && selectedTime;
@@ -253,8 +383,26 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return true;
   };
 
+  function storePendingAndAuth() {
+    const data = {
+      tab,
+      branchId: selectedBranch?._id || selectedBranch?.id,
+      packageId: pkg?._id || pkg?.id,
+      selectedSubServices: currentSubServices,
+      selectedDate: tab === 'regular' ? currentDate.iso : undefined,
+      selectedTime,
+      selectedDays: tab === 'recurring' ? selectedDays : undefined,
+      weeks: tab === 'recurring' ? weeks : undefined,
+      appliedVoucher,
+      guestVehicle: { ...guestVehicle },
+    };
+    onSetPendingBooking(data);
+    onOpenAuth();
+  }
+
   async function confirmBooking() {
-    if (!isLoggedIn) { onOpenAuth(); return; }
+    if (!isLoggedIn) { storePendingAndAuth(); return; }
+    if (pendingBooking) { await processPendingBooking(); return; }
     if (!selectedTime) { setError('Vui lòng chọn khung giờ.'); return; }
     if (!vehicle) { setError('Vui lòng chọn xe.'); return; }
     setBookingLoading(true); setMessage(''); setError(''); setBookingCode('');
@@ -300,7 +448,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }
 
   async function confirmRecurringBooking() {
-    if (!isLoggedIn) { onOpenAuth(); return; }
+    if (!isLoggedIn) { storePendingAndAuth(); return; }
+    if (pendingBooking) { await processPendingBooking(); return; }
     if (!selectedBranch || !selectedPackage || selectedDays.length === 0 || !selectedTime) {
       setError('Vui lòng điền đầy đủ thông tin.');
       return;
@@ -351,6 +500,25 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       setBookingLoading(false);
     }
   }
+
+  const reset = () => {
+    setStep(1);
+    setSelectedVehicle('');
+    setSelectedPackage(null);
+    setSelectedSubServices({});
+    setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
+    setSelectedTime('');
+    setSelectedDays([]);
+    setWeeks(4);
+    setAppliedVoucher(null);
+    setSelectedSlotPack(null);
+    setMessage('');
+    setError('');
+    setBookingCode('');
+    setResult(null);
+    setGuestVehicle({ licensePlate: '', brand: '', model: '', type: 'sedan' });
+    setVehicleError('');
+  };
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center gap-2 mb-10">
@@ -504,27 +672,64 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
-              {/* STEP 3: Xe (chỉ hiện khi đã login) */}
-              {step === 3 && isLoggedIn && (
+              {/* STEP 3: Xe (logged-in: select; guest: form) */}
+              {step === 3 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn xe</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {userVehicles.length === 0 ? (
-                      <div className="col-span-2 text-center text-slate-400 py-8">Chưa có xe nào. Vui lòng thêm xe trong hồ sơ.</div>
-                    ) : userVehicles.map(v => {
-                      const vId = v._id || v.id;
-                      return (
-                        <button key={vId} onClick={() => setSelectedVehicle(vId)}
-                          className={`text-left p-5 rounded-xl border transition-all ${
-                            selectedVehicle === vId ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                          }`}>
-                          <div className="font-semibold text-slate-800 text-sm">{v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate}</div>
-                          <div className="text-xs text-slate-400 mt-1">{v.licensePlate || v.plate}</div>
-                          <div className="text-xs text-slate-400">{v.vehicleType || v.type || ''}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {isLoggedIn ? (
+                    <>
+                      <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn xe</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {userVehicles.length === 0 ? (
+                          <div className="col-span-2 text-center text-slate-400 py-8">Chưa có xe nào.</div>
+                        ) : userVehicles.map(v => {
+                          const vId = v._id || v.id;
+                          return (
+                            <button key={vId} onClick={() => setSelectedVehicle(vId)}
+                              className={`text-left p-5 rounded-xl border transition-all ${
+                                selectedVehicle === vId ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}>
+                              <div className="font-semibold text-slate-800 text-sm">{v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate}</div>
+                              <div className="text-xs text-slate-400 mt-1">{v.licensePlate || v.plate}</div>
+                              <div className="text-xs text-slate-400">{v.vehicleType || v.type || ''}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-lg font-semibold text-slate-800 mb-6">Thông tin xe của bạn</h3>
+                      <p className="text-sm text-slate-500 mb-6">Nhập thông tin xe để tiếp tục. Sau khi đăng nhập, xe sẽ tự động lưu vào tài khoản.</p>
+                      <div className="max-w-md mx-auto space-y-4">
+                        <div>
+                          <label className="text-sm text-slate-500 block mb-1.5">Biển số xe *</label>
+                          <input type="text" value={guestVehicle.licensePlate} placeholder="Ví dụ: 30A-12345"
+                            onChange={e => setGuestVehicle(prev => ({ ...prev, licensePlate: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-all" />
+                        </div>
+                        <div>
+                          <label className="text-sm text-slate-500 block mb-1.5">Hãng xe *</label>
+                          <input type="text" value={guestVehicle.brand} placeholder="Ví dụ: Toyota, Honda, Hyundai..."
+                            onChange={e => setGuestVehicle(prev => ({ ...prev, brand: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-all" />
+                        </div>
+                        <div>
+                          <label className="text-sm text-slate-500 block mb-1.5">Dòng xe</label>
+                          <input type="text" value={guestVehicle.model} placeholder="Ví dụ: Camry, Tucson, SH..."
+                            onChange={e => setGuestVehicle(prev => ({ ...prev, model: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-all" />
+                        </div>
+                        <div>
+                          <label className="text-sm text-slate-500 block mb-1.5">Loại xe *</label>
+                          <select value={guestVehicle.type}
+                            onChange={e => setGuestVehicle(prev => ({ ...prev, type: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-all">
+                            {VEHICLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </motion.div>
               )}
 
@@ -637,8 +842,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
-              {/* STEP 5 / Confirm */}
-              {((step === 5 && isLoggedIn) || (step === 4 && !isLoggedIn)) && (
+              {/* STEP 5: Confirm */}
+              {step === 5 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
                   <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-6">
                     <svg className="w-8 h-8 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -652,10 +857,21 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <span className="text-slate-500 text-sm">Chi nhánh</span>
                       <span className="text-slate-800 font-medium text-sm">{selectedBranch?.name}</span>
                     </div>
-                    {isLoggedIn && vehicle && (
+                    {pendingBooking?.guestVehicle?.licensePlate ? (
+                      <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
+                        <span className="text-slate-500 text-sm">Xe</span>
+                        <span className="text-slate-800 font-medium text-sm">{pendingBooking.guestVehicle.licensePlate} ({pendingBooking.guestVehicle.brand} {pendingBooking.guestVehicle.model})</span>
+                      </div>
+                    ) : isLoggedIn && vehicle && (
                       <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
                         <span className="text-slate-500 text-sm">Xe</span>
                         <span className="text-slate-800 font-medium text-sm">{vehicle.licensePlate || vehicle.name}</span>
+                      </div>
+                    )}
+                    {!isLoggedIn && guestVehicle.licensePlate && (
+                      <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
+                        <span className="text-slate-500 text-sm">Xe</span>
+                        <span className="text-slate-800 font-medium text-sm">{guestVehicle.licensePlate} ({guestVehicle.brand} {guestVehicle.model})</span>
                       </div>
                     )}
                     <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
@@ -730,6 +946,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   )}
 
                   {error && <div className="mt-4 text-red-500 font-medium text-sm">{error}</div>}
+                  {processingPending && (
+                    <div className="mt-4 text-emerald-600 font-medium text-sm">Đang xử lý đặt lịch sau đăng nhập...</div>
+                  )}
 
                   {tab === 'regular' ? (
                     <button onClick={confirmBooking} disabled={bookingLoading}
@@ -739,10 +958,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   ) : (
                     <button onClick={confirmRecurringBooking} disabled={bookingLoading || previewDates.length === 0}
                       className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)] transition-all duration-300 disabled:opacity-50">
-                      {bookingLoading ? 'Đang tạo lịch...' : `Xác nhận ${previewDates.length} buổi`}
+                      {bookingLoading ? 'Đang tạo lịch...' : isLoggedIn ? `Xác nhận ${previewDates.length} buổi` : 'Đăng nhập để xác nhận'}
                     </button>
                   )}
-                  {!isLoggedIn && <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch</p>}
+                  {!isLoggedIn && <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch. Thông tin xe sẽ tự động lưu vào tài khoản.</p>}
                 </motion.div>
               )}
 

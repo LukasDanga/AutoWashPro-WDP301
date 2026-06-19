@@ -26,9 +26,17 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState(null);
 
   function handleUserUpdate(updated) {
     setUser(prev => ({ ...prev, ...updated }));
+  }
+
+  function handleVehicleCreated(newVehicle) {
+    setVehicles(prev => {
+      if (prev.some(v => (v._id || v.id) === (newVehicle._id || newVehicle.id))) return prev;
+      return [newVehicle, ...prev];
+    });
   }
 
   async function loadSession(accessToken) {
@@ -199,7 +207,7 @@ export default function App() {
       );
     }
 
-    return <LandingPage onOpenAuth={() => setShowAuth(true)} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} />;
+    return <LandingPage onOpenAuth={() => setShowAuth(true)} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
   }
 
   if (showHistory) {
@@ -210,5 +218,5 @@ export default function App() {
     return <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => setShowProfile(false)} onUserUpdate={handleUserUpdate} />;
   }
 
-  return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} />;
+  return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
 }

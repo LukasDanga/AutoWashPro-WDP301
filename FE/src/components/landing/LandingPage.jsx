@@ -9,7 +9,7 @@ import MapSection from './MapSection';
 import CTASection from './CTASection';
 import Footer from './Footer';
 
-export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiBase, token, onGoToProfile, onGoToHistory }) {
+export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiBase, token, onGoToProfile, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
   const scrollToBooking = () => {
     document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -18,7 +18,7 @@ export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiB
     <div className="bg-white">
       <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} />
       <HeroSection onOpenAuth={onOpenAuth} user={user} />
-      <BookingWidget onOpenAuth={onOpenAuth} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onGoToHistory={onGoToHistory} />
+      <BookingWidget onOpenAuth={onOpenAuth} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onGoToHistory={onGoToHistory} pendingBooking={pendingBooking} onSetPendingBooking={onSetPendingBooking} onVehicleCreated={onVehicleCreated} />
       <HowItWorksSection />
       <PackagesSection />
       <GiftStoreSection />

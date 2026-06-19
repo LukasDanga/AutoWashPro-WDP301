@@ -106,7 +106,7 @@ router.get('/my', authenticate, bookingController.getMyBookings);
  *         schema:
  *           type: string
  */
-router.get('/slots', authenticate, bookingValidators.slots, validate, bookingController.getAvailableSlots);
+router.get('/slots', bookingValidators.slots, validate, bookingController.getAvailableSlots);
 
 /**
  * @swagger
