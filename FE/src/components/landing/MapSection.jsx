@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-const branches = [
-  { id: 'hn1', city: 'Hà Nội', name: 'Cầu Giấy', address: '122 Cầu Giấy, Q. Cầu Giấy', phone: '0888.123.456', hours: '06:00 - 20:00', cx: 190, cy: 128 },
-  { id: 'hn2', city: 'Hà Nội', name: 'Thanh Xuân', address: 'Nguyễn Trãi, Q. Thanh Xuân', phone: '0888.123.457', hours: '06:00 - 20:00', cx: 197, cy: 135 },
-  { id: 'hcm1', city: 'TP.HCM', name: 'Quận 1', address: 'Lê Lợi, P. Bến Nghé', phone: '0888.123.458', hours: '06:00 - 21:00', cx: 236, cy: 684 },
-  { id: 'hcm2', city: 'TP.HCM', name: 'Thủ Đức', address: 'Võ Văn Ngân, P. Linh Chiểu', phone: '0888.123.459', hours: '06:00 - 21:00', cx: 246, cy: 673 },
-  { id: 'dn1', city: 'Đà Nẵng', name: 'Hải Châu', address: 'Nguyễn Văn Linh, Q. Hải Châu', phone: '0888.123.460', hours: '06:00 - 20:00', cx: 309, cy: 403 },
-];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const cities = ['Tất cả', 'Hà Nội', 'TP.HCM', 'Đà Nẵng'];
+function getCities(branches) {
+  const set = new Set(branches.map(b => b.city).filter(Boolean));
+  return ['Tất cả', ...Array.from(set)];
+}
 
 function parseSvgPaths(svgText) {
   const parser = new DOMParser();
@@ -27,6 +24,8 @@ export default function MapSection({ onSelectBranch }) {
   const [selectedId, setSelectedId] = useState(null);
   const [provincePaths, setProvincePaths] = useState([]);
   const [hoveredProvince, setHoveredProvince] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [cities, setCities] = useState(['Tất cả']);
 
   useEffect(() => {
     fetch('/assets/vietnam.svg')
@@ -34,6 +33,26 @@ export default function MapSection({ onSelectBranch }) {
       .then(text => {
         const paths = parseSvgPaths(text);
         setProvincePaths(paths);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/branches/public`)
+      .then(r => r.json())
+      .then(res => {
+        const list = (res?.data || []).map(b => ({
+          id: b._id,
+          city: b.city || '',
+          name: b.name.replace(/^AutoWash\s*/, ''),
+          address: b.address,
+          phone: b.phone || '',
+          hours: (b.openingTime || '07:00') + ' - ' + (b.closingTime || '18:00'),
+          cx: b.mapCoordinates?.svgCx || 0,
+          cy: b.mapCoordinates?.svgCy || 0,
+        })).filter(b => b.cx && b.cy);
+        setBranches(list);
+        setCities(getCities(list));
       })
       .catch(() => {});
   }, []);

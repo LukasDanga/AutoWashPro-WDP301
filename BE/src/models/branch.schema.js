@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const branchSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 200 },
+    city: { type: String, trim: true, maxlength: 50 },
     address: { type: String, required: true, trim: true, maxlength: 500 },
     phone: { type: String, trim: true, maxlength: 20 },
     email: { type: String, trim: true, lowercase: true },
@@ -15,6 +16,10 @@ const branchSchema = new mongoose.Schema(
       coordinates: { type: [Number], default: [0, 0] },
     },
     managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    mapCoordinates: {
+      svgCx: { type: Number },
+      svgCy: { type: Number },
+    },
   },
   { timestamps: true }
 );
