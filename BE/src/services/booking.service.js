@@ -1096,3 +1096,24 @@ exports.getCustomers = async (user, filters = {}) => {
   const total     = result?.count?.[0]?.total || 0;
   return { customers, total, page, totalPages: Math.ceil(total / limit) };
 };
+
+exports.getPublicTestimonials = async () => {
+  const testimonials = await Booking.find({
+    status: 'completed',
+    rating: { $gte: 4 },
+    feedback: { $exists: true, $ne: '' },
+  })
+    .populate('userId', 'name')
+    .populate('branchId', 'name city')
+    .sort({ feedbackAt: -1 })
+    .limit(20)
+    .lean();
+
+  return testimonials.map(t => ({
+    name: t.userId?.name || 'Khách hàng',
+    role: '',
+    content: t.feedback || '',
+    rating: t.rating || 5,
+    location: t.branchId?.name || '',
+  }));
+};
