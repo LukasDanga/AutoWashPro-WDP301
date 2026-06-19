@@ -13,6 +13,7 @@ const sseRoutes = require('./sse.routes');
 const slotProductRoutes = require('./slotProduct.routes');
 const giftRoutes = require('./gift.routes');
 const testimonialRoutes = require('./testimonial.routes');
+const statsRoutes = require('./stats.routes');
 
 module.exports = {
   authRoutes,
@@ -30,4 +31,5 @@ module.exports = {
   slotProductRoutes,
   giftRoutes,
   testimonialRoutes,
+  statsRoutes,
 };

@@ -46,7 +46,7 @@ const VEHICLE_TYPES = [
   { value: 'motorcycle', label: 'Xe máy' },
 ];
 
-export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId }) {
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -179,6 +179,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     if (pb.selectedSubServices) setSelectedSubServices(pb.selectedSubServices);
     setStep(5);
   }, [pendingBooking, isLoggedIn, branches, packages]);
+
+  // Auto-select branch from URL param and jump to step 2
+  useEffect(() => {
+    if (!initialBranchId || branches.length === 0) return;
+    const match = branches.find(b => (b._id || b.id) === initialBranchId);
+    if (match) {
+      setSelectedBranch(match);
+      setStep(2);
+    }
+  }, [initialBranchId, branches]);
 
   async function processPendingBooking() {
     const pb = pendingBooking;
@@ -503,7 +513,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }
 
   const reset = () => {
-    setStep(1);
+    setStep(initialBranchId ? 2 : 1);
     setSelectedVehicle('');
     setSelectedPackage(null);
     setSelectedSubServices({});

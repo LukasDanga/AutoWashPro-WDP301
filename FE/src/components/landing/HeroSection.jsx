@@ -1,7 +1,40 @@
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import VideoBackground from './VideoBackground';
 
-export default function HeroSection({ onOpenAuth }) {
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const STATIC_STATS = [
+  { num: '15K+', label: 'Lượt rửa' },
+  { num: '98.7%', label: 'Hài lòng' },
+  { num: '12', label: 'Chi nhánh' },
+];
+
+function formatNum(n) {
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}K+`;
+  return `${n}+`;
+}
+
+export default function HeroSection() {
+  const navigate = useNavigate();
+  const [stats, setStats] = useState(STATIC_STATS);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/stats/public`)
+      .then(r => r.json())
+      .then(payload => {
+        const d = payload?.data;
+        if (!d) return;
+        setStats([
+          { num: formatNum(d.totalCompleted), label: 'Lượt rửa' },
+          { num: d.satisfactionRate, label: 'Hài lòng' },
+          { num: `${d.totalBranches}`, label: 'Chi nhánh' },
+        ]);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <section className="relative min-h-[80vh] md:min-h-screen flex items-center overflow-hidden">
       <VideoBackground />
@@ -38,7 +71,7 @@ export default function HeroSection({ onOpenAuth }) {
             className="flex flex-col sm:flex-row items-center justify-center gap-2.5 md:gap-3 mb-8 md:mb-10"
           >
             <motion.button
-              onClick={onOpenAuth}
+              onClick={() => navigate('/map')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="w-full sm:w-auto px-6 md:px-7 py-2.5 md:py-3 rounded-xl bg-emerald-500 text-white font-semibold text-sm
@@ -49,6 +82,7 @@ export default function HeroSection({ onOpenAuth }) {
               Bắt đầu ngay
             </motion.button>
             <motion.button
+              onClick={() => navigate('/booking')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="w-full sm:w-auto px-6 md:px-7 py-2.5 md:py-3 rounded-xl border border-white/30 bg-white/10 text-white font-medium text-sm
@@ -64,11 +98,7 @@ export default function HeroSection({ onOpenAuth }) {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="flex items-center justify-center gap-5 md:gap-10"
           >
-            {[
-              { num: '15K+', label: 'Lượt rửa' },
-              { num: '98.7%', label: 'Hài lòng' },
-              { num: '12', label: 'Chi nhánh' },
-            ].map((stat) => (
+            {stats.map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="text-lg md:text-2xl font-bold text-white tracking-tight drop-shadow">
                   {stat.num}

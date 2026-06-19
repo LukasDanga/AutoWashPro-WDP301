@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import BookingFlow from './components/BookingFlow.jsx';
 import AuthScreen from './components/AuthScreen.jsx';
 import LandingPage from './components/landing/LandingPage.jsx';
+import BookingPage from './components/landing/BookingPage.jsx';
+import PackagesPage from './components/landing/PackagesPage.jsx';
+import GiftStorePage from './components/landing/GiftStorePage.jsx';
+import MapPage from './components/landing/MapPage.jsx';
 import ProfilePage from './components/landing/ProfilePage.jsx';
 import HistoryPage from './components/landing/HistoryPage.jsx';
 import {
@@ -23,9 +26,6 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [user, setUser] = useState(null);
   const [vehicles, setVehicles] = useState([]);
-  const [showAuth, setShowAuth] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [pendingBooking, setPendingBooking] = useState(null);
 
   function handleUserUpdate(updated) {
@@ -143,6 +143,8 @@ export default function App() {
     
     if (profile?.role === 'admin' || profile?.role === 'manager') {
       redirectByRole(profile);
+    } else {
+      navigate('/');
     }
     
     return profile;
@@ -166,14 +168,16 @@ export default function App() {
     const registerData = registerPayload?.data || registerPayload;
     applySession(registerData?.accessToken, registerData?.refreshToken);
 
-    await loadSession(registerData?.accessToken);
+    const profile = await loadSession(registerData?.accessToken);
+    if (profile?.role !== 'admin' && profile?.role !== 'manager') {
+      navigate('/');
+    }
   }
 
   async function handleLogout() {
     try {
       if (token) {
         await fetch(`${apiBase}/auth/logout`, {
-          method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
       }
@@ -181,6 +185,7 @@ export default function App() {
       // Ignore transport errors and clear local state anyway.
     } finally {
       clearSession();
+      navigate('/', { replace: true });
     }
   }
 
@@ -195,28 +200,35 @@ export default function App() {
     );
   }
 
-  if (!token || !user) {
-    if (showAuth) {
-      return (
-        <AuthScreen 
-          authLoading={authLoading}
-          onLogin={loginWithCredentials}
-          onRegister={registerUser}
-          onBack={() => setShowAuth(false)}
-        />
-      );
-    }
+  const path = location.pathname;
 
-    return <LandingPage onOpenAuth={() => setShowAuth(true)} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+  if (path === '/auth') {
+    return <AuthScreen authLoading={authLoading} onLogin={loginWithCredentials} onRegister={registerUser} onBack={() => navigate('/')} />;
   }
 
-  if (showHistory) {
-    return <HistoryPage onBack={() => setShowHistory(false)} apiBase={apiBase} token={token} />;
+  if (path === '/profile' && token && user) {
+    return <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => navigate('/')} onUserUpdate={handleUserUpdate} />;
   }
 
-  if (showProfile) {
-    return <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => setShowProfile(false)} onUserUpdate={handleUserUpdate} />;
+  if (path === '/history' && token && user) {
+    return <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />;
   }
 
-  return <LandingPage onOpenAuth={() => setShowAuth(true)} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => setShowProfile(true)} onGoToHistory={() => setShowHistory(true)} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+  if (path === '/booking') {
+    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+  }
+
+  if (path === '/packages') {
+    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} />;
+  }
+
+  if (path === '/gifts') {
+    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} />;
+  }
+
+  if (path === '/map') {
+    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} />;
+  }
+
+  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
 }

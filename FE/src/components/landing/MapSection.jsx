@@ -72,7 +72,7 @@ export default function MapSection({ onSelectBranch }) {
           <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-white">
             Tìm chi nhánh gần bạn
           </h2>
-          <p className="text-neutral-400 mt-4 leading-relaxed">12 chi nhánh trên toàn quốc. Chọn chi nhánh và đặt lịch ngay.</p>
+          <p className="text-neutral-400 mt-4 leading-relaxed"> {branches.length} chi nhánh trên toàn quốc. Chọn chi nhánh và đặt lịch ngay.</p>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-8">
@@ -175,7 +175,7 @@ export default function MapSection({ onSelectBranch }) {
                   <path
                     key={p.id}
                     d={p.d}
-                    fill={hoveredProvince === p.id ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.02)'}
+                    fill={hoveredProvince === p.id ? 'rgba(16,185,129,0.08)' : 'transparent'}
                     stroke={hoveredProvince === p.id ? '#34d399' : 'rgba(16,185,129,0.25)'}
                     strokeWidth={hoveredProvince === p.id ? '1.2' : '0.5'}
                     filter={hoveredProvince === p.id ? 'url(#neon-glow)' : undefined}
@@ -184,16 +184,6 @@ export default function MapSection({ onSelectBranch }) {
                     style={{ transition: 'all 0.2s ease', cursor: 'default' }}
                   />
                 ))}
-
-                <path
-                  id="coastline-highlight"
-                  d={provincePaths.filter(p => ['quang-ninh', 'hai-phong', 'thai-binh', 'nam-dinh', 'ninh-binh', 'thanh-hoa', 'nghe-an', 'ha-tinh', 'quang-binh', 'quang-tri', 'thua-thien-hue', 'da-nang', 'quang-nam', 'quang-ngai', 'binh-dinh', 'phu-yen', 'khanh-hoa', 'ninh-thuan', 'binh-thuan', 'ba-ria-vung-tau', 'ho-chi-minh', 'tien-giang', 'ben-tre', 'tra-vinh', 'soc-trang', 'bac-lieu', 'ca-mau', 'kien-giang', 'an-giang', 'dong-thap', 'long-an'].includes(p.id)).map(p => p.d).join(' ')}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="1.8"
-                  filter="url(#neon-glow)"
-                  opacity="0.7"
-                />
 
                 {branches.map((b) => (
                   <g key={b.id} onClick={() => setSelectedId(b.id)} className="cursor-pointer">
