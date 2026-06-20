@@ -201,6 +201,11 @@ exports.createBooking = async (data) => {
     });
     await booking.save({ session });
 
+    // Reserve voucher khi tạo booking (trừ remaining + tạo VoucherUsage)
+    if (voucherCode && computedDiscountAmount > 0) {
+      await voucherService.reserveVoucher(voucherCode, userId, booking._id, computedDiscountAmount);
+    }
+
     await session.commitTransaction();
 
     notificationService.send(
@@ -209,6 +214,15 @@ exports.createBooking = async (data) => {
       `Bạn đã đặt lịch rửa xe ${pkg.name} vào lúc ${startTime} ngày ${bd.toLocaleDateString('vi-VN')}.`,
       'booking_created',
       { bookingId: booking._id }
+    ).catch(() => {});
+
+    // Notify admin + manager of the branch
+    notificationService.sendToAdminAndManager(
+      branchId,
+      'Đặt lịch mới',
+      `${user.name || 'Khách hàng'} vừa đặt lịch ${pkg.name} lúc ${startTime} ngày ${bd.toLocaleDateString('vi-VN')}.`,
+      'booking_created',
+      { bookingId: booking._id, branchId }
     ).catch(() => {});
 
     // Push SSE event to manager so their bell updates in real-time
@@ -451,6 +465,14 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
           'booking_completed',
           { bookingId: id }
         );
+        // Notify admin + manager
+        await notificationService.sendToAdminAndManager(
+          booking.branchId?._id || booking.branchId,
+          'Dịch vụ hoàn thành',
+          `Xe ${plate} đã hoàn thành tại ${branch}.`,
+          'booking_completed',
+          { bookingId: id }
+        );
         // Award loyalty points for slot_pack bookings (cash/online already handled in payment service)
         if (currentBooking.bookingType === 'slot_pack_usage' || currentBooking.paymentStatus === 'paid') {
           if ((currentBooking.finalPrice || 0) > 0) {
@@ -523,6 +545,15 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       `Lịch hẹn rửa xe vào lúc ${booking.startTime} ngày ${new Date(booking.bookingDate).toLocaleDateString('vi-VN')} đã bị hủy${cancellationReason ? `. Lý do: ${cancellationReason}` : ''}.`,
       'booking_cancelled',
       { bookingId: id }
+    ).catch(() => {});
+
+    // Notify admin + manager
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      'Lịch hẹn bị hủy',
+      `Lịch hẹn lúc ${booking.startTime} ngày ${new Date(booking.bookingDate).toLocaleDateString('vi-VN')} đã bị hủy.`,
+      'booking_cancelled',
+      { bookingId: id, branchId: booking.branchId }
     ).catch(() => {});
 
     return updated;
@@ -837,6 +868,15 @@ exports.createRecurringBooking = async (data) => {
     { recurringGroupId, count: created.length }
   ).catch(() => {});
 
+  // Notify admin + manager
+  notificationService.sendToAdminAndManager(
+    branchId,
+    'Đặt lịch định kỳ mới',
+    `${user.name || 'Khách hàng'} vừa tạo ${created.length} lịch định kỳ cho ${pkg.name}.`,
+    'booking_created',
+    { recurringGroupId, count: created.length, branchId }
+  ).catch(() => {});
+
   return { created, failed, recurringGroupId, totalCreated: created.length, totalFailed: failed.length };
 };
 
@@ -1038,6 +1078,15 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     `Lịch hẹn mới của bạn: ${pkg.name} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
     'booking_created',
     { bookingId: newBooking._id }
+  ).catch(() => {});
+
+  // Notify admin + manager
+  notificationService.sendToAdminAndManager(
+    src.branchId?._id || src.branchId,
+    'Đặt lại lịch mới',
+    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkg.name} lúc ${startTime}.`,
+    'booking_created',
+    { bookingId: newBooking._id, branchId: src.branchId?._id || src.branchId }
   ).catch(() => {});
 
   return Booking.findById(newBooking._id)

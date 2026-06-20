@@ -7,8 +7,8 @@ exports.createVoucher = catchAsync(async (req, res) => {
 });
 
 exports.getAllVouchers = catchAsync(async (req, res) => {
-  const vouchers = await voucherService.getAllVouchers(req.query);
-  success(res, vouchers, 'Vouchers retrieved');
+  const result = await voucherService.getAllVouchers(req.query);
+  success(res, result.data, 'Vouchers retrieved', 200, result.pagination);
 });
 
 exports.getVoucherById = catchAsync(async (req, res) => {
@@ -50,8 +50,8 @@ exports.rollbackVoucher = catchAsync(async (req, res) => {
 });
 
 exports.getVoucherUsage = catchAsync(async (req, res) => {
-  const usages = await voucherService.getVoucherUsage(req.params.id);
-  success(res, usages, 'Voucher usage retrieved');
+  const result = await voucherService.getVoucherUsage(req.params.id, req.query);
+  success(res, result.data, 'Voucher usage retrieved', 200, result.pagination);
 });
 
 exports.getVoucherUsageReport = catchAsync(async (req, res) => {

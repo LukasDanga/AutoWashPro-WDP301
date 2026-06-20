@@ -41,7 +41,35 @@ exports.getAllVouchers = async (filters = {}) => {
       { name: { $regex: filters.search, $options: 'i' } },
     ];
   }
-  return Voucher.find(query).populate('createdBy', 'name email').sort({ createdAt: -1 });
+  if (filters.startDate || filters.endDate) {
+    query.startDate = {};
+    if (filters.startDate) query.startDate.$gte = new Date(filters.startDate);
+    if (filters.endDate) query.startDate.$lte = new Date(filters.endDate);
+  }
+  if (filters.endDateOnly) {
+    query.endDate = { $gte: new Date(filters.endDateOnly) };
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Voucher.find(query).populate('createdBy', 'name email').sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Voucher.countDocuments(query),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
 };
 
 exports.getVoucherById = async (id) => {
@@ -141,6 +169,15 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
   session.startTransaction();
 
   try {
+    // Kiểm tra đã reserve cho booking này chưa (idempotent)
+    const existingForBooking = await VoucherUsage.findOne({ bookingId, userId }).session(session);
+    if (existingForBooking) {
+      // Đã reserve rồi, skip
+      const voucher = await Voucher.findById(existingForBooking.voucherId).session(session);
+      await session.commitTransaction();
+      return { voucher, usage: existingForBooking, alreadyReserved: true };
+    }
+
     const Booking = mongoose.model('Booking');
     const booking = await Booking.findById(bookingId).session(session);
     let isAlreadyReservedForGroup = false;
@@ -247,11 +284,43 @@ exports.rollbackVoucher = async (code, userId, bookingId) => {
   }
 };
 
-exports.getVoucherUsage = async (voucherId) => {
-  return VoucherUsage.find({ voucherId })
-    .populate('userId', 'name email phone tier')
-    .populate('bookingId', 'bookingDate startTime status')
-    .sort({ usedAt: -1 });
+exports.getVoucherUsage = async (voucherId, filters = {}) => {
+  const query = { voucherId };
+  if (filters.dateFrom || filters.dateTo) {
+    query.usedAt = {};
+    if (filters.dateFrom) query.usedAt.$gte = new Date(filters.dateFrom);
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
+      query.usedAt.$lte = to;
+    }
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    VoucherUsage.find(query)
+      .populate('userId', 'name email phone tier')
+      .populate('bookingId', 'bookingDate startTime status')
+      .sort({ usedAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    VoucherUsage.countDocuments(query),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
 };
 
 exports.getVoucherUsageReport = async () => {

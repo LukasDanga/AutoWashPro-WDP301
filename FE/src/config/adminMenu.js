@@ -6,6 +6,8 @@ import {
   Star,
   UserCircle,
   Users,
+  CalendarBlank,
+  Ticket,
 } from '@phosphor-icons/react';
 
 export const ADMIN_BRAND = {
@@ -47,9 +49,21 @@ export const ADMIN_MENU_ITEMS = [
   },
   {
     id: 'activity',
-    label: 'Quản lý đặt lịch',
+    label: 'Hoạt động gần đây',
     to: '/admin/activity',
     icon: ClockCounterClockwise,
+  },
+  {
+    id: 'bookings',
+    label: 'Quản lý đặt lịch',
+    to: '/admin/bookings',
+    icon: CalendarBlank,
+  },
+  {
+    id: 'slot-packs',
+    label: 'Gói lượt',
+    to: '/admin/slot-packs',
+    icon: Ticket,
   },
   {
     id: 'profile',
@@ -81,8 +95,16 @@ export const ADMIN_PAGE_META = {
     description: 'Cấu hình chương trình tích điểm và đổi quà.',
   },
   activity: {
+    title: 'Hoạt động gần đây',
+    description: 'Dòng thời gian các sự kiện đặt lịch, hoàn thành, hủy và đánh giá.',
+  },
+  bookings: {
     title: 'Quản lý đặt lịch',
     description: 'Xem và quản lý toàn bộ đặt lịch trên tất cả chi nhánh.',
+  },
+  'slot-packs': {
+    title: 'Gói lượt',
+    description: 'Quản lý tất cả gói lượt trên toàn hệ thống.',
   },
   profile: {
     title: 'Hồ sơ',

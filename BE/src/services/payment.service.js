@@ -49,7 +49,12 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
   const amount = payment.amount;
 
   if (booking.voucherCode) {
-    await voucherService.reserveVoucher(booking.voucherCode, targetUserId, bookingId, booking.discountAmount || 0);
+    // Kiểm tra voucher đã reserve ở booking chưa
+    const VoucherUsage = mongoose.model('VoucherUsage');
+    const existingUsage = await VoucherUsage.findOne({ bookingId, userId: targetUserId });
+    if (!existingUsage) {
+      await voucherService.reserveVoucher(booking.voucherCode, targetUserId, bookingId, booking.discountAmount || 0);
+    }
   }
 
   if (method === 'cash') {
@@ -82,6 +87,15 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
       `Thanh toán ${amount.toLocaleString('vi-VN')}đ bằng tiền mặt đã được xác nhận.`,
       'payment_confirmed',
       { bookingId, paymentId: payment._id }
+    ).catch(() => {});
+
+    // Notify admin + manager
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      'Thanh toán tiền mặt',
+      `Khách hàng đã thanh toán ${amount.toLocaleString('vi-VN')}đ tiền mặt cho lịch hẹn.`,
+      'payment_confirmed',
+      { bookingId, branchId: booking.branchId }
     ).catch(() => {});
 
     return payment;
@@ -146,6 +160,15 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       `Thanh toán ${booking.finalPrice?.toLocaleString('vi-VN') || payment.amount.toLocaleString('vi-VN')}đ bằng ${payment.method.toUpperCase()} đã được xác nhận.`,
       'payment_confirmed',
       { bookingId: booking._id, paymentId: payment._id }
+    ).catch(() => {});
+
+    // Notify admin + manager
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      `Thanh toán ${payment.method.toUpperCase()}`,
+      `Khách hàng đã thanh toán ${(booking.finalPrice || payment.amount).toLocaleString('vi-VN')}đ qua ${payment.method.toUpperCase()}.`,
+      'payment_confirmed',
+      { bookingId: booking._id, branchId: booking.branchId }
     ).catch(() => {});
 
     return payment;
@@ -278,6 +301,15 @@ exports.refundPayment = async (bookingId) => {
       `Yêu cầu hoàn tiền ${payment.amount.toLocaleString('vi-VN')}đ đã được xử lý.`,
       'refund',
       { bookingId, paymentId: payment._id }
+    ).catch(() => {});
+
+    // Notify admin + manager
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      'Hoàn tiền',
+      `Đã hoàn tiền ${payment.amount.toLocaleString('vi-VN')}đ cho khách hàng.`,
+      'refund',
+      { bookingId, branchId: booking.branchId }
     ).catch(() => {});
 
     return payment;

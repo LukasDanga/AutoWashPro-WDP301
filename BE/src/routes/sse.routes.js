@@ -60,10 +60,22 @@ router.get('/', authenticateSSE, (req, res) => {
     sseService.emitter.on('manager-event', managerListener);
   }
 
+  // Admin: forward all booking events (all branches)
+  let adminListener;
+  if (user.role === 'admin') {
+    adminListener = ({ event, data }) => {
+      try {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      } catch { /* client gone */ }
+    };
+    sseService.emitter.on('manager-event', adminListener);
+  }
+
   req.on('close', () => {
     clearInterval(ping);
     sseService.removeClient(userId, res);
     if (managerListener) sseService.emitter.off('manager-event', managerListener);
+    if (adminListener) sseService.emitter.off('manager-event', adminListener);
   });
 });
 

@@ -1,4 +1,4 @@
-const { Notification } = require('../models');
+const { Notification, User, Branch } = require('../models');
 const sseService = require('./sse.service');
 
 const create = async (userId, title, message, type, data = {}) => {
@@ -73,4 +73,35 @@ exports.delete = async (notificationId, userId) => {
 
 exports.deleteAll = async (userId) => {
   return Notification.deleteMany({ userId });
+};
+
+// ─── Admin / Manager notification helpers ────────────────────────────────────
+// Send notification to all admin users
+exports.sendToAdmins = async (title, message, type, data) => {
+  const admins = await User.find({ role: 'admin', status: 'active' }).select('_id');
+  if (admins.length === 0) return;
+  const docs = admins.map(a => ({ userId: a._id, title, message, type, data: data || {} }));
+  await Notification.insertMany(docs);
+  // Push SSE to each connected admin
+  for (const admin of admins) {
+    sseService.sendToUser(String(admin._id), 'notification', { title, message, type });
+  }
+};
+
+// Send notification to the manager of a specific branch
+exports.sendToBranchManager = async (branchId, title, message, type, data) => {
+  if (!branchId) return;
+  const branch = await Branch.findById(branchId).select('managerId');
+  if (!branch || !branch.managerId) return;
+  const notification = new Notification({ userId: branch.managerId, title, message, type, data: data || {} });
+  await notification.save();
+  sseService.sendToUser(String(branch.managerId), 'notification', { title, message, type });
+};
+
+// Send notification to admin + manager of a branch
+exports.sendToAdminAndManager = async (branchId, title, message, type, data) => {
+  await Promise.all([
+    exports.sendToAdmins(title, message, type, data),
+    exports.sendToBranchManager(branchId, title, message, type, data),
+  ]);
 };
