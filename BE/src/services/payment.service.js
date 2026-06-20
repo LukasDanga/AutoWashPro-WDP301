@@ -211,7 +211,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       await payment.save({ session });
 
       if (booking.voucherCode) {
-        await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, booking._id);
+        await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, booking._id, session);
       }
     }
 
@@ -290,7 +290,7 @@ exports.refundPayment = async (bookingId) => {
     await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled', paymentStatus: 'refunded' }).session(session);
 
     if (booking.voucherCode) {
-      await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, bookingId);
+      await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, bookingId, session);
     }
 
     await session.commitTransaction();

@@ -52,6 +52,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const [tab, setTab] = useState('regular');
   const [step, setStep] = useState(1);
+  const [spCanAdvance, setSpCanAdvance] = useState(false);
 
   // Data from API
   const [branches, setBranches] = useState([]);
@@ -378,9 +379,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedDays(prev => prev.includes(value) ? prev.filter(d => d !== value) : [...prev, value]);
   };
 
-  const totalSteps = 5;
+  const totalSteps = tab === 'slot_pack' ? 4 : 5;
 
   const canNextStep = () => {
+    if (tab === 'slot_pack') return spCanAdvance;
     if (step === 1) return selectedBranch;
     if (step === 2) return selectedPackage;
     if (step === 3) {
@@ -529,22 +531,26 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setResult(null);
     setGuestVehicle({ licensePlate: '', brand: '', model: '', type: 'sedan' });
     setVehicleError('');
+    setSpCanAdvance(false);
   };
 
-  const renderStepIndicator = () => (
+  const renderStepIndicator = (labels) => (
     <div className="flex items-center justify-center gap-2 mb-10">
-      {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
-        <div key={s} className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-            step === s ? 'bg-emerald-600 text-white shadow-md'
-              : step > s ? 'bg-emerald-100 text-emerald-600'
-              : 'bg-slate-100 text-slate-400'
-          }`}>
-            {step > s ? '✓' : s}
+      {labels.map((lbl, i) => {
+        const s = i + 1;
+        return (
+          <div key={s} className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+              step === s ? 'bg-emerald-600 text-white shadow-md'
+                : step > s ? 'bg-emerald-100 text-emerald-600'
+                : 'bg-slate-100 text-slate-400'
+            }`}>
+              {step > s ? '✓' : s}
+            </div>
+            {s < labels.length && <div className={`w-8 md:w-12 h-0.5 ${step > s ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
           </div>
-          {s < totalSteps && <div className={`w-8 md:w-12 h-0.5 ${step > s ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -584,7 +590,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           {/* ── Slot Pack Tab ── */}
           {tab === 'slot_pack' && (
             isLoggedIn ? (
-              <SlotPackFlow user={user} vehicles={userVehicles} apiBase={apiBase} token={token} />
+              <>
+                {renderStepIndicator(['Chi nhánh', 'Xe & gói', 'Số lần', 'Thanh toán'])}
+                <SlotPackFlow step={step} setStep={setStep} user={user} vehicles={userVehicles} apiBase={apiBase} token={token} onCanAdvanceChange={setSpCanAdvance} onGoToHistory={onGoToHistory} />
+              </>
             ) : (
               <div className="text-center py-16 space-y-4">
                 <div className="text-5xl mb-2">🎫</div>
@@ -600,7 +609,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           {/* ── Regular + Recurring Step Flow ── */}
           {tab !== 'slot_pack' && (
             <>
-              {renderStepIndicator()}
+              {renderStepIndicator(tab === 'recurring'
+                ? ['Chi nhánh', 'Gói DV', 'Xe', 'Lịch định kỳ', 'Xác nhận']
+                : ['Chi nhánh', 'Gói DV', 'Xe', 'Thời gian', 'Xác nhận']
+              )}
 
               {/* STEP 1: Chi nhánh */}
               {step === 1 && (
@@ -975,30 +987,32 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   {!isLoggedIn && <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch. Thông tin xe sẽ tự động lưu vào tài khoản.</p>}
                 </motion.div>
               )}
-
-              {/* Navigation */}
-              <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-200">
-                {step > 1 ? (
-                  <button onClick={() => setStep(step - 1)}
-                    className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
-                    Quay lại
-                  </button>
-                ) : <div />}
-                {step < totalSteps ? (
-                  <button onClick={() => setStep(step + 1)} disabled={!canNextStep()}
-                    className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                      canNextStep() ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                    }`}>
-                    Tiếp theo
-                  </button>
-                ) : (
-                  <button onClick={reset}
-                    className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
-                    Đặt lại
-                  </button>
-                )}
-              </div>
             </>
+          )}
+
+          {/* ── Shared Navigation ── */}
+          {(tab !== 'slot_pack' || isLoggedIn) && (
+            <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-200">
+              {step > 1 ? (
+                <button onClick={() => setStep(step - 1)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+                  Quay lại
+                </button>
+              ) : <div />}
+              {step < totalSteps ? (
+                <button onClick={() => setStep(step + 1)} disabled={!canNextStep()}
+                  className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    canNextStep() ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                  }`}>
+                  Tiếp theo
+                </button>
+              ) : (
+                <button onClick={reset}
+                  className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+                  Đặt lại
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

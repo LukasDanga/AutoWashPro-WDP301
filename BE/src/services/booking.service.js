@@ -211,7 +211,7 @@ exports.createBooking = async (data) => {
 
     // Reserve voucher khi tạo booking (trừ remaining + tạo VoucherUsage)
     if (voucherCode && computedDiscountAmount > 0) {
-      await voucherService.reserveVoucher(voucherCode, userId, booking._id, computedDiscountAmount);
+      await voucherService.reserveVoucher(voucherCode, userId, booking._id, computedDiscountAmount, session);
     }
 
     await session.commitTransaction();
@@ -542,7 +542,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     }
 
     if (booking.voucherCode) {
-      await voucherService.rollbackVoucher(booking.voucherCode, booking.userId, id).catch(() => {});
+      await voucherService.rollbackVoucher(booking.voucherCode, booking.userId, id, session).catch(() => {});
     }
 
     await session.commitTransaction();
