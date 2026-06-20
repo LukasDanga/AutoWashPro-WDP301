@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { showToast } from '@/lib/toast';
+import { confirmDialog } from '@/lib/confirm';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -486,7 +488,7 @@ export default function AdminRewards() {
   const [statusFilter, setStatusFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -534,7 +536,7 @@ export default function AdminRewards() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa voucher này?')) return;
+    if (!(await confirmDialog({ title: 'Xóa voucher', message: 'Bạn có chắc chắn muốn xóa voucher này?', confirmLabel: 'Xóa', danger: true }))) return;
     try {
       const res = await api(`/vouchers/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await readErr(res));

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { showToast } from '@/lib/toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -87,8 +88,7 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   const debounceRef = useRef(null);
 
   function showToastMsg(message, type = 'success') {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
+    showToast(message, type);
   }
 
   const doFetch = useCallback((kw, st, df, dt, pg) => {

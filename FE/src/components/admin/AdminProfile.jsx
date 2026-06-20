@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { showToast } from '@/lib/toast';
 import { CheckCircle, FloppyDisk, Shield, UserCircle, X, XCircle } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -54,7 +55,7 @@ export default function AdminProfile({ user }) {
   const [saving, setSaving] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
   const [toast, setToast] = useState(null);
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   useEffect(() => {
     if (user) setForm({ name: user.name ?? '', phone: user.phone ?? '' });

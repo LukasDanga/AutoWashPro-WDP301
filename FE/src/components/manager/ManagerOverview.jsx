@@ -5,8 +5,12 @@ import {
   ArrowClockwise,
   TrendUp,
   Clock,
-  XCircle,
 } from '@phosphor-icons/react';
+import {
+  ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
 function api(path) {
@@ -39,27 +43,16 @@ function StatCard({ icon, label, value, sub, color }) {
   );
 }
 
-const BOOKING_STATUS_LABEL = {
-  pending: 'Chờ xác nhận',
-  in_progress: 'Đang thực hiện',
-  completed: 'Hoàn thành',
-  cancelled: 'Đã hủy',
+const STATUS_META = {
+  pending:     { label: 'Chờ xác nhận', color: '#f59e0b' },
+  confirmed:   { label: 'Đã xác nhận', color: '#6366f1' },
+  checked_in:  { label: 'Đã check-in', color: '#06b6d4' },
+  in_progress: { label: 'Đang thực hiện', color: '#3b82f6' },
+  completed:   { label: 'Hoàn thành', color: '#10b981' },
+  cancelled:   { label: 'Đã hủy', color: '#94a3b8' },
 };
 
-const BOOKING_STATUS_COLOR = {
-  pending: 'bg-amber-50 text-amber-700',
-  in_progress: 'bg-blue-50 text-blue-700',
-  completed: 'bg-emerald-50 text-emerald-700',
-  cancelled: 'bg-slate-100 text-slate-500',
-};
-
-function StatusPill({ status }) {
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${BOOKING_STATUS_COLOR[status] ?? 'bg-slate-100 text-slate-500'}`}>
-      {BOOKING_STATUS_LABEL[status] ?? status}
-    </span>
-  );
-}
+const WEEKDAY_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 export default function ManagerOverview() {
   const [bookings, setBookings] = useState([]);
@@ -68,7 +61,7 @@ export default function ManagerOverview() {
   async function load() {
     setLoading(true);
     try {
-      const bRes = await api('/bookings');
+      const bRes = await api('/bookings?limit=200');
       if (bRes.ok) {
         const p = await bRes.json();
         const data = p?.data ?? p;
@@ -82,13 +75,39 @@ export default function ManagerOverview() {
 
   const now = new Date();
   const todayStr = now.toDateString();
-
   const today = bookings.filter((b) => new Date(b.bookingDate).toDateString() === todayStr);
   const pending = today.filter((b) => b.status === 'pending').length;
   const inProgress = today.filter((b) => b.status === 'in_progress').length;
   const completed = today.filter((b) => b.status === 'completed').length;
   const cancelled = today.filter((b) => b.status === 'cancelled').length;
-  const recentBookings = bookings.slice(0, 6);
+
+  // ── 7-day bar chart data ──
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = d.toDateString();
+    const count = bookings.filter((b) => new Date(b.bookingDate).toDateString() === key).length;
+    const done = bookings.filter((b) => new Date(b.bookingDate).toDateString() === key && b.status === 'completed').length;
+    return { label: `${WEEKDAY_VN[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`, 'Lịch hẹn': count, 'Hoàn thành': done };
+  });
+
+  // ── status distribution donut ──
+  const statusCounts = bookings.reduce((acc, b) => { acc[b.status] = (acc[b.status] || 0) + 1; return acc; }, {});
+  const statusData = Object.entries(STATUS_META)
+    .map(([k, m]) => ({ name: m.label, value: statusCounts[k] || 0, color: m.color }))
+    .filter((d) => d.value > 0);
+
+  // ── revenue (completed + paid) per day ──
+  const revenue7 = last7.map(({ label }) => label);
+  const revenueData = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = d.toDateString();
+    const rev = bookings
+      .filter((b) => new Date(b.bookingDate).toDateString() === key && b.status === 'completed')
+      .reduce((s, b) => s + (b.finalPrice || 0), 0);
+    return { label: revenue7[i], 'Doanh thu': rev };
+  });
 
   return (
     <div className="space-y-6">
@@ -116,43 +135,64 @@ export default function ManagerOverview() {
           label="Hoàn thành" value={completed} sub={cancelled > 0 ? `${cancelled} đã hủy` : undefined} color="bg-emerald-50" />
       </div>
 
-      {/* recent bookings */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">Lịch đặt gần đây</h2>
-          <span className="text-xs text-slate-400">Tổng: {bookings.length}</span>
-        </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-20"><Spinner /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* 7-day bookings bar chart */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+              <h2 className="mb-4 text-sm font-semibold text-slate-700">Lịch đặt 7 ngày gần đây</h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={last7} barGap={4} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Lịch hẹn" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={28} />
+                  <Bar dataKey="Hoàn thành" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={28} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-14"><Spinner /></div>
-        ) : recentBookings.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-slate-400">
-            <CalendarCheck size={32} weight="thin" />
-            <p className="text-sm">Chưa có lịch đặt nào</p>
+            {/* status distribution donut */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-sm font-semibold text-slate-700">Phân bố trạng thái</h2>
+              {statusData.length === 0 ? (
+                <div className="flex h-[280px] items-center justify-center text-sm text-slate-400">Chưa có dữ liệu</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="45%"
+                      innerRadius={55} outerRadius={85} paddingAngle={2}>
+                      {statusData.map((d) => <Cell key={d.name} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {recentBookings.map((b) => (
-              <div key={b._id} className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-800">
-                    {b.userId?.name ?? 'Khách hàng'}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">
-                    {b.packageId?.name ?? 'Dịch vụ'} · {b.startTime}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <StatusPill status={b.status} />
-                  <p className="text-[11px] text-slate-400">
-                    {new Date(b.bookingDate).toLocaleDateString('vi-VN')}
-                  </p>
-                </div>
-              </div>
-            ))}
+
+          {/* revenue bar chart */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold text-slate-700">Doanh thu 7 ngày (đơn hoàn thành)</h2>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={revenueData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                  tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}tr` : v >= 1000 ? `${v / 1000}k` : v} />
+                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+                  formatter={(v) => [`${Number(v).toLocaleString('vi-VN')}₫`, 'Doanh thu']} />
+                <Bar dataKey="Doanh thu" fill="#8b5cf6" radius={[6, 6, 0, 0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
