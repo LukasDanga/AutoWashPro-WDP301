@@ -65,6 +65,54 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
+function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel, danger }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${danger ? 'bg-red-50' : 'bg-amber-50'}`}>
+            {danger ? <Warning size={20} weight="fill" className="text-red-500" /> : <CurrencyCircleDollar size={20} weight="fill" className="text-amber-500" />}
+          </div>
+          <div>
+            <p className="font-semibold text-slate-800 text-sm">{title}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{message}</p>
+          </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button onClick={onCancel}
+            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+            Huỷ
+          </button>
+          <button onClick={onConfirm}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-colors ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+            {confirmLabel || 'Xác nhận'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuccessBanner({ show, message, onDone }) {
+  useEffect(() => {
+    if (!show) return;
+    const t = setTimeout(onDone, 3000);
+    return () => clearTimeout(t);
+  }, [show, onDone]);
+  if (!show) return null;
+  return (
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
+      <div className="flex items-center gap-3 rounded-2xl bg-emerald-600 px-6 py-3.5 text-white shadow-2xl shadow-emerald-600/25 ring-1 ring-emerald-500/20">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+          <CheckCircle size={18} weight="fill" />
+        </div>
+        <span className="text-sm font-semibold">{message}</span>
+      </div>
+    </div>
+  );
+}
+
 
 /* ── status config ── */
 const STATUS_MAP = {
@@ -111,8 +159,7 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
       const payload = await res.json();
       onUpdated(payload?.data ?? payload);
     } catch (err) {
-      if (typeof notify === 'function') notify(err.message, 'error');
-      else alert(err.message);
+      notify(err.message, 'error');
     } finally { setBusy(false); }
   };
 
@@ -578,6 +625,8 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [showRebook, setShowRebook] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
+  const [confirmCash, setConfirmCash] = useState(false);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
@@ -598,13 +647,12 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       const payload = await res.json();
       onUpdated(payload?.data ?? payload);
     } catch (err) {
-      if (typeof notify === 'function') notify(err.message, 'error');
-      else alert(err.message);
+      notify(err.message, 'error');
     } finally { setBusy(false); }
   };
 
   const handleCashPayment = async () => {
-    if (!window.confirm('Xác nhận khách đã thanh toán bằng tiền mặt?')) return;
+    setConfirmCash(false);
     setBusy(true);
     try {
       const res = await api(`/payments`, {
@@ -613,9 +661,9 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       });
       if (!res.ok) throw new Error(await readErr(res));
       onUpdated({ ...booking, paymentStatus: 'paid' });
+      setShowPaymentSuccess(true);
     } catch (err) {
-      if (typeof notify === 'function') notify(err.message, 'error');
-      else alert(err.message);
+      notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
     } finally { setBusy(false); }
   };
 
@@ -700,7 +748,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
               </span>
               {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
-                <button disabled={busy} onClick={handleCashPayment}
+                <button disabled={busy} onClick={() => setConfirmCash(true)}
                   className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
                   Xác nhận tiền mặt
                 </button>
@@ -809,7 +857,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
               {/* Confirm cash if not yet paid */}
               {booking.paymentStatus !== 'paid' && (
-                <button disabled={busy} onClick={handleCashPayment}
+                <button disabled={busy} onClick={() => setConfirmCash(true)}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                   <CurrencyCircleDollar size={15} weight="fill" />
                   Xác nhận thu tiền mặt
@@ -890,6 +938,19 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       )}
       {showQR    && <QRDisplayModal      booking={booking} onClose={() => setShowQR(false)} />}
       {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
+      <ConfirmDialog
+        open={confirmCash}
+        title="Xác nhận thu tiền mặt"
+        message="Xác nhận khách hàng đã thanh toán bằng tiền mặt?"
+        confirmLabel="Xác nhận thu tiền"
+        onConfirm={handleCashPayment}
+        onCancel={() => setConfirmCash(false)}
+      />
+      <SuccessBanner
+        show={showPaymentSuccess}
+        message="Xác nhận thu tiền mặt thành công!"
+        onDone={() => setShowPaymentSuccess(false)}
+      />
     </div>
   );
 }
@@ -916,6 +977,7 @@ export default function ManagerBookings() {
   const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
+  const [confirmCancelId, setConfirmCancelId] = useState(null);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
@@ -962,7 +1024,7 @@ export default function ManagerBookings() {
   };
 
   const handleCancel = async (id) => {
-    if (!window.confirm('Xác nhận hủy lịch này?')) return;
+    setConfirmCancelId(null);
     try {
       const res = await api(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: 'Quản lý hủy' }) });
       if (!res.ok) throw new Error(await readErr(res));
@@ -1090,7 +1152,7 @@ export default function ManagerBookings() {
                         Xem đơn
                       </button>
                       {b.status !== 'cancelled' && b.status !== 'completed' && (
-                        <button onClick={() => handleCancel(b._id)}
+                        <button onClick={() => setConfirmCancelId(b._id)}
                           className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
                           Hủy
                         </button>
@@ -1143,6 +1205,16 @@ export default function ManagerBookings() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmCancelId}
+        title="Xác nhận hủy lịch"
+        message="Bạn có chắc chắn muốn hủy lịch đặt này? Hành động không thể hoàn tác."
+        confirmLabel="Hủy lịch"
+        danger
+        onConfirm={() => handleCancel(confirmCancelId)}
+        onCancel={() => setConfirmCancelId(null)}
+      />
     </div>
   );
 }
