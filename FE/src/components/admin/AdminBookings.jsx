@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || { label: status, color: 'bg-slate-100 text-slate-600' };
-  return <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${cfg.color}`}>{cfg.label}</span>;
+  return <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${cfg.color}`}>{cfg.label}</span>;
 }
 
 function fmtDate(d) {
@@ -53,7 +53,7 @@ export default function AdminBookings() {
   const load = useCallback(async (pg = 1) => {
     setLoading(true); setError('');
     try {
-      const params = new URLSearchParams({ page: pg, limit: 20 });
+      const params = new URLSearchParams({ page: pg, limit: 10 });
       if (search) params.set('search', search);
       if (status) params.set('status', status);
       if (branchId) params.set('branchId', branchId);
@@ -64,8 +64,9 @@ export default function AdminBookings() {
       const data = await res.json();
       const list = data?.data?.bookings || data?.data || [];
       setBookings(Array.isArray(list) ? list : []);
-      setTotalPages(data?.data?.totalPages || 1);
-      setTotal(data?.data?.total || 0);
+      const pag = data?.data?.pagination;
+      setTotalPages(pag?.totalPages || 1);
+      setTotal(pag?.total || 0);
       setPage(pg);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }

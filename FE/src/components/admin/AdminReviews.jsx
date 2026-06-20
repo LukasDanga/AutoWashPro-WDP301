@@ -133,13 +133,6 @@ export default function AdminReviews() {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
   }
 
-  // Branch-level stats
-  const branchStats = branches.map((br) => {
-    const items = feedbacks.filter((f) => String(f.branchId?._id || f.branchId) === String(br._id) && f.rating);
-    const avg = items.length ? (items.reduce((s, f) => s + f.rating, 0) / items.length).toFixed(1) : null;
-    return { ...br, reviewCount: items.length, avgRating: avg };
-  }).filter((b) => b.reviewCount > 0);
-
   function onBranchFilter(value) {
     setBranchFilter(value);
     setPage(1);
@@ -167,33 +160,6 @@ export default function AdminReviews() {
 
   return (
     <div className="space-y-6">
-      {/* Branch performance summary */}
-      {branchStats.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {branchStats.map((br) => (
-            <div key={br._id}
-              onClick={() => setBranchFilter(branchFilter === String(br._id) ? '' : String(br._id))}
-              className={`cursor-pointer rounded-2xl border p-4 transition-all ${
-                branchFilter === String(br._id)
-                  ? 'border-blue-400 bg-blue-50 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-blue-200'
-              }`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Buildings size={16} className="text-slate-400" />
-                <span className="text-sm font-semibold text-slate-700 truncate">{br.name}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <Star size={14} weight="fill" className="text-amber-400" />
-                  <span className="text-lg font-bold text-slate-800">{br.avgRating}</span>
-                </div>
-                <span className="text-xs text-slate-400">{br.reviewCount} đánh giá</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
         {[

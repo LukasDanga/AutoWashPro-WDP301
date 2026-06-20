@@ -11,6 +11,9 @@ import {
   XCircle,
   PencilSimple,
   ClockCounterClockwise,
+  Gift,
+  Coin,
+  Trophy,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -32,6 +35,7 @@ function Spinner({ size = 18 }) {
     </svg>
   );
 }
+
 function Toast({ toast, onDismiss }) {
   useEffect(() => { if (!toast) return; const t = setTimeout(onDismiss, 3500); return () => clearTimeout(t); }, [toast, onDismiss]);
   if (!toast) return null;
@@ -45,8 +49,6 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
-
-
 function formatDate(dateString) {
   if (!dateString) return '';
   const d = new Date(dateString);
@@ -56,7 +58,10 @@ function formatDate(dateString) {
   return `${day}/${month}/${year}`;
 }
 
-/* ── voucher form modal ── */
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('vi-VN');
+}
+
 const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
 const EMPTY_VOUCHER = {
   code: '', name: '', description: '', type: 'percentage', value: '',
@@ -223,26 +228,57 @@ function VoucherUsageModal({ voucherId, onClose }) {
   const [usages, setUsages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  useEffect(() => {
-    let mounted = true;
-    api(`/vouchers/usage/${voucherId}`)
-      .then(res => { if (!res.ok) throw new Error('Failed to load usage'); return res.json(); })
-      .then(p => { if (mounted) { setUsages(p?.data ?? []); setLoading(false); } })
-      .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
-    return () => { mounted = false; };
-  }, [voucherId]);
+  const fetchUsages = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const params = new URLSearchParams();
+      params.append('page', page);
+      params.append('limit', 10);
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
+      const res = await api(`/vouchers/usage/${voucherId}?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load usage');
+      const p = await res.json();
+      setUsages(p?.data ?? []);
+      if (p?.pagination) setPagination(p.pagination);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, [voucherId, page, dateFrom, dateTo]);
+
+  useEffect(() => { fetchUsages(); }, [fetchUsages]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
       onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-[15px] font-semibold text-slate-800">Lịch sử sử dụng Voucher</h2>
           <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"><X size={16} /></button>
         </div>
-        <div className="max-h-[72vh] overflow-y-auto p-0">
+        <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Từ ngày:</span>
+            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Đến ngày:</span>
+            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100" />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium">Xóa bộ lọc</button>
+          )}
+          <span className="text-xs text-slate-400 ml-auto">{pagination.total} kết quả</span>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto p-0">
           {loading ? (
              <div className="flex justify-center py-10"><Spinner /></div>
           ) : error ? (
@@ -250,31 +286,69 @@ function VoucherUsageModal({ voucherId, onClose }) {
           ) : usages.length === 0 ? (
              <p className="text-slate-500 text-sm text-center py-10">Chưa có ai sử dụng voucher này.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
-                  <th className="px-4 py-3">Khách hàng</th>
-                  <th className="px-4 py-3">Ngày đặt</th>
-                  <th className="px-4 py-3">Giảm giá</th>
-                  <th className="px-4 py-3">Ngày dùng</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {usages.map((u, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-800">{u.userId?.name || '—'}</span>
-                        {u.userId?.tier && <TierBadge tier={u.userId.tier} />}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
-                    <td className="px-4 py-3 text-emerald-600 font-medium">-{Number(u.discountAmount).toLocaleString('vi-VN')}₫</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{new Date(u.usedAt).toLocaleString('vi-VN')}</td>
+            <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                    <th className="px-4 py-3">Khách hàng</th>
+                    <th className="px-4 py-3">Ngày đặt</th>
+                    <th className="px-4 py-3">Giảm giá</th>
+                    <th className="px-4 py-3">Ngày dùng</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {usages.map((u, i) => (
+                    <tr key={i} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-800">{u.userId?.name || '—'}</span>
+                            {u.userId?.tier && <TierBadge tier={u.userId.tier} />}
+                          </div>
+                          {u.userId?.phone && <p className="text-[11px] text-slate-400 mt-0.5">{u.userId.phone}</p>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
+                      <td className="px-4 py-3 text-emerald-600 font-medium">-{Number(u.discountAmount).toLocaleString('vi-VN')}₫</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">{new Date(u.usedAt).toLocaleString('vi-VN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Pagination */}
+              <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+                <p className="text-xs text-slate-500">
+                  {pagination.total > 0 ? `${(pagination.page - 1) * 10 + 1}–${Math.min(pagination.page * 10, pagination.total)} / ${pagination.total}` : '0 kết quả'}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!pagination.hasPrevPage}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    Trước
+                  </button>
+                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 1)
+                    .reduce((acc, p, i, arr) => {
+                      if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '...' ? (
+                        <span key={`dots-${i}`} className="px-1 text-xs text-slate-400">...</span>
+                      ) : (
+                        <button key={p} onClick={() => setPage(p)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            p === pagination.page ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}>{p}</button>
+                      )
+                    )}
+                  <button onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={!pagination.hasNextPage}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    Sau
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -282,7 +356,6 @@ function VoucherUsageModal({ voucherId, onClose }) {
   );
 }
 
-/* ── voucher usage report tab ── */
 function VoucherUsageReportTab() {
   const [report, setReport] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -340,17 +413,79 @@ function VoucherUsageReportTab() {
   );
 }
 
+function DashboardOverview({ vouchers }) {
+  const now = new Date();
+  const total = vouchers.length;
+  const active = vouchers.filter(v => v.status === 'active' && new Date(v.endDate) >= now).length;
+  const expired = vouchers.filter(v => new Date(v.endDate) < now).length;
+  const totalRemaining = vouchers.reduce((sum, v) => sum + (v.remaining || 0), 0);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Gift size={20} />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Tổng Voucher</p>
+            <p className="text-xl font-bold text-slate-800">{total}</p>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <CheckCircle size={20} />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Đang hoạt động</p>
+            <p className="text-xl font-bold text-emerald-700">{active}</p>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+            <Coin size={20} />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Lượt còn lại</p>
+            <p className="text-xl font-bold text-amber-700">{totalRemaining.toLocaleString('vi-VN')}</p>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+            <Trophy size={20} />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Hết hạn</p>
+            <p className="text-xl font-bold text-slate-600">{expired}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Main ═══ */
-export default function ManagerVouchers() {
+export default function AdminRewards() {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState(null);   // null | 'create' | 'edit'
+  const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('list');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
 
   const fetch_ = useCallback(async () => {
@@ -358,14 +493,20 @@ export default function ManagerVouchers() {
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
+      if (statusFilter) params.append('status', statusFilter);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      params.append('page', page);
+      params.append('limit', 10);
       const res = await api(`/vouchers?${params.toString()}`);
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const data = p?.data ?? p;
       setVouchers(Array.isArray(data) ? data : []);
+      if (p?.pagination) setPagination(p.pagination);
     } catch (err) { setError(err.message || 'Không thể tải voucher'); }
     finally { setLoading(false); }
-  }, [search]);
+  }, [search, statusFilter, startDate, endDate, page]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
@@ -374,9 +515,8 @@ export default function ManagerVouchers() {
     try {
       const res = await api('/vouchers', { method: 'POST', body: JSON.stringify(form) });
       if (!res.ok) throw new Error(await readErr(res));
-      const p = await res.json(); const created = p?.data ?? p;
-      setVouchers((prev) => [created, ...prev]);
       setModal(null); notify('Tạo voucher thành công!');
+      setPage(1); fetch_();
     } catch (err) { notify(err.message || 'Tạo thất bại', 'error'); }
     finally { setSaving(false); }
   };
@@ -393,13 +533,29 @@ export default function ManagerVouchers() {
     finally { setSaving(false); }
   };
 
+  const handleDelete = async (id) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa voucher này?')) return;
+    try {
+      const res = await api(`/vouchers/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await readErr(res));
+      setVouchers((prev) => prev.filter((v) => v._id !== id));
+      notify('Xóa voucher thành công!');
+    } catch (err) { notify(err.message || 'Xóa thất bại', 'error'); }
+  };
+
   const isExpired = (v) => new Date(v.endDate) < new Date();
   const isActive = (v) => v.status === 'active' && !isExpired(v);
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
-      {/* tabs */}
+      {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
+        <button 
+          onClick={() => setActiveTab('dashboard')}
+          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'dashboard' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          Tổng quan
+        </button>
         <button 
           onClick={() => setActiveTab('list')}
           className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
@@ -414,41 +570,141 @@ export default function ManagerVouchers() {
         </button>
       </div>
 
+      {activeTab === 'dashboard' && (
+        <div className="space-y-5">
+          <DashboardOverview vouchers={vouchers} />
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-800 mb-3">Cấu hình chương trình điểm thưởng</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tích điểm</p>
+                <p className="text-lg font-bold text-slate-800 mt-1">5%</p>
+                <p className="text-xs text-slate-500">Giá trị đơn hàng</p>
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hạng thành viên</p>
+                <div className="flex gap-2 mt-2">
+                  {['bronze', 'silver', 'gold', 'diamond'].map(t => (
+                    <span key={t} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                      t === 'diamond' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
+                      t === 'gold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      t === 'silver' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+                      'bg-orange-50 text-orange-700 border-orange-200'
+                    }`}>{t}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hệ số nhân</p>
+                <p className="text-sm font-bold text-slate-800 mt-1">x1 Đồng · x1.2 Bạc · x1.5 Vàng · x2 Kim Cương</p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-800 mb-3">Ngưỡng nâng hạng</h3>
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                    <th className="px-4 py-3">Hạng</th>
+                    <th className="px-4 py-3">Điểm tích lũy tối thiểu</th>
+                    <th className="px-4 py-3">Hệ số nhân</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[
+                    { tier: 'Đồng', key: 'bronze', points: 0, multiplier: 'x1' },
+                    { tier: 'Bạc', key: 'silver', points: '100,000', multiplier: 'x1.2' },
+                    { tier: 'Vàng', key: 'gold', points: '500,000', multiplier: 'x1.5' },
+                    { tier: 'Kim Cương', key: 'diamond', points: '1,000,000', multiplier: 'x2' },
+                  ].map(row => (
+                    <tr key={row.key} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-800">{row.tier}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.points === 0 ? '—' : `${row.points}₫`}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.multiplier}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'report' ? (
         <VoucherUsageReportTab />
-      ) : (
+      ) : activeTab === 'list' && (
         <>
-          {/* toolbar */}
-          <div className="flex items-center gap-3">
-            <button onClick={fetch_} disabled={loading}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
-              <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <div className="relative flex-1 max-w-md">
-              <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm theo mã hoặc tên voucher..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
-              />
-              {search && (
+          {/* Toolbar */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => { setPage(1); fetch_(); }} disabled={loading}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
+                <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+              </button>
+              <div className="relative flex-1 max-w-md">
+                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo mã hoặc tên voucher..."
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+                />
+                {search && (
+                  <button
+                    onClick={() => { setSearch(''); setPage(1); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => { setSelected(null); setModal('create'); }}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm">
+                <Plus size={14} weight="bold" />Tạo voucher
+              </button>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="active">Hoạt động</option>
+                <option value="inactive">Tắt</option>
+              </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Từ ngày:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Đến ngày:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+                />
+              </div>
+              {(statusFilter || startDate || endDate) && (
                 <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                  onClick={() => { setStatusFilter(''); setStartDate(''); setEndDate(''); setPage(1); }}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  <X size={12} />
+                  Xóa bộ lọc
                 </button>
               )}
             </div>
-            <button id="create-voucher-btn" onClick={() => { setSelected(null); setModal('create'); }}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm">
-              <Plus size={14} weight="bold" />Tạo voucher
-            </button>
           </div>
 
-          {/* content */}
+          {/* Content */}
           {loading ? (
             <div className="flex items-center justify-center py-24 text-slate-400"><Spinner size={24} /></div>
           ) : error ? (
@@ -489,8 +745,8 @@ export default function ManagerVouchers() {
                         {v.description && <p className="text-[11px] text-slate-400 truncate max-w-[180px]" title={v.description}>{v.description}</p>}
                       </td>
                       <td className="px-4 py-3 text-slate-700">
-                        {v.type === 'percentage' ? `${v.value}%` : `${Number(v.value).toLocaleString('vi-VN')}₫`}
-                        {v.maxDiscount > 0 && <span className="text-[11px] text-slate-400"> (tối đa {Number(v.maxDiscount).toLocaleString('vi-VN')}₫)</span>}
+                        {v.type === 'percentage' ? `${v.value}%` : `${formatCurrency(v.value)}₫`}
+                        {v.maxDiscount > 0 && <span className="text-[11px] text-slate-400"> (tối đa {formatCurrency(v.maxDiscount)}₫)</span>}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{v.remaining ?? v.quantity}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">
@@ -498,7 +754,7 @@ export default function ManagerVouchers() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive(v) ? 'bg-emerald-50 text-emerald-700' : isExpired(v) ? 'bg-slate-100 text-slate-400' : 'bg-rose-50 text-rose-600'}`}>
-                          {isActive(v) ? 'Đang hoạt động' : isExpired(v) ? 'Hết hạn' : 'Tắt'}
+                          {isActive(v) ? 'Hoạt động' : isExpired(v) ? 'Hết hạn' : 'Tắt'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -507,9 +763,13 @@ export default function ManagerVouchers() {
                             className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
                             <ClockCounterClockwise size={14} />
                           </button>
-                          <button id={`edit-voucher-${v._id}`} onClick={() => { setSelected(v); setModal('edit'); }} title="Chỉnh sửa"
+                          <button onClick={() => { setSelected(v); setModal('edit'); }} title="Chỉnh sửa"
                             className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
                             <PencilSimple size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(v._id)} title="Xóa"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                            <Trash size={14} />
                           </button>
                         </div>
                       </td>
@@ -517,6 +777,52 @@ export default function ManagerVouchers() {
                   ))}
                 </tbody>
               </table>
+              {/* Pagination */}
+              <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+                <p className="text-xs text-slate-500">
+                  Hiển thị {(pagination.page - 1) * 10 + 1}–{Math.min(pagination.page * 10, pagination.total)} / {pagination.total} voucher
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={!pagination.hasPrevPage}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Trước
+                  </button>
+                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 1)
+                    .reduce((acc, p, i, arr) => {
+                      if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '...' ? (
+                        <span key={`dots-${i}`} className="px-1 text-xs text-slate-400">...</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setPage(p)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            p === pagination.page
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
+                  <button
+                    onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                    disabled={!pagination.hasNextPage}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </>
