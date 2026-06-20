@@ -284,7 +284,8 @@ router.patch('/:id/feedback/reply', authenticate, authorize(ROLES.ADMIN, ROLES.M
  *       404:
  *         description: Booking not found
  */
-router.post('/:id/rebook', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+// Đặt lại lịch — chỉ khách hàng (user) mới có quyền
+router.post('/:id/rebook', authenticate, authorize(ROLES.CUSTOMER), [
   param('id').isMongoId(),
   body('bookingDate').notEmpty().withMessage('bookingDate is required'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),

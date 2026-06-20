@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
  * @param {() => void} props.onLogout
  * @param {string} [props.className]
  */
-export default function DashboardSidebar({ brand, menuItems, user, onLogout, className }) {
+export default function DashboardSidebar({ brand, menuItems, user, onLogout, className, badges = {} }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -57,6 +57,7 @@ export default function DashboardSidebar({ brand, menuItems, user, onLogout, cla
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Menu chính">
         {menuItems.map((item) => {
           const Icon = item.icon;
+          const count = badges[item.id] || 0;
           return (
             <NavLink
               key={item.id}
@@ -64,7 +65,7 @@ export default function DashboardSidebar({ brand, menuItems, user, onLogout, cla
               end={item.end ?? false}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   collapsed ? 'justify-center px-0' : '',
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground'
@@ -73,8 +74,19 @@ export default function DashboardSidebar({ brand, menuItems, user, onLogout, cla
               }
               title={collapsed ? item.label : undefined}
             >
-              <Icon size={20} weight="duotone" className="shrink-0" aria-hidden />
+              <span className="relative shrink-0">
+                <Icon size={20} weight="duotone" aria-hidden />
+                {count > 0 && collapsed && (
+                  <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-sidebar" aria-hidden />
+                )}
+              </span>
               {!collapsed && <span className="truncate">{item.label}</span>}
+              {!collapsed && count > 0 && (
+                <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-bold text-white"
+                  title={`${count} mục mới`}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
             </NavLink>
           );
         })}

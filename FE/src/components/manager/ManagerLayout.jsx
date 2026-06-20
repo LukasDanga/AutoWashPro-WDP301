@@ -1,9 +1,14 @@
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Drop } from '@phosphor-icons/react';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { MANAGER_BRAND, MANAGER_MENU_ITEMS, MANAGER_PAGE_META } from '@/config/managerMenu';
-import { clearSession } from '@/lib/authStorage';
+import { clearSession, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import NotificationBell from '@/components/ui/NotificationBell';
+
+function api(path) {
+  return fetch(`${getApiBaseUrl()}${path}`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
+}
 
 function resolvePageMeta(pathname) {
   if (pathname === '/manager' || pathname === '/manager/') return MANAGER_PAGE_META.overview;
@@ -24,6 +29,28 @@ export default function ManagerLayout({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const meta = resolvePageMeta(location.pathname);
+  const [badges, setBadges] = useState({});
+
+  // Đếm số mục "mới / cần xử lý": đơn chờ xác nhận + đánh giá chưa phản hồi
+  useEffect(() => {
+    let alive = true;
+    async function loadCounts() {
+      try {
+        const [bRes, fRes] = await Promise.all([
+          api('/bookings?status=pending&limit=1'),
+          api('/bookings/feedbacks?replied=false&limit=1'),
+        ]);
+        const bData = await bRes.json().catch(() => ({}));
+        const fData = await fRes.json().catch(() => ({}));
+        const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
+        const unrepliedFeedbacks = fData?.data?.total ?? 0;
+        if (alive) setBadges({ bookings: pendingBookings, feedbacks: unrepliedFeedbacks });
+      } catch { /* silent */ }
+    }
+    loadCounts();
+    const t = setInterval(loadCounts, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, [location.pathname]);
 
   async function handleLogout() {
     await onLogout?.();
@@ -38,6 +65,7 @@ export default function ManagerLayout({ user, onLogout }) {
         logo: <Drop size={24} weight="fill" className="text-primary" aria-hidden />,
       }}
       menuItems={MANAGER_MENU_ITEMS}
+      badges={badges}
       user={{
         name: user?.name || 'Quản lý',
         roleLabel: 'Quản lý chi nhánh',
