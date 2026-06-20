@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('./src/config/dns'); // Override DNS for MongoDB Atlas SRV resolution
 const app = require('./src/app');
 const config = require('./src/config');
 const { connectDB } = require('./src/config/db');

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ChartLine,
   CurrencyDollar,
@@ -8,9 +8,12 @@ import {
   Money,
   CreditCard,
   CaretRight,
+  CalendarBlank,
+  CaretDown,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { cn } from '@/lib/utils';
+import TierBadge from '@/components/ui/TierBadge';
 
 const apiBase = getApiBaseUrl();
 const token = getStoredToken();
@@ -28,6 +31,53 @@ function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+}
+
+const TIME_FILTERS = [
+  { key: 'all',     label: 'Tất cả' },
+  { key: '7d',      label: '7 ngày' },
+  { key: '30d',     label: '30 ngày' },
+  { key: 'month',   label: 'Tháng này' },
+  { key: 'quarter', label: 'Quý này' },
+  { key: 'year',    label: 'Năm nay' },
+];
+
+function getDateRange(key) {
+  const now = new Date();
+  const start = new Date();
+  let endDate = now.toISOString();
+
+  switch (key) {
+    case '7d':
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case '30d':
+      start.setDate(now.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case 'month':
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case 'quarter': {
+      const q = Math.floor(now.getMonth() / 3);
+      start.setMonth(q * 3, 1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    }
+    case 'year':
+      start.setMonth(0, 1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    default:
+      return {};
+  }
+
+  return {
+    startDate: start.toISOString(),
+    endDate,
+  };
 }
 
 const STATUS_META = {
@@ -51,34 +101,38 @@ export default function AdminOverview() {
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [timeFilter, setTimeFilter] = useState('all');
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [resReport, resBranches, resUsers, resBookings] = await Promise.all([
-          fetch(`${apiBase}/reports/revenue`, { headers }),
-          fetch(`${apiBase}/branches`, { headers }),
-          fetch(`${apiBase}/auth/users`, { headers }),
-          fetch(`${apiBase}/bookings?limit=10`, { headers }),
-        ]);
-        const [reportData, branchesData, usersData, bookingsData] = await Promise.all([
-          resReport.json().then(r => r?.data ?? r),
-          resBranches.json().then(r => r?.data ?? r),
-          resUsers.json().then(r => r?.data ?? r),
-          resBookings.json().then(r => r?.data ?? r),
-        ]);
-        setReport(reportData);
-        setBranches(Array.isArray(branchesData) ? branchesData : []);
-        setUsers(Array.isArray(usersData) ? usersData : []);
-        setBookings(bookingsData?.bookings ?? (Array.isArray(bookingsData) ? bookingsData : []));
-      } catch (e) {
-        console.error('Failed to load overview data', e);
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async (filter) => {
+    setLoading(true);
+    try {
+      const dateParams = getDateRange(filter);
+      const qs = new URLSearchParams(dateParams).toString();
+
+      const [resReport, resBranches, resUsers, resBookings] = await Promise.all([
+        fetch(`${apiBase}/reports/revenue${qs ? '?' + qs : ''}`, { headers }),
+        fetch(`${apiBase}/branches`, { headers }),
+        fetch(`${apiBase}/auth/users`, { headers }),
+        fetch(`${apiBase}/bookings?limit=10${qs ? '&' + qs : ''}`, { headers }),
+      ]);
+      const [reportData, branchesData, usersData, bookingsData] = await Promise.all([
+        resReport.json().then(r => r?.data ?? r),
+        resBranches.json().then(r => r?.data ?? r),
+        resUsers.json().then(r => r?.data ?? r),
+        resBookings.json().then(r => r?.data ?? r),
+      ]);
+      setReport(reportData);
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setBookings(bookingsData?.bookings ?? (Array.isArray(bookingsData) ? bookingsData : []));
+    } catch (e) {
+      console.error('Failed to load overview data', e);
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
+
+  useEffect(() => { load(timeFilter); }, [timeFilter, load]);
 
   if (loading) {
     return (
@@ -126,6 +180,24 @@ export default function AdminOverview() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Time filter */}
+      <div className="flex items-center gap-2">
+        <CalendarBlank size={16} weight="duotone" className="text-slate-400" />
+        <span className="text-xs font-medium text-slate-500">Thời gian:</span>
+        <div className="flex items-center gap-1.5">
+          {TIME_FILTERS.map(f => (
+            <button key={f.key} onClick={() => setTimeFilter(f.key)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+                timeFilter === f.key
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Revenue split + top packages */}
@@ -258,9 +330,7 @@ export default function AdminOverview() {
                   <p className="truncate text-sm font-medium text-slate-700">{c.user?.name ?? 'Ẩn danh'}</p>
                   <p className="truncate text-xs text-slate-400">{c.bookingsCount} lượt · {fmtCurrency(c.totalRevenue)}</p>
                 </div>
-                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', TIER_COLORS[c.user?.tier] || TIER_COLORS.bronze)}>
-                  {c.user?.tier ?? 'bronze'}
-                </span>
+                <TierBadge tier={c.user?.tier || 'bronze'} />
               </div>
             ))}
           </div>
