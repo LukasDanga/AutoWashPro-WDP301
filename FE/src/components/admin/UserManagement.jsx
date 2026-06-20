@@ -772,7 +772,6 @@ export default function UserManagement() {
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4">Tên người dùng / Email</th>
-                  <th className="px-6 py-4">Số điện thoại</th>
                   <th className="px-6 py-4">Vai trò</th>
                   <th className="px-6 py-4">Hạng / Điểm</th>
                   <th className="px-6 py-4">Trạng thái</th>
@@ -783,22 +782,11 @@ export default function UserManagement() {
                 {users.map((u) => (
                   <tr key={u._id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 font-bold uppercase overflow-hidden text-sm">
-                          {u.avatar ? (
-                            <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
-                          ) : (
-                            u.name.charAt(0)
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-800">{u.name}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">{u.email}</div>
-                        </div>
+                      <div>
+                        <div className="font-semibold text-slate-800">{u.name}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{u.email}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{u.phone || ''}</div>
                       </div>
-                    </td>
-                    <td className="px-6 py-3.5 whitespace-nowrap font-medium text-slate-700">
-                      {u.phone || <span className="text-slate-300">-</span>}
                     </td>
                     <td className="px-6 py-3.5 whitespace-nowrap">
                       <RoleBadge role={u.role} />
