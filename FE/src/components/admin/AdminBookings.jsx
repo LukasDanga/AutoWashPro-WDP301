@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import {
   MagnifyingGlass, ArrowClockwise, X, Buildings, CalendarBlank,
-  CheckCircle, XCircle, Clock, Spinner, CaretLeft, CaretRight,
+  CheckCircle, XCircle, Clock, Spinner,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
@@ -197,16 +197,35 @@ export default function AdminBookings() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
-              <span className="text-xs text-slate-400">Trang {page}/{totalPages}</span>
-              <div className="flex gap-2">
+            <div className="flex items-center justify-center gap-4 border-t border-slate-100 px-4 py-3">
+              <p className="text-xs text-slate-500">
+                {total > 0 ? `${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} / ${total}` : '0 kết quả'}
+              </p>
+              <div className="flex items-center gap-1">
                 <button onClick={() => load(page - 1)} disabled={page <= 1 || loading}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-30">
-                  <CaretLeft size={12} />
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Trước
                 </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce((acc, p, i, arr) => {
+                    if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === '...' ? (
+                      <span key={`dots-${i}`} className="px-1 text-xs text-slate-400">...</span>
+                    ) : (
+                      <button key={p} onClick={() => load(p)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          p === page ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}>{p}</button>
+                    )
+                  )}
                 <button onClick={() => load(page + 1)} disabled={page >= totalPages || loading}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-30">
-                  <CaretRight size={12} />
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Sau
                 </button>
               </div>
             </div>
