@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { showToast } from '@/lib/toast';
 import {
   Buildings,
   CheckCircle,
@@ -134,7 +135,7 @@ export default function ManagerBranch({ user }) {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
   const [toast, setToast] = useState(null);
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   useEffect(() => {
     api('/branches')

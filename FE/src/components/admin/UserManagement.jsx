@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -584,7 +585,7 @@ export default function UserManagement() {
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const notify = (message, type = "success") => setToast({ message, type });
+  const notify = (message, type = "success") => showToast(message, type);
 
   // Fetch Users
   const fetchUsers = useCallback(
