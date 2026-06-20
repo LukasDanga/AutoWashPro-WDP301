@@ -316,7 +316,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
                 </tbody>
               </table>
               {/* Pagination */}
-              <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+              <div className="flex items-center justify-center gap-4 border-t border-slate-100 px-4 py-3">
                 <p className="text-xs text-slate-500">
                   {pagination.total > 0 ? `${(pagination.page - 1) * 10 + 1}–${Math.min(pagination.page * 10, pagination.total)} / ${pagination.total}` : '0 kết quả'}
                 </p>
@@ -778,7 +778,7 @@ export default function AdminRewards() {
                 </tbody>
               </table>
               {/* Pagination */}
-              <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+              <div className="flex items-center justify-center gap-4 border-t border-slate-100 px-4 py-3">
                 <p className="text-xs text-slate-500">
                   Hiển thị {(pagination.page - 1) * 10 + 1}–{Math.min(pagination.page * 10, pagination.total)} / {pagination.total} voucher
                 </p>
