@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
@@ -18,10 +20,10 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
   const [prevScroll, setPrevScroll] = useState(0);
 
   const navItems = [
-    { label: 'Đặt lịch', href: '#booking' },
-    { label: 'Gói slot', href: '#packages' },
-    { label: 'Quà tặng', href: '#giftstore' },
-    { label: 'Cửa hàng', href: '#map' },
+    { label: 'Đặt lịch', to: '/booking' },
+    { label: 'Gói slot', to: '/packages' },
+    { label: 'Quà tặng', to: '/gifts' },
+    { label: 'Cửa hàng', to: '/map' },
   ];
 
   useEffect(() => {
@@ -51,15 +53,23 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
         className="fixed top-4 left-1/2 -translate-x-1/2 z-[5000]"
       >
         <div className="flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/70 backdrop-blur-xl px-2 py-1.5 shadow-lg shadow-black/5 dark:bg-neutral-900/70 dark:border-neutral-800">
+          <Link to="/" className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-bold text-emerald-600 hover:text-emerald-500 transition-colors shrink-0">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+            </svg>
+            <span className="hidden sm:inline">AutoWashPro</span>
+            <span className="sm:hidden">AWP</span>
+          </Link>
+          <div className="h-4 w-px bg-neutral-200 dark:bg-neutral-800" />
           <div className="flex items-center gap-1">
             {navItems.map((item, idx) => (
-              <a
+              <Link
                 key={idx}
-                href={item.href}
+                to={item.to}
                 className="relative flex items-center gap-1 rounded-full px-3.5 py-2 text-xs md:text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
           </div>
 
@@ -145,14 +155,14 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
             >
               <div className="px-4 py-3 space-y-2">
                 {navItems.map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
+                  <Link
+                    key={item.to}
+                    to={item.to}
                     onClick={() => setIsOpen(false)}
                     className="block text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white text-sm font-medium transition-colors"
                   >
                     {item.label}
-                  </a>
+                  </Link>
                 ))}
               </div>
             </motion.div>

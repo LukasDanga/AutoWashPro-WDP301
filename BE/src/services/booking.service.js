@@ -48,6 +48,13 @@ const computeEndTime = (startTime, duration) => {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 };
 
+function generateBookingCode() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+  return `AW-${dateStr}-${rand}`;
+}
+
 const getDayBounds = (dateStr) => ({
   gte: new Date(`${dateStr}T00:00:00.000Z`),
   lte: new Date(`${dateStr}T23:59:59.999Z`),
@@ -191,6 +198,7 @@ exports.createBooking = async (data) => {
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
       bookingDate: bd, startTime, endTime, note,
+      bookingCode: generateBookingCode(),
       voucherCode: voucherCode || undefined,
       discountAmount: computedDiscountAmount,
       finalPrice: computedFinalPrice,
@@ -800,6 +808,7 @@ exports.createRecurringBooking = async (data) => {
         userId, branchId, packageId, vehicleId,
         bookingDate, startTime: finalStartTime, endTime: finalEndTime,
         note: finalNote,
+        bookingCode: generateBookingCode(),
         bookingType: 'recurring',
         recurringGroupId,
         priority,
@@ -1021,6 +1030,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     bookingDate: bookingDateObj,
     startTime,
     endTime,
+    bookingCode: generateBookingCode(),
     bookingType: src.bookingType === 'recurring' ? 'single' : src.bookingType,
     selectedSubServices: src.selectedSubServices || [],
     note: src.note,
@@ -1085,4 +1095,25 @@ exports.getCustomers = async (user, filters = {}) => {
   const customers = result?.data  || [];
   const total     = result?.count?.[0]?.total || 0;
   return { customers, total, page, totalPages: Math.ceil(total / limit) };
+};
+
+exports.getPublicTestimonials = async () => {
+  const testimonials = await Booking.find({
+    status: 'completed',
+    rating: { $gte: 4 },
+    feedback: { $exists: true, $ne: '' },
+  })
+    .populate('userId', 'name')
+    .populate('branchId', 'name city')
+    .sort({ feedbackAt: -1 })
+    .limit(20)
+    .lean();
+
+  return testimonials.map(t => ({
+    name: t.userId?.name || 'Khách hàng',
+    role: '',
+    content: t.feedback || '',
+    rating: t.rating || 5,
+    location: t.branchId?.name || '',
+  }));
 };
