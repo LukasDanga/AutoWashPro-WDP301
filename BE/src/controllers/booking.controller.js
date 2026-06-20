@@ -64,9 +64,15 @@ exports.getAvailableSlots = catchAsync(async (req, res) => {
 });
 
 exports.createPayment = catchAsync(async (req, res) => {
-  const { bookingId, method } = req.body;
-  const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, method);
+  const { bookingId, method, paymentType } = req.body;
+  const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, method, paymentType || 'full');
   success(res, payment, 'Payment created', 201);
+});
+
+exports.confirmBookings = catchAsync(async (req, res) => {
+  const { ids } = req.body;
+  const result = await bookingService.confirmBookings(ids, req.user.role, req.userId);
+  success(res, result, `Đã xác nhận ${result.confirmed} đơn`);
 });
 
 exports.confirmPayment = catchAsync(async (req, res) => {

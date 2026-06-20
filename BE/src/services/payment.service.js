@@ -10,9 +10,12 @@ const VALID_METHODS = ['cash', 'momo', 'vnpay'];
 const simulateMomoPayment = (amount, transactionId) => `https://momo.vn/pay?amount=${amount}&txn=${transactionId}`;
 const simulateVNPayPayment = (amount, transactionId) => `https://vnpay.vn/pay?amount=${amount}&txn=${transactionId}`;
 
-exports.createPayment = async (bookingId, requesterId, userRole, method) => {
+exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full') => {
   if (!VALID_METHODS.includes(method)) {
     throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
+  }
+  if (!['deposit', 'remaining', 'full'].includes(paymentType)) {
+    throw Object.assign(new Error('Invalid payment type'), { statusCode: 400, code: 'INVALID_PAYMENT_TYPE' });
   }
 
   const booking = await Booking.findById(bookingId).populate('packageId');
@@ -26,12 +29,31 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
   if (!booking.packageId) {
     throw Object.assign(new Error('Package not found'), { statusCode: 400, code: 'PACKAGE_NOT_FOUND' });
   }
-
   if (booking.paymentStatus === 'paid') {
     throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
-  if (!['pending', 'in_progress', 'completed'].includes(booking.status)) {
+  const fullPrice = booking.finalPrice ?? booking.packageId.price;
+  const deposit = booking.depositAmount || 0;
+
+  // ── Xác định số tiền cần thu theo loại thanh toán ──
+  let amount;
+  let isDeposit = false;
+  if (paymentType === 'deposit') {
+    if (deposit <= 0) throw Object.assign(new Error('Đơn này không yêu cầu đặt cọc'), { statusCode: 400, code: 'NO_DEPOSIT_REQUIRED' });
+    if (booking.depositPaid) throw Object.assign(new Error('Đã đặt cọc trước đó'), { statusCode: 409, code: 'DEPOSIT_ALREADY_PAID' });
+    amount = deposit;
+    isDeposit = true;
+  } else {
+    // remaining/full: nếu đã cọc thì chỉ thu phần còn lại
+    amount = booking.depositPaid ? Math.max(0, fullPrice - deposit) : fullPrice;
+  }
+
+  // Đặt cọc được phép khi đơn còn pending/confirmed; thu phần còn lại khi in_progress/completed
+  const allowedStatuses = isDeposit
+    ? ['pending', 'confirmed']
+    : ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
+  if (!allowedStatuses.includes(booking.status)) {
     throw Object.assign(new Error(`Cannot create payment for booking with status '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
   }
 
@@ -42,11 +64,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
 
   let payment = await Payment.findOneAndUpdate(
     { bookingId, status: { $nin: ['paid', 'refunded'] } },
-    { bookingId, userId: targetUserId, amount: booking.finalPrice || booking.packageId.price, method, transactionId: generateTransactionId(), status: 'pending' },
+    { bookingId, userId: targetUserId, amount, method, paymentType, transactionId: generateTransactionId(), status: 'pending' },
     { new: true, upsert: true, runValidators: true }
   );
-
-  const amount = payment.amount;
 
   if (booking.voucherCode) {
     // Kiểm tra voucher đã reserve ở booking chưa
@@ -57,43 +77,56 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
     }
   }
 
-  if (method === 'cash') {
+  // Tiền cọc luôn được thanh toán tức thì (mô phỏng cổng thanh toán cho demo);
+  // phần còn lại bằng tiền mặt cũng thanh toán tức thì.
+  if (isDeposit || method === 'cash') {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
       payment.status = 'paid';
       payment.paidAt = new Date();
       await payment.save({ session });
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method }).session(session);
-      
-      // Tích điểm
-      await loyaltyService.addPointsFromPayment(targetUserId, amount, bookingId, session);
 
-      
+      if (isDeposit) {
+        await Booking.findByIdAndUpdate(
+          booking._id,
+          { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: method },
+          { session }
+        );
+      } else {
+        await Booking.findByIdAndUpdate(
+          booking._id,
+          { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method },
+          { session }
+        );
+        // Tích điểm theo tổng giá trị đơn (chỉ khi tất toán hoàn toàn)
+        await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+      }
+
       await session.commitTransaction();
     } catch (err) {
       await session.abortTransaction();
       if (booking.voucherCode) {
-        await voucherService.rollbackVoucher(booking.voucherCode, userId, bookingId).catch(() => {});
+        await voucherService.rollbackVoucher(booking.voucherCode, targetUserId, bookingId).catch(() => {});
       }
       throw err;
     } finally {
       session.endSession();
     }
 
+    const label = isDeposit ? 'tiền cọc' : 'phần còn lại';
     notificationService.send(
       booking.userId,
       'Thanh toán thành công',
-      `Thanh toán ${amount.toLocaleString('vi-VN')}đ bằng tiền mặt đã được xác nhận.`,
+      `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng ${method === 'cash' ? 'tiền mặt' : method.toUpperCase()}.`,
       'payment_confirmed',
       { bookingId, paymentId: payment._id }
     ).catch(() => {});
 
-    // Notify admin + manager
     notificationService.sendToAdminAndManager(
       booking.branchId,
-      'Thanh toán tiền mặt',
-      `Khách hàng đã thanh toán ${amount.toLocaleString('vi-VN')}đ tiền mặt cho lịch hẹn.`,
+      isDeposit ? 'Khách đã đặt cọc' : 'Thanh toán hoàn tất',
+      `Khách hàng đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ cho lịch hẹn.`,
       'payment_confirmed',
       { bookingId, branchId: booking.branchId }
     ).catch(() => {});

@@ -12,10 +12,11 @@ const bookingSchema = new mongoose.Schema(
     endTime: { type: String, required: true },
     status: {
       type: String,
-      enum: ['pending', 'checked_in', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'],
       default: 'pending',
     },
     note: { type: String, trim: true, maxlength: 500 },
+    confirmedAt: { type: Date },
     cancelledAt: { type: Date },
     cancelledBy: { type: String, enum: ['customer', 'admin', 'manager', 'system'] },
     cancellationReason: { type: String, trim: true, maxlength: 500 },
@@ -38,9 +39,14 @@ const bookingSchema = new mongoose.Schema(
     voucherCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
     finalPrice: { type: Number, min: 0 },
+    // Deposit (đặt cọc trước) — tránh khách đặt mà không đến / spam
+    depositAmount: { type: Number, default: 0, min: 0 },
+    depositPaid: { type: Boolean, default: false },
+    depositPaidAt: { type: Date },
     paymentStatus: {
       type: String,
-      enum: ['unpaid', 'pending', 'paid', 'refunded'],
+      // 'deposit_paid' = đã trả cọc, chờ thanh toán phần còn lại khi hoàn thành
+      enum: ['unpaid', 'pending', 'deposit_paid', 'paid', 'refunded'],
       default: 'unpaid',
     },
     paymentMethod: {
