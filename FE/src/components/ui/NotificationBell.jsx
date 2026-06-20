@@ -84,29 +84,34 @@ export default function NotificationBell() {
 
     let es;
     let retryTimeout;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
 
     function connect() {
       const base = getApiBaseUrl().replace(/\/api$/, '');
       es = new EventSource(`${base}/api/sse?token=${encodeURIComponent(token)}`);
 
       es.addEventListener('notification', () => {
-        // New notification arrived — bump count and reload if open
         setUnread((c) => c + 1);
-        setNotifications((prev) => {
-          // Reload will happen on next open; mark stale
-          return prev;
-        });
+        setNotifications((prev) => prev);
         fetchCount();
+        retryCount = 0;
       });
 
       es.addEventListener('booking_new', () => {
         fetchCount();
       });
 
+      es.onopen = () => {
+        retryCount = 0;
+      };
+
       es.onerror = () => {
         es.close();
-        // Reconnect after 5s
-        retryTimeout = setTimeout(connect, 5000);
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          retryTimeout = setTimeout(connect, 5000 * retryCount);
+        }
       };
     }
 

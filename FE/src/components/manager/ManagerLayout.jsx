@@ -14,6 +14,8 @@ if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
   if (pathname.startsWith('/manager/customers')) return MANAGER_PAGE_META.customers;
   if (pathname.startsWith('/manager/feedbacks')) return MANAGER_PAGE_META.feedbacks;
   if (pathname.startsWith('/manager/revenue')) return MANAGER_PAGE_META.revenue;
+  if (pathname.startsWith('/manager/packages')) return MANAGER_PAGE_META.packages;
+  if (pathname.startsWith('/manager/slot-packs')) return MANAGER_PAGE_META['slot-packs'];
   if (pathname.startsWith('/manager/profile')) return MANAGER_PAGE_META.profile;
   return MANAGER_PAGE_META.overview;
 }
