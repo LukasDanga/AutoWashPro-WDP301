@@ -12,6 +12,7 @@ export default function DashboardShell({
   children,
   header,
   className,
+  badges,
 }) {
   return (
     <div className={cn('flex min-h-screen bg-background', className)}>
@@ -20,6 +21,7 @@ export default function DashboardShell({
         menuItems={menuItems}
         user={user}
         onLogout={onLogout}
+        badges={badges}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         {header ? (

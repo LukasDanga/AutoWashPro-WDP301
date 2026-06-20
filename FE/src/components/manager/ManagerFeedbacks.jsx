@@ -237,6 +237,11 @@ export default function ManagerFeedbacks() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold text-slate-800 text-sm">{fb.userId?.name || 'Khách hàng'}</span>
                         {fb.userId?.tier && <TierBadge tier={fb.userId.tier} />}
+                        {!fb.managerReply && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {new Date(fb.feedbackAt || fb.updatedAt || fb.createdAt).toLocaleDateString('vi-VN')}
