@@ -573,59 +573,109 @@ export default function AdminRewards() {
       {activeTab === 'dashboard' && (
         <div className="space-y-5">
           <DashboardOverview vouchers={vouchers} />
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-800 mb-3">Cấu hình chương trình điểm thưởng</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tích điểm</p>
-                <p className="text-lg font-bold text-slate-800 mt-1">5%</p>
-                <p className="text-xs text-slate-500">Giá trị đơn hàng</p>
-              </div>
-              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hạng thành viên</p>
-                <div className="flex gap-2 mt-2">
-                  {['bronze', 'silver', 'gold', 'diamond'].map(t => (
-                    <span key={t} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
-                      t === 'diamond' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
-                      t === 'gold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                      t === 'silver' ? 'bg-slate-100 text-slate-600 border-slate-200' :
-                      'bg-orange-50 text-orange-700 border-orange-200'
-                    }`}>{t}</span>
-                  ))}
+
+          {/* Points config */}
+          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-100" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdf4)' }}>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Coin size={16} weight="duotone" className="text-emerald-600" />
+                Cấu hình chương trình điểm thưởng
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Tích điểm */}
+                <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg,#eff6ff,#f0f9ff)', border: '1px solid #bfdbfe' }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#dbeafe' }}>
+                      <Coin size={16} className="text-blue-600" weight="fill" />
+                    </div>
+                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Tích điểm</p>
+                  </div>
+                  <p className="text-3xl font-extrabold text-blue-700">5%</p>
+                  <p className="text-xs text-blue-500 mt-1">Giá trị đơn hàng</p>
                 </div>
-              </div>
-              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hệ số nhân</p>
-                <p className="text-sm font-bold text-slate-800 mt-1">x1 Đồng · x1.2 Bạc · x1.5 Vàng · x2 Kim Cương</p>
+
+                {/* Hạng thành viên */}
+                <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg,#fefce8,#fffbeb)', border: '1px solid #fde68a' }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#fef3c7' }}>
+                      <Trophy size={16} className="text-amber-600" weight="fill" />
+                    </div>
+                    <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Hạng thành viên</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {['bronze', 'silver', 'gold', 'diamond'].map(t => <TierBadge key={t} tier={t} />)}
+                  </div>
+                </div>
+
+                {/* Hệ số nhân */}
+                <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg,#f0fdf4,#ecfdf5)', border: '1px solid #bbf7d0' }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#dcfce7' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Hệ số nhân</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: 'Đồng', mult: 'x1', color: '#b45309', bg: '#fef3c7' },
+                      { label: 'Bạc', mult: 'x1.2', color: '#475569', bg: '#f1f5f9' },
+                      { label: 'Vàng', mult: 'x1.5', color: '#a16207', bg: '#fef9c3' },
+                      { label: 'Kim Cương', mult: 'x2', color: '#0e7490', bg: '#ecfeff' },
+                    ].map(r => (
+                      <div key={r.label} className="flex items-center justify-between rounded-lg px-2.5 py-1" style={{ background: r.bg }}>
+                        <span className="text-[11px] font-semibold" style={{ color: r.color }}>{r.label}</span>
+                        <span className="text-xs font-extrabold" style={{ color: r.color }}>{r.mult}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-800 mb-3">Ngưỡng nâng hạng</h3>
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
-                    <th className="px-4 py-3">Hạng</th>
-                    <th className="px-4 py-3">Điểm tích lũy tối thiểu</th>
-                    <th className="px-4 py-3">Hệ số nhân</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+
+          {/* Tier progression */}
+          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-100" style={{ background: 'linear-gradient(135deg,#fefce8,#fffbeb)' }}>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Trophy size={16} weight="duotone" className="text-amber-500" />
+                Ngưỡng nâng hạng
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="relative">
+                {/* Connection line */}
+                <div className="absolute top-10 left-0 right-0 h-0.5 bg-slate-100 hidden md:block" />
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {[
-                    { tier: 'Đồng', key: 'bronze', points: 0, multiplier: 'x1' },
-                    { tier: 'Bạc', key: 'silver', points: '100,000', multiplier: 'x1.2' },
-                    { tier: 'Vàng', key: 'gold', points: '500,000', multiplier: 'x1.5' },
-                    { tier: 'Kim Cương', key: 'diamond', points: '1,000,000', multiplier: 'x2' },
-                  ].map(row => (
-                    <tr key={row.key} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-800">{row.tier}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.points === 0 ? '—' : `${row.points}₫`}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.multiplier}</td>
-                    </tr>
+                    { tier: 'bronze', label: 'Đồng', points: '0', mult: 'x1', desc: 'Bắt đầu', color: '#b45309', bg: '#fef3c7', border: '#fcd34d' },
+                    { tier: 'silver', label: 'Bạc', points: '100,000đ', mult: 'x1.2', desc: 'Tích lũy', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
+                    { tier: 'gold', label: 'Vàng', points: '500,000đ', mult: 'x1.5', desc: 'Thân thiết', color: '#a16207', bg: '#fef9c3', border: '#facc15' },
+                    { tier: 'diamond', label: 'Kim Cương', points: '1,000,000đ', mult: 'x2', desc: 'VIP', color: '#0e7490', bg: '#ecfeff', border: '#22d3ee' },
+                  ].map((row, i) => (
+                    <div key={row.tier} className="relative flex flex-col items-center text-center">
+                      <div className="relative z-10 w-full rounded-xl p-4 transition-all hover:scale-105 hover:shadow-md"
+                        style={{ background: row.bg, border: `2px solid ${row.border}` }}>
+                        <div className="flex justify-center mb-2">
+                          <TierBadge tier={row.tier} />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{row.desc}</p>
+                        <p className="text-lg font-extrabold" style={{ color: row.color }}>{row.points}</p>
+                        <p className="text-xs font-semibold mt-1" style={{ color: row.color }}>Hệ số {row.mult}</p>
+                      </div>
+                      {i < 3 && (
+                        <div className="hidden md:block absolute top-10 -right-2 z-20 text-slate-300">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
