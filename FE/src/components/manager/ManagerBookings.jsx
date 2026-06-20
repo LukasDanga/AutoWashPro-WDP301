@@ -925,10 +925,17 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
         )}
 
-        {/* Action buttons — cancelled: nút đặt lại lịch, pending: nút QR */}
-        {(booking.status === 'cancelled' || booking.status === 'pending' || booking.status === 'confirmed') && (
-          <div className="mt-4 flex items-center gap-2">
-            {(booking.status === 'pending' || booking.status === 'confirmed') && (
+        {/* QR check-in — chỉ hiển thị khi đơn đã xác nhận / đã check-in / hết hạn */}
+        {(() => {
+          const m = getQrMode(booking);
+          if (!m) return null;
+          const label = m === 'active' ? 'Hiển thị QR cho khách'
+            : m === 'checked_in' ? 'Xem QR (đã check-in)' : 'Xem QR (hết hạn)';
+          const cls = m === 'active' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+            : m === 'checked_in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
+          return (
+            <div className="mt-4 flex items-center gap-2">
               <button onClick={() => setShowQR(true)}
                 className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${cls}`}>
                 <QrCode size={15} />
@@ -1351,14 +1358,21 @@ export default function ManagerBookings() {
                     <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {(b.status === 'pending' || b.status === 'confirmed') ? (
-                      <button onClick={() => setQrBooking(b)} title="Hiển thị QR để khách check-in nhanh"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <QrCode size={18} weight="duotone" />
-                      </button>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
+                    {(() => {
+                      const m = getQrMode(b);
+                      if (!m) return <span className="text-slate-300">—</span>;
+                      const cls = m === 'active' ? 'text-blue-600 hover:bg-blue-50'
+                        : m === 'checked_in' ? 'text-emerald-600 hover:bg-emerald-50'
+                        : 'text-red-500 hover:bg-red-50';
+                      const title = m === 'active' ? 'Hiển thị QR để khách check-in'
+                        : m === 'checked_in' ? 'Đã check-in — xem QR' : 'Mã đã hết hạn';
+                      return (
+                        <button onClick={() => setQrBooking(b)} title={title}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${cls}`}>
+                          <QrCode size={18} weight="duotone" />
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -1409,8 +1423,6 @@ export default function ManagerBookings() {
         </div>
       )}
       </>)}
-
-      {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
 
       {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
 
