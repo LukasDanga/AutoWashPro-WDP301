@@ -5,6 +5,7 @@ const config = require('./src/config');
 const { connectDB } = require('./src/config/db');
 const { startReminderJob } = require('./src/jobs/reminder.job');
 const { startBirthdayJob } = require('./src/jobs/birthday.job');
+const { startAutoCancelJob } = require('./src/jobs/autoCancel.job');
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
@@ -21,6 +22,7 @@ const startServer = async () => {
   // Start background jobs
   startReminderJob();
   startBirthdayJob();
+  startAutoCancelJob();
 };
 
 startServer();

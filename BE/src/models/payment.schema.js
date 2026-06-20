@@ -6,6 +6,8 @@ const paymentSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     amount: { type: Number, required: true, min: 0 },
     method: { type: String, enum: ['cash', 'momo', 'vnpay'], required: true },
+    // 'deposit' = tiền cọc trước, 'remaining' = phần còn lại khi hoàn thành, 'full' = trả 1 lần
+    paymentType: { type: String, enum: ['deposit', 'remaining', 'full'], default: 'full' },
     status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
     transactionId: { type: String },
     paymentUrl: { type: String },

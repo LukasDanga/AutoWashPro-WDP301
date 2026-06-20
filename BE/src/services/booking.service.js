@@ -6,15 +6,23 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 const sseService = require('./sse.service');
 
-const VALID_STATUSES = ['pending', 'checked_in', 'in_progress', 'completed', 'cancelled'];
+const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'];
 
+// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → completed
 const VALID_TRANSITIONS = {
-  pending: ['checked_in', 'in_progress', 'cancelled'],
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['checked_in', 'cancelled'],
   checked_in: ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 };
+
+// Tỉ lệ đặt cọc trước cho đơn lẻ + định kỳ (gói lượt đã trả trước toàn bộ)
+const DEPOSIT_RATE = 0.3;
+
+// Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
+const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -130,7 +138,7 @@ exports.createBooking = async (data) => {
       _id: { $ne: null },
       branchId,
       bookingDate: { $gte: gte, $lte: lte },
-      status: { $in: ['pending', 'in_progress'] },
+      status: { $in: ACTIVE_SLOT_STATUSES },
     }).session(session);
 
     const newStart = parseTime(startTime);
@@ -195,6 +203,11 @@ exports.createBooking = async (data) => {
       paymentStatus = 'paid';
     }
 
+    // Đặt cọc 30% cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc)
+    const depositAmount = bookingType === 'slot_pack_usage'
+      ? 0
+      : Math.round((computedFinalPrice * DEPOSIT_RATE) / 1000) * 1000;
+
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
       bookingDate: bd, startTime, endTime, note,
@@ -202,6 +215,7 @@ exports.createBooking = async (data) => {
       voucherCode: voucherCode || undefined,
       discountAmount: computedDiscountAmount,
       finalPrice: computedFinalPrice,
+      depositAmount,
       selectedSubServices: validSubServices,
       slotPackId: slotPackId || undefined,
       bookingType,
@@ -389,7 +403,7 @@ exports.updateBooking = async (id, updates, userRole) => {
         _id: { $ne: booking._id },
         branchId: bid,
         bookingDate: { $gte: gte, $lte: lte },
-        status: { $in: ['pending', 'in_progress'] },
+        status: { $in: ACTIVE_SLOT_STATUSES },
       }).session(session);
 
       const newStart = parseTime(startT);
@@ -432,6 +446,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
   }
 
   const update = { status };
+  if (status === 'confirmed') update.confirmedAt = new Date();
   if (status === 'checked_in') {
     update.checkInTime = new Date();
     if (updateData.staffId) update.staffId = updateData.staffId;
@@ -457,6 +472,17 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
    .populate('vehicleId', 'licensePlate vehicleType brand color');
   if (!booking) {
     throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
+  }
+
+  // Notify customer when their booking is confirmed by the branch
+  if (status === 'confirmed') {
+    notificationService.send(
+      booking.userId?._id || currentBooking.userId,
+      'Lịch hẹn đã được xác nhận',
+      `Lịch rửa xe ${booking.packageId?.name || ''} lúc ${booking.startTime} ngày ${new Date(booking.bookingDate).toLocaleDateString('vi-VN')} đã được xác nhận. Vui lòng đến đúng giờ để check-in.`,
+      'booking_confirmed',
+      { bookingId: id }
+    ).catch(() => {});
   }
 
   // Post-completion side effects (async, non-blocking)
@@ -495,6 +521,61 @@ exports.updateBookingStatus = async (id, status, updateData = {}) => {
   }
 
   return booking;
+};
+
+/**
+ * Xác nhận hàng loạt các đơn đang 'pending' → 'confirmed'.
+ * Nếu truyền ids → chỉ xác nhận các id đó; nếu không → xác nhận tất cả pending trong phạm vi.
+ * Manager chỉ xác nhận đơn thuộc chi nhánh mình.
+ */
+exports.confirmBookings = async (ids, userRole, userId) => {
+  const query = { status: 'pending' };
+
+  if (userRole === 'manager') {
+    const branch = await Branch.findOne({ managerId: userId });
+    if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+    query.branchId = branch._id;
+  }
+
+  if (Array.isArray(ids) && ids.length > 0) {
+    query._id = { $in: ids.map((i) => new mongoose.Types.ObjectId(i)) };
+  }
+
+  const pending = await Booking.find(query)
+    .populate('packageId', 'name')
+    .populate('userId', 'name');
+
+  if (pending.length === 0) {
+    return { confirmed: 0, total: 0, bookings: [] };
+  }
+
+  const now = new Date();
+  const results = await Promise.allSettled(
+    pending.map((b) =>
+      Booking.findOneAndUpdate(
+        { _id: b._id, status: 'pending' },
+        { status: 'confirmed', confirmedAt: now },
+        { new: true }
+      )
+    )
+  );
+
+  const confirmed = results
+    .filter((r) => r.status === 'fulfilled' && r.value)
+    .map((r) => r.value);
+
+  // Thông báo cho từng khách (non-blocking)
+  for (const b of pending) {
+    notificationService.send(
+      b.userId?._id || b.userId,
+      'Lịch hẹn đã được xác nhận',
+      `Lịch rửa xe ${b.packageId?.name || ''} lúc ${b.startTime} ngày ${new Date(b.bookingDate).toLocaleDateString('vi-VN')} đã được xác nhận.`,
+      'booking_confirmed',
+      { bookingId: b._id }
+    ).catch(() => {});
+  }
+
+  return { confirmed: confirmed.length, total: pending.length, bookings: confirmed };
 };
 
 exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
@@ -573,6 +654,67 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
   }
 };
 
+/**
+ * Tự động hủy các đơn quá hạn mà khách không đến (no-show).
+ * Đơn vẫn ở 'pending' hoặc 'confirmed' (chưa check-in) và đã quá giờ bắt đầu + graceMinutes.
+ * Được gọi định kỳ bởi cron job.
+ */
+exports.autoCancelNoShows = async (graceMinutes = 30) => {
+  const now = new Date();
+  // Chỉ xét các đơn của hôm nay & trước đó để giảm tải
+  const candidates = await Booking.find({
+    status: { $in: ['pending', 'confirmed'] },
+    bookingDate: { $lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+  }).select('startTime bookingDate status voucherCode userId branchId packageId');
+
+  let cancelledCount = 0;
+
+  for (const b of candidates) {
+    const startMin = parseTime(b.startTime);
+    if (startMin === null) continue;
+
+    const startDateTime = new Date(b.bookingDate);
+    startDateTime.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
+    const deadline = new Date(startDateTime.getTime() + graceMinutes * 60 * 1000);
+    if (now < deadline) continue;
+
+    const updated = await Booking.findOneAndUpdate(
+      { _id: b._id, status: b.status },
+      {
+        status: 'cancelled',
+        cancelledAt: now,
+        cancelledBy: 'system',
+        cancellationReason: `Tự động hủy: khách không đến sau ${graceMinutes} phút kể từ giờ hẹn`,
+      },
+      { new: true }
+    );
+    if (!updated) continue;
+    cancelledCount += 1;
+
+    if (b.voucherCode) {
+      await voucherService.rollbackVoucher(b.voucherCode, b.userId, b._id).catch(() => {});
+    }
+
+    notificationService.send(
+      b.userId,
+      'Lịch hẹn đã bị hủy tự động',
+      `Lịch hẹn lúc ${b.startTime} đã bị hủy do bạn không đến đúng giờ. Tiền cọc (nếu có) sẽ không được hoàn lại.`,
+      'booking_cancelled',
+      { bookingId: b._id }
+    ).catch(() => {});
+
+    notificationService.sendToAdminAndManager(
+      b.branchId,
+      'Đơn bị hủy tự động (no-show)',
+      `Một lịch hẹn lúc ${b.startTime} đã bị hệ thống tự hủy do khách không đến.`,
+      'booking_cancelled',
+      { bookingId: b._id, branchId: b.branchId }
+    ).catch(() => {});
+  }
+
+  return { cancelled: cancelledCount, checked: candidates.length };
+};
+
 exports.deleteBooking = async (id, userRole) => {
   if (userRole !== 'admin') {
     throw Object.assign(new Error('Only admin can delete bookings'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -598,7 +740,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
   const existing = await Booking.find({
     branchId,
     bookingDate: { $gte: gte, $lte: lte },
-    status: { $in: ['pending', 'in_progress'] },
+    status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime');
 
   const slots = buildSlots(pkg.duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
@@ -719,6 +861,9 @@ exports.createRecurringBooking = async (data) => {
     computedFinalPrice = vResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
   }
 
+  // --- Đặt cọc 30% cho mỗi buổi định kỳ ---
+  const depositAmount = Math.round((computedFinalPrice * DEPOSIT_RATE) / 1000) * 1000;
+
   // --- Build danh sách các ngày cần tạo booking ---
   const recurringGroupId = crypto.randomUUID();
   const today = new Date();
@@ -770,7 +915,7 @@ exports.createRecurringBooking = async (data) => {
       const conflicting = await Booking.find({
         branchId,
         bookingDate: { $gte: gte, $lte: lte },
-        status: { $in: ['pending', 'in_progress'] },
+        status: { $in: ACTIVE_SLOT_STATUSES },
       }).session(session);
 
       const ns = parseTime(startTime);
@@ -846,6 +991,7 @@ exports.createRecurringBooking = async (data) => {
         voucherCode: voucherCode ? voucherCode.trim().toUpperCase() : undefined,
         discountAmount: computedDiscountAmount,
         finalPrice: computedFinalPrice,
+        depositAmount,
         selectedSubServices: validSubServices,
       });
       await booking.save({ session });
@@ -1053,7 +1199,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   const conflicts = await Booking.find({
     branchId: src.branchId,
     bookingDate: { $gte: gte, $lte: lte },
-    status: { $in: ['pending', 'checked_in', 'in_progress'] },
+    status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime');
   const hasConflict = conflicts.some(c => isSlotOverlap(startMins, endMins, parseTime(c.startTime), parseTime(c.endTime)));
   if (hasConflict) throw Object.assign(new Error('Khung giờ này đã được đặt'), { statusCode: 409, code: 'SLOT_TAKEN' });
@@ -1078,6 +1224,9 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     rebookedFromId: src._id,
     finalPrice: src.finalPrice,
     discountAmount: src.discountAmount || 0,
+    depositAmount: src.bookingType === 'slot_pack_usage'
+      ? 0
+      : Math.round(((src.finalPrice || 0) * DEPOSIT_RATE) / 1000) * 1000,
     voucherCode: undefined,
     paymentStatus: 'unpaid',
   });

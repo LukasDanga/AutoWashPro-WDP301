@@ -11,14 +11,16 @@ function api(path, opts = {}) {
 
 const STATUS_COLOR = {
   pending:     { bg: 'bg-amber-400',   text: 'text-white',     border: 'border-amber-500' },
-  checked_in:  { bg: 'bg-blue-500',    text: 'text-white',     border: 'border-blue-600' },
-  in_progress: { bg: 'bg-violet-500',  text: 'text-white',     border: 'border-violet-600' },
+  confirmed:   { bg: 'bg-indigo-500',  text: 'text-white',     border: 'border-indigo-600' },
+  checked_in:  { bg: 'bg-cyan-500',    text: 'text-white',     border: 'border-cyan-600' },
+  in_progress: { bg: 'bg-blue-500',    text: 'text-white',     border: 'border-blue-600' },
   completed:   { bg: 'bg-emerald-500', text: 'text-white',     border: 'border-emerald-600' },
   cancelled:   { bg: 'bg-slate-300',   text: 'text-slate-600', border: 'border-slate-400' },
 };
 
 const STATUS_LABEL = {
   pending: 'Chờ',
+  confirmed: 'Đã xác nhận',
   checked_in: 'Check-in',
   in_progress: 'Đang rửa',
   completed: 'Xong',

@@ -65,6 +65,12 @@ router.post('/recurring/:groupId/cancel', authenticate, authorize(ROLES.ADMIN, R
  */
 router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getAllBookings);
 
+// POST /api/bookings/confirm — Xác nhận hàng loạt đơn pending (truyền ids, hoặc rỗng = tất cả)
+router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  body('ids').optional().isArray(),
+  body('ids.*').optional().isMongoId(),
+], validate, bookingController.confirmBookings);
+
 router.get('/feedbacks', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getFeedbacks);
 
 router.get('/customers', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getCustomers);

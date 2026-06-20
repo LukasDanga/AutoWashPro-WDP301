@@ -22,6 +22,11 @@ import {
   Clock,
   CurrencyCircleDollar,
   Printer,
+  CaretLeft,
+  CaretRight,
+  CalendarBlank,
+  Table as TableIcon,
+  Rows,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -117,6 +122,7 @@ function SuccessBanner({ show, message, onDone }) {
 /* ── status config ── */
 const STATUS_MAP = {
   pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700' },
+  confirmed:   { label: 'Đã xác nhận', cls: 'bg-indigo-50 text-indigo-700' },
   checked_in:  { label: 'Đã check-in', cls: 'bg-cyan-50 text-cyan-700' },
   in_progress: { label: 'Đang thực hiện', cls: 'bg-blue-50 text-blue-700' },
   completed:   { label: 'Hoàn thành', cls: 'bg-emerald-50 text-emerald-700' },
@@ -124,7 +130,8 @@ const STATUS_MAP = {
 };
 
 const NEXT_STATUS = {
-  pending:     ['checked_in', 'cancelled'],
+  pending:     ['confirmed', 'cancelled'],
+  confirmed:   ['checked_in', 'cancelled'],
   checked_in:  ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
 };
@@ -629,10 +636,19 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
+    { id: 'confirmed', label: 'Đã xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
     { id: 'in_progress', label: 'Đang thực hiện' },
     { id: 'completed', label: 'Hoàn thành' },
   ];
+
+  // Nhãn nút chuyển bước theo từng giai đoạn (xác nhận / check-in khi khách đến / …)
+  const STAGE_ACTION = {
+    confirmed: 'Xác nhận đơn',
+    checked_in: 'Khách đã đến — Check-in',
+    in_progress: 'Bắt đầu rửa',
+    completed: 'Hoàn thành',
+  };
 
   const currentStageIndex = stages.findIndex(s => s.id === booking.status);
 
@@ -657,10 +673,10 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
     try {
       const res = await api(`/payments`, {
         method: 'POST',
-        body: JSON.stringify({ bookingId: booking._id, method: 'cash' }),
+        body: JSON.stringify({ bookingId: booking._id, method: 'cash', paymentType: booking.depositPaid ? 'remaining' : 'full' }),
       });
       if (!res.ok) throw new Error(await readErr(res));
-      onUpdated({ ...booking, paymentStatus: 'paid' });
+      onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: 'cash' });
       setShowPaymentSuccess(true);
     } catch (err) {
       notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
@@ -701,7 +717,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                     {isCurrent && stage.id !== 'completed' && (
                       <button disabled={busy} onClick={() => updateStatus(stages[idx + 1].id)}
                         className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 hover:shadow disabled:opacity-50 transition-all">
-                        {busy ? 'Đang cập nhật...' : `Chuyển sang ${stages[idx + 1].label}`}
+                        {busy ? 'Đang cập nhật...' : (STAGE_ACTION[stages[idx + 1].id] || `Chuyển sang ${stages[idx + 1].label}`)}
                       </button>
                     )}
                   </div>
@@ -740,17 +756,25 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Chi tiết thanh toán</h3>
-            <p className="text-sm text-slate-700 mb-2">
+            <p className="text-sm text-slate-700 mb-1">
               Tổng tiền: <strong className="text-slate-900">{Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫</strong>
             </p>
+            {booking.depositAmount > 0 && (
+              <div className="text-xs text-slate-500 mb-2 space-y-0.5">
+                <p>Tiền cọc: <strong className={booking.depositPaid ? 'text-emerald-600' : 'text-amber-600'}>{Number(booking.depositAmount).toLocaleString('vi-VN')}₫</strong> {booking.depositPaid ? '(đã cọc)' : '(chưa cọc)'}</p>
+                {booking.paymentStatus !== 'paid' && (
+                  <p>Còn lại: <strong className="text-slate-700">{Number(Math.max(0, (booking.finalPrice || 0) - (booking.depositPaid ? booking.depositAmount : 0))).toLocaleString('vi-VN')}₫</strong></p>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-3">
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'deposit_paid' ? 'bg-indigo-100 text-indigo-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'deposit_paid' ? 'Đã cọc — chờ tất toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
               </span>
               {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
                 <button disabled={busy} onClick={() => setConfirmCash(true)}
                   className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
-                  Xác nhận tiền mặt
+                  {booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận tiền mặt'}
                 </button>
               )}
             </div>
@@ -955,6 +979,140 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   );
 }
 
+/* ── Calendar (timeline) view — giống "Lịch theo ngày" ── */
+const CAL_STATUS_COLOR = {
+  pending:     'bg-amber-400 text-white border-amber-500',
+  confirmed:   'bg-indigo-500 text-white border-indigo-600',
+  checked_in:  'bg-cyan-500 text-white border-cyan-600',
+  in_progress: 'bg-blue-500 text-white border-blue-600',
+  completed:   'bg-emerald-500 text-white border-emerald-600',
+  cancelled:   'bg-slate-300 text-slate-600 border-slate-400',
+};
+
+const CAL_SLOTS = (() => {
+  const s = [];
+  for (let h = 6; h <= 21; h++) { s.push(`${String(h).padStart(2, '0')}:00`); if (h < 21) s.push(`${String(h).padStart(2, '0')}:30`); }
+  return s;
+})();
+const CAL_SLOT_W = 64;
+const CAL_ROW_H = 56;
+function calMinutes(t) { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); }
+function calDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+function CalendarView({ onSelect, onConfirmAll, refreshSignal }) {
+  const [date, setDate] = useState(new Date());
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async (d) => {
+    setLoading(true);
+    try {
+      const ds = calDateStr(d);
+      const res = await api(`/bookings?dateFrom=${ds}&dateTo=${ds}&limit=200&page=1`);
+      const data = await res.json();
+      const list = data?.data?.bookings || data?.data || [];
+      setBookings(Array.isArray(list) ? list : []);
+    } catch { setBookings([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(date); }, [date, load, refreshSignal]);
+
+  const lanes = [];
+  const laneMap = {};
+  for (const b of bookings) {
+    const key = b.packageId?.name || 'Không rõ dịch vụ';
+    if (!laneMap[key]) { laneMap[key] = []; lanes.push({ label: key, items: laneMap[key] }); }
+    laneMap[key].push(b);
+  }
+  const totalWidth = CAL_SLOTS.length * CAL_SLOT_W;
+  const isToday = calDateStr(date) === calDateStr(new Date());
+  const pendingCount = bookings.filter((b) => b.status === 'pending').length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d); }}
+            className="flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50"><CaretLeft size={14} /></button>
+          <div className="px-3 py-1.5 text-sm font-semibold text-slate-800 min-w-52 text-center">
+            {date.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+          <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d); }}
+            className="flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50"><CaretRight size={14} /></button>
+        </div>
+        <button onClick={() => setDate(new Date())}
+          className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${isToday ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>
+          Hôm nay
+        </button>
+        <input type="date" value={calDateStr(date)}
+          onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value + 'T00:00:00')); }}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+        {pendingCount > 0 && (
+          <button onClick={() => onConfirmAll(bookings.filter((b) => b.status === 'pending').map((b) => b._id), () => load(date))}
+            className="ml-auto flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors">
+            <CheckCircle size={14} weight="fill" /> Xác nhận tất cả ({pendingCount})
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner /></div>
+      ) : bookings.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 py-24 text-slate-400">
+          <CalendarBlank size={48} weight="duotone" />
+          <p className="text-sm">Không có lịch đặt nào trong ngày này.</p>
+        </div>
+      ) : (
+        <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
+            <div className="w-44 shrink-0 border-r border-slate-100 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Dịch vụ</div>
+            <div className="flex" style={{ width: totalWidth }}>
+              {CAL_SLOTS.map((slot) => (
+                <div key={slot} style={{ width: CAL_SLOT_W }} className="border-r border-slate-100 px-1 py-2 text-center text-[10px] font-medium text-slate-400">{slot}</div>
+              ))}
+            </div>
+          </div>
+          {lanes.map(({ label, items }) => (
+            <div key={label} className="flex border-b border-slate-100 last:border-0">
+              <div className="w-44 shrink-0 border-r border-slate-100 px-4 py-3 flex items-start">
+                <p className="text-xs font-semibold text-slate-700 leading-snug">{label}</p>
+              </div>
+              <div className="relative" style={{ width: totalWidth, height: CAL_ROW_H }}>
+                {CAL_SLOTS.map((_, i) => (<div key={i} className="absolute top-0 bottom-0 border-r border-slate-50" style={{ left: i * CAL_SLOT_W }} />))}
+                {items.map((b) => {
+                  const startMin = calMinutes(b.startTime);
+                  const endMin = calMinutes(b.endTime);
+                  const left = ((startMin - calMinutes('06:00')) / 30) * CAL_SLOT_W;
+                  const width = Math.max(((endMin - startMin) / 30) * CAL_SLOT_W - 2, 40);
+                  return (
+                    <button key={b._id} onClick={() => onSelect(b)}
+                      title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}`}
+                      style={{ left, width, top: 6 }}
+                      className={`absolute h-11 rounded-lg border px-2 text-left text-[11px] font-medium overflow-hidden transition-opacity hover:opacity-80 ${CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending}`}>
+                      <p className="truncate font-semibold leading-tight">{b.userId?.name || '—'}</p>
+                      <p className="truncate opacity-80 leading-tight">{b.vehicleId?.licensePlate || ''} · {b.startTime}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3 px-1">
+        {Object.entries(STATUS_MAP).map(([k, v]) => (
+          <div key={k} className="flex items-center gap-1.5 text-xs text-slate-500">
+            <div className={`h-3 w-3 rounded-sm ${(CAL_STATUS_COLOR[k] || '').split(' ')[0]}`} />
+            {v.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Main ═══ */
 function getTodayStr() {
   const d = new Date();
@@ -978,6 +1136,9 @@ export default function ManagerBookings() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
+  const [confirmingAll, setConfirmingAll] = useState(false);
   const debounce = useRef(null);
 
   const notify = (msg, type = 'success') => setToast({ message: msg, type });
@@ -1035,6 +1196,30 @@ export default function ManagerBookings() {
     } catch (err) { notify(err.message || 'Hủy thất bại', 'error'); }
   };
 
+  const pendingInView = bookings.filter((b) => b.status === 'pending');
+
+  // Xác nhận hàng loạt; nếu truyền ids dùng ids, ngược lại xác nhận các đơn pending đang hiển thị.
+  const confirmAll = async (ids, after) => {
+    setConfirmingAll(true);
+    try {
+      const res = await api(`/bookings/confirm`, {
+        method: 'POST',
+        body: JSON.stringify(ids && ids.length ? { ids } : { ids: pendingInView.map((b) => b._id) }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const p = await res.json();
+      const result = p?.data ?? p;
+      notify(`Đã xác nhận ${result.confirmed} đơn`);
+      if (after) after();
+      else fetch_(search, statusFilter, typeFilter, todayOnly, page);
+    } catch (err) {
+      notify(err.message || 'Xác nhận thất bại', 'error');
+    } finally {
+      setConfirmingAll(false);
+      setConfirmAllOpen(false);
+    }
+  };
+
   if (selectedBooking) {
     return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} notify={notify} />;
   }
@@ -1043,43 +1228,75 @@ export default function ManagerBookings() {
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input id="booking-search" value={search} onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Tìm theo khách hàng, mã đặt…"
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+        {/* view toggle: Bảng / Lịch */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+          <button onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Rows size={14} /> Bảng
+          </button>
+          <button onClick={() => setViewMode('calendar')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === 'calendar' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <CalendarBlank size={14} /> Lịch
+          </button>
         </div>
-        <select id="booking-status-filter" value={statusFilter} onChange={(e) => handleFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
-          <option value="">Tất cả trạng thái</option>
-          <option value="pending">Chờ xác nhận</option>
-          <option value="checked_in">Đã check-in</option>
-          <option value="in_progress">Đang thực hiện</option>
-          <option value="completed">Hoàn thành</option>
-          <option value="cancelled">Đã hủy</option>
-        </select>
-        <select id="booking-type-filter" value={typeFilter} onChange={(e) => handleTypeFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
-          <option value="">Tất cả loại đơn</option>
-          <option value="single">Đặt 1 lần</option>
-          <option value="recurring">Định kỳ</option>
-          <option value="slot_pack_usage">Gói lượt</option>
-        </select>
-        <button onClick={handleTodayToggle}
-          className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
-            todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-          }`}>
-          📅 Hôm nay
-        </button>
-        <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly)} disabled={loading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
-          <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
-        </button>
+
+        {viewMode === 'table' && (
+          <>
+            <div className="relative flex-1 min-w-[200px]">
+              <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input id="booking-search" value={search} onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Tìm theo khách hàng, mã đặt…"
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+            </div>
+            <select id="booking-status-filter" value={statusFilter} onChange={(e) => handleFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
+              <option value="">Tất cả trạng thái</option>
+              <option value="pending">Chờ xác nhận</option>
+              <option value="confirmed">Đã xác nhận</option>
+              <option value="checked_in">Đã check-in</option>
+              <option value="in_progress">Đang thực hiện</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+            <select id="booking-type-filter" value={typeFilter} onChange={(e) => handleTypeFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
+              <option value="">Tất cả loại đơn</option>
+              <option value="single">Đặt 1 lần</option>
+              <option value="recurring">Định kỳ</option>
+              <option value="slot_pack_usage">Gói lượt</option>
+            </select>
+            <button onClick={handleTodayToggle}
+              className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+              }`}>
+              📅 Hôm nay
+            </button>
+            <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly)} disabled={loading}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
+              <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+            {pendingInView.length > 0 && (
+              <button onClick={() => setConfirmAllOpen(true)} disabled={confirmingAll}
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                <CheckCircle size={14} weight="fill" /> Xác nhận tất cả ({pendingInView.length})
+              </button>
+            )}
+          </>
+        )}
+
         <button onClick={() => setShowCheckin(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
           <Lightning size={14} /> Check-in nhanh
         </button>
       </div>
+
+      {viewMode === 'calendar' && (
+        <CalendarView
+          onSelect={(b) => setSelectedBooking(b)}
+          onConfirmAll={(ids, after) => confirmAll(ids, after)}
+        />
+      )}
+      {viewMode === 'table' && (<>
       {/* filter info */}
       <p className="text-xs text-slate-400">
         {todayOnly
@@ -1193,6 +1410,7 @@ export default function ManagerBookings() {
           <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} lịch hẹn</p>
         </div>
       )}
+      </>)}
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
 
@@ -1214,6 +1432,15 @@ export default function ManagerBookings() {
         danger
         onConfirm={() => handleCancel(confirmCancelId)}
         onCancel={() => setConfirmCancelId(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmAllOpen}
+        title="Xác nhận tất cả đơn chờ"
+        message={`Xác nhận ${pendingInView.length} đơn đang chờ? Khách sẽ được thông báo và có thể đến check-in.`}
+        confirmLabel="Xác nhận tất cả"
+        onConfirm={() => confirmAll()}
+        onCancel={() => setConfirmAllOpen(false)}
       />
     </div>
   );
