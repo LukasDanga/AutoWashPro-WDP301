@@ -133,7 +133,7 @@ exports.createSlotPack = async (data) => {
 
     // Reserve voucher nếu có
     if (appliedVoucherCode) {
-      await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount);
+      await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount, session);
     }
 
     await session.commitTransaction();

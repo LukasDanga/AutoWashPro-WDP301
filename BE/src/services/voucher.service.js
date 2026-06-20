@@ -163,10 +163,12 @@ exports.validateVoucher = async (code, bookingData, userId) => {
 /**
  * Reserve voucher for a booking (atomic decrement).
  * If payment fails, call rollbackVoucher() to restore remaining count.
+ * @param {Object} [parentSession] - Optional existing session from a parent transaction
  */
-exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+exports.reserveVoucher = async (code, userId, bookingId, discountAmount, parentSession) => {
+  const ownSession = !parentSession;
+  const session = parentSession || await mongoose.startSession();
+  if (ownSession) session.startTransaction();
 
   try {
     // Kiểm tra đã reserve cho booking này chưa (idempotent)
@@ -240,23 +242,25 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
     });
     await usage.save({ session });
 
-    await session.commitTransaction();
+    if (ownSession) await session.commitTransaction();
     return { voucher, usage };
   } catch (err) {
-    await session.abortTransaction();
+    if (ownSession) await session.abortTransaction();
     throw err;
   } finally {
-    session.endSession();
+    if (ownSession) session.endSession();
   }
 };
 
 /**
  * Rollback voucher reservation (restore remaining count).
  * Idempotent: safe to call multiple times — only restores if usage record exists.
+ * @param {Object} [parentSession] - Optional existing session from a parent transaction
  */
-exports.rollbackVoucher = async (code, userId, bookingId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+exports.rollbackVoucher = async (code, userId, bookingId, parentSession) => {
+  const ownSession = !parentSession;
+  const session = parentSession || await mongoose.startSession();
+  if (ownSession) session.startTransaction();
 
   try {
     const voucher = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
@@ -275,12 +279,12 @@ exports.rollbackVoucher = async (code, userId, bookingId) => {
     await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
 
     await VoucherUsage.deleteOne({ _id: usage._id }).session(session);
-    await session.commitTransaction();
+    if (ownSession) await session.commitTransaction();
   } catch (err) {
-    await session.abortTransaction();
+    if (ownSession) await session.abortTransaction();
     throw err;
   } finally {
-    session.endSession();
+    if (ownSession) session.endSession();
   }
 };
 

@@ -493,7 +493,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           ) : null}
 
           {activeNav === 'recurring' ? <div style={{ paddingTop: 8 }}><RecurringBookingFlow user={currentUser} vehicles={vehicleList} apiBase={apiBase} token={token} /></div> : null}
-          {activeNav === 'slot_pack' ? <div style={{ paddingTop: 8 }}><SlotPackFlow user={currentUser} vehicles={vehicleList} apiBase={apiBase} token={token} /></div> : null}
+          {activeNav === 'slot_pack' ? <div style={{ paddingTop: 8 }}><SlotPackFlow user={currentUser} vehicles={vehicleList} apiBase={apiBase} token={token} onGoToHistory={() => setActiveNav('history')} /></div> : null}
           {activeNav === 'history' ? <div style={{ paddingTop: 8 }}><BookingsHistory apiBase={apiBase} token={token} /></div> : null}
           {activeNav === 'gifts' ? <div style={{ paddingTop: 8 }}><LoyaltyGifts apiBase={apiBase} token={token} user={currentUser} refreshUser={refreshUser} /></div> : null}
           {activeNav === 'profile' ? <div style={{ paddingTop: 8 }}><CustomerProfile apiBase={apiBase} token={token} /></div> : null}
