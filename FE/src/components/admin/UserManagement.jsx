@@ -617,8 +617,13 @@ export default function UserManagement() {
     fetchUsers(1);
   }, []); // eslint-disable-line
 
-  // Search handler
-  const handleSearch = () => fetchUsers(1, search, roleFilter, statusFilter);
+  // Debounced search: khi gõ vào ô tìm kiếm thì tự search sau 400ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers(1, search, roleFilter, statusFilter);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]); // eslint-disable-line
 
   // Handle filter changes
   const handleRoleFilter = (val) => {
@@ -695,14 +700,8 @@ export default function UserManagement() {
             placeholder="Tìm theo tên, email, SĐT..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
-
-        <button onClick={handleSearch} disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
-          <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} /> Tìm kiếm
-        </button>
 
         <select
           value={roleFilter}
