@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { showToast } from '@/lib/toast';
 import {
   User, PencilSimple, Check, X, Car, Motorcycle,
   Phone, Envelope, CalendarBlank, MapPin, Crown,
@@ -45,7 +46,7 @@ export default function CustomerProfile({ apiBase, token }) {
   const [errors, setErrors] = useState({});
   const fileRef = useRef(null);
 
-  const notify = (msg, type = 'success') => { setToast({ message: msg, type }); setTimeout(() => setToast(null), 3500); };
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   const fetchProfile = async () => {
     setLoading(true);

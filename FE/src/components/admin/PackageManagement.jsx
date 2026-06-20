@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -299,7 +300,7 @@ export default function PackageManagement() {
   const [toast, setToast] = useState(null);
   const debounce = useRef(null);
 
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   const fetchPackages = useCallback(async (q = search) => {
     setLoading(true);

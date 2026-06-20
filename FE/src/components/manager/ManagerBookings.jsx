@@ -29,6 +29,8 @@ import {
   Rows,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { showToast } from '@/lib/toast';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import ManagerQuickCheckin from '@/components/manager/ManagerQuickCheckin';
 
@@ -56,68 +58,6 @@ function Spinner({ size = 18 }) {
     </svg>
   );
 }
-
-function Toast({ toast, onDismiss }) {
-  useEffect(() => { if (!toast) return; const t = setTimeout(onDismiss, 3500); return () => clearTimeout(t); }, [toast, onDismiss]);
-  if (!toast) return null;
-  const ok = toast.type !== 'error';
-  return (
-    <div role="alert" className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ring-1 ${ok ? 'bg-white text-emerald-700 ring-emerald-200' : 'bg-white text-red-600 ring-red-200'}`}>
-      {ok ? <CheckCircle size={15} weight="fill" /> : <XCircle size={15} weight="fill" />}
-      {toast.message}
-      <button onClick={onDismiss} className="ml-1 opacity-50 hover:opacity-100"><X size={13} /></button>
-    </div>
-  );
-}
-
-function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel, danger }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${danger ? 'bg-red-50' : 'bg-amber-50'}`}>
-            {danger ? <Warning size={20} weight="fill" className="text-red-500" /> : <CurrencyCircleDollar size={20} weight="fill" className="text-amber-500" />}
-          </div>
-          <div>
-            <p className="font-semibold text-slate-800 text-sm">{title}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{message}</p>
-          </div>
-        </div>
-        <div className="flex gap-3 pt-2">
-          <button onClick={onCancel}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-            Huỷ
-          </button>
-          <button onClick={onConfirm}
-            className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-colors ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
-            {confirmLabel || 'Xác nhận'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SuccessBanner({ show, message, onDone }) {
-  useEffect(() => {
-    if (!show) return;
-    const t = setTimeout(onDone, 3000);
-    return () => clearTimeout(t);
-  }, [show, onDone]);
-  if (!show) return null;
-  return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
-      <div className="flex items-center gap-3 rounded-2xl bg-emerald-600 px-6 py-3.5 text-white shadow-2xl shadow-emerald-600/25 ring-1 ring-emerald-500/20">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-          <CheckCircle size={18} weight="fill" />
-        </div>
-        <span className="text-sm font-semibold">{message}</span>
-      </div>
-    </div>
-  );
-}
-
 
 /* ── status config ── */
 const STATUS_MAP = {
@@ -693,7 +633,6 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [showQR, setShowQR] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
   const [confirmCash, setConfirmCash] = useState(false);
-  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'confirmed', label: 'Đã xác nhận' },
@@ -737,7 +676,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       });
       if (!res.ok) throw new Error(await readErr(res));
       onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: 'cash' });
-      setShowPaymentSuccess(true);
+      notify('Xác nhận thu tiền mặt thành công!');
     } catch (err) {
       notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
     } finally { setBusy(false); }
@@ -986,17 +925,10 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
         )}
 
-        {/* QR check-in — chỉ hiển thị khi đơn đã xác nhận / đã check-in / hết hạn */}
-        {(() => {
-          const m = getQrMode(booking);
-          if (!m) return null;
-          const label = m === 'active' ? 'Hiển thị QR cho khách'
-            : m === 'checked_in' ? 'Xem QR (đã check-in)' : 'Xem QR (hết hạn)';
-          const cls = m === 'active' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-            : m === 'checked_in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-            : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
-          return (
-            <div className="mt-4 flex items-center gap-2">
+        {/* Action buttons — cancelled: nút đặt lại lịch, pending: nút QR */}
+        {(booking.status === 'cancelled' || booking.status === 'pending' || booking.status === 'confirmed') && (
+          <div className="mt-4 flex items-center gap-2">
+            {(booking.status === 'pending' || booking.status === 'confirmed') && (
               <button onClick={() => setShowQR(true)}
                 className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${cls}`}>
                 <QrCode size={15} />
@@ -1016,11 +948,6 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         confirmLabel="Xác nhận thu tiền"
         onConfirm={handleCashPayment}
         onCancel={() => setConfirmCash(false)}
-      />
-      <SuccessBanner
-        show={showPaymentSuccess}
-        message="Xác nhận thu tiền mặt thành công!"
-        onDone={() => setShowPaymentSuccess(false)}
       />
     </div>
   );
@@ -1132,14 +1059,14 @@ function CalendarView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
                   const endMin = calMinutes(b.endTime);
                   const left = ((startMin - calMinutes('06:00')) / 30) * CAL_SLOT_W;
                   const width = Math.max(((endMin - startMin) / 30) * CAL_SLOT_W - 2, 40);
-                  const qrMode = getQrMode(b);
+                  const showQR = b.status === 'pending' || b.status === 'confirmed';
                   return (
                     <div key={b._id} onClick={() => onSelect(b)}
                       title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}`}
                       style={{ left, width, top: 6 }}
                       className={`absolute h-11 rounded-lg border px-2 pt-1 text-left text-[11px] font-medium overflow-hidden cursor-pointer transition-opacity hover:opacity-80 ${CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending}`}>
-                      {qrMode && (
-                        <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Xem QR check-in"
+                      {showQR && (
+                        <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Hiển thị QR check-in nhanh"
                           className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-white/25 hover:bg-white/40 transition-colors">
                           <QrCode size={13} weight="bold" />
                         </button>
@@ -1186,17 +1113,16 @@ export default function ManagerBookings() {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [todayOnly, setTodayOnly] = useState(false);
-  const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
-  const [qrBooking, setQrBooking] = useState(null); // đơn đang hiển thị QR check-in
+  const [qrBooking, setQrBooking] = useState(null); // booking đang hiển thị QR check-in nhanh
   const debounce = useRef(null);
 
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = showToast;
 
   const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, pg = 1) => {
     setLoading(true); setError('');
@@ -1425,21 +1351,14 @@ export default function ManagerBookings() {
                     <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {(() => {
-                      const m = getQrMode(b);
-                      if (!m) return <span className="text-slate-300">—</span>;
-                      const cls = m === 'active' ? 'text-blue-600 hover:bg-blue-50'
-                        : m === 'checked_in' ? 'text-emerald-600 hover:bg-emerald-50'
-                        : 'text-red-500 hover:bg-red-50';
-                      const title = m === 'active' ? 'Hiển thị QR để khách check-in'
-                        : m === 'checked_in' ? 'Đã check-in — xem QR' : 'Mã đã hết hạn';
-                      return (
-                        <button onClick={() => setQrBooking(b)} title={title}
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${cls}`}>
-                          <QrCode size={18} weight="duotone" />
-                        </button>
-                      );
-                    })()}
+                    {(b.status === 'pending' || b.status === 'confirmed') ? (
+                      <button onClick={() => setQrBooking(b)} title="Hiển thị QR để khách check-in nhanh"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                        <QrCode size={18} weight="duotone" />
+                      </button>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -1491,7 +1410,7 @@ export default function ManagerBookings() {
       )}
       </>)}
 
-      <Toast toast={toast} onDismiss={() => setToast(null)} />
+      {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
 
       {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
 
@@ -1499,7 +1418,7 @@ export default function ManagerBookings() {
         <ManagerQuickCheckin
           onClose={() => setShowCheckin(false)}
           onCheckedIn={(b) => {
-            setToast({ type: 'success', message: `Check-in thành công: ${b?.userId?.name || 'khách hàng'}` });
+            showToast(`Check-in thành công: ${b?.userId?.name || 'khách hàng'}`);
             fetch_(search, statusFilter, typeFilter, todayOnly);
           }}
         />

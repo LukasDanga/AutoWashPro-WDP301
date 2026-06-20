@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { confirmDialog } from '@/lib/confirm';
 
 const TIER_META = {
   bronze:  { icon: '🥉', label: 'Bronze',  color: '#cd7f32', bg: 'rgba(205,127,50,0.12)' },
@@ -85,7 +86,7 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
     if (!voucher) { onSelect(null); return; }
     const needsPoints = voucher.requiredPoints > 0;
     if (needsPoints && voucher.isTemplate) {
-      if (!window.confirm(`Bạn có chắc chắn muốn dùng ${voucher.requiredPoints} điểm để đổi lấy mã: ${voucher.name}?`)) return;
+      if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: `Dùng ${voucher.requiredPoints} điểm để đổi lấy mã "${voucher.name}"?`, confirmLabel: 'Đổi điểm' }))) return;
       try {
         setLoading(true);
         const res = await fetch(`${apiBase}/vouchers/redeem-points`, {
