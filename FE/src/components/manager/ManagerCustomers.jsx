@@ -134,6 +134,11 @@ export default function ManagerCustomers() {
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-foreground">{c.user?.name || 'Khách vãng lai'}</span>
                                 {c.user?.tier && <TierBadge tier={c.user.tier} />}
+                                {c.user?.createdAt && (Date.now() - new Date(c.user.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000) && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground capitalize">{c.user?.role || 'customer'}</div>
                             </div>

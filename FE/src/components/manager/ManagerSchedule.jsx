@@ -47,19 +47,30 @@ function parseMinutes(t) {
   return h * 60 + (m || 0);
 }
 
+// Đơn "mới": chờ xác nhận và được tạo trong vòng 24h
+function isNewBooking(b) {
+  if (!b || b.status !== 'pending') return false;
+  const created = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return created > 0 && Date.now() - created < 24 * 60 * 60 * 1000;
+}
+
 function BookingBar({ booking, startMin, endMin, onClick }) {
   const gridStart = parseMinutes('06:00');
   const left = ((startMin - gridStart) / 30) * SLOT_WIDTH_PX;
   const width = Math.max(((endMin - startMin) / 30) * SLOT_WIDTH_PX - 2, 40);
   const cfg = STATUS_COLOR[booking.status] || STATUS_COLOR.pending;
+  const fresh = isNewBooking(booking);
 
   return (
     <button
       onClick={() => onClick(booking)}
-      title={`${booking.userId?.name || '?'} | ${booking.startTime}–${booking.endTime} | ${STATUS_LABEL[booking.status]}`}
+      title={`${booking.userId?.name || '?'} | ${booking.startTime}–${booking.endTime} | ${STATUS_LABEL[booking.status]}${fresh ? ' • MỚI' : ''}`}
       style={{ left, width, top: 6 }}
-      className={`absolute h-11 rounded-lg border px-2 text-left text-[11px] font-medium overflow-hidden transition-opacity hover:opacity-80 ${cfg.bg} ${cfg.text} ${cfg.border}`}
+      className={`absolute h-11 rounded-lg border px-2 text-left text-[11px] font-medium overflow-hidden transition-opacity hover:opacity-80 ${cfg.bg} ${cfg.text} ${cfg.border} ${fresh ? 'ring-2 ring-red-400 ring-offset-1' : ''}`}
     >
+      {fresh && (
+        <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
+      )}
       <p className="truncate font-semibold leading-tight">{booking.userId?.name || '—'}</p>
       <p className="truncate opacity-80 leading-tight">{booking.vehicleId?.licensePlate || ''} · {booking.startTime}</p>
     </button>
