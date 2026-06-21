@@ -165,7 +165,14 @@ export default function AdminBookings() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div>
-                        <p className="font-medium text-slate-800">{b.userId?.name || '—'}</p>
+                        <p className="font-medium text-slate-800 flex items-center gap-1.5">
+                          {b.userId?.name || '—'}
+                          {b.status === 'pending' && b.createdAt && (Date.now() - new Date(b.createdAt).getTime() < 24 * 60 * 60 * 1000) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                            </span>
+                          )}
+                        </p>
                         <p className="text-slate-400">{b.vehicleId?.licensePlate || '—'}</p>
                       </div>
                       {b.userId?.tier && <TierBadge tier={b.userId.tier} />}

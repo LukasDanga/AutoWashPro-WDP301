@@ -1066,14 +1066,18 @@ function CalendarView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
                   const endMin = calMinutes(b.endTime);
                   const left = ((startMin - calMinutes('06:00')) / 30) * CAL_SLOT_W;
                   const width = Math.max(((endMin - startMin) / 30) * CAL_SLOT_W - 2, 40);
-                  const showQR = b.status === 'pending' || b.status === 'confirmed';
+                  const qrMode = getQrMode(b);
+                  const fresh = isNewBooking(b);
                   return (
                     <div key={b._id} onClick={() => onSelect(b)}
-                      title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}`}
+                      title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}${fresh ? ' • MỚI' : ''}`}
                       style={{ left, width, top: 6 }}
-                      className={`absolute h-11 rounded-lg border px-2 pt-1 text-left text-[11px] font-medium overflow-hidden cursor-pointer transition-opacity hover:opacity-80 ${CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending}`}>
-                      {showQR && (
-                        <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Hiển thị QR check-in nhanh"
+                      className={`absolute h-11 rounded-lg border px-2 pt-1 text-left text-[11px] font-medium overflow-hidden cursor-pointer transition-opacity hover:opacity-80 ${CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending} ${fresh ? 'ring-2 ring-red-400 ring-offset-1' : ''}`}>
+                      {fresh && (
+                        <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
+                      )}
+                      {qrMode && (
+                        <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Xem QR check-in"
                           className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-white/25 hover:bg-white/40 transition-colors">
                           <QrCode size={13} weight="bold" />
                         </button>

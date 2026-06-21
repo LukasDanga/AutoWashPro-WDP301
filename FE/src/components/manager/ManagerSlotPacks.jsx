@@ -220,7 +220,14 @@ export default function ManagerSlotPacks({ user }) {
                 <div key={pack._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-mono font-bold text-slate-800 text-sm">{pack.packCode}</div>
+                      <div className="font-mono font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        {pack.packCode}
+                        {pack.createdAt && (Date.now() - new Date(pack.createdAt).getTime() < 24 * 60 * 60 * 1000) && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">
                         {pack.userId?.name || 'Khách hàng'}
                       </div>

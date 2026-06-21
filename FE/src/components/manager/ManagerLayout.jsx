@@ -36,21 +36,40 @@ export default function ManagerLayout({ user, onLogout }) {
     let alive = true;
     async function loadCounts() {
       try {
-        const [bRes, fRes] = await Promise.all([
+        const bId = user?.branchId;
+        const [bRes, fRes, cRes, spRes] = await Promise.all([
           api('/bookings?status=pending&limit=1'),
           api('/bookings/feedbacks?replied=false&limit=1'),
+          api('/bookings/customers?limit=100'),
+          bId ? api(`/slot-packs?branchId=${bId}&limit=100`) : Promise.resolve(null),
         ]);
         const bData = await bRes.json().catch(() => ({}));
         const fData = await fRes.json().catch(() => ({}));
+        const cData = await cRes.json().catch(() => ({}));
+        const spData = spRes ? await spRes.json().catch(() => ({})) : {};
         const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
         const unrepliedFeedbacks = fData?.data?.total ?? 0;
-        if (alive) setBadges({ bookings: pendingBookings, feedbacks: unrepliedFeedbacks });
+        const customerList = cData?.data?.customers ?? cData?.data ?? [];
+        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const newCustomers = (Array.isArray(customerList) ? customerList : [])
+          .filter((c) => c.user?.createdAt && new Date(c.user.createdAt).getTime() > weekAgo).length;
+        const slotPackList = Array.isArray(spData?.data) ? spData.data : [];
+        const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const newSlotPacks = slotPackList
+          .filter((p) => p.createdAt && new Date(p.createdAt).getTime() > dayAgo).length;
+        if (alive) setBadges({
+          bookings: pendingBookings,
+          schedule: pendingBookings,
+          feedbacks: unrepliedFeedbacks,
+          customers: newCustomers,
+          'slot-packs': newSlotPacks,
+        });
       } catch { /* silent */ }
     }
     loadCounts();
     const t = setInterval(loadCounts, 60000);
     return () => { alive = false; clearInterval(t); };
-  }, [location.pathname]);
+  }, [location.pathname, user?.branchId]);
 
   async function handleLogout() {
     await onLogout?.();

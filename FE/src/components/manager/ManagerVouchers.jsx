@@ -267,6 +267,11 @@ function VoucherUsageModal({ voucherId, onClose }) {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-800">{u.userId?.name || '—'}</span>
                         {u.userId?.tier && <TierBadge tier={u.userId.tier} />}
+                        {u.usedAt && (Date.now() - new Date(u.usedAt).getTime() < 24 * 60 * 60 * 1000) && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
