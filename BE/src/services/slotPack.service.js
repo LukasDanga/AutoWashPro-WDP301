@@ -148,7 +148,9 @@ exports.createSlotPack = async (data) => {
 
     return slotPack;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -289,7 +291,9 @@ exports.useSlot = async (packId, staffId, data = {}) => {
 
     return { slotPack: pack, booking };
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();

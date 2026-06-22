@@ -176,7 +176,7 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount, parentS
     if (existingForBooking) {
       // Đã reserve rồi, skip
       const voucher = await Voucher.findById(existingForBooking.voucherId).session(session);
-      await session.commitTransaction();
+      if (ownSession) await session.commitTransaction();
       return { voucher, usage: existingForBooking, alreadyReserved: true };
     }
 
@@ -266,13 +266,13 @@ exports.rollbackVoucher = async (code, userId, bookingId, parentSession) => {
     const voucher = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
     if (!voucher) {
       // Already rolled back or never reserved — safe to skip
-      await session.commitTransaction();
+      if (ownSession) await session.commitTransaction();
       return;
     }
 
     const usage = await VoucherUsage.findOne({ voucherId: voucher._id, userId, bookingId }).session(session);
     if (!usage) {
-      await session.commitTransaction();
+      if (ownSession) await session.commitTransaction();
       return;
     }
 
@@ -548,7 +548,9 @@ exports.redeemPointsForVoucher = async (templateId, userId) => {
 
     return userVoucher;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();

@@ -37,7 +37,7 @@ export const ADMIN_MENU_ITEMS = [
   },
   {
     id: 'reviews',
-    label: 'Đánh giá của khách hàng',
+    label: 'Đánh giá',
     to: '/admin/reviews',
     icon: Star,
   },
