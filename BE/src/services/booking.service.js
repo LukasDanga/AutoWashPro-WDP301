@@ -257,7 +257,9 @@ exports.createBooking = async (data) => {
 
     return booking;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -425,7 +427,9 @@ exports.updateBooking = async (id, updates, userRole) => {
     await session.commitTransaction();
     return booking;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -647,7 +651,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
     return updated;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -998,7 +1004,9 @@ exports.createRecurringBooking = async (data) => {
       await session.commitTransaction();
       created.push(booking);
     } catch (err) {
-      await session.abortTransaction();
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
       const bookingStr = bookingDate.toISOString().split('T')[0];
       failed.push({ date: bookingStr, reason: err.message || 'Lỗi không xác định' });
     } finally {

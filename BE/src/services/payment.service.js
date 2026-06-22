@@ -105,7 +105,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
       await session.commitTransaction();
     } catch (err) {
-      await session.abortTransaction();
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
       if (booking.voucherCode) {
         await voucherService.rollbackVoucher(booking.voucherCode, targetUserId, bookingId).catch(() => {});
       }
@@ -206,7 +208,9 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
 
     return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -251,7 +255,9 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     await session.commitTransaction();
     return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -347,7 +353,9 @@ exports.refundPayment = async (bookingId) => {
 
     return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
