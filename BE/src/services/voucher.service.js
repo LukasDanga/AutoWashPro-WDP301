@@ -31,7 +31,7 @@ exports.createVoucher = async (data) => {
   return voucher;
 };
 
-exports.getAllVouchers = async (filters = {}) => {
+exports.getAllVouchers = async (filters = {}, userRole, userId) => {
   const query = {};
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
@@ -48,6 +48,9 @@ exports.getAllVouchers = async (filters = {}) => {
   }
   if (filters.endDateOnly) {
     query.endDate = { $gte: new Date(filters.endDateOnly) };
+  }
+  if (userRole === 'manager' && userId) {
+    query.createdBy = userId;
   }
 
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
@@ -72,9 +75,12 @@ exports.getAllVouchers = async (filters = {}) => {
   };
 };
 
-exports.getVoucherById = async (id) => {
+exports.getVoucherById = async (id, userRole, userId) => {
   const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
   return voucher;
 };
 
@@ -84,15 +90,23 @@ exports.getVoucherByCode = async (code) => {
   return voucher;
 };
 
-exports.updateVoucher = async (id, updates) => {
-  const voucher = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+exports.updateVoucher = async (id, updates, userRole, userId) => {
+  const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  return voucher;
+  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const updated = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  return updated;
 };
 
-exports.deleteVoucher = async (id) => {
-  const voucher = await Voucher.findByIdAndDelete(id);
+exports.deleteVoucher = async (id, userRole, userId) => {
+  const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  await Voucher.findByIdAndDelete(id);
   return voucher;
 };
 

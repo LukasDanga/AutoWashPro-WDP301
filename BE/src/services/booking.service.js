@@ -354,7 +354,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   };
 };
 
-exports.getBookingById = async (id, userRole, userId) => {
+exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   const booking = await Booking.findById(id)
     .populate('userId', 'name email phone tier')
     .populate('branchId', 'name address phone')
@@ -363,6 +363,12 @@ exports.getBookingById = async (id, userRole, userId) => {
   if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   if (userRole === 'customer' && String(booking.userId._id || booking.userId) !== String(userId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (userRole === 'manager') {
+    const bookingBranch = String(booking.branchId?._id || booking.branchId);
+    if (!userBranchId || String(userBranchId) !== bookingBranch) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
   }
   return booking;
 };
@@ -436,13 +442,19 @@ exports.updateBooking = async (id, updates, userRole) => {
   }
 };
 
-exports.updateBookingStatus = async (id, status, updateData = {}) => {
+exports.updateBookingStatus = async (id, status, updateData = {}, userRole, userBranchId) => {
   if (!VALID_STATUSES.includes(status)) {
     throw Object.assign(new Error('Invalid status'), { statusCode: 400, code: 'INVALID_STATUS' });
   }
 
   const currentBooking = await Booking.findById(id);
   if (!currentBooking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+
+  if (userRole === 'manager') {
+    if (!userBranchId || String(userBranchId) !== String(currentBooking.branchId)) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
 
   const allowed = VALID_TRANSITIONS[currentBooking.status] || [];
   if (!allowed.includes(status)) {

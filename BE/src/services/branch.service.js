@@ -30,21 +30,31 @@ exports.getAllBranches = async (filters = {}, user) => {
   return Branch.find(query).sort({ createdAt: -1 });
 };
 
-exports.getBranchById = async (id) => {
+exports.getBranchById = async (id, userRole, userId) => {
   const branch = await Branch.findById(id);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+  if (userRole === 'manager' && String(branch.managerId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
   return branch;
 };
 
-exports.updateBranch = async (id, updates) => {
+exports.updateBranch = async (id, updates, userRole, userId) => {
+  const branch = await Branch.findById(id);
+  if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+  if (userRole === 'manager' && String(branch.managerId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (updates.managerId && userRole !== 'admin') {
+    delete updates.managerId;
+  }
   if (updates.managerId) {
     const manager = await User.findById(updates.managerId);
     if (!manager) throw Object.assign(new Error('Manager not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
     if (manager.role !== 'manager') throw Object.assign(new Error('Selected manager must have manager role'), { statusCode: 400, code: 'INVALID_MANAGER_ROLE' });
   }
-  const branch = await Branch.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
-  if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-  return branch;
+  const updated = await Branch.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  return updated;
 };
 
 exports.deleteBranch = async (id) => {
@@ -53,8 +63,12 @@ exports.deleteBranch = async (id) => {
   return branch;
 };
 
-exports.updateStatus = async (id, status) => {
-  const branch = await Branch.findByIdAndUpdate(id, { status }, { new: true, runValidators: true });
+exports.updateStatus = async (id, status, userRole, userId) => {
+  const branch = await Branch.findById(id);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-  return branch;
+  if (userRole === 'manager' && String(branch.managerId) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const updated = await Branch.findByIdAndUpdate(id, { status }, { new: true, runValidators: true });
+  return updated;
 };

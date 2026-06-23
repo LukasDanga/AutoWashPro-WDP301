@@ -14,20 +14,31 @@ exports.getAllPackages = async (filters = {}) => {
   return Package.find(query).sort({ price: 1 });
 };
 
-exports.getPackageById = async (id) => {
+exports.getPackageById = async (id, userRole, userBranchId) => {
   const pkg = await Package.findById(id);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+  if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
   return pkg;
 };
 
-exports.updatePackage = async (id, updates) => {
-  const pkg = await Package.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+exports.updatePackage = async (id, updates, userRole, userBranchId) => {
+  const pkg = await Package.findById(id);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-  return pkg;
+  if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const updated = await Package.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  return updated;
 };
 
-exports.deletePackage = async (id) => {
-  const pkg = await Package.findByIdAndDelete(id);
+exports.deletePackage = async (id, userRole, userBranchId) => {
+  const pkg = await Package.findById(id);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+  if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  await Package.findByIdAndDelete(id);
   return pkg;
 };

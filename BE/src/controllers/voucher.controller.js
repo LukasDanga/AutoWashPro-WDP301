@@ -7,12 +7,12 @@ exports.createVoucher = catchAsync(async (req, res) => {
 });
 
 exports.getAllVouchers = catchAsync(async (req, res) => {
-  const result = await voucherService.getAllVouchers(req.query);
+  const result = await voucherService.getAllVouchers(req.query, req.user.role, req.userId);
   success(res, result.data, 'Vouchers retrieved', 200, result.pagination);
 });
 
 exports.getVoucherById = catchAsync(async (req, res) => {
-  const voucher = await voucherService.getVoucherById(req.params.id);
+  const voucher = await voucherService.getVoucherById(req.params.id, req.user.role, req.userId);
   success(res, voucher, 'Voucher retrieved');
 });
 
@@ -22,12 +22,12 @@ exports.getVoucherByCode = catchAsync(async (req, res) => {
 });
 
 exports.updateVoucher = catchAsync(async (req, res) => {
-  const voucher = await voucherService.updateVoucher(req.params.id, req.body);
+  const voucher = await voucherService.updateVoucher(req.params.id, req.body, req.user.role, req.userId);
   success(res, voucher, 'Voucher updated');
 });
 
 exports.deleteVoucher = catchAsync(async (req, res) => {
-  await voucherService.deleteVoucher(req.params.id);
+  await voucherService.deleteVoucher(req.params.id, req.user.role, req.userId);
   success(res, null, 'Voucher deleted');
 });
 

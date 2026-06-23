@@ -171,11 +171,15 @@ exports.getMySlotPacks = async (userId, filters = {}) => {
     .sort({ createdAt: -1 });
 };
 
-exports.getAllSlotPacks = async (filters = {}) => {
+exports.getAllSlotPacks = async (filters = {}, userRole, userBranchId) => {
   const query = {};
   if (filters.userId)   query.userId   = filters.userId;
-  if (filters.branchId) query.branchId = filters.branchId;
   if (filters.status)   query.status   = filters.status;
+  if (userRole === 'manager' && userBranchId) {
+    query.branchId = userBranchId;
+  } else if (filters.branchId) {
+    query.branchId = filters.branchId;
+  }
 
   return SlotPack.find(query)
     .populate('userId',    'name email phone tier')
@@ -199,7 +203,7 @@ exports.getSlotPackById = async (id, userId, userRole) => {
   return pack;
 };
 
-exports.getSlotPackByCode = async (packCode, userRole) => {
+exports.getSlotPackByCode = async (packCode, userRole, userBranchId) => {
   if (userRole !== 'admin' && userRole !== 'manager') {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
@@ -210,6 +214,12 @@ exports.getSlotPackByCode = async (packCode, userRole) => {
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 
   if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (userRole === 'manager') {
+    const packBranch = String(pack.branchId?._id || pack.branchId);
+    if (!userBranchId || String(userBranchId) !== packBranch) {
+      throw Object.assign(new Error('Slot pack does not belong to your branch'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
   return pack;
 };
 
