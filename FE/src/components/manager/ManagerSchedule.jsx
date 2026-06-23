@@ -47,11 +47,9 @@ function parseMinutes(t) {
   return h * 60 + (m || 0);
 }
 
-// Đơn "mới": chờ xác nhận và được tạo trong vòng 24h
+// Đơn "mới": đang chờ xác nhận (chưa được manager xử lý)
 function isNewBooking(b) {
-  if (!b || b.status !== 'pending') return false;
-  const created = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-  return created > 0 && Date.now() - created < 24 * 60 * 60 * 1000;
+  return b?.status === 'pending';
 }
 
 function BookingBar({ booking, startMin, endMin, onClick }) {
@@ -71,7 +69,12 @@ function BookingBar({ booking, startMin, endMin, onClick }) {
       {fresh && (
         <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
       )}
-      <p className="truncate font-semibold leading-tight">{booking.userId?.name || '—'}</p>
+      <p className="flex items-center gap-1 truncate font-semibold leading-tight">
+        {fresh && (
+          <span className="shrink-0 rounded-full bg-red-500 px-1 text-[8px] font-bold text-white leading-4">Mới</span>
+        )}
+        {booking.userId?.name || '—'}
+      </p>
       <p className="truncate opacity-80 leading-tight">{booking.vehicleId?.licensePlate || ''} · {booking.startTime}</p>
     </button>
   );
@@ -205,7 +208,14 @@ export default function ManagerSchedule() {
 
       {/* Status summary pills */}
       <div className="flex flex-wrap gap-2">
+        {(byStatus['pending'] || 0) > 0 && (
+          <div className="flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            <span>{byStatus['pending']} mới · chờ xác nhận</span>
+          </div>
+        )}
         {Object.entries(STATUS_LABEL).map(([k, label]) => {
+          if (k === 'pending') return null;
           const count = byStatus[k] || 0;
           if (!count) return null;
           const cfg = STATUS_COLOR[k];
