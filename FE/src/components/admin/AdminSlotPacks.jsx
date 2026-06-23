@@ -2,6 +2,25 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { Buildings, Ticket, CurrencyDollar, CaretLeft, CaretRight, User, Phone, Envelope, Car, CalendarBlank, CheckCircle, Clock, Warning, X } from '@phosphor-icons/react';
 
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-slate-800">{title}</h2>
+          <button onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="max-h-[78vh] overflow-y-auto px-6 py-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getStoredToken()}`, ...opts.headers },
@@ -43,6 +62,117 @@ function SlotBar({ total, remaining }) {
         <div style={{ width: `${pct}%`, background: color }} className="h-full rounded-full transition-all" />
       </div>
     </div>
+  );
+}
+
+function SlotPackDetail({ pack, onClose }) {
+  const st = STATUS_MAP[pack.status] || { label: pack.status, cls: 'bg-slate-100 text-slate-500' };
+  const slotPct = pack.totalSlots > 0 ? (pack.usedSlots / pack.totalSlots) * 100 : 0;
+  const slotColor = slotPct >= 80 ? '#ef4444' : slotPct >= 40 ? '#f59e0b' : '#10b981';
+  const isPaid = pack.paymentStatus === 'paid';
+  const initials = pack.userId?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'KH';
+  const createdDate = pack.createdAt ? new Date(pack.createdAt).toLocaleString('vi-VN') : 'Không rõ';
+  const expiredDate = pack.expiresAt ? new Date(pack.expiresAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Không hết hạn';
+
+  return (
+    <Modal title="Thông tin chi tiết gói lượt" onClose={onClose}>
+      <div className="space-y-5 text-sm text-slate-600">
+        {/* Overview Block */}
+        <div className="flex items-center gap-4 rounded-xl bg-slate-50 p-4 border border-slate-100">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 font-bold text-xl border-2 border-white shadow-sm">
+            <Ticket size={28} weight="duotone" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              {pack.packCode}
+              <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5">{pack.userId?.name || 'Khách hàng'}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{pack.userId?.email || ''}</p>
+          </div>
+        </div>
+
+        {/* Grid of details */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 border-t border-b border-slate-100 py-4">
+          <div>
+            <span className="block text-xs text-slate-400 font-medium">Số điện thoại</span>
+            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+              <Phone size={14} className="text-slate-400" />
+              {pack.userId?.phone || 'Chưa cung cấp'}
+            </span>
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400 font-medium">Chi nhánh</span>
+            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+              <Buildings size={14} className="text-slate-400" />
+              {pack.branchId?.name || '—'}
+            </span>
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400 font-medium">Gói dịch vụ</span>
+            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+              <Ticket size={14} className="text-slate-400" />
+              {pack.packageId?.name || '—'}
+            </span>
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400 font-medium">Xe</span>
+            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+              <Car size={14} className="text-slate-400" />
+              {pack.vehicleId?.licensePlate || 'Tất cả xe'}
+            </span>
+          </div>
+        </div>
+
+        {/* Slot Usage */}
+        <div>
+          <span className="block text-xs text-slate-400 font-medium mb-2">Lượt sử dụng</span>
+          <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
+            <div className="grid grid-cols-3 gap-4 text-center mb-3">
+              <div>
+                <div className="text-2xl font-bold text-slate-800">{pack.totalSlots}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Tổng lượt</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-amber-600">{pack.usedSlots}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Đã dùng</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-emerald-600">{pack.remainingSlots}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Còn lại</div>
+              </div>
+            </div>
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{ width: `${slotPct}%`, background: slotColor }} />
+            </div>
+            <div className="text-[11px] text-slate-400 text-right mt-1">Đã dùng {slotPct.toFixed(0)}%</div>
+          </div>
+        </div>
+
+        {/* Payment & Expiry */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-slate-400">
+          <div>
+            <span>Thanh toán:</span>
+            <p className={`font-semibold mt-0.5 flex items-center gap-1 ${isPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {isPaid ? <CheckCircle size={14} weight="fill" /> : <Clock size={14} />}
+              {isPaid ? 'Đã thanh toán' : 'Chờ thanh toán'}
+            </p>
+          </div>
+          <div>
+            <span>Giá cuối:</span>
+            <p className="font-semibold text-emerald-600 mt-0.5">{formatCurrency(pack.finalPriceAfterVoucher ?? pack.finalPrice)}</p>
+          </div>
+          <div>
+            <span>Hết hạn:</span>
+            <p className="font-medium text-slate-600 mt-0.5">{expiredDate}</p>
+          </div>
+          <div>
+            <span>Ngày tạo:</span>
+            <p className="font-medium text-slate-600 mt-0.5">{createdDate}</p>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -196,175 +326,7 @@ export default function AdminSlotPacks() {
         </>
       )}
 
-      {detail && (() => {
-        const st = STATUS_MAP[detail.status] || { label: detail.status, cls: 'bg-slate-100 text-slate-500' };
-        const slotPct = detail.totalSlots > 0 ? (detail.usedSlots / detail.totalSlots) * 100 : 0;
-        const slotColor = slotPct >= 80 ? '#ef4444' : slotPct >= 40 ? '#f59e0b' : '#10b981';
-        const isPaid = detail.paymentStatus === 'paid';
-        const isExpired = detail.status === 'expired';
-        const isCancelled = detail.status === 'cancelled';
-        const initials = detail.userId?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'KH';
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-            onClick={() => setDetail(null)}>
-            <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-
-              {/* Header */}
-              <div className="relative bg-gradient-to-br from-emerald-500 to-teal-500 px-6 py-5 text-white">
-                <button onClick={() => setDetail(null)}
-                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
-                  <X size={16} />
-                </button>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                    <Ticket size={22} className="text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono font-bold text-lg tracking-wide">{detail.packCode}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
-                      {isExpired && <Warning size={14} className="text-amber-400" />}
-                      {isCancelled && <X size={14} className="text-red-400" />}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-
-                {/* Customer Info */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                      <User size={14} className="text-blue-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Thông tin khách hàng</span>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-4 space-y-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
-                        {initials}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-800 text-sm">{detail.userId?.name || '—'}</div>
-                        <div className="text-xs text-slate-400">{detail.userId?.email || '—'}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600 pl-1">
-                      <Phone size={13} className="text-slate-400" />
-                      <span>{detail.userId?.phone || '—'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Service Info */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
-                      <Buildings size={14} className="text-emerald-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Thông tin dịch vụ</span>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-4 space-y-2.5">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Buildings size={14} className="text-slate-400 shrink-0" />
-                      <span className="text-slate-500 w-20 shrink-0">Chi nhánh</span>
-                      <span className="font-medium text-slate-800">{detail.branchId?.name || '—'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Ticket size={14} className="text-slate-400 shrink-0" />
-                      <span className="text-slate-500 w-20 shrink-0">Gói</span>
-                      <span className="font-medium text-slate-800">{detail.packageId?.name || '—'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Car size={14} className="text-slate-400 shrink-0" />
-                      <span className="text-slate-500 w-20 shrink-0">Xe</span>
-                      <span className="font-medium text-slate-800 font-mono">{detail.vehicleId?.licensePlate || 'Tất cả xe'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Slot Usage */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center">
-                      <CheckCircle size={14} className="text-violet-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Lượt sử dụng</span>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-center flex-1">
-                        <div className="text-2xl font-bold text-slate-800">{detail.totalSlots}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">Tổng lượt</div>
-                      </div>
-                      <div className="w-px h-10 bg-slate-200" />
-                      <div className="text-center flex-1">
-                        <div className="text-2xl font-bold text-amber-600">{detail.usedSlots}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">Đã dùng</div>
-                      </div>
-                      <div className="w-px h-10 bg-slate-200" />
-                      <div className="text-center flex-1">
-                        <div className="text-2xl font-bold text-emerald-600">{detail.remainingSlots}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">Còn lại</div>
-                      </div>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${slotPct}%`, background: slotColor }} />
-                    </div>
-                    <div className="text-[11px] text-slate-400 text-right mt-1">
-                      Đã dùng {slotPct.toFixed(0)}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Info */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-                      <CurrencyDollar size={14} className="text-amber-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Thanh toán</span>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-4 space-y-2.5">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Trạng thái</span>
-                      <span className={`inline-flex items-center gap-1.5 font-semibold text-sm px-2.5 py-1 rounded-lg ${
-                        isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {isPaid ? <CheckCircle size={14} /> : <Clock size={14} />}
-                        {isPaid ? 'Đã thanh toán' : 'Chờ thanh toán'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Giá cuối</span>
-                      <span className="font-bold text-emerald-600 text-lg">{formatCurrency(detail.finalPriceAfterVoucher ?? detail.finalPrice)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Hết hạn</span>
-                      <div className="flex items-center gap-1.5">
-                        <CalendarBlank size={13} className="text-slate-400" />
-                        <span className="font-medium text-slate-700">
-                          {detail.expiresAt ? new Date(detail.expiresAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Không hết hạn'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="px-6 pb-6">
-                <button onClick={() => setDetail(null)}
-                  className="w-full rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">
-                  Đóng
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {detail && <SlotPackDetail pack={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
