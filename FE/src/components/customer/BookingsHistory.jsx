@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 
 const DAYS_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
@@ -57,13 +57,22 @@ export default function BookingsHistory({ apiBase, token }) {
   // View mode: 'calendar' or 'list'
   const [viewMode, setViewMode] = useState('calendar');
 
+  // Review state
+  const [showReview, setShowReview] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [hoverStar, setHoverStar] = useState(0);
+  const reviewTextRef = useRef(null);
+
   useEffect(() => {
     let mounted = true;
     async function load() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`${apiBase}/bookings`, {
+        const res = await fetch(`${apiBase}/bookings/my`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error('Không thể tải lịch sử đặt chỗ');
@@ -159,6 +168,41 @@ export default function BookingsHistory({ apiBase, token }) {
       setDetailBooking(payload?.data || payload);
     } catch (err) {
       setError(err.message || 'Lỗi tải chi tiết');
+    }
+  }
+
+  function openReviewForm() {
+    setReviewRating(detailBooking?.rating || 0);
+    setReviewText(detailBooking?.feedback || '');
+    setReviewError('');
+    setShowReview(true);
+    setTimeout(() => reviewTextRef.current?.focus(), 100);
+  }
+
+  async function submitReview() {
+    if (reviewRating === 0) { setReviewError('Vui lòng chọn số sao'); return; }
+    setReviewLoading(true);
+    setReviewError('');
+    try {
+      const res = await fetch(`${apiBase}/bookings/${detailBooking._id}/feedback`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rating: reviewRating, feedback: reviewText.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Gửi đánh giá thất bại');
+      }
+      const payload = await res.json();
+      const updated = payload?.data || payload;
+      // sync local state
+      setDetailBooking((prev) => ({ ...prev, ...updated }));
+      setBookings((prev) => prev.map((b) => b._id === updated._id ? { ...b, ...updated } : b));
+      setShowReview(false);
+    } catch (e) {
+      setReviewError(e.message);
+    } finally {
+      setReviewLoading(false);
     }
   }
 
@@ -459,11 +503,136 @@ export default function BookingsHistory({ apiBase, token }) {
             </div>
 
             {/* Modal footer */}
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {detailBooking.status === 'completed' && (
+                <button onClick={openReviewForm} style={{
+                  width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
+                  background: detailBooking.rating ? '#fffbeb' : '#f59e0b',
+                  color: detailBooking.rating ? '#b45309' : '#fff',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  border: detailBooking.rating ? '1px solid #fde68a' : 'none',
+                }}>
+                  {detailBooking.rating ? '✏️ Sửa đánh giá' : '⭐ Đánh giá dịch vụ'}
+                </button>
+              )}
               <button onClick={() => setDetailBooking(null)} style={{
                 width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
                 background: '#0f172a', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
               }}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ REVIEW MODAL ═══ */}
+      {showReview && detailBooking && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
+        }} onClick={() => setShowReview(false)}>
+          <div style={{
+            width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          }} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Đánh giá dịch vụ</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ'}
+                </div>
+              </div>
+              <button onClick={() => setShowReview(false)} style={{
+                width: 32, height: 32, borderRadius: 8, border: '1px solid #e2e8f0',
+                background: '#f8fafc', cursor: 'pointer', fontSize: 16, color: '#64748b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              {/* Star selector */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
+                  Chất lượng dịch vụ <span style={{ color: '#ef4444' }}>*</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <button
+                      key={s}
+                      onMouseEnter={() => setHoverStar(s)}
+                      onMouseLeave={() => setHoverStar(0)}
+                      onClick={() => setReviewRating(s)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px',
+                        fontSize: 36, lineHeight: 1,
+                        color: s <= (hoverStar || reviewRating) ? '#f59e0b' : '#d1d5db',
+                        transform: s <= (hoverStar || reviewRating) ? 'scale(1.15)' : 'scale(1)',
+                        transition: 'all 0.1s',
+                      }}
+                    >★</button>
+                  ))}
+                </div>
+                {reviewRating > 0 && (
+                  <div style={{ textAlign: 'center', marginTop: 8, fontSize: 13, color: '#f59e0b', fontWeight: 600 }}>
+                    {['', 'Rất tệ', 'Tệ', 'Bình thường', 'Tốt', 'Xuất sắc'][reviewRating]}
+                  </div>
+                )}
+              </div>
+
+              {/* Text */}
+              <div style={{ marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                  Nhận xét (tuỳ chọn)
+                </div>
+                <textarea
+                  ref={reviewTextRef}
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  maxLength={500}
+                  rows={4}
+                  placeholder="Chia sẻ trải nghiệm của bạn về dịch vụ..."
+                  style={{
+                    width: '100%', padding: '12px 14px', borderRadius: 12, resize: 'none',
+                    border: '1.5px solid #e2e8f0', fontSize: 14, color: '#0f172a',
+                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    background: '#f8fafc',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = '#f59e0b'; e.target.style.background = '#fff'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
+                />
+                <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{reviewText.length}/500</div>
+              </div>
+
+              {reviewError && (
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13, marginBottom: 8 }}>
+                  {reviewError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowReview(false)} style={{
+                flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
+                background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}>Huỷ</button>
+              <button
+                onClick={submitReview}
+                disabled={reviewLoading || reviewRating === 0}
+                style={{
+                  flex: 2, padding: '12px 0', borderRadius: 12, border: 'none',
+                  background: reviewRating === 0 ? '#d1d5db' : '#f59e0b',
+                  color: reviewRating === 0 ? '#9ca3af' : '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: reviewRating === 0 ? 'not-allowed' : 'pointer',
+                  opacity: reviewLoading ? 0.7 : 1,
+                }}
+              >
+                {reviewLoading ? 'Đang gửi...' : '⭐ Gửi đánh giá'}
+              </button>
             </div>
           </div>
         </div>
