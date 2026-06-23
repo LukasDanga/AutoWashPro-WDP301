@@ -29,7 +29,7 @@ exports.getMyBookings = catchAsync(async (req, res) => {
 });
 
 exports.getBookingById = catchAsync(async (req, res) => {
-  const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId);
+  const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId, req.user.branchId);
   success(res, booking, 'Booking retrieved');
 });
 
@@ -43,7 +43,7 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   if (req.body.status === 'checked_in') {
     updateData.staffId = req.userId;
   }
-  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData);
+  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId);
   success(res, booking, 'Booking status updated');
 });
 

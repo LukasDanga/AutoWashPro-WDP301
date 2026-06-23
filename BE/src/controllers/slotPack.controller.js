@@ -16,7 +16,7 @@ exports.getMySlotPacks = catchAsync(async (req, res) => {
 
 /** GET /api/slot-packs — Admin/Manager xem tất cả gói */
 exports.getAllSlotPacks = catchAsync(async (req, res) => {
-  const packs = await slotPackService.getAllSlotPacks(req.query);
+  const packs = await slotPackService.getAllSlotPacks(req.query, req.user.role, req.user.branchId);
   success(res, packs, 'All slot packs retrieved');
 });
 
@@ -28,7 +28,7 @@ exports.getSlotPackById = catchAsync(async (req, res) => {
 
 /** GET /api/slot-packs/code/:code — Lookup bằng mã (manager checkin) */
 exports.getSlotPackByCode = catchAsync(async (req, res) => {
-  const pack = await slotPackService.getSlotPackByCode(req.params.code, req.user.role);
+  const pack = await slotPackService.getSlotPackByCode(req.params.code, req.user.role, req.user.branchId);
   success(res, pack, 'Slot pack retrieved');
 });
 

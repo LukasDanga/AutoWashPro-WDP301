@@ -17,12 +17,12 @@ exports.getPublicBranches = catchAsync(async (req, res) => {
 });
 
 exports.getBranchById = catchAsync(async (req, res) => {
-  const branch = await branchService.getBranchById(req.params.id);
+  const branch = await branchService.getBranchById(req.params.id, req.user.role, req.userId);
   success(res, branch, 'Branch retrieved');
 });
 
 exports.updateBranch = catchAsync(async (req, res) => {
-  const branch = await branchService.updateBranch(req.params.id, req.body);
+  const branch = await branchService.updateBranch(req.params.id, req.body, req.user.role, req.userId);
   success(res, branch, 'Branch updated');
 });
 
@@ -32,6 +32,6 @@ exports.deleteBranch = catchAsync(async (req, res) => {
 });
 
 exports.updateStatus = catchAsync(async (req, res) => {
-  const branch = await branchService.updateStatus(req.params.id, req.body.status);
+  const branch = await branchService.updateStatus(req.params.id, req.body.status, req.user.role, req.userId);
   success(res, branch, 'Branch status updated');
 });
