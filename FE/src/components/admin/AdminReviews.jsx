@@ -177,22 +177,20 @@ export default function AdminReviews() {
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <select value={branchFilter} onChange={(e) => onBranchFilter(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400">
           <option value="">Tất cả chi nhánh</option>
           {branches.map((br) => (
             <option key={br._id} value={br._id}>{br.name}</option>
           ))}
         </select>
-        {STAR_FILTERS.map((f) => (
-          <button key={f.value} onClick={() => onStarFilter(f.value)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
-              starFilter === f.value ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
-            }`}>
-            {f.label}
-          </button>
-        ))}
+        <select value={starFilter} onChange={(e) => onStarFilter(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          {STAR_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
         <button onClick={load} disabled={loading}
-          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
         </button>
       </div>

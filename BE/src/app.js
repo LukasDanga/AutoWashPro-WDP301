@@ -26,7 +26,7 @@ if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
 app.use(
   '/api/',
-  rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { success: false, message: 'Too many requests' } })
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10000, message: { success: false, message: 'Too many requests' } })
 );
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
