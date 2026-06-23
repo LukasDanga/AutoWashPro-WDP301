@@ -229,11 +229,9 @@ function getQrMode(b) {
   return null;
 }
 
-// Đơn "mới": đang chờ xác nhận và được tạo trong vòng 24h
+// Đơn "mới": đang chờ xác nhận (chưa được manager xử lý)
 function isNewBooking(b) {
-  if (!b || b.status !== 'pending') return false;
-  const created = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-  return created > 0 && Date.now() - created < 24 * 60 * 60 * 1000;
+  return b?.status === 'pending';
 }
 
 function QRDisplayModal({ booking, onClose }) {
@@ -960,7 +958,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   );
 }
 
-/* ── Calendar (timeline) view — giống "Lịch theo ngày" ── */
+/* ── Week view (lịch tuần) ── */
 const CAL_STATUS_COLOR = {
   pending:     'bg-amber-400 text-white border-amber-500',
   confirmed:   'bg-indigo-500 text-white border-indigo-600',
@@ -970,26 +968,37 @@ const CAL_STATUS_COLOR = {
   cancelled:   'bg-slate-300 text-slate-600 border-slate-400',
 };
 
-const CAL_SLOTS = (() => {
-  const s = [];
-  for (let h = 6; h <= 21; h++) { s.push(`${String(h).padStart(2, '0')}:00`); if (h < 21) s.push(`${String(h).padStart(2, '0')}:30`); }
-  return s;
-})();
-const CAL_SLOT_W = 64;
-const CAL_ROW_H = 56;
-function calMinutes(t) { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); }
 function calDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
-function CalendarView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
-  const [date, setDate] = useState(new Date());
+function getWeekStart(from = new Date()) {
+  const d = new Date(from);
+  const day = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+const WEEK_DAY_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+function WeekView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
+  const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (d) => {
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+
+  const load = useCallback(async (start) => {
     setLoading(true);
     try {
-      const ds = calDateStr(d);
-      const res = await api(`/bookings?dateFrom=${ds}&dateTo=${ds}&limit=200&page=1`);
+      const from = calDateStr(start);
+      const endDay = new Date(start);
+      endDay.setDate(start.getDate() + 6);
+      const to = calDateStr(endDay);
+      const res = await api(`/bookings?dateFrom=${from}&dateTo=${to}&limit=500&page=1`);
       const data = await res.json();
       const list = data?.data?.bookings || data?.data || [];
       setBookings(Array.isArray(list) ? list : []);
@@ -997,40 +1006,37 @@ function CalendarView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(date); }, [date, load, refreshSignal]);
+  useEffect(() => { load(weekStart); }, [weekStart, load, refreshSignal]);
 
-  const lanes = [];
-  const laneMap = {};
+  const byDay = {};
   for (const b of bookings) {
-    const key = b.packageId?.name || 'Không rõ dịch vụ';
-    if (!laneMap[key]) { laneMap[key] = []; lanes.push({ label: key, items: laneMap[key] }); }
-    laneMap[key].push(b);
+    const ds = b.bookingDate ? calDateStr(new Date(b.bookingDate)) : '';
+    if (!byDay[ds]) byDay[ds] = [];
+    byDay[ds].push(b);
   }
-  const totalWidth = CAL_SLOTS.length * CAL_SLOT_W;
-  const isToday = calDateStr(date) === calDateStr(new Date());
+
+  const todayStr = calDateStr(new Date());
   const pendingCount = bookings.filter((b) => b.status === 'pending').length;
 
   return (
     <div className="space-y-4">
+      {/* Week navigation */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d); }}
+          <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); }}
             className="flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50"><CaretLeft size={14} /></button>
-          <div className="px-3 py-1.5 text-sm font-semibold text-slate-800 min-w-52 text-center">
-            {date.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          <div className="px-3 py-1.5 text-sm font-semibold text-slate-800 min-w-56 text-center">
+            {weekDays[0].toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} – {weekDays[6].toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </div>
-          <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d); }}
+          <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); }}
             className="flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50"><CaretRight size={14} /></button>
         </div>
-        <button onClick={() => setDate(new Date())}
-          className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${isToday ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>
-          Hôm nay
+        <button onClick={() => setWeekStart(getWeekStart())}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+          Tuần này
         </button>
-        <input type="date" value={calDateStr(date)}
-          onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value + 'T00:00:00')); }}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400" />
         {pendingCount > 0 && (
-          <button onClick={() => onConfirmAll(bookings.filter((b) => b.status === 'pending').map((b) => b._id), () => load(date))}
+          <button onClick={() => onConfirmAll(bookings.filter((b) => b.status === 'pending').map((b) => b._id), () => load(weekStart))}
             className="ml-auto flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors">
             <CheckCircle size={14} weight="fill" /> Xác nhận tất cả ({pendingCount})
           </button>
@@ -1039,57 +1045,79 @@ function CalendarView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
 
       {loading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
-      ) : bookings.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 py-24 text-slate-400">
-          <CalendarBlank size={48} weight="duotone" />
-          <p className="text-sm">Không có lịch đặt nào trong ngày này.</p>
-        </div>
       ) : (
         <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
-            <div className="w-44 shrink-0 border-r border-slate-100 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Dịch vụ</div>
-            <div className="flex" style={{ width: totalWidth }}>
-              {CAL_SLOTS.map((slot) => (
-                <div key={slot} style={{ width: CAL_SLOT_W }} className="border-r border-slate-100 px-1 py-2 text-center text-[10px] font-medium text-slate-400">{slot}</div>
-              ))}
-            </div>
-          </div>
-          {lanes.map(({ label, items }) => (
-            <div key={label} className="flex border-b border-slate-100 last:border-0">
-              <div className="w-44 shrink-0 border-r border-slate-100 px-4 py-3 flex items-start">
-                <p className="text-xs font-semibold text-slate-700 leading-snug">{label}</p>
-              </div>
-              <div className="relative" style={{ width: totalWidth, height: CAL_ROW_H }}>
-                {CAL_SLOTS.map((_, i) => (<div key={i} className="absolute top-0 bottom-0 border-r border-slate-50" style={{ left: i * CAL_SLOT_W }} />))}
-                {items.map((b) => {
-                  const startMin = calMinutes(b.startTime);
-                  const endMin = calMinutes(b.endTime);
-                  const left = ((startMin - calMinutes('06:00')) / 30) * CAL_SLOT_W;
-                  const width = Math.max(((endMin - startMin) / 30) * CAL_SLOT_W - 2, 40);
-                  const qrMode = getQrMode(b);
-                  const fresh = isNewBooking(b);
-                  return (
-                    <div key={b._id} onClick={() => onSelect(b)}
-                      title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}${fresh ? ' • MỚI' : ''}`}
-                      style={{ left, width, top: 6 }}
-                      className={`absolute h-11 rounded-lg border px-2 pt-1 text-left text-[11px] font-medium overflow-hidden cursor-pointer transition-opacity hover:opacity-80 ${CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending} ${fresh ? 'ring-2 ring-red-400 ring-offset-1' : ''}`}>
-                      {fresh && (
-                        <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
+          {/* Day header row */}
+          <div className="grid border-b border-slate-100 bg-slate-50 sticky top-0 z-10"
+            style={{ gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))' }}>
+            {weekDays.map((day, i) => {
+              const ds = calDateStr(day);
+              const isToday = ds === todayStr;
+              const count = (byDay[ds] || []).length;
+              const newCount = (byDay[ds] || []).filter((b) => isNewBooking(b)).length;
+              return (
+                <div key={ds} className={`px-2 py-2.5 text-center border-r border-slate-100 last:border-0 ${isToday ? 'bg-blue-50' : ''}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-blue-500' : 'text-slate-400'}`}>{WEEK_DAY_SHORT[i]}</p>
+                  <p className={`text-xl font-bold leading-tight ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>{day.getDate()}</p>
+                  <p className="text-[10px] text-slate-400 mb-1">{day.toLocaleDateString('vi-VN', { month: 'numeric' })} / {day.getFullYear()}</p>
+                  {count > 0 ? (
+                    <div className="flex items-center justify-center gap-1 flex-wrap">
+                      <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">{count} lịch</span>
+                      {newCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                          <span className="h-1 w-1 animate-pulse rounded-full bg-white" />{newCount} mới
+                        </span>
                       )}
-                      {qrMode && (
-                        <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Xem QR check-in"
-                          className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-white/25 hover:bg-white/40 transition-colors">
-                          <QrCode size={13} weight="bold" />
-                        </button>
-                      )}
-                      <p className="truncate font-semibold leading-tight pr-5">{b.userId?.name || '—'}</p>
-                      <p className="truncate opacity-80 leading-tight">{b.vehicleId?.licensePlate || ''} · {b.startTime}</p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                  ) : (
+                    <span className="text-[10px] text-slate-300">Trống</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Day columns with booking cards */}
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))' }}>
+            {weekDays.map((day) => {
+              const ds = calDateStr(day);
+              const isToday = ds === todayStr;
+              const dayBookings = [...(byDay[ds] || [])].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+              return (
+                <div key={ds} className={`border-r border-slate-100 last:border-0 p-1.5 space-y-1 min-h-[160px] ${isToday ? 'bg-blue-50/30' : ''}`}>
+                  {dayBookings.length === 0 ? (
+                    <div className="flex min-h-[140px] items-center justify-center">
+                      <p className="text-[10px] text-slate-200">—</p>
+                    </div>
+                  ) : dayBookings.map((b) => {
+                    const fresh = isNewBooking(b);
+                    const colorCls = CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending;
+                    const qrMode = getQrMode(b);
+                    return (
+                      <div key={b._id} onClick={() => onSelect(b)}
+                        title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}`}
+                        className={`relative rounded-lg border px-2 py-1.5 cursor-pointer transition-opacity hover:opacity-80 ${colorCls} ${fresh ? 'ring-2 ring-red-400 ring-offset-1' : ''}`}>
+                        {fresh && (
+                          <span className="absolute -top-1.5 right-1 inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
+                            <span className="h-1 w-1 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
+                        {qrMode && (
+                          <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Xem QR"
+                            className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded bg-white/25 hover:bg-white/40">
+                            <QrCode size={10} weight="bold" />
+                          </button>
+                        )}
+                        <p className="text-[10px] font-bold leading-tight opacity-75">{b.startTime}–{b.endTime}</p>
+                        <p className="text-[11px] font-semibold leading-tight truncate pr-5">{b.userId?.name || '—'}</p>
+                        <p className="text-[10px] leading-tight truncate opacity-75">{b.packageId?.name || '—'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1283,7 +1311,7 @@ export default function ManagerBookings() {
       </div>
 
       {viewMode === 'calendar' && (
-        <CalendarView
+        <WeekView
           onSelect={(b) => setSelectedBooking(b)}
           onConfirmAll={(ids, after) => confirmAll(ids, after)}
           onQR={(b) => setQrBooking(b)}
