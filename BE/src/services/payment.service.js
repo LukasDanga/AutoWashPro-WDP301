@@ -266,7 +266,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   const payment = await Payment.findOne({ bookingId })
-    .populate('bookingId', 'bookingDate startTime status userId')
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
     .populate('userId', 'name email');
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
@@ -291,7 +291,7 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
     if (filters.method) query.method = filters.method;
   }
   return Payment.find(query)
-    .populate('bookingId', 'bookingDate startTime status')
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
     .populate('userId', 'name email')
     .sort({ createdAt: -1 });
 };
