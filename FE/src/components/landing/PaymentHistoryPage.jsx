@@ -38,17 +38,52 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
       .then(r => r.json())
       .then(payload => {
         const data = payload?.data || payload;
-        setPayments(Array.isArray(data) ? data : []);
+        const paymentsList = Array.isArray(data) ? data : [];
+        if (paymentsList.length > 0) {
+          setPayments(paymentsList);
+          setLoading(false);
+        } else {
+          // Fallback: fetch bookings with payment info
+          fetch(`${apiBase || API_BASE}/bookings/my?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r2 => r2.json())
+            .then(payload2 => {
+              const data2 = payload2?.data || payload2;
+              const bookings = Array.isArray(data2) ? data2 : (data2?.bookings || []);
+              const mapped = bookings
+                .filter(b => b.finalPrice || b.totalAmount)
+                .map(b => ({
+                  _id: `booking_${b._id}`,
+                  bookingId: b._id || b.id,
+                  amount: b.totalAmount || b.finalPrice || 0,
+                  status: b.paymentStatus === 'paid' ? 'paid' : b.paymentStatus === 'unpaid' ? 'pending' : b.paymentStatus || 'pending',
+                  method: 'cash',
+                  paymentType: 'full',
+                  paidAt: b.updatedAt,
+                  transactionId: null,
+                  bookingData: b,
+                }));
+              setPayments(mapped);
+            })
+            .catch(() => setPayments([]))
+            .finally(() => setLoading(false));
+        }
       })
-      .catch(() => { showToast('Không thể tải lịch sử thanh toán', 'error'); setPayments([]); })
-      .finally(() => setLoading(false));
+      .catch(() => { showToast('Không thể tải lịch sử thanh toán', 'error'); setPayments([]); setLoading(false); });
   }, [apiBase, token]);
 
   async function openDetail(payment) {
     setDetailPayment(null);
     setShowDetail(true);
     try {
-      const bId = payment.bookingId?._id || payment.bookingId;
+      const bId = payment.bookingId?._id || payment.bookingId || payment.bookingData?._id;
+      if (payment.bookingData) {
+        // Fallback detail from booking data
+        setDetailPayment({
+          ...payment,
+          bookingId: payment.bookingData,
+        });
+        return;
+      }
       const res = await fetch(`${apiBase || API_BASE}/payments/booking/${bId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -90,7 +125,7 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
           <div className="space-y-3">
             {payments.map(p => {
               const pId = p._id || p.id;
-              const booking = p.bookingId || {};
+              const booking = p.bookingId || p.bookingData || {};
               return (
                 <div key={pId} onClick={() => openDetail(p)}
                   className="p-5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors cursor-pointer">
@@ -184,7 +219,11 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                     </div>
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Chi nhánh</span>
-                      <span className="text-sm text-slate-700">{detailPayment.bookingId.branchId?.name || '—'}</span>
+                      <span className="text-sm text-slate-700">{detailPayment.bookingId.branchId?.name || detailPayment.bookingId.branchName || '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5">
+                      <span className="text-xs text-slate-500">Dịch vụ</span>
+                      <span className="text-sm text-slate-700">{detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}</span>
                     </div>
                   </div>
                 )}
