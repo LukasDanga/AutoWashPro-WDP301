@@ -58,7 +58,8 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                   status: b.paymentStatus === 'paid' ? 'paid' : b.paymentStatus === 'unpaid' ? 'pending' : b.paymentStatus || 'pending',
                   method: 'cash',
                   paymentType: 'full',
-                  paidAt: b.updatedAt,
+                  createdAt: b.createdAt,
+                  paidAt: b.paymentStatus === 'paid' ? (b.updatedAt || b.createdAt) : undefined,
                   transactionId: null,
                   bookingData: b,
                 }));
