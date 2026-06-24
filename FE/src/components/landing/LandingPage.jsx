@@ -15,6 +15,7 @@ export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiB
       <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
       <HeroSection />
       <HowItWorksSection />
+      <TestimonialsSection />
       <MapSection onSelectBranch={(branch) => navigate(`/booking?branchId=${branch.id}`)} />
       <CTASection />
       <Footer />
