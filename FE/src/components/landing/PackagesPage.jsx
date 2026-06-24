@@ -2,10 +2,10 @@ import Navbar from './Navbar';
 import PackagesSection from './PackagesSection';
 import Footer from './Footer';
 
-export default function PackagesPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory }) {
+export default function PackagesPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   return (
     <div className="bg-white min-h-screen">
-      <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} />
+      <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
       <PackagesSection />
       <Footer />
     </div>

@@ -207,6 +207,22 @@ export default function HistoryPage({ onBack, apiBase, token }) {
     finally { setRebookLoading(false); }
   }
 
+  async function handleCancelRecurring(b) {
+    if (!b.recurringGroupId) return;
+    if (!window.confirm('Hủy toàn bộ lịch định kỳ? Tất cả các buổi trong loạt này sẽ bị hủy.')) return;
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/bookings/recurring/${b.recurringGroupId}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
+      showToastMsg('Đã hủy toàn bộ lịch định kỳ');
+      doFetch(keyword, statusFilter, dateFrom, dateTo, page);
+    } catch (e) { showToastMsg(e.message, 'error'); }
+    finally { setCancelLoading(false); }
+  }
+
   /* ── calendar helpers ── */
   const bookingsByDate = useMemo(() => {
     const map = {};
@@ -448,6 +464,13 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                                 className="text-[11px] font-semibold text-sky-600 hover:text-sky-500 border-none bg-transparent cursor-pointer">
                                 📱 QR
                               </button>
+                              {b.recurringGroupId && (
+                                <button onClick={(e) => { e.stopPropagation(); handleCancelRecurring(b); }}
+                                  disabled={cancelLoading}
+                                  className="text-[11px] font-semibold text-red-500 hover:text-red-400 border-none bg-transparent cursor-pointer disabled:opacity-50">
+                                  Hủy định kỳ
+                                </button>
+                              )}
                               <button onClick={(e) => { e.stopPropagation(); handleCancel(b); }}
                                 disabled={cancelLoading}
                                 className="text-[11px] font-semibold text-red-500 hover:text-red-400 border-none bg-transparent cursor-pointer disabled:opacity-50">
@@ -639,6 +662,13 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                             className="text-xs font-semibold text-sky-600 hover:text-sky-500 border-none bg-transparent cursor-pointer">
                             📱 Xem QR
                           </button>
+                          {b.recurringGroupId && (
+                            <button onClick={() => handleCancelRecurring(b)}
+                              disabled={cancelLoading}
+                              className="text-xs font-semibold text-red-500 hover:text-red-400 border-none bg-transparent cursor-pointer disabled:opacity-50">
+                              Hủy định kỳ
+                            </button>
+                          )}
                           <button onClick={() => handleCancel(b)}
                             disabled={cancelLoading}
                             className="text-xs font-semibold text-red-500 hover:text-red-400 border-none bg-transparent cursor-pointer disabled:opacity-50">

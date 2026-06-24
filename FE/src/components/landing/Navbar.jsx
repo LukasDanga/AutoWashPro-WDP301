@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory }) {
+export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
@@ -129,6 +129,22 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
                             <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
                           </svg>
                           Lịch sử
+                        </button>
+                        <button onClick={() => { setProfileOpen(false); onGoToPayments?.(); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                          </svg>
+                          Thanh toán
+                        </button>
+                        <button onClick={() => { setProfileOpen(false); onGoToNotifications?.(); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+                          </svg>
+                          Thông báo
                         </button>
                         <div className="h-px bg-slate-200" />
                         <button onClick={onLogout}

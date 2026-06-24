@@ -7,12 +7,12 @@ import MapSection from './MapSection';
 import CTASection from './CTASection';
 import Footer from './Footer';
 
-export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiBase, token, onGoToProfile, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
+export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiBase, token, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
   const navigate = useNavigate();
 
   return (
     <div className="bg-white">
-      <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} />
+      <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
       <HeroSection />
       <HowItWorksSection />
       <TestimonialsSection />
