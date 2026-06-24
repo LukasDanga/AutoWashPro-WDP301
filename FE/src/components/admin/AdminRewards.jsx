@@ -203,12 +203,12 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày bắt đầu <span className="text-red-500">*</span></label>
-              <input type="date" className={inp} value={form.startDate?.split('T')[0] ?? form.startDate} onChange={(e) => set('startDate', e.target.value)} />
+              <input type="date" className={inp} min={new Date().toISOString().split('T')[0]} value={form.startDate?.split('T')[0] ?? form.startDate} onChange={(e) => set('startDate', e.target.value)} />
               {errors.startDate && <p className="mt-0.5 text-[11px] text-red-500">{errors.startDate}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày kết thúc <span className="text-red-500">*</span></label>
-              <input type="date" className={inp} value={form.endDate?.split('T')[0] ?? form.endDate} onChange={(e) => set('endDate', e.target.value)} />
+              <input type="date" className={inp} min={form.startDate?.split('T')[0] || new Date().toISOString().split('T')[0]} value={form.endDate?.split('T')[0] ?? form.endDate} onChange={(e) => set('endDate', e.target.value)} />
               {errors.endDate && <p className="mt-0.5 text-[11px] text-red-500">{errors.endDate}</p>}
             </div>
           </div>
