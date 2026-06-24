@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { showToast } from '@/lib/toast';
 import {
   CurrencyDollar,
   CheckCircle,
@@ -17,6 +18,8 @@ import {
   ArrowUUpLeft,
   ArrowsClockwise,
   Sun,
+  Receipt,
+  Check,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
@@ -217,6 +220,107 @@ function PaymentDetail({ payment, onClose, onConfirm, onRefund, confirming, refu
   );
 }
 
+/* ─────────────────────────── Refund Modal ─────────────────────────── */
+function RefundModal({ payment, onConfirm, onClose, refunding }) {
+  const [reason, setReason] = useState('');
+
+  return (
+    <Modal title="Xác nhận hoàn tiền" onClose={onClose}>
+      <div className="space-y-5 text-sm text-slate-600">
+        <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 p-4">
+          <Warning size={20} className="text-amber-600 shrink-0" />
+          <p className="text-xs text-amber-700">Bạn có chắc chắn muốn hoàn tiền giao dịch này? Hành động này không thể hoàn tác.</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">Mã giao dịch</span>
+            <span className="font-mono text-xs font-bold text-slate-700">{payment.transactionId || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">Khách hàng</span>
+            <span className="font-semibold text-slate-700">{payment.userId?.name || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">Phương thức</span>
+            <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${(METHOD_MAP[payment.method] || {}).cls || ''}`}>
+              {(METHOD_MAP[payment.method] || {}).label || payment.method}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-200 pt-3">
+            <span className="text-xs text-slate-400">Số tiền hoàn</span>
+            <span className="text-lg font-bold text-red-600">{formatCurrency(payment.amount)}</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Lý do hoàn tiền</label>
+          <textarea
+            rows={3}
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Nhập lý do hoàn tiền (không bắt buộc)..."
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors resize-none"
+          />
+        </div>
+
+        <div className="flex gap-2 border-t border-slate-100 pt-4">
+          <button onClick={onClose}
+            className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+            Hủy
+          </button>
+          <button onClick={() => onConfirm(reason)} disabled={refunding}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors">
+            {refunding ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <ArrowUUpLeft size={14} />
+            )}
+            {refunding ? 'Đang hoàn tiền…' : 'Xác nhận hoàn tiền'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─────────────────────────── Refund Success Modal ─────────────────────────── */
+function RefundSuccessModal({ payment, onClose }) {
+  return (
+    <Modal title="Hoàn tiền thành công" onClose={onClose}>
+      <div className="flex flex-col items-center gap-4 py-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+          <Check size={32} weight="bold" className="text-emerald-600" />
+        </div>
+        <div>
+          <p className="text-base font-bold text-slate-800">Giao dịch đã được hoàn tiền</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Số tiền <span className="font-semibold text-red-600">{formatCurrency(payment.amount)}</span> đã được hoàn về cho khách hàng.
+          </p>
+        </div>
+        <div className="w-full rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-2 text-xs text-slate-500">
+          <div className="flex justify-between">
+            <span>Mã giao dịch:</span>
+            <span className="font-mono font-bold text-slate-700">{payment.transactionId || '—'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Khách hàng:</span>
+            <span className="font-semibold text-slate-700">{payment.userId?.name || '—'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Thời gian:</span>
+            <span className="text-slate-600">{formatDateTime(new Date())}</span>
+          </div>
+        </div>
+        <button onClick={onClose}
+          className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors">
+          Đóng
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─────────────────────────── Main ─────────────────────────── */
 export default function AdminPayments() {
   const [payments, setPayments] = useState([]);
@@ -228,7 +332,9 @@ export default function AdminPayments() {
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [refundTarget, setRefundTarget] = useState(null);
   const [refunding, setRefunding] = useState(false);
+  const [refundSuccess, setRefundSuccess] = useState(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
@@ -291,26 +397,29 @@ export default function AdminPayments() {
       const updated = data?.data || data;
       setPayments(prev => prev.map(p => p._id === updated._id ? updated : p));
       setDetail(null);
-    } catch (e) { alert(e.message); }
+      showToast('Xác nhận thanh toán thành công!', 'success');
+    } catch (e) { showToast(e.message, 'error'); }
     finally { setConfirming(false); }
   }
 
-  async function handleRefund() {
-    if (!detail) return;
-    if (!confirm('Bạn có chắc chắn muốn hoàn tiền thanh toán này?')) return;
+  async function handleRefund(reason) {
+    if (!refundTarget) return;
     setRefunding(true);
     try {
-      const bookingId = detail.bookingId?._id || detail.bookingId;
+      const bookingId = refundTarget.bookingId?._id || refundTarget.bookingId;
       const res = await api('/payments/refund', {
         method: 'POST',
-        body: JSON.stringify({ bookingId }),
+        body: JSON.stringify({ bookingId, reason }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Lỗi hoàn tiền'); }
       const data = await res.json();
       const updated = data?.data || data;
       setPayments(prev => prev.map(p => p._id === updated._id ? updated : p));
+      setRefundTarget(null);
       setDetail(null);
-    } catch (e) { alert(e.message); }
+      setRefundSuccess(updated);
+      showToast('Hoàn tiền thành công!', 'success');
+    } catch (e) { showToast(e.message, 'error'); }
     finally { setRefunding(false); }
   }
 
@@ -421,6 +530,7 @@ export default function AdminPayments() {
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-800">{p.userId?.name || '—'}</div>
                         <div className="text-xs text-slate-400">{p.userId?.email || ''}</div>
+                        {p.userId?.phone && <div className="text-xs text-slate-400">{p.userId.phone}</div>}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${mt.cls}`}>{mt.label}</span>
@@ -471,9 +581,27 @@ export default function AdminPayments() {
           payment={detail}
           onClose={() => setDetail(null)}
           onConfirm={handleConfirm}
-          onRefund={handleRefund}
+          onRefund={() => { setRefundTarget(detail); setDetail(null); }}
           confirming={confirming}
           refunding={refunding}
+        />
+      )}
+
+      {/* Refund Modal */}
+      {refundTarget && (
+        <RefundModal
+          payment={refundTarget}
+          onConfirm={handleRefund}
+          onClose={() => setRefundTarget(null)}
+          refunding={refunding}
+        />
+      )}
+
+      {/* Refund Success Modal */}
+      {refundSuccess && (
+        <RefundSuccessModal
+          payment={refundSuccess}
+          onClose={() => setRefundSuccess(null)}
         />
       )}
     </div>
