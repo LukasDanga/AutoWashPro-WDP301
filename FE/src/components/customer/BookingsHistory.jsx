@@ -65,6 +65,10 @@ export default function BookingsHistory({ apiBase, token }) {
   const [reviewError, setReviewError] = useState('');
   const [hoverStar, setHoverStar] = useState(0);
   const reviewTextRef = useRef(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -203,6 +207,43 @@ export default function BookingsHistory({ apiBase, token }) {
       setReviewError(e.message);
     } finally {
       setReviewLoading(false);
+    }
+  }
+
+  async function handleCancel(id) {
+    if (!window.confirm('Bạn có chắc muốn hủy đơn này?')) return;
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/bookings/${id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Không thể hủy đơn');
+      setDetailBooking((prev) => ({ ...prev, status: 'cancelled' }));
+      setBookings((prev) => prev.map((b) => b._id === id ? { ...b, status: 'cancelled' } : b));
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
+  async function handleShowQR(id) {
+    setQrLoading(true);
+    setQrUrl('');
+    setShowQR(true);
+    try {
+      const res = await fetch(`${apiBase}/bookings/${id}/qr`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Không thể tạo mã QR');
+      const payload = await res.json();
+      setQrUrl(payload?.data || payload?.url || '');
+    } catch (e) {
+      alert(e.message);
+      setShowQR(false);
+    } finally {
+      setQrLoading(false);
     }
   }
 
@@ -504,6 +545,22 @@ export default function BookingsHistory({ apiBase, token }) {
 
             {/* Modal footer */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(detailBooking.status === 'pending' || detailBooking.status === 'confirmed') && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => handleCancel(detailBooking._id)} disabled={cancelLoading} style={{
+                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #fecaca',
+                    background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'not-allowed' : 'pointer', opacity: cancelLoading ? 0.6 : 1,
+                  }}>
+                    {cancelLoading ? 'Đang hủy...' : '🗑 Hủy đơn'}
+                  </button>
+                  <button onClick={() => handleShowQR(detailBooking._id)} style={{
+                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #bfdbfe',
+                    background: '#eff6ff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    📱 QR Check-in
+                  </button>
+                </div>
+              )}
               {detailBooking.status === 'completed' && (
                 <button onClick={openReviewForm} style={{
                   width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
@@ -633,6 +690,41 @@ export default function BookingsHistory({ apiBase, token }) {
               >
                 {reviewLoading ? 'Đang gửi...' : '⭐ Gửi đánh giá'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ QR MODAL ═══ */}
+      {showQR && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
+        }} onClick={() => setShowQR(false)}>
+          <div style={{
+            width: '100%', maxWidth: 360, background: '#fff', borderRadius: 20, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Mã QR Check-in</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>Đưa mã này cho nhân viên khi đến rửa xe</div>
+              {qrLoading ? (
+                <div style={{ padding: '60px 0', color: '#94a3b8' }}>Đang tạo mã QR...</div>
+              ) : qrUrl ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                  <img src={qrUrl} alt="QR Check-in" style={{ width: 200, height: 200, borderRadius: 12 }} />
+                  <a href={qrUrl} target="_blank" rel="noopener noreferrer" style={{
+                    padding: '8px 20px', borderRadius: 10, background: '#0f172a', color: '#fff',
+                    fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                  }}>🔗 Mở trong tab mới</a>
+                </div>
+              ) : (
+                <div style={{ padding: '60px 0', color: '#ef4444' }}>Không thể tạo mã QR</div>
+              )}
+              <button onClick={() => setShowQR(false)} style={{
+                width: '100%', marginTop: 20, padding: '12px 0', borderRadius: 12, border: 'none',
+                background: '#0f172a', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}>Đóng</button>
             </div>
           </div>
         </div>
