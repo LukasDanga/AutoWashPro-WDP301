@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { showToast } from '@/lib/toast';
+import useSSE from '../../hooks/useSSE';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -131,6 +132,11 @@ export default function HistoryPage({ onBack, apiBase, token }) {
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [keyword, statusFilter, dateFrom, dateTo, page, token, doFetch]);
+
+  /* ── SSE: auto-refresh on notification ── */
+  useSSE(token, 'notification', useCallback(() => {
+    doFetch(keyword, statusFilter, dateFrom, dateTo, page);
+  }, [doFetch, keyword, statusFilter, dateFrom, dateTo, page]));
 
   function resetFilters() { setKeyword(''); setStatusFilter(''); setDateFrom(''); setDateTo(''); setPage(1); }
   function onFilterChange(setter, value) { setter(value); setPage(1); }

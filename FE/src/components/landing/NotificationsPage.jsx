@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
+import useSSE from '../../hooks/useSSE';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -46,6 +47,11 @@ export default function NotificationsPage({ onBack, apiBase, token }) {
     if (!token) return;
     doFetch(page);
   }, [apiBase, token, page]);
+
+  /* ── SSE: auto-refresh on notification ── */
+  useSSE(token, 'notification', useCallback(() => {
+    doFetch(page);
+  }, [doFetch, page]));
 
   async function markRead(id) {
     try {
