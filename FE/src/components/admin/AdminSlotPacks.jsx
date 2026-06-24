@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Buildings, Ticket, CurrencyDollar, CaretLeft, CaretRight, User, Phone, Envelope, Car, CalendarBlank, CheckCircle, Clock, Warning, X } from '@phosphor-icons/react';
+import { Buildings, Ticket, CurrencyDollar, CaretLeft, CaretRight, User, Phone, Envelope, Car, CalendarBlank, CheckCircle, Clock, Warning, X, MagnifyingGlass } from '@phosphor-icons/react';
 
 function Modal({ title, onClose, children }) {
   return (
@@ -47,7 +47,7 @@ const STATUS_TABS = [
   { key: 'cancelled', label: 'Đã hủy' },
 ];
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 9;
 
 function SlotBar({ total, remaining }) {
   const pct = total > 0 ? (remaining / total) * 100 : 0;
@@ -182,8 +182,12 @@ export default function AdminSlotPacks() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const debounceRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,12 +195,17 @@ export default function AdminSlotPacks() {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (branchFilter) params.set('branchId', branchFilter);
+      if (search.trim()) params.set('search', search.trim());
+      params.set('page', page);
+      params.set('limit', PAGE_SIZE);
       const res = await api(`/slot-packs?${params}`);
-      const data = await res.json();
-      setPacks(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
+      const json = await res.json();
+      setPacks(Array.isArray(json?.data) ? json.data : []);
+      setTotalPages(json?.pagination?.totalPages || 1);
+      setTotal(json?.pagination?.total || 0);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [statusFilter, branchFilter]);
+  }, [statusFilter, branchFilter, search, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -211,23 +220,25 @@ export default function AdminSlotPacks() {
     setPage(1);
   }
 
-  // Stats
-  const totalPacks = packs.length;
+  function onSearchChange(e) {
+    const value = e.target.value;
+    setSearch(value);
+    setPage(1);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {}, 300);
+  }
+
+  // Stats (from current page data — approximation)
   const activePacks = packs.filter(p => p.status === 'active').length;
   const exhaustedPacks = packs.filter(p => p.status === 'exhausted').length;
   const totalRevenue = packs.reduce((s, p) => s + (p.finalPriceAfterVoucher ?? p.finalPrice ?? 0), 0);
-
-  // Pagination
-  const totalPages = Math.ceil(packs.length / PAGE_SIZE) || 1;
-  const safePage = Math.min(page, totalPages);
-  const paginated = packs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="space-y-5">
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { icon: Ticket, label: 'Tổng gói', value: totalPacks, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { icon: Ticket, label: 'Tổng gói', value: total, color: 'text-blue-600', bg: 'bg-blue-50' },
           { icon: Ticket, label: 'Còn hiệu lực', value: activePacks, color: 'text-emerald-600', bg: 'bg-emerald-50' },
           { icon: Ticket, label: 'Đã dùng hết', value: exhaustedPacks, color: 'text-slate-500', bg: 'bg-slate-100' },
           { icon: CurrencyDollar, label: 'Doanh thu gói lượt', value: formatCurrency(totalRevenue), color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -246,6 +257,22 @@ export default function AdminSlotPacks() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={onSearchChange}
+            placeholder="Tìm theo tên, SĐT hoặc mã gói..."
+            className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all"
+          />
+          {search && (
+            <button onClick={() => { setSearch(''); setPage(1); }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X size={14} />
+            </button>
+          )}
+        </div>
         <select value={branchFilter} onChange={e => onFilter(setBranchFilter, e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400">
           <option value="">Tất cả chi nhánh</option>
@@ -258,7 +285,7 @@ export default function AdminSlotPacks() {
           ))}
         </select>
         <button onClick={() => load()}
-          className="ml-auto px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-500 hover:bg-slate-50">
+          className="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-500 hover:bg-slate-50">
           Làm mới
         </button>
       </div>
@@ -270,12 +297,12 @@ export default function AdminSlotPacks() {
       ) : packs.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
           <Ticket size={48} weight="duotone" />
-          <p className="text-sm">Không có gói slot nào.</p>
+          <p className="text-sm">{search ? 'Không tìm thấy kết quả phù hợp.' : 'Không có gói slot nào.'}</p>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {paginated.map(pack => {
+            {packs.map(pack => {
               const st = STATUS_MAP[pack.status] || { label: pack.status, cls: 'bg-slate-100 text-slate-500' };
               return (
                 <div key={pack._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
@@ -283,6 +310,12 @@ export default function AdminSlotPacks() {
                     <div className="min-w-0">
                       <div className="font-mono font-bold text-slate-800 text-sm">{pack.packCode}</div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">{pack.userId?.name || 'Khách hàng'}</div>
+                      {pack.userId?.phone && (
+                        <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                          <Phone size={10} />
+                          <span>{pack.userId.phone}</span>
+                        </div>
+                      )}
                     </div>
                     <span className={`shrink-0 text-[11px] font-semibold rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                   </div>
@@ -307,17 +340,17 @@ export default function AdminSlotPacks() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-2">
-              <button disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}
+              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
                 className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                 ‹ Trước
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
                 <button key={p} onClick={() => setPage(p)}
                   className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
-                    safePage === p ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    page === p ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}>{p}</button>
               ))}
-              <button disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
                 className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                 Sau ›
               </button>

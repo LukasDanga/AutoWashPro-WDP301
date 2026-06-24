@@ -8,6 +8,7 @@ import {
   Users,
   CalendarBlank,
   Ticket,
+  CurrencyDollar,
 } from '@phosphor-icons/react';
 
 export const ADMIN_BRAND = {
@@ -60,6 +61,12 @@ export const ADMIN_MENU_ITEMS = [
     icon: CalendarBlank,
   },
   {
+    id: 'payments',
+    label: 'Quản lý thanh toán',
+    to: '/admin/payments',
+    icon: CurrencyDollar,
+  },
+  {
     id: 'slot-packs',
     label: 'Gói lượt',
     to: '/admin/slot-packs',
@@ -101,6 +108,10 @@ export const ADMIN_PAGE_META = {
   bookings: {
     title: 'Quản lý đặt lịch',
     description: 'Xem và quản lý toàn bộ đặt lịch trên tất cả chi nhánh.',
+  },
+  payments: {
+    title: 'Quản lý thanh toán',
+    description: 'Xem và quản lý toàn bộ giao dịch thanh toán trên hệ thống.',
   },
   'slot-packs': {
     title: 'Gói lượt',

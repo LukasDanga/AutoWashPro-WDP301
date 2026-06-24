@@ -181,12 +181,42 @@ exports.getAllSlotPacks = async (filters = {}, userRole, userBranchId) => {
     query.branchId = filters.branchId;
   }
 
-  return SlotPack.find(query)
-    .populate('userId',    'name email phone tier')
-    .populate('branchId',  'name address')
-    .populate('packageId', 'name price duration')
-    .populate('vehicleId', 'licensePlate vehicleType brand color')
-    .sort({ priority: -1, createdAt: -1 }); // ưu tiên cao lên trước
+  // ── Search by keyword (name, phone, packCode) ──
+  if (filters.search && filters.search.trim()) {
+    const keyword = filters.search.trim();
+    const regex = new RegExp(keyword, 'i');
+
+    // Find matching user IDs by name or phone
+    const matchingUsers = await User.find({
+      $or: [{ name: regex }, { phone: regex }],
+    }).select('_id').lean();
+    const userIds = matchingUsers.map(u => u._id);
+
+    query.$or = [
+      { packCode: regex },
+      { userId: { $in: userIds } },
+    ];
+  }
+
+  // ── Pagination ──
+  const page  = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(filters.limit, 10) || 9));
+  const skip  = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    SlotPack.find(query)
+      .populate('userId',    'name email phone tier')
+      .populate('branchId',  'name address')
+      .populate('packageId', 'name price duration')
+      .populate('vehicleId', 'licensePlate vehicleType brand color')
+      .sort({ priority: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    SlotPack.countDocuments(query),
+  ]);
+
+  return { data, total, page, totalPages: Math.ceil(total / limit) };
 };
 
 exports.getSlotPackById = async (id, userId, userRole) => {

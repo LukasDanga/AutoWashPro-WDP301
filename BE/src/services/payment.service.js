@@ -266,7 +266,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   const payment = await Payment.findOne({ bookingId })
-    .populate('bookingId', 'bookingDate startTime status userId')
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
     .populate('userId', 'name email');
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
@@ -289,9 +289,23 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
     if (filters.userId) query.userId = filters.userId;
     if (filters.status) query.status = filters.status;
     if (filters.method) query.method = filters.method;
+    if (filters.today === 'true' || filters.today === true) {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (filters.date) {
+      const day = new Date(filters.date);
+      const start = new Date(day);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(day);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
   }
   return Payment.find(query)
-    .populate('bookingId', 'bookingDate startTime status')
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
     .populate('userId', 'name email')
     .sort({ createdAt: -1 });
 };
