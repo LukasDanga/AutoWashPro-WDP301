@@ -8,6 +8,8 @@ import GiftStorePage from './components/landing/GiftStorePage.jsx';
 import MapPage from './components/landing/MapPage.jsx';
 import ProfilePage from './components/landing/ProfilePage.jsx';
 import HistoryPage from './components/landing/HistoryPage.jsx';
+import PaymentHistoryPage from './components/landing/PaymentHistoryPage.jsx';
+import NotificationsPage from './components/landing/NotificationsPage.jsx';
 import {
   clearSession as clearStoredSession,
   getApiBaseUrl,
@@ -214,21 +216,29 @@ export default function App() {
     return <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />;
   }
 
+  if (path === '/payments' && token && user) {
+    return <PaymentHistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />;
+  }
+
+  if (path === '/notifications' && token && user) {
+    return <NotificationsPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />;
+  }
+
   if (path === '/booking') {
-    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
   }
 
   if (path === '/packages') {
-    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} />;
+    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/gifts') {
-    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} />;
+    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/map') {
-    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} />;
+    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
-  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
 }

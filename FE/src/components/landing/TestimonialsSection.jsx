@@ -4,74 +4,35 @@ import { useRef, useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+const CARD_BG = ['bg-white'];
+
 function StarRating({ rating }) {
   return (
-    <div className="flex gap-1 text-yellow-400">
+    <div className="flex gap-0.5">
       {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={`material-symbols-outlined text-sm ${i < rating ? 'text-yellow-400' : 'text-slate-200'}`}
-          style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
-          star
-        </span>
+        <svg key={i} className={`w-4 h-4 ${i < rating ? 'text-amber-400' : 'text-slate-200'}`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
       ))}
     </div>
   );
 }
 
 const FALLBACK_REVIEWS = [
-  { name: 'Lê Văn Cường', location: 'AutoWash Pro Thủ Đức', content: 'Dịch vụ tốt, đội ngũ chuyên nghiệp, không gian chờ rất thoải mái và hiện đại. Sẽ quay lại!', rating: 5, initials: 'LC', color: 'emerald' },
-  { name: 'Phạm Thị Dung', location: 'AutoWash Pro Quận 1', content: 'Rửa rất sạch, nhân viên nhiệt tình, chu đáo. Giá cả rất tương xứng với chất lượng 5 sao.', rating: 5, initials: 'PD', color: 'blue' },
-  { name: 'Nguyễn Văn An', location: 'AutoWash Pro Quận 7', content: 'Công nghệ rửa tiên tiến, bảo vệ sơn xe rất tốt. Đặt lịch online cực kỳ tiện lợi.', rating: 5, initials: 'NA', color: 'violet' },
-  { name: 'Trần Minh Tuấn', location: 'AutoWash Pro Bình Thạnh', content: 'Lần đầu thử dịch vụ ceramic coating rất ưng ý. Xe bóng loáng như mới, nhân viên tư vấn nhiệt tình.', rating: 5, initials: 'TT', color: 'amber' },
-  { name: 'Hoàng Thị Mai', location: 'AutoWash Pro Tân Bình', content: 'Đặt lịch nhanh, rửa xe sạch, không gian chờ có cafe ngon. Rất hài lòng và sẽ giới thiệu cho bạn bè.', rating: 5, initials: 'HM', color: 'rose' },
+  { name: 'Anh Hạnh', location: 'AutoWash Cầu Giấy', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AH', color: 'emerald' },
+  { name: 'Chị Minh', location: 'AutoWash Thu Duc', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CM', color: 'blue' },
+  { name: 'Anh Thành', location: 'AutoWash Quận 1', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AT', color: 'violet' },
+  // Duplicate for alternating effect
+  { name: 'Chị Lan', location: 'AutoWash Quận 7', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CL', color: 'emerald' },
+  { name: 'Anh Hoàng', location: 'AutoWash Đà Nẵng', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AH', color: 'blue' },
+  { name: 'Chị Nga', location: 'AutoWash Hải Châu', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CN', color: 'violet' },
 ];
 
 const COLOR_MAP = {
   emerald: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
   blue: { bg: 'bg-blue-100', text: 'text-blue-700' },
   violet: { bg: 'bg-violet-100', text: 'text-violet-700' },
-  amber: { bg: 'bg-amber-100', text: 'text-amber-700' },
-  rose: { bg: 'bg-rose-100', text: 'text-rose-700' },
 };
-
-function ReviewCard({ review }) {
-  const color = COLOR_MAP[review.color] || COLOR_MAP.emerald;
-  const initials = review.initials || review.name?.charAt(0) || 'K';
-
-  return (
-    <div className="w-[380px] shrink-0 p-8 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-xl hover:shadow-emerald-50 transition-all duration-500 group">
-      <StarRating rating={review.rating || 5} />
-      <p className="text-slate-700 mb-6 mt-4 leading-relaxed italic">"{review.content}"</p>
-      <div className="flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-full ${color.bg} flex items-center justify-center ${color.text} font-bold text-sm`}>
-          {initials}
-        </div>
-        <div>
-          <div className="font-semibold text-slate-900">{review.name}</div>
-          <div className="text-xs text-slate-400">{review.location}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MarqueeRow({ reviews, speed = 40, reverse = false, pauseOnHover = true }) {
-  const doubled = [...reviews, ...reviews];
-
-  return (
-    <div className={`overflow-hidden ${pauseOnHover ? 'group/row' : ''}`}>
-      <div
-        className={`flex gap-6 w-max ${pauseOnHover ? '[&>*]:group-hover/row:[animation-play-state:paused]' : ''}`}
-        style={{
-          animation: `marquee-${reverse ? 'right' : 'left'} ${reviews.length * speed}s linear infinite`,
-        }}
-      >
-        {doubled.map((review, i) => (
-          <ReviewCard key={`${review.name}-${i}`} review={review} />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function TestimonialsSection() {
   const [testimonials, setTestimonials] = useState([]);
@@ -87,7 +48,6 @@ export default function TestimonialsSection() {
         const data = payload?.data || payload || [];
         setTestimonials(Array.isArray(data) && data.length > 0 ? data : FALLBACK_REVIEWS);
       } catch (e) {
-        console.error('Failed to load testimonials:', e);
         setTestimonials(FALLBACK_REVIEWS);
       } finally {
         setLoading(false);
@@ -96,37 +56,43 @@ export default function TestimonialsSection() {
     fetchTestimonials();
   }, []);
 
-  const leftReviews = testimonials.length > 0 ? testimonials : FALLBACK_REVIEWS;
-  const rightReviews = testimonials.length > 0 ? [...testimonials].reverse() : [...FALLBACK_REVIEWS].reverse();
+  const items = testimonials.length > 0 ? testimonials : FALLBACK_REVIEWS;
 
   return (
-    <section ref={ref} id="testimonials" className="relative py-24 md:py-32 overflow-hidden bg-slate-50">
-      <style>{`
-        @keyframes marquee-left {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        @keyframes marquee-right {
-          0% { transform: translateX(-50%); }
-          100% { transform: translateX(0); }
-        }
-      `}</style>
-
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.04),transparent_60%)]" />
-
-      <div className="relative z-10">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-center mb-16 px-6">
+    <section ref={ref} id="testimonials" className="relative py-24 md:py-32 overflow-hidden bg-emerald-50/30">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-center mb-16">
           <span className="text-emerald-600 text-xs font-semibold tracking-widest uppercase mb-4 block">KHÁCH HÀNG NÓI GÌ</span>
-          <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-slate-900 mb-4">Hàng ngàn khách hàng hài lòng</h2>
-          <p className="text-slate-500 max-w-xl mx-auto text-sm md:text-base">Những đánh giá chân thực từ khách hàng đã trải nghiệm dịch vụ vệ sinh cao cấp tại AutoWash Pro.</p>
+          <h2 className="text-4xl md:text-6xl font-extrabold tracking-tighter leading-none text-slate-900 mb-4">Hàng ngàn khách hàng hài lòng</h2>
+          <p className="text-slate-500 max-w-xl mx-auto text-sm md:text-base">Những đánh giá chân thực từ khách hàng đã trải nghiệm dịch vụ tại AutoWash Pro.</p>
         </motion.div>
 
         {loading ? (
           <div className="text-center text-slate-400 py-16">Đang tải đánh giá...</div>
         ) : (
-          <div className="space-y-6">
-            <MarqueeRow reviews={leftReviews} speed={35} reverse={false} />
-            <MarqueeRow reviews={rightReviews} speed={45} reverse={true} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {items.slice(0, 6).map((t, i) => {
+              const color = COLOR_MAP[t.color] || COLOR_MAP.emerald;
+              const initials = t.initials || t.name?.charAt(0) || 'K';
+              const bgClass = CARD_BG[i % CARD_BG.length];
+              return (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className={`${bgClass} border border-slate-200 rounded-2xl p-8 hover:shadow-lg hover:shadow-emerald-50/50 transition-all duration-500`}>
+                  <StarRating rating={t.rating || 5} />
+                  <p className="text-sm text-slate-600 leading-relaxed mt-4 mb-6 italic">"{t.content}"</p>
+                  <div className="flex items-center gap-3 border-t border-slate-200 pt-4">
+                    <div className={`w-10 h-10 rounded-full ${color.bg} flex items-center justify-center ${color.text} text-sm font-bold`}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-800">{t.name}</div>
+                      <div className="text-xs text-slate-400">{t.location}</div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </div>

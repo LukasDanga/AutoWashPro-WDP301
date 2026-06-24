@@ -116,7 +116,7 @@ export default function VideoBackground() {
         playsInline
         className="absolute inset-0 w-full h-full object-cover"
       >
-        <source src="https://assets.mixkit.co/videos/47586/47586-720.mp4" type="video/mp4" />
+        <source src="/assets/car-wash.mp4" type="video/mp4" />
       </video>
 
       <div className="absolute inset-0 bg-black/30" />

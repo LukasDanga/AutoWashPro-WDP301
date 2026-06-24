@@ -6,13 +6,13 @@ import VideoBackground from './VideoBackground';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATIC_STATS = [
-  { num: '15K+', label: 'Lượt rửa' },
-  { num: '98.7%', label: 'Hài lòng' },
-  { num: '12', label: 'Chi nhánh' },
+  { num: '2k+', label: 'LƯỢT RỬA' },
+  { num: '100.0%', label: 'HÀI LÒNG' },
+  { num: '5', label: 'CHI NHÁNH' },
 ];
 
 function formatNum(n) {
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}K+`;
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}k+`;
   return `${n}+`;
 }
 
@@ -27,9 +27,9 @@ export default function HeroSection() {
         const d = payload?.data;
         if (!d) return;
         setStats([
-          { num: formatNum(d.totalCompleted), label: 'Lượt rửa' },
-          { num: d.satisfactionRate, label: 'Hài lòng' },
-          { num: `${d.totalBranches}`, label: 'Chi nhánh' },
+          { num: formatNum(d.totalCompleted), label: 'LƯỢT RỬA' },
+          { num: d.satisfactionRate, label: 'HÀI LÒNG' },
+          { num: `${d.totalBranches}`, label: 'CHI NHÁNH' },
         ]);
       })
       .catch(() => {});
@@ -46,21 +46,18 @@ export default function HeroSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="inline-flex items-center gap-2 px-3.5 md:px-4 py-1.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-sm mb-5 md:mb-6 drop-shadow-lg">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-emerald-200 text-xs font-medium tracking-wide">
+            <div className="mb-5 md:mb-6">
+              <span className="text-emerald-400 font-semibold text-xs md:text-sm tracking-widest uppercase">
                 Hệ thống đặt lịch thông minh
               </span>
             </div>
 
-            <h1 className="text-[2rem] md:text-5xl lg:text-6xl tracking-tighter leading-none text-white mb-2 md:mb-3 drop-shadow-lg">
-              Auto
-              <span className="text-emerald-400">Wash</span>
-              <span className="text-white/40">Pro</span>
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter leading-none text-white mb-2 md:mb-3 drop-shadow-lg">
+              AutoWash Pro
             </h1>
 
             <p className="text-white/60 md:text-white/70 text-sm md:text-lg max-w-lg mx-auto leading-relaxed mb-6 md:mb-8 drop-shadow px-2">
-              Đặt lịch rửa xe trực tuyến nhanh chóng tại các chi nhánh trên toàn quốc.
+              Đặt lịch rửa xe trực tuyến nhanh chóng tại các chi nhánh trên toàn quốc. Trải nghiệm dịch vụ chăm sóc xe chuyên nghiệp nhất.
             </p>
           </motion.div>
 
@@ -88,7 +85,7 @@ export default function HeroSection() {
               className="w-full sm:w-auto px-6 md:px-7 py-2.5 md:py-3 rounded-xl border border-white/30 bg-white/10 text-white font-medium text-sm
                 hover:bg-white/20 transition-all duration-300 backdrop-blur-sm"
             >
-              Khám phá dịch vụ
+              Cuộn để khám phá
             </motion.button>
           </motion.div>
 
@@ -103,7 +100,7 @@ export default function HeroSection() {
                 <div className="text-lg md:text-2xl font-bold text-white tracking-tight drop-shadow">
                   {stat.num}
                 </div>
-                <div className="text-[11px] md:text-xs text-white/50 mt-0.5">{stat.label}</div>
+                <div className="text-[11px] md:text-xs text-white/50 mt-0.5 uppercase tracking-wider">{stat.label}</div>
               </div>
             ))}
           </motion.div>
