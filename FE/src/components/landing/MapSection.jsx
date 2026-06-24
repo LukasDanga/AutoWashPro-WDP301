@@ -1,68 +1,68 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MapPin, Phone, Clock, Search, Building2, ArrowRight, Car } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 function getCities(branches) {
-  const set = new Set(branches.map(b => b.city).filter(Boolean));
-  return ['Tất cả', ...Array.from(set)];
-}
-
-function parseSvgPaths(svgText) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(svgText, 'image/svg+xml');
-  const paths = doc.querySelectorAll('path');
-  return Array.from(paths).map(p => ({
-    id: p.getAttribute('id') || '',
-    name: p.getAttribute('name') || '',
-    d: p.getAttribute('d') || '',
-  }));
+  const map = {};
+  branches.forEach(b => {
+    if (b.city) map[b.city] = (map[b.city] || 0) + 1;
+  });
+  return Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .map(([city, count]) => ({ city, count }));
 }
 
 export default function MapSection({ onSelectBranch }) {
   const [activeCity, setActiveCity] = useState('Tất cả');
-  const [selectedId, setSelectedId] = useState(null);
-  const [provincePaths, setProvincePaths] = useState([]);
-  const [hoveredProvince, setHoveredProvince] = useState(null);
+  const [search, setSearch] = useState('');
   const [branches, setBranches] = useState([]);
-  const [cities, setCities] = useState(['Tất cả']);
+  const [loading, setLoading] = useState(true);
+  const [hoveredId, setHoveredId] = useState(null);
 
   useEffect(() => {
-    fetch('/assets/vietnam.svg')
-      .then(r => r.text())
-      .then(text => {
-        const paths = parseSvgPaths(text);
-        setProvincePaths(paths);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
+    setLoading(true);
     fetch(`${API_BASE}/branches/public`)
       .then(r => r.json())
       .then(res => {
         const list = (res?.data || []).map(b => ({
           id: b._id,
           city: b.city || '',
-          name: b.name.replace(/^AutoWash\s*/, ''),
+          name: b.name,
           address: b.address,
           phone: b.phone || '',
           hours: (b.openingTime || '07:00') + ' - ' + (b.closingTime || '18:00'),
-          cx: b.mapCoordinates?.svgCx || 0,
-          cy: b.mapCoordinates?.svgCy || 0,
-        })).filter(b => b.cx && b.cy);
+          status: b.status || 'active',
+        }));
         setBranches(list);
-        setCities(getCities(list));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const filtered = activeCity === 'Tất cả' ? branches : branches.filter((b) => b.city === activeCity);
-  const selected = branches.find((b) => b.id === selectedId);
+  const cities = useMemo(() => getCities(branches), [branches]);
+
+  const filtered = useMemo(() => {
+    let list = branches;
+    if (activeCity !== 'Tất cả') {
+      list = list.filter(b => b.city === activeCity);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(b =>
+        b.name.toLowerCase().includes(q) ||
+        b.address.toLowerCase().includes(q) ||
+        b.city.toLowerCase().includes(q) ||
+        b.phone.includes(q)
+      );
+    }
+    return list;
+  }, [branches, activeCity, search]);
 
   return (
-    <section id="map" className="relative py-24 md:py-32 bg-neutral-950 overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.03),transparent_60%)]" />
+    <section id="map" className="relative py-24 md:py-32 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.04),transparent_60%)]" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-12">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -96,33 +96,18 @@ export default function MapSection({ onSelectBranch }) {
             <div className="space-y-3">
               {filtered.map((b) => (
               <button
-                key={b.id}
-                onClick={() => setSelectedId(b.id)}
-                className={`w-full text-left p-5 rounded-xl border transition-all ${
-                  selectedId === b.id
-                    ? 'border-emerald-500/50 bg-emerald-500/10 shadow-sm'
-                    : 'border-neutral-800 bg-neutral-900/50 hover:border-neutral-700'
+                key={city}
+                onClick={() => setActiveCity(city)}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  activeCity === city
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                    : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="10" r="3" />
-                      <path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-neutral-200 text-sm">{b.name}</span>
-                      <span className="text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">{b.city}</span>
-                    </div>
-                    <p className="text-xs text-neutral-500 mt-1">{b.address}</p>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-neutral-500">
-                      <span>{b.hours}</span>
-                      <span>{b.phone}</span>
-                    </div>
-                  </div>
-                </div>
+                {city}
+                <span className={`ml-1.5 text-xs ${activeCity === city ? 'text-emerald-100' : 'text-slate-400'}`}>
+                  {count}
+                </span>
               </button>
             ))}
           </div>
@@ -255,21 +240,43 @@ export default function MapSection({ onSelectBranch }) {
                       <h4 className="font-semibold text-neutral-200">{selected.name}</h4>
                       <p className="text-xs text-neutral-500 mt-0.5">{selected.address}</p>
                     </div>
-                    <span className="text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">{selected.city}</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-neutral-500 mb-4">
-                    <span>{selected.hours}</span>
-                    <span>{selected.phone}</span>
-                  </div>
-                  <button
-                    onClick={() => onSelectBranch?.(selected)}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"
-                  >
-                    Đặt lịch tại đây
-                  </button>
-                </motion.div>
-              )}
+
+                    {/* CTA */}
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <span className="text-xs text-slate-400 font-medium">Rửa xe ngay</span>
+                      <div className="flex items-center gap-1 text-emerald-600 text-xs font-bold group-hover:gap-2 transition-all">
+                        Đặt lịch
+                        <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                    </div>
+
+                    {/* Hover accent line */}
+                    <div className={`absolute bottom-0 left-4 right-4 h-0.5 bg-emerald-500 rounded-full transition-all duration-300 ${
+                      hoveredId === branch.id ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0'
+                    }`} />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
+          </>
+        )}
+
+        {/* ── Bottom CTA ── */}
+        <div className="mt-14 text-center">
+          <div className="inline-flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+              <Car size={18} className="text-emerald-600" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-slate-800">Đã chọn được chi nhánh?</p>
+              <p className="text-xs text-slate-500">Đặt lịch rửa xe chỉ trong 3 bước đơn giản.</p>
+            </div>
+            <a
+              href="/booking"
+              className="ml-4 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-500/10 whitespace-nowrap"
+            >
+              Đặt lịch ngay
+            </a>
           </div>
         </div>
       </div>

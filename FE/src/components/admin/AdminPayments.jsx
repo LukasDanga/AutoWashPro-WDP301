@@ -428,12 +428,12 @@ export default function AdminPayments() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
+          { label: 'Doanh thu', value: formatCurrency(totalRevenue), color: 'text-emerald-600', bg: 'bg-emerald-50', icon: ArrowsClockwise },
           { label: 'Tổng giao dịch', value: total, color: 'text-blue-600', bg: 'bg-blue-50', icon: CurrencyDollar },
           { label: 'Thành công', value: paidCount, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle },
           { label: 'Chờ xử lý', value: pendingCount, color: 'text-amber-600', bg: 'bg-amber-50', icon: Clock },
           { label: 'Thất bại', value: failedCount, color: 'text-red-500', bg: 'bg-red-50', icon: XCircle },
           { label: 'Đã hoàn', value: refundedCount, color: 'text-slate-500', bg: 'bg-slate-100', icon: ArrowUUpLeft },
-          { label: 'Doanh thu', value: formatCurrency(totalRevenue), color: 'text-emerald-600', bg: 'bg-emerald-50', icon: ArrowsClockwise },
         ].map(({ label, value, color, bg, icon: Icon }) => (
           <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
