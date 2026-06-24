@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   ArrowUUpLeft,
   ArrowsClockwise,
+  Sun,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
@@ -223,6 +224,7 @@ export default function AdminPayments() {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -236,13 +238,18 @@ export default function AdminPayments() {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (methodFilter) params.set('method', methodFilter);
+      if (dateFilter === 'today') {
+        params.set('today', 'true');
+      } else if (dateFilter) {
+        params.set('date', dateFilter);
+      }
       const res = await api(`/payments?${params}`);
       if (!res.ok) throw new Error('Không thể tải danh sách thanh toán');
       const data = await res.json();
       setPayments(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [statusFilter, methodFilter]);
+  }, [statusFilter, methodFilter, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -310,7 +317,7 @@ export default function AdminPayments() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
           { label: 'Tổng giao dịch', value: total, color: 'text-blue-600', bg: 'bg-blue-50', icon: CurrencyDollar },
           { label: 'Thành công', value: paidCount, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle },
@@ -356,6 +363,20 @@ export default function AdminPayments() {
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400">
           {METHOD_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
+        <div className="flex items-center gap-1">
+          <button onClick={() => onFilter(setDateFilter, dateFilter === 'today' ? '' : 'today')}
+            className={`flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+              dateFilter === 'today'
+                ? 'border-amber-300 bg-amber-50 text-amber-700'
+                : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+            }`}>
+            <Sun size={13} /> Hôm nay
+          </button>
+          <input type="date" value={dateFilter === 'today' ? '' : dateFilter}
+            onChange={e => onFilter(setDateFilter, e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          />
+        </div>
         <button onClick={load} disabled={loading}
           className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới

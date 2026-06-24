@@ -289,6 +289,20 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
     if (filters.userId) query.userId = filters.userId;
     if (filters.status) query.status = filters.status;
     if (filters.method) query.method = filters.method;
+    if (filters.today === 'true' || filters.today === true) {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (filters.date) {
+      const day = new Date(filters.date);
+      const start = new Date(day);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(day);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
   }
   return Payment.find(query)
     .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
