@@ -13,7 +13,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const fetchVouchers = async () => {
     setLoading(true);
     try {
-      const resTpl = await fetch(`${apiBase}/vouchers`, { headers: { Authorization: `Bearer ${token}` } });
+      const resTpl = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${token}` } });
       const dataTpl = await resTpl.json();
       const allVouchers = dataTpl.data || [];
       const templates = allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0);

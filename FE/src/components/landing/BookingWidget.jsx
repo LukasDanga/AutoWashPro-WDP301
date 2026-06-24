@@ -551,14 +551,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   };
 
   const groupedSlots = useMemo(() => {
-    const list = availableSlots.length > 0 
-      ? availableSlots 
-      : ['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'].map(t => ({ startTime: t, available: true }));
+    if (availableSlots.length === 0) return { morning: [], afternoon: [] };
     
     const morning = [];
     const afternoon = [];
     
-    list.forEach(slot => {
+    availableSlots.forEach(slot => {
       const hour = parseInt((slot.startTime || '').split(':')[0], 10);
       if (hour < 12) {
         morning.push(slot);
