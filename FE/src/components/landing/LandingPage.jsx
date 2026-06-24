@@ -17,7 +17,7 @@ export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiB
       <HowItWorksSection />
       <TestimonialsSection />
       <MapSection onSelectBranch={(branch) => navigate(`/booking?branchId=${branch.id}`)} />
-      <CTASection onOpenAuth={onOpenAuth} user={user} />
+      <CTASection />
       <Footer />
     </div>
   );

@@ -65,35 +65,36 @@ export default function MapSection({ onSelectBranch }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.03),transparent_60%)]" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-12">
-        <div className="max-w-xl mb-12">
-          <span className="text-emerald-400 text-sm font-medium tracking-widest uppercase mb-4 block">
-            Hệ thống chi nhánh
-          </span>
-          <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-white">
-            Tìm chi nhánh gần bạn
-          </h2>
-          <p className="text-neutral-400 mt-4 leading-relaxed"> {branches.length} chi nhánh trên toàn quốc. Chọn chi nhánh và đặt lịch ngay.</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-8">
-          {cities.map((c) => (
-            <button
-              key={c}
-              onClick={() => { setActiveCity(c); setSelectedId(null); }}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                activeCity === c
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-2 space-y-3 max-h-[550px] overflow-y-auto pr-2">
-            {filtered.map((b) => (
+          <div className="lg:col-span-2">
+            <div className="max-w-xl mb-8">
+              <span className="text-emerald-400 text-sm font-medium tracking-widest uppercase mb-4 block">
+                Hệ thống chi nhánh
+              </span>
+              <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-white">
+                Tìm chi nhánh gần bạn
+              </h2>
+              <p className="text-neutral-400 mt-4 leading-relaxed"> {branches.length} chi nhánh trên toàn quốc. Chọn chi nhánh và đặt lịch ngay.</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-6">
+              {cities.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => { setActiveCity(c); setSelectedId(null); }}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    activeCity === c
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              {filtered.map((b) => (
               <button
                 key={b.id}
                 onClick={() => setSelectedId(b.id)}
@@ -125,14 +126,15 @@ export default function MapSection({ onSelectBranch }) {
               </button>
             ))}
           </div>
+          </div>
 
           <div className="lg:col-span-3">
-            <div className="relative w-full rounded-2xl border border-neutral-800 bg-neutral-950 overflow-hidden backdrop-blur-sm"
+            <div className="relative h-full rounded-2xl border border-neutral-800 bg-neutral-950 overflow-hidden backdrop-blur-sm"
               style={{
                 boxShadow: 'inset 0 0 80px rgba(16,185,129,0.04), 0 0 60px rgba(16,185,129,0.02)',
               }}
             >
-              <svg viewBox="0 0 812 872" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+              <svg viewBox="0 0 812 872" className="w-full h-full" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
                     <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1" />
