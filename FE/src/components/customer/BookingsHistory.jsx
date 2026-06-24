@@ -66,9 +66,23 @@ export default function BookingsHistory({ apiBase, token }) {
   const [hoverStar, setHoverStar] = useState(0);
   const reviewTextRef = useRef(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [rebookLoading, setRebookLoading] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState('');
+
+  // Rebook modal
+  const [showRebookModal, setShowRebookModal] = useState(false);
+  const [rebookTarget, setRebookTarget] = useState(null);
+  const [rebookDate, setRebookDate] = useState('');
+  const [rebookTime, setRebookTime] = useState('');
+  const [rebookError, setRebookError] = useState('');
+
+  // Cancel confirm modal
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelError, setCancelError] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -211,26 +225,71 @@ export default function BookingsHistory({ apiBase, token }) {
   }
 
   async function handleCancel(id) {
-    if (!window.confirm('Bạn có chắc muốn hủy đơn này?')) return;
+    setCancelTarget(id);
+    setCancelError('');
+    setShowCancelConfirm(true);
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
     setCancelLoading(true);
+    setCancelError('');
     try {
-      const res = await fetch(`${apiBase}/bookings/${id}/cancel`, {
+      const res = await fetch(`${apiBase}/bookings/${cancelTarget}/cancel`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Không thể hủy đơn');
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể hủy đơn'); }
       setDetailBooking((prev) => ({ ...prev, status: 'cancelled' }));
-      setBookings((prev) => prev.map((b) => b._id === id ? { ...b, status: 'cancelled' } : b));
+      setBookings((prev) => prev.map((b) => b._id === cancelTarget ? { ...b, status: 'cancelled' } : b));
+      setShowCancelConfirm(false);
+      setCancelTarget(null);
     } catch (e) {
-      alert(e.message);
+      setCancelError(e.message);
     } finally {
       setCancelLoading(false);
     }
   }
 
+  async function handleRebook(b) {
+    setRebookTarget(b);
+    setRebookDate('');
+    setRebookTime('');
+    setRebookError('');
+    setShowRebookModal(true);
+  }
+
+  async function submitRebook() {
+    if (!rebookTarget) return;
+    setRebookError('');
+    if (!rebookDate) { setRebookError('Vui lòng chọn ngày'); return; }
+    if (!rebookTime) { setRebookError('Vui lòng chọn giờ'); return; }
+    const selected = new Date(rebookDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selected < today) { setRebookError('Ngày phải từ hôm nay trở đi'); return; }
+    setRebookLoading(true);
+    try {
+      const bId = rebookTarget._id || rebookTarget.id;
+      const res = await fetch(`${apiBase}/bookings/${bId}/rebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
+      setShowRebookModal(false);
+      setRebookTarget(null);
+      // re-fetch
+      const res2 = await fetch(`${apiBase}/bookings/my`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res2.ok) { const payload = await res2.json(); setBookings(Array.isArray(payload?.data || payload) ? (payload?.data || payload) : []); }
+    } catch (e) { setRebookError(e.message); }
+    finally { setRebookLoading(false); }
+  }
+
   async function handleShowQR(id) {
     setQrLoading(true);
     setQrUrl('');
+    setQrError('');
     setShowQR(true);
     try {
       const res = await fetch(`${apiBase}/bookings/${id}/qr`, {
@@ -240,8 +299,7 @@ export default function BookingsHistory({ apiBase, token }) {
       const payload = await res.json();
       setQrUrl(payload?.data || payload?.url || '');
     } catch (e) {
-      alert(e.message);
-      setShowQR(false);
+      setQrError(e.message);
     } finally {
       setQrLoading(false);
     }
@@ -561,16 +619,26 @@ export default function BookingsHistory({ apiBase, token }) {
                   </button>
                 </div>
               )}
-              {detailBooking.status === 'completed' && (
-                <button onClick={openReviewForm} style={{
-                  width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
-                  background: detailBooking.rating ? '#fffbeb' : '#f59e0b',
-                  color: detailBooking.rating ? '#b45309' : '#fff',
-                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                  border: detailBooking.rating ? '1px solid #fde68a' : 'none',
-                }}>
-                  {detailBooking.rating ? '✏️ Sửa đánh giá' : '⭐ Đánh giá dịch vụ'}
-                </button>
+              {(detailBooking.status === 'completed' || detailBooking.status === 'cancelled') && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => handleRebook(detailBooking)} disabled={rebookLoading} style={{
+                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #a7f3d0',
+                    background: '#ecfdf5', color: '#059669', fontSize: 13, fontWeight: 600, cursor: rebookLoading ? 'not-allowed' : 'pointer', opacity: rebookLoading ? 0.6 : 1,
+                  }}>
+                    {rebookLoading ? 'Đang đặt lại...' : '🔄 Đặt lại'}
+                  </button>
+                  {detailBooking.status === 'completed' && (
+                    <button onClick={openReviewForm} style={{
+                      flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
+                      background: detailBooking.rating ? '#fffbeb' : '#f59e0b',
+                      color: detailBooking.rating ? '#b45309' : '#fff',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: detailBooking.rating ? '1px solid #fde68a' : 'none',
+                    }}>
+                      {detailBooking.rating ? '✏️ Sửa đánh giá' : '⭐ Đánh giá'}
+                    </button>
+                  )}
+                </div>
               )}
               <button onClick={() => setDetailBooking(null)} style={{
                 width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
@@ -718,13 +786,145 @@ export default function BookingsHistory({ apiBase, token }) {
                     fontSize: 13, fontWeight: 600, textDecoration: 'none',
                   }}>🔗 Mở trong tab mới</a>
                 </div>
+              ) : qrError ? (
+                <div style={{ padding: '60px 0', color: '#ef4444', fontSize: 13 }}>{qrError}</div>
               ) : (
-                <div style={{ padding: '60px 0', color: '#ef4444' }}>Không thể tạo mã QR</div>
+                <div style={{ padding: '60px 0', color: '#94a3b8' }}>Không có dữ liệu QR</div>
               )}
               <button onClick={() => setShowQR(false)} style={{
                 width: '100%', marginTop: 20, padding: '12px 0', borderRadius: 12, border: 'none',
                 background: '#0f172a', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
               }}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ CONFIRM CANCEL MODAL ═══ */}
+      {showCancelConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
+        }} onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); } }}>
+          <div style={{
+            width: '100%', maxWidth: 380, background: '#fff', borderRadius: 20, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🗑</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>Xác nhận hủy đơn</div>
+              <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, margin: 0 }}>
+                Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.
+              </p>
+              {cancelError && (
+                <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>{cancelError}</div>
+              )}
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                <button
+                  onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); }}
+                  disabled={cancelLoading}
+                  style={{
+                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
+                    background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >Không, giữ lại</button>
+                <button
+                  onClick={confirmCancel}
+                  disabled={cancelLoading}
+                  style={{
+                    flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
+                    background: cancelLoading ? '#fca5a5' : '#ef4444', color: '#fff',
+                    fontSize: 14, fontWeight: 700, cursor: cancelLoading ? 'not-allowed' : 'pointer',
+                    opacity: cancelLoading ? 0.7 : 1,
+                  }}
+                >{cancelLoading ? 'Đang hủy...' : 'Xác nhận hủy'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ REBOOK MODAL ═══ */}
+      {showRebookModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
+        }} onClick={() => { if (!rebookLoading) { setShowRebookModal(false); setRebookTarget(null); setRebookError(''); } }}>
+          <div style={{
+            width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Đặt lại lịch</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                {rebookTarget?.packageName || rebookTarget?.packageId?.name || ''}
+              </div>
+            </div>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                  Ngày mới <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input type="date"
+                  value={rebookDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setRebookDate(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                    fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit',
+                    background: '#f8fafc', boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = '#fff'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
+                />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                  Giờ mới <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input type="time"
+                  value={rebookTime}
+                  onChange={(e) => setRebookTime(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                    fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit',
+                    background: '#f8fafc', boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = '#fff'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
+                />
+              </div>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 4px 0' }}>
+                💡 Nhập ngày và giờ bạn muốn đặt lại. Ngày phải từ hôm nay trở đi.
+              </p>
+              {rebookError && (
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13, marginTop: 8 }}>
+                  {rebookError}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '0 24px 20px', display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookError(''); }}
+                disabled={rebookLoading}
+                style={{
+                  flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
+                  background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >Hủy</button>
+              <button
+                onClick={submitRebook}
+                disabled={rebookLoading}
+                style={{
+                  flex: 2, padding: '12px 0', borderRadius: 12, border: 'none',
+                  background: rebookLoading ? '#6ee7b7' : '#10b981', color: '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: rebookLoading ? 'not-allowed' : 'pointer',
+                  opacity: rebookLoading ? 0.7 : 1,
+                }}
+              >{rebookLoading ? 'Đang đặt lại...' : '🔄 Xác nhận đặt lại'}</button>
             </div>
           </div>
         </div>
@@ -764,6 +964,19 @@ export default function BookingsHistory({ apiBase, token }) {
                     <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
                   </div>
+                  {(b.status === 'completed' || b.status === 'cancelled') && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                      <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
+                        disabled={rebookLoading}
+                        style={{
+                          padding: '6px 14px', borderRadius: 8, border: '1px solid #a7f3d0',
+                          background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 600,
+                          cursor: rebookLoading ? 'not-allowed' : 'pointer', opacity: rebookLoading ? 0.6 : 1,
+                      }}>
+                        {rebookLoading ? '...' : '🔄 Đặt lại'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

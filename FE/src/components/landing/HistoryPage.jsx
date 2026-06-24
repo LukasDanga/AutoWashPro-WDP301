@@ -96,6 +96,22 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [rebookLoading, setRebookLoading] = useState(false);
 
+  // Cancel confirm modal
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelConfirmError, setCancelConfirmError] = useState('');
+
+  // Cancel recurring confirm modal
+  const [showCancelRecurringConfirm, setShowCancelRecurringConfirm] = useState(false);
+  const [cancelRecurringTarget, setCancelRecurringTarget] = useState(null);
+
+  // Rebook modal
+  const [showRebookModal, setShowRebookModal] = useState(false);
+  const [rebookTarget, setRebookTarget] = useState(null);
+  const [rebookDate, setRebookDate] = useState('');
+  const [rebookTime, setRebookTime] = useState('');
+  const [rebookFormError, setRebookFormError] = useState('');
+
   const debounceRef = useRef(null);
 
   function showToastMsg(message, type = 'success') {
@@ -163,10 +179,17 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   }
 
   async function handleCancel(b) {
-    if (!window.confirm('Bạn có chắc chắn muốn hủy đơn này?')) return;
+    setCancelTarget(b);
+    setCancelConfirmError('');
+    setShowCancelConfirm(true);
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
     setCancelLoading(true);
+    setCancelConfirmError('');
     try {
-      const bId = b._id || b.id;
+      const bId = cancelTarget._id || cancelTarget.id;
       const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -174,8 +197,9 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
       showToastMsg('Đã hủy đơn thành công');
+      setShowCancelConfirm(false); setCancelTarget(null);
       doFetch(keyword, statusFilter, dateFrom, dateTo, page);
-    } catch (e) { showToastMsg(e.message, 'error'); }
+    } catch (e) { setCancelConfirmError(e.message); }
     finally { setCancelLoading(false); }
   }
 
@@ -194,36 +218,55 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   }
 
   async function handleRebook(b) {
-    const dateStr = prompt('Nhập ngày mới (YYYY-MM-DD):');
-    if (!dateStr) return;
-    const timeStr = prompt('Nhập giờ mới (HH:mm), ví dụ 09:00:');
-    if (!timeStr) return;
+    setRebookTarget(b);
+    setRebookDate('');
+    setRebookTime('');
+    setRebookFormError('');
+    setShowRebookModal(true);
+  }
+
+  async function submitRebook() {
+    if (!rebookTarget) return;
+    setRebookFormError('');
+    if (!rebookDate) { setRebookFormError('Vui lòng chọn ngày'); return; }
+    if (!rebookTime) { setRebookFormError('Vui lòng chọn giờ'); return; }
+    const selected = new Date(rebookDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selected < today) { setRebookFormError('Ngày phải từ hôm nay trở đi'); return; }
     setRebookLoading(true);
     try {
-      const bId = b._id || b.id;
+      const bId = rebookTarget._id || rebookTarget.id;
       const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingDate: dateStr, startTime: timeStr }),
+        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
       showToastMsg('Đặt lại thành công! Vui lòng kiểm tra lịch mới.');
+      setShowRebookModal(false); setRebookTarget(null);
       doFetch(keyword, statusFilter, dateFrom, dateTo, page);
-    } catch (e) { showToastMsg(e.message, 'error'); }
+    } catch (e) { setRebookFormError(e.message); }
     finally { setRebookLoading(false); }
   }
 
   async function handleCancelRecurring(b) {
     if (!b.recurringGroupId) return;
-    if (!window.confirm('Hủy toàn bộ lịch định kỳ? Tất cả các buổi trong loạt này sẽ bị hủy.')) return;
+    setCancelRecurringTarget(b);
+    setShowCancelRecurringConfirm(true);
+  }
+
+  async function confirmCancelRecurring() {
+    if (!cancelRecurringTarget?.recurringGroupId) return;
     setCancelLoading(true);
     try {
-      const res = await fetch(`${apiBase || API_BASE}/bookings/recurring/${b.recurringGroupId}/cancel`, {
+      const res = await fetch(`${apiBase || API_BASE}/bookings/recurring/${cancelRecurringTarget.recurringGroupId}/cancel`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
       showToastMsg('Đã hủy toàn bộ lịch định kỳ');
+      setShowCancelRecurringConfirm(false); setCancelRecurringTarget(null);
       doFetch(keyword, statusFilter, dateFrom, dateTo, page);
     } catch (e) { showToastMsg(e.message, 'error'); }
     finally { setCancelLoading(false); }
@@ -753,6 +796,100 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── CANCEL CONFIRM MODAL ── */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); } }}>
+          <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-4xl mb-4">🗑</div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận hủy đơn</h3>
+            <p className="text-sm text-slate-500 mb-6">Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.</p>
+            {cancelConfirmError && (
+              <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{cancelConfirmError}</div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); }}
+                disabled={cancelLoading}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Không, giữ lại
+              </button>
+              <button onClick={confirmCancel} disabled={cancelLoading}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-400 transition-colors disabled:opacity-50">
+                {cancelLoading ? 'Đang hủy...' : 'Xác nhận hủy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CANCEL RECURRING CONFIRM MODAL ── */}
+      {showCancelRecurringConfirm && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => { if (!cancelLoading) { setShowCancelRecurringConfirm(false); setCancelRecurringTarget(null); } }}>
+          <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-4xl mb-4">🔄</div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Hủy lịch định kỳ</h3>
+            <p className="text-sm text-slate-500 mb-6">Tất cả các buổi trong loạt định kỳ này sẽ bị hủy. Hành động này không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button onClick={() => { setShowCancelRecurringConfirm(false); setCancelRecurringTarget(null); }}
+                disabled={cancelLoading}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Giữ lại
+              </button>
+              <button onClick={confirmCancelRecurring} disabled={cancelLoading}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-400 transition-colors disabled:opacity-50">
+                {cancelLoading ? 'Đang hủy...' : 'Hủy tất cả'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── REBOOK MODAL ── */}
+      {showRebookModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => { if (!rebookLoading) { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); } }}>
+          <div className="bg-white rounded-[1.5rem] w-full max-w-md p-8 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Đặt lại lịch</h3>
+            <p className="text-sm text-slate-400 mb-6">{rebookTarget?.packageId?.name || rebookTarget?.packageName || ''}</p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1.5">Ngày mới <span className="text-red-500">*</span></label>
+                <input type="date"
+                  value={rebookDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={e => setRebookDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1.5">Giờ mới <span className="text-red-500">*</span></label>
+                <input type="time"
+                  value={rebookTime}
+                  onChange={e => setRebookTime(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400">💡 Chọn ngày và giờ bạn muốn đặt lại. Ngày phải từ hôm nay trở đi.</p>
+              {rebookFormError && (
+                <div className="px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{rebookFormError}</div>
+              )}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); }}
+                disabled={rebookLoading}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Hủy
+              </button>
+              <button onClick={submitRebook} disabled={rebookLoading}
+                className="flex-[2] px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50">
+                {rebookLoading ? 'Đang đặt lại...' : 'Xác nhận đặt lại'}
+              </button>
+            </div>
           </div>
         </div>
       )}
