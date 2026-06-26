@@ -1,32 +1,19 @@
 import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Phone,
   LockKey,
   User,
   Envelope,
   Eye,
   EyeSlash,
+  ArrowRight,
+  Briefcase,
 } from '@phosphor-icons/react';
-import { Input } from '@/components/ui/input';
 import Label from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 const ADMIN_QUICK_LOGIN = { identifier: 'admin@washpro.vn', password: 'Admin123!' };
 const MANAGER_QUICK_LOGIN = { identifier: 'manager@washpro.vn', password: 'Manager123!' };
-
-function BottomGradient() {
-  return (
-    <>
-      <span className="absolute inset-x-0 -bottom-px block h-px w-full bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-0 transition duration-500 group-hover/btn:opacity-100" />
-      <span className="absolute inset-x-10 -bottom-px mx-auto block h-px w-1/2 bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-0 blur-sm transition duration-500 group-hover/btn:opacity-100" />
-    </>
-  );
-}
-
-function LabelInputContainer({ children, className }) {
-  return <div className={cn('flex w-full flex-col space-y-2', className)}>{children}</div>;
-}
 
 export default function AuthScreen({ authLoading, onLogin, onRegister, onBack }) {
   const location = useLocation();
@@ -76,85 +63,126 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-950">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-neutral-800 border-t-emerald-500" />
-          <p className="text-sm font-semibold text-neutral-400">Đang kiểm tra phiên đăng nhập...</p>
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
+          <p className="text-sm font-semibold text-slate-500">Đang kiểm tra phiên đăng nhập...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="hidden w-1/2 flex-col justify-between p-12 lg:flex relative overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-emerald-600/20 blur-[120px]" />
-        <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-emerald-400/10 blur-[120px]" />
+    <div className="flex min-h-screen bg-slate-50 text-slate-800 font-sans">
+      {/* Left Split-Screen Panel (Desktop only) */}
+      <div className="hidden w-1/2 flex-col justify-between p-16 bg-[#fafbfc] relative overflow-hidden lg:flex">
+        {/* Soft background glow decoration */}
+        <div className="absolute -left-20 -top-20 h-[400px] w-[400px] rounded-full bg-emerald-500/5 blur-[100px] pointer-events-none" />
+        <div className="absolute -right-20 -bottom-20 h-[400px] w-[400px] rounded-full bg-emerald-500/5 blur-[100px] pointer-events-none" />
 
+        {/* Logo and App Title */}
         <div className="relative z-10 flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-3xl shadow-lg shadow-emerald-500/30">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white text-2xl shadow-lg shadow-emerald-500/10">
             🚗
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-widest text-neutral-100">AUTOWASH PRO</h1>
-            <span className="inline-block mt-1 rounded-full bg-emerald-500/20 px-3 py-0.5 border border-emerald-500/30 text-[10px] font-bold tracking-widest text-emerald-300">
+            <h1 className="text-lg font-black tracking-widest text-slate-800 uppercase">AUTOWASH PRO</h1>
+            <span className="inline-block mt-0.5 rounded-full bg-emerald-50 text-emerald-600 px-2.5 py-0.5 border border-emerald-100/50 text-[9px] font-extrabold tracking-widest">
               CLIENT HUB
             </span>
           </div>
         </div>
 
-        <div className="relative z-10 max-w-lg">
-          <h2 className="text-5xl font-extrabold leading-tight tracking-tight">
-            Dịch vụ chăm sóc xe <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">thế hệ mới.</span>
+        {/* Hero message matching the mockup */}
+        <div className="relative z-10 max-w-lg my-auto">
+          <h2 className="text-4xl md:text-5xl lg:text-[54px] font-black leading-[1.1] tracking-tight text-slate-800">
+            Dịch vụ chăm sóc <br />
+            xe <br />
+            <span className="text-emerald-600">đẳng cấp mới.</span>
           </h2>
-          <p className="mt-6 text-lg text-neutral-500 leading-relaxed">
-            Trải nghiệm đặt lịch nhanh chóng, quản lý phương tiện thông minh và nhận các ưu đãi độc quyền dành riêng cho bạn.
+          <p className="mt-6 text-sm md:text-base text-slate-500 leading-relaxed max-w-md">
+            Hệ thống quản lý thông minh giúp bạn đặt lịch và theo dõi quá trình chăm sóc xế yêu dễ dàng hơn bao giờ hết.
           </p>
+
+          {/* Stats matching the mockup */}
+          <div className="flex items-center mt-12 pt-8 border-t border-slate-100">
+            <div>
+              <div className="text-2xl font-black text-emerald-600">5,000+</div>
+              <div className="text-xs text-slate-400 font-bold mt-1">Khách hàng tin tưởng</div>
+            </div>
+            <div className="h-10 w-px bg-slate-200/60 mx-8" />
+            <div>
+              <div className="text-2xl font-black text-emerald-600">15+</div>
+              <div className="text-xs text-slate-400 font-bold mt-1">Trung tâm toàn quốc</div>
+            </div>
+          </div>
         </div>
 
-        <div className="relative z-10 text-sm font-medium text-neutral-700">
+        {/* Footer info */}
+        <div className="relative z-10 text-xs font-semibold text-slate-400">
           &copy; 2026 AutoWash Pro. All rights reserved.
         </div>
       </div>
 
-      <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-20 xl:px-32 relative">
+      {/* Right Form Panel */}
+      <div className="flex w-full flex-col justify-center px-6 py-12 bg-gradient-to-tr from-slate-200/50 via-slate-100/80 to-slate-200/30 lg:w-1/2 lg:px-20 xl:px-32 relative">
         <div className="mx-auto w-full max-w-md">
-          <div className="mb-10 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-xl shadow-md">
+          {/* Mobile Logo */}
+          <div className="mb-10 flex items-center gap-4 lg:hidden">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white text-2xl shadow-lg">
               🚗
             </div>
-            <h1 className="text-xl font-bold tracking-widest text-neutral-100">AUTOWASH PRO</h1>
+            <div>
+              <h1 className="text-lg font-black tracking-widest text-slate-800 uppercase">AUTOWASH PRO</h1>
+              <span className="inline-block mt-0.5 rounded-full bg-emerald-50 text-emerald-600 px-2.5 py-0.5 border border-emerald-100/50 text-[9px] font-extrabold tracking-widest">
+                CLIENT HUB
+              </span>
+            </div>
           </div>
 
           {onBack && (
-            <button onClick={onBack} className="mb-6 flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-300 transition-colors">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
+            <button
+              onClick={onBack}
+              className="mb-6 flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Quay lại
             </button>
           )}
 
-          <div className="shadow-input mx-auto w-full max-w-md rounded-2xl bg-neutral-900/50 border border-neutral-800 p-6 md:p-8 backdrop-blur-sm">
-            <h2 className="text-xl font-bold text-neutral-100">
-              {authMode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản'}
+          {/* Floating White Card Form */}
+          <div className="mx-auto w-full max-w-md rounded-[40px] bg-white p-8 md:p-10 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.04)] border border-slate-100/60 backdrop-blur-sm">
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">
+              Chào mừng
             </h2>
-            <p className="mt-2 max-w-sm text-sm text-neutral-400">
-              {authMode === 'login' ? 'Đăng nhập để tiếp tục đặt lịch.' : 'Đăng ký nhanh để trải nghiệm dịch vụ.'}
+            <p className="mt-2 text-xs md:text-sm text-slate-400">
+              {authMode === 'login' ? 'Vui lòng đăng nhập để tiếp tục.' : 'Tạo tài khoản mới để bắt đầu.'}
             </p>
 
-            <div className="my-6 flex rounded-lg bg-neutral-800/50 p-1">
+            {/* Toggle Tabs */}
+            <div className="my-8 flex rounded-2xl bg-slate-100/80 p-1.5">
               <button
                 type="button"
-                className={cn('flex-1 rounded-lg py-2 text-sm font-semibold transition-all', authMode === 'login' ? 'bg-neutral-700 text-neutral-100 shadow-sm' : 'text-neutral-400 hover:text-neutral-200')}
+                className={cn(
+                  'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
+                  authMode === 'login'
+                    ? 'bg-white text-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+                    : 'text-slate-400 hover:text-slate-600'
+                )}
                 onClick={() => { setAuthMode('login'); setAuthError(''); setStatusMessage(''); }}
               >
                 Đăng nhập
               </button>
               <button
                 type="button"
-                className={cn('flex-1 rounded-lg py-2 text-sm font-semibold transition-all', authMode === 'register' ? 'bg-neutral-700 text-neutral-100 shadow-sm' : 'text-neutral-400 hover:text-neutral-200')}
+                className={cn(
+                  'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
+                  authMode === 'register'
+                    ? 'bg-white text-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+                    : 'text-slate-400 hover:text-slate-600'
+                )}
                 onClick={() => { setAuthMode('register'); setAuthError(''); setStatusMessage(''); }}
               >
                 Đăng ký
@@ -162,117 +190,184 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
             </div>
 
             {location.state?.adminAuthError && (
-              <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{location.state.adminAuthError}</div>
+              <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-555 font-semibold">{location.state.adminAuthError}</div>
             )}
             {authError && (
-              <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{authError}</div>
+              <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-500 font-semibold">{authError}</div>
             )}
             {statusMessage && (
-              <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">{statusMessage}</div>
+              <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-xs md:text-sm text-emerald-600 font-semibold">{statusMessage}</div>
             )}
 
             {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="space-y-5">
-                <LabelInputContainer>
-                  <Label htmlFor="login-phone">Tài khoản</Label>
-                  <Input
-                    id="login-phone"
-                    placeholder="Số điện thoại hoặc Email"
-                    type="text"
-                    value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
-                  />
-                </LabelInputContainer>
-                <LabelInputContainer>
-                  <Label htmlFor="login-pass">Mật khẩu</Label>
-                  <div className="relative">
-                    <Input
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="login-phone" className="text-xs font-bold text-slate-600">
+                    Email hoặc Số điện thoại
+                  </Label>
+                  <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                    <div className="w-6 h-6 rounded-full bg-slate-200/50 flex items-center justify-center text-slate-500 text-xs font-bold mr-3 select-none">
+                      @
+                    </div>
+                    <input
+                      id="login-phone"
+                      type="text"
+                      placeholder="manager@gmail.com"
+                      value={loginPhone}
+                      onChange={(e) => setLoginPhone(e.target.value)}
+                      className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="login-pass" className="text-xs font-bold text-slate-600">
+                    Mật khẩu
+                  </Label>
+                  <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                    <LockKey size={20} className="text-slate-400 mr-3" />
+                    <input
                       id="login-pass"
-                      placeholder="••••••••"
                       type={showLoginPass ? 'text' : 'password'}
+                      placeholder="••••••"
                       value={loginPass}
                       onChange={(e) => setLoginPass(e.target.value)}
+                      className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => setShowLoginPass(!showLoginPass)}
-                      className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-emerald-400 transition-colors z-10"
+                      className="text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none ml-2"
                     >
-                      {showLoginPass ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      {showLoginPass ? <EyeSlash size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
-                </LabelInputContainer>
+                </div>
+
+                <div className="flex items-center justify-between mt-4">
+                  <label className="flex items-center gap-2 text-slate-500 text-xs md:text-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="rounded-md border-slate-200 text-emerald-600 focus:ring-emerald-500/30 w-4 h-4 bg-slate-50"
+                    />
+                    <span className="font-semibold text-slate-500">Ghi nhớ tôi</span>
+                  </label>
+                  <a
+                    href="#"
+                    onClick={(e) => e.preventDefault()}
+                    className="text-xs md:text-sm font-bold text-emerald-600 hover:text-emerald-500 transition-colors"
+                  >
+                    Quên mật khẩu?
+                  </a>
+                </div>
+
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="group/btn relative block h-10 w-full rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 font-medium text-white shadow-[0px_1px_0px_0px_#ffffff20_inset,0px_-1px_0px_0px_#ffffff20_inset] hover:from-emerald-500 hover:to-emerald-700 transition-all disabled:opacity-60"
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3.5 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
                 >
-                  {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP →'}
-                  <BottomGradient />
+                  {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'TIẾP TỤC'}
+                  {!loginLoading && <ArrowRight size={18} weight="bold" />}
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleRegister} className="space-y-5">
-                <LabelInputContainer>
-                  <Label htmlFor="reg-email">Email</Label>
-                  <Input
-                    id="reg-email"
-                    placeholder="khachhang@mail.com"
-                    type="email"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                  />
-                </LabelInputContainer>
-                <LabelInputContainer>
-                  <Label htmlFor="reg-pass">Mật khẩu</Label>
-                  <div className="relative">
-                    <Input
+              <form onSubmit={handleRegister} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="reg-email" className="text-xs font-bold text-slate-600">
+                    Email
+                  </Label>
+                  <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                    <div className="w-6 h-6 rounded-full bg-slate-200/50 flex items-center justify-center text-slate-500 text-xs font-bold mr-3 select-none">
+                      @
+                    </div>
+                    <input
+                      id="reg-email"
+                      type="email"
+                      placeholder="khachhang@mail.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="reg-pass" className="text-xs font-bold text-slate-600">
+                    Mật khẩu
+                  </Label>
+                  <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                    <LockKey size={20} className="text-slate-400 mr-3" />
+                    <input
                       id="reg-pass"
-                      placeholder="••••••••"
                       type={showRegPass ? 'text' : 'password'}
+                      placeholder="••••••"
                       value={regPass}
                       onChange={(e) => setRegPass(e.target.value)}
+                      className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => setShowRegPass(!showRegPass)}
-                      className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-emerald-400 transition-colors z-10"
+                      className="text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none ml-2"
                     >
-                      {showRegPass ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      {showRegPass ? <EyeSlash size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
-                </LabelInputContainer>
+                </div>
+
                 <button
                   type="submit"
                   disabled={registerLoading}
-                  className="group/btn relative block h-10 w-full rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 font-medium text-white shadow-[0px_1px_0px_0px_#ffffff20_inset,0px_-1px_0px_0px_#ffffff20_inset] hover:from-emerald-500 hover:to-emerald-700 transition-all disabled:opacity-60"
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3.5 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
                 >
-                  {registerLoading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG KÝ →'}
-                  <BottomGradient />
+                  {registerLoading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG KÝ'}
+                  {!registerLoading && <ArrowRight size={18} weight="bold" />}
                 </button>
               </form>
             )}
 
-            <div className="my-6 h-[1px] w-full bg-gradient-to-r from-transparent via-neutral-700 to-transparent" />
+            {/* Quick Login Section */}
+            <div className="relative my-8 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-100" />
+              </div>
+              <span className="relative bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Đăng nhập nhanh với
+              </span>
+            </div>
 
-            <div className="space-y-3">
-              <p className="text-xs text-neutral-500 text-center">Đăng nhập nhanh</p>
+            <div className="flex gap-4">
               <button
+                type="button"
                 onClick={handleQuickAdminLogin}
                 disabled={loginLoading}
-                className="group/btn shadow-input relative flex h-10 w-full items-center justify-center space-x-2 rounded-md bg-neutral-800 px-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-60"
+                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3.5 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
               >
-                <span>Đăng nhập Admin</span>
-                <BottomGradient />
+                <User size={18} className="text-slate-400" />
+                <span>Admin</span>
               </button>
               <button
+                type="button"
                 onClick={handleQuickManagerLogin}
                 disabled={loginLoading}
-                className="group/btn shadow-input relative flex h-10 w-full items-center justify-center space-x-2 rounded-md bg-neutral-800 px-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-60"
+                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3.5 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
               >
-                <span>Đăng nhập Manager</span>
-                <BottomGradient />
+                <Briefcase size={18} className="text-slate-400" />
+                <span>Manager</span>
               </button>
+            </div>
+
+            {/* Footer links */}
+            <div className="flex items-center justify-center gap-8 mt-10 text-xs font-bold text-slate-400">
+              <a href="#" onClick={(e) => e.preventDefault()} className="hover:text-slate-600 transition-colors">
+                Trợ giúp
+              </a>
+              <a href="#" onClick={(e) => e.preventDefault()} className="hover:text-slate-600 transition-colors">
+                Điều khoản
+              </a>
+              <a href="#" onClick={(e) => e.preventDefault()} className="hover:text-slate-600 transition-colors">
+                Bảo mật
+              </a>
             </div>
           </div>
         </div>

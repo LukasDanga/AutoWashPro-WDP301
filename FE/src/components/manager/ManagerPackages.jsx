@@ -34,20 +34,44 @@ export default function ManagerPackages({ user }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
+  const [branchId, setBranchId] = useState(user?.branchId || null);
 
-  const branchId = user?.branchId;
-
-  async function loadPackages() {
+  async function loadPackages(bId) {
     setLoading(true);
     try {
-      const res = await api(`/packages?branchId=${branchId}`);
+      const res = await api(`/packages?branchId=${bId}`);
       const p = await res.json();
       setPackages(Array.isArray(p?.data) ? p.data : Array.isArray(p) ? p : []);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { if (branchId) loadPackages(); }, [branchId]);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      let bId = user?.branchId;
+
+      if (!bId) {
+        try {
+          const res = await api('/branches');
+          const p = await res.json();
+          const data = p?.data ?? p;
+          if (Array.isArray(data) && data.length > 0) {
+            bId = data[0]._id;
+          }
+        } catch { /* silent */ }
+      }
+
+      if (cancelled) return;
+      setBranchId(bId);
+      if (bId) loadPackages(bId);
+      else setLoading(false);
+    }
+
+    init();
+    return () => { cancelled = true; };
+  }, [user]);
 
   function openCreate() {
     setEditPkg(null);
@@ -121,7 +145,7 @@ export default function ManagerPackages({ user }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi lưu gói dịch vụ');
       setShowModal(false);
-      loadPackages();
+      loadPackages(branchId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -133,7 +157,7 @@ export default function ManagerPackages({ user }) {
     const newStatus = pkg.status === 'active' ? 'inactive' : 'active';
     try {
       await api(`/packages/${pkg._id || pkg.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
-      loadPackages();
+      loadPackages(branchId);
     } catch { /* silent */ }
   }
 
@@ -141,7 +165,7 @@ export default function ManagerPackages({ user }) {
     try {
       await api(`/packages/${id}`, { method: 'DELETE' });
       setDeleteId(null);
-      loadPackages();
+      loadPackages(branchId);
     } catch { /* silent */ }
   }
 
@@ -164,7 +188,12 @@ export default function ManagerPackages({ user }) {
         </button>
       </div>
 
-      {loading ? (
+      {!branchId ? (
+        <div className="flex flex-col items-center gap-3 py-20 text-slate-400">
+          <span className="text-4xl">⚠️</span>
+          <p className="text-sm">Tài khoản chưa được phân công chi nhánh. Vui lòng liên hệ admin.</p>
+        </div>
+      ) : loading ? (
         <div className="flex items-center justify-center py-20 text-slate-400 text-sm">Đang tải...</div>
       ) : packages.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-20 text-slate-400">

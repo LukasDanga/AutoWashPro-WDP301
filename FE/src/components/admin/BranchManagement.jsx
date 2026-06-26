@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
   Buildings,
@@ -335,7 +336,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
   const [pkgDeleting, setPkgDeleting] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   useEffect(() => {
     let mounted = true;
@@ -758,7 +759,7 @@ export default function BranchManagement() {
   const [toast, setToast] = useState(null);
   const debounce = useRef(null);
 
-  const notify = (message, type = 'success') => setToast({ message, type });
+  const notify = (message, type = 'success') => showToast(message, type);
 
   /* ── fetch ── */
   const fetchBranches = useCallback(async (q = search, st = statusFilter) => {

@@ -29,6 +29,9 @@ export const userService = {
     const params = new URLSearchParams();
     if (filters.role) params.set('role', filters.role);
     if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.page) params.set('page', filters.page);
+    if (filters.limit) params.set('limit', filters.limit);
     return apiFetch(`/auth/users?${params}`);
   },
 

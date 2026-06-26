@@ -22,8 +22,15 @@ import {
   Clock,
   CurrencyCircleDollar,
   Printer,
+  CaretLeft,
+  CaretRight,
+  CalendarBlank,
+  Table as TableIcon,
+  Rows,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { showToast } from '@/lib/toast';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import ManagerQuickCheckin from '@/components/manager/ManagerQuickCheckin';
 
@@ -52,23 +59,10 @@ function Spinner({ size = 18 }) {
   );
 }
 
-function Toast({ toast, onDismiss }) {
-  useEffect(() => { if (!toast) return; const t = setTimeout(onDismiss, 3500); return () => clearTimeout(t); }, [toast, onDismiss]);
-  if (!toast) return null;
-  const ok = toast.type !== 'error';
-  return (
-    <div role="alert" className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ring-1 ${ok ? 'bg-white text-emerald-700 ring-emerald-200' : 'bg-white text-red-600 ring-red-200'}`}>
-      {ok ? <CheckCircle size={15} weight="fill" /> : <XCircle size={15} weight="fill" />}
-      {toast.message}
-      <button onClick={onDismiss} className="ml-1 opacity-50 hover:opacity-100"><X size={13} /></button>
-    </div>
-  );
-}
-
-
 /* ── status config ── */
 const STATUS_MAP = {
   pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700' },
+  confirmed:   { label: 'Đã xác nhận', cls: 'bg-indigo-50 text-indigo-700' },
   checked_in:  { label: 'Đã check-in', cls: 'bg-cyan-50 text-cyan-700' },
   in_progress: { label: 'Đang thực hiện', cls: 'bg-blue-50 text-blue-700' },
   completed:   { label: 'Hoàn thành', cls: 'bg-emerald-50 text-emerald-700' },
@@ -76,7 +70,8 @@ const STATUS_MAP = {
 };
 
 const NEXT_STATUS = {
-  pending:     ['checked_in', 'cancelled'],
+  pending:     ['confirmed', 'cancelled'],
+  confirmed:   ['checked_in', 'cancelled'],
   checked_in:  ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
 };
@@ -111,8 +106,7 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
       const payload = await res.json();
       onUpdated(payload?.data ?? payload);
     } catch (err) {
-      if (typeof notify === 'function') notify(err.message, 'error');
-      else alert(err.message);
+      notify(err.message, 'error');
     } finally { setBusy(false); }
   };
 
@@ -220,18 +214,40 @@ function RebookModal({ booking, onClose, onRebooked, notify }) {
 }
 
 /* ── QR display modal ── */
+/**
+ * Trạng thái hiển thị QR theo vòng đời đơn:
+ *  - 'active'     : đã xác nhận → hiện mã QR để khách quét check-in
+ *  - 'checked_in' : đã check-in (hoặc đang/đã hoàn thành) → mã đã dùng
+ *  - 'expired'    : đơn bị hệ thống tự hủy do quá hạn → hết hạn
+ *  - null         : không hiển thị QR (pending, đơn hủy thủ công…)
+ */
+function getQrMode(b) {
+  if (!b) return null;
+  if (b.status === 'confirmed') return 'active';
+  if (['checked_in', 'in_progress', 'completed'].includes(b.status)) return 'checked_in';
+  if (b.status === 'cancelled' && b.cancelledBy === 'system') return 'expired';
+  return null;
+}
+
+// Đơn "mới": đang chờ xác nhận (chưa được manager xử lý)
+function isNewBooking(b) {
+  return b?.status === 'pending';
+}
+
 function QRDisplayModal({ booking, onClose }) {
+  const mode = getQrMode(booking);
   const [qrUrl, setQrUrl] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(mode === 'active');
   const [err, setErr] = useState('');
 
   useEffect(() => {
+    if (mode !== 'active') return;
     api(`/bookings/${booking._id}/qr`)
       .then((r) => r.json())
       .then((d) => { setQrUrl(d?.data?.qrDataUrl || null); })
       .catch(() => setErr('Không thể tạo QR'))
       .finally(() => setLoading(false));
-  }, [booking._id]);
+  }, [booking._id, mode]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -244,16 +260,53 @@ function QRDisplayModal({ booking, onClose }) {
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
         </div>
         <div className="p-6 flex flex-col items-center gap-4">
-          <p className="text-sm text-slate-500 text-center">
-            Cho khách hàng dùng điện thoại quét mã này để xác nhận lịch hẹn.
-          </p>
-          {loading && <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />}
-          {err && <p className="text-sm text-red-500">{err}</p>}
-          {qrUrl && (
-            <div className="rounded-2xl border-4 border-slate-100 bg-white p-3 shadow-inner">
-              <img src={qrUrl} alt="QR check-in" className="w-64 h-64 object-contain" />
+          {mode === 'active' && (
+            <>
+              <p className="text-sm text-slate-500 text-center">
+                Cho khách hàng dùng điện thoại quét mã này để check-in.
+              </p>
+              {loading && <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />}
+              {err && <p className="text-sm text-red-500">{err}</p>}
+              {qrUrl && (
+                <div className="rounded-2xl border-4 border-slate-100 bg-white p-3 shadow-inner">
+                  <img src={qrUrl} alt="QR check-in" className="w-64 h-64 object-contain" />
+                </div>
+              )}
+            </>
+          )}
+
+          {mode === 'checked_in' && (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <div className="relative rounded-2xl border-4 border-emerald-100 bg-emerald-50/60 p-6">
+                <QrCode size={120} weight="duotone" className="text-emerald-200" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="rotate-[-12deg] rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
+                    ĐÃ CHECK-IN
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm font-medium text-emerald-700">Khách đã check-in thành công</p>
+              {booking.checkInTime && (
+                <p className="text-xs text-slate-500">Vào lúc {new Date(booking.checkInTime).toLocaleString('vi-VN')}</p>
+              )}
             </div>
           )}
+
+          {mode === 'expired' && (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <div className="relative rounded-2xl border-4 border-red-100 bg-red-50/60 p-6">
+                <QrCode size={120} weight="duotone" className="text-red-200" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="rotate-[-12deg] rounded-lg bg-red-600 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
+                    HẾT HẠN
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm font-medium text-red-600">Mã đã hết hạn</p>
+              <p className="text-xs text-slate-500 text-center">Đơn đã bị hệ thống tự động hủy do khách không đến đúng giờ.</p>
+            </div>
+          )}
+
           <div className="text-center space-y-0.5">
             <p className="text-xs font-semibold text-slate-700">{booking.userId?.name || '—'}</p>
             <p className="text-xs text-slate-500">
@@ -575,15 +628,24 @@ function PrintReceiptModal({ booking, onClose }) {
 /* ── booking details tab ── */
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
-  const [showRebook, setShowRebook] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
+  const [confirmCash, setConfirmCash] = useState(false);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
+    { id: 'confirmed', label: 'Đã xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
     { id: 'in_progress', label: 'Đang thực hiện' },
     { id: 'completed', label: 'Hoàn thành' },
   ];
+
+  // Nhãn nút chuyển bước theo từng giai đoạn (xác nhận / check-in khi khách đến / …)
+  const STAGE_ACTION = {
+    confirmed: 'Xác nhận đơn',
+    checked_in: 'Khách đã đến — Check-in',
+    in_progress: 'Bắt đầu rửa',
+    completed: 'Hoàn thành',
+  };
 
   const currentStageIndex = stages.findIndex(s => s.id === booking.status);
 
@@ -598,24 +660,23 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       const payload = await res.json();
       onUpdated(payload?.data ?? payload);
     } catch (err) {
-      if (typeof notify === 'function') notify(err.message, 'error');
-      else alert(err.message);
+      notify(err.message, 'error');
     } finally { setBusy(false); }
   };
 
   const handleCashPayment = async () => {
-    if (!window.confirm('Xác nhận khách đã thanh toán bằng tiền mặt?')) return;
+    setConfirmCash(false);
     setBusy(true);
     try {
       const res = await api(`/payments`, {
         method: 'POST',
-        body: JSON.stringify({ bookingId: booking._id, method: 'cash' }),
+        body: JSON.stringify({ bookingId: booking._id, method: 'cash', paymentType: booking.depositPaid ? 'remaining' : 'full' }),
       });
       if (!res.ok) throw new Error(await readErr(res));
-      onUpdated({ ...booking, paymentStatus: 'paid' });
+      onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: 'cash' });
+      notify('Xác nhận thu tiền mặt thành công!');
     } catch (err) {
-      if (typeof notify === 'function') notify(err.message, 'error');
-      else alert(err.message);
+      notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
     } finally { setBusy(false); }
   };
 
@@ -653,7 +714,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                     {isCurrent && stage.id !== 'completed' && (
                       <button disabled={busy} onClick={() => updateStatus(stages[idx + 1].id)}
                         className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 hover:shadow disabled:opacity-50 transition-all">
-                        {busy ? 'Đang cập nhật...' : `Chuyển sang ${stages[idx + 1].label}`}
+                        {busy ? 'Đang cập nhật...' : (STAGE_ACTION[stages[idx + 1].id] || `Chuyển sang ${stages[idx + 1].label}`)}
                       </button>
                     )}
                   </div>
@@ -692,17 +753,25 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Chi tiết thanh toán</h3>
-            <p className="text-sm text-slate-700 mb-2">
+            <p className="text-sm text-slate-700 mb-1">
               Tổng tiền: <strong className="text-slate-900">{Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫</strong>
             </p>
+            {booking.depositAmount > 0 && (
+              <div className="text-xs text-slate-500 mb-2 space-y-0.5">
+                <p>Tiền cọc: <strong className={booking.depositPaid ? 'text-emerald-600' : 'text-amber-600'}>{Number(booking.depositAmount).toLocaleString('vi-VN')}₫</strong> {booking.depositPaid ? '(đã cọc)' : '(chưa cọc)'}</p>
+                {booking.paymentStatus !== 'paid' && (
+                  <p>Còn lại: <strong className="text-slate-700">{Number(Math.max(0, (booking.finalPrice || 0) - (booking.depositPaid ? booking.depositAmount : 0))).toLocaleString('vi-VN')}₫</strong></p>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-3">
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'deposit_paid' ? 'bg-indigo-100 text-indigo-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'deposit_paid' ? 'Đã cọc — chờ tất toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
               </span>
               {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
-                <button disabled={busy} onClick={handleCashPayment}
+                <button disabled={busy} onClick={() => setConfirmCash(true)}
                   className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
-                  Xác nhận tiền mặt
+                  {booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận tiền mặt'}
                 </button>
               )}
             </div>
@@ -809,24 +878,19 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
               {/* Confirm cash if not yet paid */}
               {booking.paymentStatus !== 'paid' && (
-                <button disabled={busy} onClick={handleCashPayment}
+                <button disabled={busy} onClick={() => setConfirmCash(true)}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                   <CurrencyCircleDollar size={15} weight="fill" />
                   Xác nhận thu tiền mặt
                 </button>
               )}
 
-              {/* Invoice action buttons — trong invoice, không bị chatbot đè */}
+              {/* Invoice action buttons — đặt lại lịch chỉ dành cho khách hàng */}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowPrint(true)}
                   className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
                   <Printer size={15} />
                   In hóa đơn
-                </button>
-                <button onClick={() => setShowRebook(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
-                  <CalendarPlus size={15} />
-                  Đặt lại lịch
                 </button>
               </div>
             </div>
@@ -859,37 +923,212 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
         )}
 
-        {/* Action buttons — cancelled: nút đặt lại lịch, pending: nút QR */}
-        {(booking.status === 'cancelled' || booking.status === 'pending') && (
-          <div className="mt-4 flex items-center gap-2">
-            {booking.status === 'pending' && (
+        {/* QR check-in — chỉ hiển thị khi đơn đã xác nhận / đã check-in / hết hạn */}
+        {(() => {
+          const m = getQrMode(booking);
+          if (!m) return null;
+          const label = m === 'active' ? 'Hiển thị QR cho khách'
+            : m === 'checked_in' ? 'Xem QR (đã check-in)' : 'Xem QR (hết hạn)';
+          const cls = m === 'active' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+            : m === 'checked_in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
+          return (
+            <div className="mt-4 flex items-center gap-2">
               <button onClick={() => setShowQR(true)}
-                className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${cls}`}>
                 <QrCode size={15} />
-                Hiển thị QR cho khách
+                {label}
               </button>
-            )}
-            {booking.status === 'cancelled' && (
-              <button onClick={() => setShowRebook(true)}
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
-                <CalendarPlus size={15} />
-                Đặt lại lịch
-              </button>
-            )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {showQR    && <QRDisplayModal      booking={booking} onClose={() => setShowQR(false)} />}
+      {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
+      <ConfirmDialog
+        open={confirmCash}
+        title="Xác nhận thu tiền mặt"
+        message="Xác nhận khách hàng đã thanh toán bằng tiền mặt?"
+        confirmLabel="Xác nhận thu tiền"
+        onConfirm={handleCashPayment}
+        onCancel={() => setConfirmCash(false)}
+      />
+    </div>
+  );
+}
+
+/* ── Week view (lịch tuần) ── */
+const CAL_STATUS_COLOR = {
+  pending:     'bg-amber-400 text-white border-amber-500',
+  confirmed:   'bg-indigo-500 text-white border-indigo-600',
+  checked_in:  'bg-cyan-500 text-white border-cyan-600',
+  in_progress: 'bg-blue-500 text-white border-blue-600',
+  completed:   'bg-emerald-500 text-white border-emerald-600',
+  cancelled:   'bg-slate-300 text-slate-600 border-slate-400',
+};
+
+function calDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+function getWeekStart(from = new Date()) {
+  const d = new Date(from);
+  const day = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+const WEEK_DAY_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+function WeekView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
+  const [weekStart, setWeekStart] = useState(() => getWeekStart());
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+
+  const load = useCallback(async (start) => {
+    setLoading(true);
+    try {
+      const from = calDateStr(start);
+      const endDay = new Date(start);
+      endDay.setDate(start.getDate() + 6);
+      const to = calDateStr(endDay);
+      const res = await api(`/bookings?dateFrom=${from}&dateTo=${to}&limit=500&page=1`);
+      const data = await res.json();
+      const list = data?.data?.bookings || data?.data || [];
+      setBookings(Array.isArray(list) ? list : []);
+    } catch { setBookings([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(weekStart); }, [weekStart, load, refreshSignal]);
+
+  const byDay = {};
+  for (const b of bookings) {
+    const ds = b.bookingDate ? calDateStr(new Date(b.bookingDate)) : '';
+    if (!byDay[ds]) byDay[ds] = [];
+    byDay[ds].push(b);
+  }
+
+  const todayStr = calDateStr(new Date());
+  const pendingCount = bookings.filter((b) => b.status === 'pending').length;
+
+  return (
+    <div className="space-y-4">
+      {/* Week navigation */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); }}
+            className="flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50"><CaretLeft size={14} /></button>
+          <div className="px-3 py-1.5 text-sm font-semibold text-slate-800 min-w-56 text-center">
+            {weekDays[0].toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} – {weekDays[6].toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </div>
+          <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); }}
+            className="flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50"><CaretRight size={14} /></button>
+        </div>
+        <button onClick={() => setWeekStart(getWeekStart())}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+          Tuần này
+        </button>
+        {pendingCount > 0 && (
+          <button onClick={() => onConfirmAll(bookings.filter((b) => b.status === 'pending').map((b) => b._id), () => load(weekStart))}
+            className="ml-auto flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors">
+            <CheckCircle size={14} weight="fill" /> Xác nhận tất cả ({pendingCount})
+          </button>
         )}
       </div>
 
-      {showRebook && (
-        <RebookModal
-          booking={booking}
-          onClose={() => setShowRebook(false)}
-          onRebooked={() => { notify('Đã đặt lại lịch thành công!'); onBack(); }}
-          notify={notify}
-        />
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner /></div>
+      ) : (
+        <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {/* Day header row */}
+          <div className="grid border-b border-slate-100 bg-slate-50 sticky top-0 z-10"
+            style={{ gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))' }}>
+            {weekDays.map((day, i) => {
+              const ds = calDateStr(day);
+              const isToday = ds === todayStr;
+              const count = (byDay[ds] || []).length;
+              const newCount = (byDay[ds] || []).filter((b) => isNewBooking(b)).length;
+              return (
+                <div key={ds} className={`px-2 py-2.5 text-center border-r border-slate-100 last:border-0 ${isToday ? 'bg-blue-50' : ''}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-blue-500' : 'text-slate-400'}`}>{WEEK_DAY_SHORT[i]}</p>
+                  <p className={`text-xl font-bold leading-tight ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>{day.getDate()}</p>
+                  <p className="text-[10px] text-slate-400 mb-1">{day.toLocaleDateString('vi-VN', { month: 'numeric' })} / {day.getFullYear()}</p>
+                  {count > 0 ? (
+                    <div className="flex items-center justify-center gap-1 flex-wrap">
+                      <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">{count} lịch</span>
+                      {newCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                          <span className="h-1 w-1 animate-pulse rounded-full bg-white" />{newCount} mới
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-300">Trống</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Day columns with booking cards */}
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))' }}>
+            {weekDays.map((day) => {
+              const ds = calDateStr(day);
+              const isToday = ds === todayStr;
+              const dayBookings = [...(byDay[ds] || [])].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+              return (
+                <div key={ds} className={`border-r border-slate-100 last:border-0 p-1.5 space-y-1 min-h-[160px] ${isToday ? 'bg-blue-50/30' : ''}`}>
+                  {dayBookings.length === 0 ? (
+                    <div className="flex min-h-[140px] items-center justify-center">
+                      <p className="text-[10px] text-slate-200">—</p>
+                    </div>
+                  ) : dayBookings.map((b) => {
+                    const fresh = isNewBooking(b);
+                    const colorCls = CAL_STATUS_COLOR[b.status] || CAL_STATUS_COLOR.pending;
+                    const qrMode = getQrMode(b);
+                    return (
+                      <div key={b._id} onClick={() => onSelect(b)}
+                        title={`${b.userId?.name || '?'} | ${b.startTime}–${b.endTime} | ${STATUS_MAP[b.status]?.label || b.status}`}
+                        className={`relative rounded-lg border px-2 py-1.5 cursor-pointer transition-opacity hover:opacity-80 ${colorCls} ${fresh ? 'ring-2 ring-red-400 ring-offset-1' : ''}`}>
+                        {fresh && (
+                          <span className="absolute -top-1.5 right-1 inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
+                            <span className="h-1 w-1 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
+                        {qrMode && (
+                          <button onClick={(e) => { e.stopPropagation(); onQR(b); }} title="Xem QR"
+                            className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded bg-white/25 hover:bg-white/40">
+                            <QrCode size={10} weight="bold" />
+                          </button>
+                        )}
+                        <p className="text-[10px] font-bold leading-tight opacity-75">{b.startTime}–{b.endTime}</p>
+                        <p className="text-[11px] font-semibold leading-tight truncate pr-5">{b.userId?.name || '—'}</p>
+                        <p className="text-[10px] leading-tight truncate opacity-75">{b.packageId?.name || '—'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
-      {showQR    && <QRDisplayModal      booking={booking} onClose={() => setShowQR(false)} />}
-      {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
+
+      <div className="flex flex-wrap gap-3 px-1">
+        {Object.entries(STATUS_MAP).map(([k, v]) => (
+          <div key={k} className="flex items-center gap-1.5 text-xs text-slate-500">
+            <div className={`h-3 w-3 rounded-sm ${(CAL_STATUS_COLOR[k] || '').split(' ')[0]}`} />
+            {v.label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -913,12 +1152,16 @@ export default function ManagerBookings() {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [todayOnly, setTodayOnly] = useState(false);
-  const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
+  const [confirmCancelId, setConfirmCancelId] = useState(null);
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const [qrBooking, setQrBooking] = useState(null); // booking đang hiển thị QR check-in nhanh
   const debounce = useRef(null);
 
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = showToast;
 
   const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, pg = 1) => {
     setLoading(true); setError('');
@@ -962,7 +1205,7 @@ export default function ManagerBookings() {
   };
 
   const handleCancel = async (id) => {
-    if (!window.confirm('Xác nhận hủy lịch này?')) return;
+    setConfirmCancelId(null);
     try {
       const res = await api(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: 'Quản lý hủy' }) });
       if (!res.ok) throw new Error(await readErr(res));
@@ -973,6 +1216,30 @@ export default function ManagerBookings() {
     } catch (err) { notify(err.message || 'Hủy thất bại', 'error'); }
   };
 
+  const pendingInView = bookings.filter((b) => b.status === 'pending');
+
+  // Xác nhận hàng loạt; nếu truyền ids dùng ids, ngược lại xác nhận các đơn pending đang hiển thị.
+  const confirmAll = async (ids, after) => {
+    setConfirmingAll(true);
+    try {
+      const res = await api(`/bookings/confirm`, {
+        method: 'POST',
+        body: JSON.stringify(ids && ids.length ? { ids } : { ids: pendingInView.map((b) => b._id) }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const p = await res.json();
+      const result = p?.data ?? p;
+      notify(`Đã xác nhận ${result.confirmed} đơn`);
+      if (after) after();
+      else fetch_(search, statusFilter, typeFilter, todayOnly, page);
+    } catch (err) {
+      notify(err.message || 'Xác nhận thất bại', 'error');
+    } finally {
+      setConfirmingAll(false);
+      setConfirmAllOpen(false);
+    }
+  };
+
   if (selectedBooking) {
     return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} notify={notify} />;
   }
@@ -981,43 +1248,76 @@ export default function ManagerBookings() {
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input id="booking-search" value={search} onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Tìm theo khách hàng, mã đặt…"
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+        {/* view toggle: Bảng / Lịch */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+          <button onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Rows size={14} /> Bảng
+          </button>
+          <button onClick={() => setViewMode('calendar')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === 'calendar' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <CalendarBlank size={14} /> Lịch
+          </button>
         </div>
-        <select id="booking-status-filter" value={statusFilter} onChange={(e) => handleFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
-          <option value="">Tất cả trạng thái</option>
-          <option value="pending">Chờ xác nhận</option>
-          <option value="checked_in">Đã check-in</option>
-          <option value="in_progress">Đang thực hiện</option>
-          <option value="completed">Hoàn thành</option>
-          <option value="cancelled">Đã hủy</option>
-        </select>
-        <select id="booking-type-filter" value={typeFilter} onChange={(e) => handleTypeFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
-          <option value="">Tất cả loại đơn</option>
-          <option value="single">Đặt 1 lần</option>
-          <option value="recurring">Định kỳ</option>
-          <option value="slot_pack_usage">Gói lượt</option>
-        </select>
-        <button onClick={handleTodayToggle}
-          className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
-            todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-          }`}>
-          📅 Hôm nay
-        </button>
-        <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly)} disabled={loading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
-          <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
-        </button>
+
+        {viewMode === 'table' && (
+          <>
+            <div className="relative flex-1 min-w-[200px]">
+              <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input id="booking-search" value={search} onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Tìm theo khách hàng, mã đặt…"
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+            </div>
+            <select id="booking-status-filter" value={statusFilter} onChange={(e) => handleFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
+              <option value="">Tất cả trạng thái</option>
+              <option value="pending">Chờ xác nhận</option>
+              <option value="confirmed">Đã xác nhận</option>
+              <option value="checked_in">Đã check-in</option>
+              <option value="in_progress">Đang thực hiện</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+            <select id="booking-type-filter" value={typeFilter} onChange={(e) => handleTypeFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
+              <option value="">Tất cả loại đơn</option>
+              <option value="single">Đặt 1 lần</option>
+              <option value="recurring">Định kỳ</option>
+              <option value="slot_pack_usage">Gói lượt</option>
+            </select>
+            <button onClick={handleTodayToggle}
+              className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+              }`}>
+              📅 Hôm nay
+            </button>
+            <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly)} disabled={loading}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
+              <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+            {pendingInView.length > 0 && (
+              <button onClick={() => setConfirmAllOpen(true)} disabled={confirmingAll}
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                <CheckCircle size={14} weight="fill" /> Xác nhận tất cả ({pendingInView.length})
+              </button>
+            )}
+          </>
+        )}
+
         <button onClick={() => setShowCheckin(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
           <Lightning size={14} /> Check-in nhanh
         </button>
       </div>
+
+      {viewMode === 'calendar' && (
+        <WeekView
+          onSelect={(b) => setSelectedBooking(b)}
+          onConfirmAll={(ids, after) => confirmAll(ids, after)}
+          onQR={(b) => setQrBooking(b)}
+        />
+      )}
+      {viewMode === 'table' && (<>
       {/* filter info */}
       <p className="text-xs text-slate-400">
         {todayOnly
@@ -1048,6 +1348,7 @@ export default function ManagerBookings() {
                 <th className="px-4 py-3">Ngày / Giờ</th>
                 <th className="px-4 py-3">Thanh toán</th>
                 <th className="px-4 py-3">Trạng thái</th>
+                <th className="px-4 py-3 text-center">QR</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -1058,6 +1359,11 @@ export default function ManagerBookings() {
                     <div className="flex items-center gap-2 mb-0.5">
                       <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
                       {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
+                      {isNewBooking(b) && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-400">{b.userId?.phone ?? ''}</p>
                   </td>
@@ -1083,6 +1389,23 @@ export default function ManagerBookings() {
                   <td className="px-4 py-3">
                     <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    {(() => {
+                      const m = getQrMode(b);
+                      if (!m) return <span className="text-slate-300">—</span>;
+                      const cls = m === 'active' ? 'text-blue-600 hover:bg-blue-50'
+                        : m === 'checked_in' ? 'text-emerald-600 hover:bg-emerald-50'
+                        : 'text-red-500 hover:bg-red-50';
+                      const title = m === 'active' ? 'Hiển thị QR để khách check-in'
+                        : m === 'checked_in' ? 'Đã check-in — xem QR' : 'Mã đã hết hạn';
+                      return (
+                        <button onClick={() => setQrBooking(b)} title={title}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${cls}`}>
+                          <QrCode size={18} weight="duotone" />
+                        </button>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => setSelectedBooking(b)}
@@ -1090,7 +1413,7 @@ export default function ManagerBookings() {
                         Xem đơn
                       </button>
                       {b.status !== 'cancelled' && b.status !== 'completed' && (
-                        <button onClick={() => handleCancel(b._id)}
+                        <button onClick={() => setConfirmCancelId(b._id)}
                           className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
                           Hủy
                         </button>
@@ -1131,18 +1454,38 @@ export default function ManagerBookings() {
           <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} lịch hẹn</p>
         </div>
       )}
+      </>)}
 
-      <Toast toast={toast} onDismiss={() => setToast(null)} />
+      {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
 
       {showCheckin && (
         <ManagerQuickCheckin
           onClose={() => setShowCheckin(false)}
           onCheckedIn={(b) => {
-            setToast({ type: 'success', message: `Check-in thành công: ${b?.userId?.name || 'khách hàng'}` });
+            showToast(`Check-in thành công: ${b?.userId?.name || 'khách hàng'}`);
             fetch_(search, statusFilter, typeFilter, todayOnly);
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmCancelId}
+        title="Xác nhận hủy lịch"
+        message="Bạn có chắc chắn muốn hủy lịch đặt này? Hành động không thể hoàn tác."
+        confirmLabel="Hủy lịch"
+        danger
+        onConfirm={() => handleCancel(confirmCancelId)}
+        onCancel={() => setConfirmCancelId(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmAllOpen}
+        title="Xác nhận tất cả đơn chờ"
+        message={`Xác nhận ${pendingInView.length} đơn đang chờ? Khách sẽ được thông báo và có thể đến check-in.`}
+        confirmLabel="Xác nhận tất cả"
+        onConfirm={() => confirmAll()}
+        onCancel={() => setConfirmAllOpen(false)}
+      />
     </div>
   );
 }

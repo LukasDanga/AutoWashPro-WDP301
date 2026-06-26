@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import {
   MagnifyingGlass, ArrowClockwise, X, Buildings, CalendarBlank,
-  CheckCircle, XCircle, Clock, Spinner, CaretLeft, CaretRight,
+  CheckCircle, XCircle, Clock, Spinner,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || { label: status, color: 'bg-slate-100 text-slate-600' };
-  return <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${cfg.color}`}>{cfg.label}</span>;
+  return <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${cfg.color}`}>{cfg.label}</span>;
 }
 
 function fmtDate(d) {
@@ -53,7 +53,7 @@ export default function AdminBookings() {
   const load = useCallback(async (pg = 1) => {
     setLoading(true); setError('');
     try {
-      const params = new URLSearchParams({ page: pg, limit: 20 });
+      const params = new URLSearchParams({ page: pg, limit: 10 });
       if (search) params.set('search', search);
       if (status) params.set('status', status);
       if (branchId) params.set('branchId', branchId);
@@ -64,8 +64,9 @@ export default function AdminBookings() {
       const data = await res.json();
       const list = data?.data?.bookings || data?.data || [];
       setBookings(Array.isArray(list) ? list : []);
-      setTotalPages(data?.data?.totalPages || 1);
-      setTotal(data?.data?.total || 0);
+      const pag = data?.data?.pagination;
+      setTotalPages(pag?.totalPages || 1);
+      setTotal(pag?.total || 0);
       setPage(pg);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -164,7 +165,14 @@ export default function AdminBookings() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div>
-                        <p className="font-medium text-slate-800">{b.userId?.name || '—'}</p>
+                        <p className="font-medium text-slate-800 flex items-center gap-1.5">
+                          {b.userId?.name || '—'}
+                          {b.status === 'pending' && b.createdAt && (Date.now() - new Date(b.createdAt).getTime() < 24 * 60 * 60 * 1000) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                            </span>
+                          )}
+                        </p>
                         <p className="text-slate-400">{b.vehicleId?.licensePlate || '—'}</p>
                       </div>
                       {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
@@ -196,16 +204,35 @@ export default function AdminBookings() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
-              <span className="text-xs text-slate-400">Trang {page}/{totalPages}</span>
-              <div className="flex gap-2">
+            <div className="flex items-center justify-center gap-4 border-t border-slate-100 px-4 py-3">
+              <p className="text-xs text-slate-500">
+                {total > 0 ? `${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} / ${total}` : '0 kết quả'}
+              </p>
+              <div className="flex items-center gap-1">
                 <button onClick={() => load(page - 1)} disabled={page <= 1 || loading}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-30">
-                  <CaretLeft size={12} />
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Trước
                 </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce((acc, p, i, arr) => {
+                    if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === '...' ? (
+                      <span key={`dots-${i}`} className="px-1 text-xs text-slate-400">...</span>
+                    ) : (
+                      <button key={p} onClick={() => load(p)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          p === page ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}>{p}</button>
+                    )
+                  )}
                 <button onClick={() => load(page + 1)} disabled={page >= totalPages || loading}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-30">
-                  <CaretRight size={12} />
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Sau
                 </button>
               </div>
             </div>

@@ -14,8 +14,8 @@ const validate = (req, res, next) => {
 
 const catchAsync = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-const success = (res, data, message = 'Success', status = 200) =>
-  res.status(status).json({ success: true, message, data, timestamp: new Date().toISOString() });
+const success = (res, data, message = 'Success', status = 200, pagination = null) =>
+  res.status(status).json({ success: true, message, data, ...(pagination ? { pagination } : {}), timestamp: new Date().toISOString() });
 
 const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;

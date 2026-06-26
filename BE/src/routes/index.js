@@ -10,6 +10,10 @@ const slotPackRoutes = require('./slotPack.routes');
 const reportRoutes = require('./report.routes');
 const chatbotRoutes = require('./chatbot.routes');
 const sseRoutes = require('./sse.routes');
+const slotProductRoutes = require('./slotProduct.routes');
+const giftRoutes = require('./gift.routes');
+const testimonialRoutes = require('./testimonial.routes');
+const statsRoutes = require('./stats.routes');
 
 module.exports = {
   authRoutes,
@@ -24,4 +28,8 @@ module.exports = {
   reportRoutes,
   chatbotRoutes,
   sseRoutes,
+  slotProductRoutes,
+  giftRoutes,
+  testimonialRoutes,
+  statsRoutes,
 };

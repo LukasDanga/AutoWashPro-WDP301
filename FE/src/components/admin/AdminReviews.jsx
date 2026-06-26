@@ -133,13 +133,6 @@ export default function AdminReviews() {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
   }
 
-  // Branch-level stats
-  const branchStats = branches.map((br) => {
-    const items = feedbacks.filter((f) => String(f.branchId?._id || f.branchId) === String(br._id) && f.rating);
-    const avg = items.length ? (items.reduce((s, f) => s + f.rating, 0) / items.length).toFixed(1) : null;
-    return { ...br, reviewCount: items.length, avgRating: avg };
-  }).filter((b) => b.reviewCount > 0);
-
   function onBranchFilter(value) {
     setBranchFilter(value);
     setPage(1);
@@ -167,33 +160,6 @@ export default function AdminReviews() {
 
   return (
     <div className="space-y-6">
-      {/* Branch performance summary */}
-      {branchStats.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {branchStats.map((br) => (
-            <div key={br._id}
-              onClick={() => setBranchFilter(branchFilter === String(br._id) ? '' : String(br._id))}
-              className={`cursor-pointer rounded-2xl border p-4 transition-all ${
-                branchFilter === String(br._id)
-                  ? 'border-blue-400 bg-blue-50 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-blue-200'
-              }`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Buildings size={16} className="text-slate-400" />
-                <span className="text-sm font-semibold text-slate-700 truncate">{br.name}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <Star size={14} weight="fill" className="text-amber-400" />
-                  <span className="text-lg font-bold text-slate-800">{br.avgRating}</span>
-                </div>
-                <span className="text-xs text-slate-400">{br.reviewCount} đánh giá</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
         {[
@@ -211,22 +177,20 @@ export default function AdminReviews() {
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <select value={branchFilter} onChange={(e) => onBranchFilter(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400">
           <option value="">Tất cả chi nhánh</option>
           {branches.map((br) => (
             <option key={br._id} value={br._id}>{br.name}</option>
           ))}
         </select>
-        {STAR_FILTERS.map((f) => (
-          <button key={f.value} onClick={() => onStarFilter(f.value)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
-              starFilter === f.value ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
-            }`}>
-            {f.label}
-          </button>
-        ))}
+        <select value={starFilter} onChange={(e) => onStarFilter(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          {STAR_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
         <button onClick={load} disabled={loading}
-          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
         </button>
       </div>
@@ -255,6 +219,11 @@ export default function AdminReviews() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold text-slate-800 text-sm">{fb.userId?.name || 'Khách hàng'}</span>
                         {fb.userId?.tier && <TierBadge tier={fb.userId.tier} />}
+                        {!fb.managerReply && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {new Date(fb.feedbackAt || fb.updatedAt || fb.createdAt).toLocaleDateString('vi-VN')}

@@ -10,9 +10,12 @@ const VALID_METHODS = ['cash', 'momo', 'vnpay'];
 const simulateMomoPayment = (amount, transactionId) => `https://momo.vn/pay?amount=${amount}&txn=${transactionId}`;
 const simulateVNPayPayment = (amount, transactionId) => `https://vnpay.vn/pay?amount=${amount}&txn=${transactionId}`;
 
-exports.createPayment = async (bookingId, requesterId, userRole, method) => {
+exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full') => {
   if (!VALID_METHODS.includes(method)) {
     throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
+  }
+  if (!['deposit', 'remaining', 'full'].includes(paymentType)) {
+    throw Object.assign(new Error('Invalid payment type'), { statusCode: 400, code: 'INVALID_PAYMENT_TYPE' });
   }
 
   const booking = await Booking.findById(bookingId).populate('packageId');
@@ -26,12 +29,31 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
   if (!booking.packageId) {
     throw Object.assign(new Error('Package not found'), { statusCode: 400, code: 'PACKAGE_NOT_FOUND' });
   }
-
   if (booking.paymentStatus === 'paid') {
     throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
-  if (!['pending', 'in_progress', 'completed'].includes(booking.status)) {
+  const fullPrice = booking.finalPrice ?? booking.packageId.price;
+  const deposit = booking.depositAmount || 0;
+
+  // ── Xác định số tiền cần thu theo loại thanh toán ──
+  let amount;
+  let isDeposit = false;
+  if (paymentType === 'deposit') {
+    if (deposit <= 0) throw Object.assign(new Error('Đơn này không yêu cầu đặt cọc'), { statusCode: 400, code: 'NO_DEPOSIT_REQUIRED' });
+    if (booking.depositPaid) throw Object.assign(new Error('Đã đặt cọc trước đó'), { statusCode: 409, code: 'DEPOSIT_ALREADY_PAID' });
+    amount = deposit;
+    isDeposit = true;
+  } else {
+    // remaining/full: nếu đã cọc thì chỉ thu phần còn lại
+    amount = booking.depositPaid ? Math.max(0, fullPrice - deposit) : fullPrice;
+  }
+
+  // Đặt cọc được phép khi đơn còn pending/confirmed; thu phần còn lại khi in_progress/completed
+  const allowedStatuses = isDeposit
+    ? ['pending', 'confirmed']
+    : ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
+  if (!allowedStatuses.includes(booking.status)) {
     throw Object.assign(new Error(`Cannot create payment for booking with status '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
   }
 
@@ -42,46 +64,73 @@ exports.createPayment = async (bookingId, requesterId, userRole, method) => {
 
   let payment = await Payment.findOneAndUpdate(
     { bookingId, status: { $nin: ['paid', 'refunded'] } },
-    { bookingId, userId: targetUserId, amount: booking.finalPrice || booking.packageId.price, method, transactionId: generateTransactionId(), status: 'pending' },
+    { bookingId, userId: targetUserId, amount, method, paymentType, transactionId: generateTransactionId(), status: 'pending' },
     { new: true, upsert: true, runValidators: true }
   );
 
-  const amount = payment.amount;
-
   if (booking.voucherCode) {
-    await voucherService.reserveVoucher(booking.voucherCode, targetUserId, bookingId, booking.discountAmount || 0);
+    // Kiểm tra voucher đã reserve ở booking chưa
+    const VoucherUsage = mongoose.model('VoucherUsage');
+    const existingUsage = await VoucherUsage.findOne({ bookingId, userId: targetUserId });
+    if (!existingUsage) {
+      await voucherService.reserveVoucher(booking.voucherCode, targetUserId, bookingId, booking.discountAmount || 0);
+    }
   }
 
-  if (method === 'cash') {
+  // Tiền cọc luôn được thanh toán tức thì (mô phỏng cổng thanh toán cho demo);
+  // phần còn lại bằng tiền mặt cũng thanh toán tức thì.
+  if (isDeposit || method === 'cash') {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
       payment.status = 'paid';
       payment.paidAt = new Date();
       await payment.save({ session });
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method }).session(session);
-      
-      // Tích điểm
-      await loyaltyService.addPointsFromPayment(targetUserId, amount, bookingId, session);
 
-      
+      if (isDeposit) {
+        await Booking.findByIdAndUpdate(
+          booking._id,
+          { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: method },
+          { session }
+        );
+      } else {
+        await Booking.findByIdAndUpdate(
+          booking._id,
+          { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method },
+          { session }
+        );
+        // Tích điểm theo tổng giá trị đơn (chỉ khi tất toán hoàn toàn)
+        await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+      }
+
       await session.commitTransaction();
     } catch (err) {
-      await session.abortTransaction();
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
       if (booking.voucherCode) {
-        await voucherService.rollbackVoucher(booking.voucherCode, userId, bookingId).catch(() => {});
+        await voucherService.rollbackVoucher(booking.voucherCode, targetUserId, bookingId).catch(() => {});
       }
       throw err;
     } finally {
       session.endSession();
     }
 
+    const label = isDeposit ? 'tiền cọc' : 'phần còn lại';
     notificationService.send(
       booking.userId,
       'Thanh toán thành công',
-      `Thanh toán ${amount.toLocaleString('vi-VN')}đ bằng tiền mặt đã được xác nhận.`,
+      `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng ${method === 'cash' ? 'tiền mặt' : method.toUpperCase()}.`,
       'payment_confirmed',
       { bookingId, paymentId: payment._id }
+    ).catch(() => {});
+
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      isDeposit ? 'Khách đã đặt cọc' : 'Thanh toán hoàn tất',
+      `Khách hàng đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ cho lịch hẹn.`,
+      'payment_confirmed',
+      { bookingId, branchId: booking.branchId }
     ).catch(() => {});
 
     return payment;
@@ -148,9 +197,20 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       { bookingId: booking._id, paymentId: payment._id }
     ).catch(() => {});
 
+    // Notify admin + manager
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      `Thanh toán ${payment.method.toUpperCase()}`,
+      `Khách hàng đã thanh toán ${(booking.finalPrice || payment.amount).toLocaleString('vi-VN')}đ qua ${payment.method.toUpperCase()}.`,
+      'payment_confirmed',
+      { bookingId: booking._id, branchId: booking.branchId }
+    ).catch(() => {});
+
     return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -188,14 +248,16 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       await payment.save({ session });
 
       if (booking.voucherCode) {
-        await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, booking._id);
+        await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, booking._id, session);
       }
     }
 
     await session.commitTransaction();
     return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -204,8 +266,8 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   const payment = await Payment.findOne({ bookingId })
-    .populate('bookingId', 'bookingDate startTime status userId')
-    .populate('userId', 'name email');
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
+    .populate('userId', 'name email phone');
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -227,10 +289,24 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
     if (filters.userId) query.userId = filters.userId;
     if (filters.status) query.status = filters.status;
     if (filters.method) query.method = filters.method;
+    if (filters.today === 'true' || filters.today === true) {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (filters.date) {
+      const day = new Date(filters.date);
+      const start = new Date(day);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(day);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
   }
   return Payment.find(query)
-    .populate('bookingId', 'bookingDate startTime status')
-    .populate('userId', 'name email')
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
+    .populate('userId', 'name email phone')
     .sort({ createdAt: -1 });
 };
 
@@ -267,7 +343,7 @@ exports.refundPayment = async (bookingId) => {
     await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled', paymentStatus: 'refunded' }).session(session);
 
     if (booking.voucherCode) {
-      await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, bookingId);
+      await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, bookingId, session);
     }
 
     await session.commitTransaction();
@@ -280,9 +356,20 @@ exports.refundPayment = async (bookingId) => {
       { bookingId, paymentId: payment._id }
     ).catch(() => {});
 
+    // Notify admin + manager
+    notificationService.sendToAdminAndManager(
+      booking.branchId,
+      'Hoàn tiền',
+      `Đã hoàn tiền ${payment.amount.toLocaleString('vi-VN')}đ cho khách hàng.`,
+      'refund',
+      { bookingId, branchId: booking.branchId }
+    ).catch(() => {});
+
     return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();

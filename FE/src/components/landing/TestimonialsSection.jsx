@@ -1,103 +1,100 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
-const testimonials = [
-  {
-    name: 'Minh Hoàng Nguyễn',
-    role: 'Tài xế công nghệ',
-    content: 'Đặt lịch nhanh, tới đúng giờ là được phục vụ ngay. Tiết kiệm cả buổi sáng chờ đợi so với các tiệm rửa xe thông thường.',
-    rating: 5,
-    location: 'Hà Nội',
-  },
-  {
-    name: 'Thanh Trúc Lê',
-    role: 'Nhân viên văn phòng',
-    content: 'Dịch vụ rửa nội thất rất kỹ, ghế da được vệ sinh sạch sẽ. Mình đặt lịch online qua app, tiện lợi và yên tâm.',
-    rating: 5,
-    location: 'TP. Hồ Chí Minh',
-  },
-  {
-    name: 'Quốc Bảo Trần',
-    role: 'Chủ doanh nghiệp',
-    content: 'Gói phủ ceramic chất lượng hơn hẳn so với các nơi khác mình từng làm. Xe mình luôn sáng bóng sau mỗi lần rửa.',
-    rating: 5,
-    location: 'Đà Nẵng',
-  },
-];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-function TestimonialCard({ testimonial, index }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-50px' });
+const CARD_BG = ['bg-white'];
 
+function StarRating({ rating }) {
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 20 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay: index * 0.15, ease: [0.16, 1, 0.3, 1] }}
-      className="relative p-8 md:p-10 rounded-[2.5rem] border border-slate-200 bg-white
-        hover:border-slate-300 hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.06)]
-        transition-all duration-500"
-    >
-      <div className="flex gap-1 mb-6">
-        {Array.from({ length: testimonial.rating }).map((_, i) => (
-          <svg key={i} className="w-5 h-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-        ))}
-      </div>
-
-      <blockquote className="text-slate-600 leading-relaxed mb-8">
-        &ldquo;{testimonial.content}&rdquo;
-      </blockquote>
-
-      <div className="flex items-center gap-4 pt-6 border-t border-slate-100">
-        <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
-          <span className="text-sm font-semibold text-slate-500">
-            {testimonial.name.split(' ').slice(-2).map((n) => n[0]).join('')}
-          </span>
-        </div>
-        <div>
-          <div className="text-slate-800 font-medium text-sm">{testimonial.name}</div>
-          <div className="text-slate-400 text-xs mt-0.5">
-            {testimonial.role} &middot; {testimonial.location}
-          </div>
-        </div>
-      </div>
-    </motion.div>
+    <div className="flex gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => (
+        <svg key={i} className={`w-4 h-4 ${i < rating ? 'text-amber-400' : 'text-slate-200'}`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+      ))}
+    </div>
   );
 }
 
+const FALLBACK_REVIEWS = [
+  { name: 'Anh Hạnh', location: 'AutoWash Cầu Giấy', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AH', color: 'emerald' },
+  { name: 'Chị Minh', location: 'AutoWash Thu Duc', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CM', color: 'blue' },
+  { name: 'Anh Thành', location: 'AutoWash Quận 1', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AT', color: 'violet' },
+  // Duplicate for alternating effect
+  { name: 'Chị Lan', location: 'AutoWash Quận 7', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CL', color: 'emerald' },
+  { name: 'Anh Hoàng', location: 'AutoWash Đà Nẵng', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AH', color: 'blue' },
+  { name: 'Chị Nga', location: 'AutoWash Hải Châu', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CN', color: 'violet' },
+];
+
+const COLOR_MAP = {
+  emerald: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  blue: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  violet: { bg: 'bg-violet-100', text: 'text-violet-700' },
+};
+
 export default function TestimonialsSection() {
+  const [testimonials, setTestimonials] = useState([]);
+  const [loading, setLoading] = useState(true);
   const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-100px' });
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+
+  useEffect(() => {
+    async function fetchTestimonials() {
+      try {
+        const res = await fetch(`${API_BASE}/testimonials`);
+        const payload = await res.json();
+        const data = payload?.data || payload || [];
+        setTestimonials(Array.isArray(data) && data.length > 0 ? data : FALLBACK_REVIEWS);
+      } catch (e) {
+        setTestimonials(FALLBACK_REVIEWS);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTestimonials();
+  }, []);
+
+  const items = testimonials.length > 0 ? testimonials : FALLBACK_REVIEWS;
 
   return (
-    <section className="relative py-24 md:py-32 bg-slate-50 overflow-hidden" ref={ref}>
-      <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px]
-        bg-[radial-gradient(ellipse,rgba(16,185,129,0.03),transparent_60%)]" />
-
-      <div className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="max-w-xl mb-16"
-        >
-          <span className="text-emerald-600 text-sm font-medium tracking-widest uppercase mb-4 block">
-            Khách hàng nói gì
-          </span>
-          <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-slate-900">
-            Được tin dùng bởi hàng ngàn chủ xe
-          </h2>
+    <section ref={ref} id="testimonials" className="relative py-24 md:py-32 overflow-hidden bg-emerald-50/30">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-center mb-16">
+          <span className="text-emerald-600 text-xs font-semibold tracking-widest uppercase mb-4 block">KHÁCH HÀNG NÓI GÌ</span>
+          <h2 className="text-4xl md:text-6xl font-extrabold tracking-tighter leading-none text-slate-900 mb-4">Hàng ngàn khách hàng hài lòng</h2>
+          <p className="text-slate-500 max-w-xl mx-auto text-sm md:text-base">Những đánh giá chân thực từ khách hàng đã trải nghiệm dịch vụ tại AutoWash Pro.</p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {testimonials.map((testimonial, index) => (
-            <TestimonialCard key={testimonial.name} testimonial={testimonial} index={index} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="text-center text-slate-400 py-16">Đang tải đánh giá...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {items.slice(0, 6).map((t, i) => {
+              const color = COLOR_MAP[t.color] || COLOR_MAP.emerald;
+              const initials = t.initials || t.name?.charAt(0) || 'K';
+              const bgClass = CARD_BG[i % CARD_BG.length];
+              return (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className={`${bgClass} border border-slate-200 rounded-2xl p-8 hover:shadow-lg hover:shadow-emerald-50/50 transition-all duration-500`}>
+                  <StarRating rating={t.rating || 5} />
+                  <p className="text-sm text-slate-600 leading-relaxed mt-4 mb-6 italic">"{t.content}"</p>
+                  <div className="flex items-center gap-3 border-t border-slate-200 pt-4">
+                    <div className={`w-10 h-10 rounded-full ${color.bg} flex items-center justify-center ${color.text} text-sm font-bold`}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-800">{t.name}</div>
+                      <div className="text-xs text-slate-400">{t.location}</div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );

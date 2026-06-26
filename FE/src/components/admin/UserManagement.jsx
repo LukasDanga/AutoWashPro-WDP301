@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -563,6 +564,19 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  // Refs for current filter values (avoid stale closures)
+  const searchRef = useRef(search);
+  const roleRef = useRef(roleFilter);
+  const statusRef = useRef(statusFilter);
+  useEffect(() => { searchRef.current = search; }, [search]);
+  useEffect(() => { roleRef.current = roleFilter; }, [roleFilter]);
+  useEffect(() => { statusRef.current = statusFilter; }, [statusFilter]);
+
   // Modals state
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -571,57 +585,71 @@ export default function UserManagement() {
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const notify = (message, type = "success") => setToast({ message, type });
+  const notify = (message, type = "success") => showToast(message, type);
 
   // Fetch Users
   const fetchUsers = useCallback(
-    async (role = roleFilter, status = statusFilter) => {
+    async (pg = 1, srch = searchRef.current, role = roleRef.current, st = statusRef.current) => {
       setLoading(true);
       setFetchError("");
       try {
-        const data = await userService.getAllUsers({ role, status });
-        setUsers(data);
+        const params = { page: pg, limit: 10 };
+        if (srch) params.search = srch;
+        if (role) params.role = role;
+        if (st) params.status = st;
+        const result = await userService.getAllUsers(params);
+        const list = result?.users || result || [];
+        setUsers(Array.isArray(list) ? list : []);
+        const pag = result?.pagination;
+        setTotalPages(pag?.totalPages || 1);
+        setTotal(pag?.total || 0);
+        setPage(pg);
       } catch (err) {
         setFetchError(err.message || "Không thể tải dữ liệu người dùng");
       } finally {
         setLoading(false);
       }
     },
-    [roleFilter, statusFilter],
+    [],
   );
 
   // Load initial data
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(1);
   }, []); // eslint-disable-line
 
-  // Handle local searching
-  const filteredUsers = users.filter((u) => {
-    const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      (u.name && u.name.toLowerCase().includes(q)) ||
-      (u.email && u.email.toLowerCase().includes(q)) ||
-      (u.phone && u.phone.includes(q))
-    );
-  });
+  // Debounced search: khi gõ vào ô tìm kiếm thì tự search sau 400ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers(1, search, roleFilter, statusFilter);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]); // eslint-disable-line
 
+  // Handle filter changes
   const handleRoleFilter = (val) => {
     setRoleFilter(val);
-    fetchUsers(val, statusFilter);
+    fetchUsers(1, search, val, statusFilter);
   };
 
   const handleStatusFilter = (val) => {
     setStatusFilter(val);
-    fetchUsers(roleFilter, val);
+    fetchUsers(1, search, roleFilter, val);
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setRoleFilter('');
+    setStatusFilter('');
+    fetchUsers(1, '', '', '');
   };
 
   // Actions
   const handleCreate = async (data) => {
     setSaving(true);
     try {
-      const created = await userService.createUser(data);
-      setUsers((p) => [created, ...p]);
+      await userService.createUser(data);
+      fetchUsers(1);
       setModal(null);
       notify("Tạo tài khoản người dùng thành công!");
     } catch (err) {
@@ -634,8 +662,8 @@ export default function UserManagement() {
   const handleUpdate = async (data) => {
     setSaving(true);
     try {
-      const updated = await userService.updateUser(selected._id, data);
-      setUsers((p) => p.map((u) => (u._id === updated._id ? updated : u)));
+      await userService.updateUser(selected._id, data);
+      fetchUsers(page);
       setModal(null);
       notify("Cập nhật tài khoản thành công!");
     } catch (err) {
@@ -649,7 +677,7 @@ export default function UserManagement() {
     setDeleting(true);
     try {
       await userService.deleteUser(selected._id);
-      setUsers((p) => p.filter((u) => u._id !== selected._id));
+      fetchUsers(page);
       setModal(null);
       notify("Đã xóa vĩnh viễn tài khoản người dùng.");
     } catch (err) {
@@ -659,62 +687,10 @@ export default function UserManagement() {
     }
   };
 
-  // Statistics
-  const stats = {
-    total: users.length,
-    admins: users.filter((u) => u.role === "admin").length,
-    managers: users.filter((u) => u.role === "manager").length,
-    customers: users.filter((u) => u.role === "customer").length,
-    suspended: users.filter((u) => u.status === "suspended").length,
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[
-          {
-            label: "Tổng người dùng",
-            value: stats.total,
-            icon: <Users size={18} weight="duotone" className="text-blue-500" />,
-            bg: "bg-blue-50",
-          },
-          {
-            label: "Quản trị viên (Admin)",
-            value: stats.admins,
-            icon: <Shield size={18} weight="duotone" className="text-rose-500" />,
-            bg: "bg-rose-50",
-          },
-          {
-            label: "Quản lý",
-            value: stats.managers,
-            icon: <Crown size={18} weight="duotone" className="text-indigo-500" />,
-            bg: "bg-indigo-50",
-          },
-          {
-            label: "Tài khoản bị khóa",
-            value: stats.suspended,
-            icon: <Warning size={18} weight="duotone" className="text-amber-500" />,
-            bg: "bg-amber-50",
-          },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm"
-          >
-            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${s.bg}`}>
-              {s.icon}
-            </div>
-            <div>
-              <p className="text-lg font-bold text-slate-800 leading-none">{s.value}</p>
-              <p className="text-[11px] text-slate-500 mt-1">{s.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
+    <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="relative flex-1 min-w-[200px]">
           <MagnifyingGlass
             size={15}
@@ -750,26 +726,16 @@ export default function UserManagement() {
           <option value="suspended">Bị khóa</option>
         </select>
 
-        <button
-          onClick={() => fetchUsers()}
-          disabled={loading}
-          title="Làm mới"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
-        >
-          <ArrowClockwise
-            size={18}
-            color="#000000"
-            weight="bold"
-            className={loading ? "animate-spin" : ""}
-          />
-        </button>
+        {(search || roleFilter || statusFilter) && (
+          <button onClick={clearFilters}
+            className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors">
+            <X size={14} /> Xóa lọc
+          </button>
+        )}
 
         <button
-          onClick={() => {
-            setSelected(null);
-            setModal("create");
-          }}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
+          onClick={() => { setSelected(null); setModal("create"); }}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm ml-auto"
         >
           <UserPlus size={15} weight="bold" />
           Thêm tài khoản
@@ -787,13 +753,13 @@ export default function UserManagement() {
           <Warning size={28} weight="duotone" className="text-red-400" />
           <p className="text-sm text-red-600">{fetchError}</p>
           <button
-            onClick={() => fetchUsers()}
+            onClick={() => fetchUsers(page)}
             className="rounded-lg border border-red-200 px-4 py-1.5 text-sm text-red-600 hover:bg-red-100 transition-colors"
           >
             Thử lại
           </button>
         </div>
-      ) : filteredUsers.length === 0 ? (
+      ) : users.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20">
           <Users size={40} weight="thin" className="text-slate-300" />
           <p className="text-sm font-medium text-slate-500">
@@ -801,93 +767,107 @@ export default function UserManagement() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full border-collapse text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4">Tên người dùng / Email</th>
-                <th className="px-6 py-4">Số điện thoại</th>
-                <th className="px-6 py-4">Vai trò</th>
-                <th className="px-6 py-4">Hạng / Điểm</th>
-                <th className="px-6 py-4">Trạng thái</th>
-                <th className="px-6 py-4 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredUsers.map((u) => (
-                <tr key={u._id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 font-bold uppercase overflow-hidden text-sm">
-                        {u.avatar ? (
-                          <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
-                        ) : (
-                          u.name.charAt(0)
-                        )}
-                      </div>
+        <>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="w-full border-collapse text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4">Tên người dùng / Email</th>
+                  <th className="px-6 py-4">Vai trò</th>
+                  <th className="px-6 py-4">Hạng / Điểm</th>
+                  <th className="px-6 py-4">Trạng thái</th>
+                  <th className="px-6 py-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {users.map((u) => (
+                  <tr key={u._id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-3.5">
                       <div>
                         <div className="font-semibold text-slate-800">{u.name}</div>
                         <div className="text-xs text-slate-400 mt-0.5">{u.email}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{u.phone || ''}</div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap font-medium text-slate-700">
-                    {u.phone || <span className="text-slate-300">-</span>}
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap">
-                    <RoleBadge role={u.role} />
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <TierBadge tier={u.tier} />
-                      <span className="text-xs text-slate-500 flex items-center gap-0.5">
-                        <Coins size={12} weight="fill" className="text-amber-500" />
-                        {u.loyaltyPoints || 0}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap">
-                    <StatusBadge status={u.status} />
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          setSelected(u);
-                          setModal("detail");
-                        }}
-                        title="Xem chi tiết"
-                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                      >
-                        <Eye size={15} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelected(u);
-                          setModal("edit");
-                        }}
-                        title="Chỉnh sửa"
-                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                      >
-                        <PencilSimple size={15} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelected(u);
-                          setModal("delete");
-                        }}
-                        title="Xóa tài khoản"
-                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                      >
-                        <Trash size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </td>
+                    <td className="px-6 py-3.5 whitespace-nowrap">
+                      <RoleBadge role={u.role} />
+                    </td>
+                    <td className="px-6 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <TierBadge tier={u.tier} />
+                        <span className="text-xs text-slate-500 flex items-center gap-0.5">
+                          <Coins size={12} weight="fill" className="text-amber-500" />
+                          {u.loyaltyPoints || 0}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3.5 whitespace-nowrap">
+                      <StatusBadge status={u.status} />
+                    </td>
+                    <td className="px-6 py-3.5 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => { setSelected(u); setModal("detail"); }}
+                          title="Xem chi tiết"
+                          className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          onClick={() => { setSelected(u); setModal("edit"); }}
+                          title="Chỉnh sửa"
+                          className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                          <PencilSimple size={15} />
+                        </button>
+                        <button
+                          onClick={() => { setSelected(u); setModal("delete"); }}
+                          title="Xóa tài khoản"
+                          className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                          <Trash size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 border-t border-slate-100 px-4 py-3">
+              <p className="text-xs text-slate-500">
+                {total > 0 ? `${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} / ${total}` : '0 kết quả'}
+              </p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => fetchUsers(page - 1)} disabled={page <= 1 || loading}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Trước
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce((acc, p, i, arr) => {
+                    if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === '...' ? (
+                      <span key={`dots-${i}`} className="px-1 text-xs text-slate-400">...</span>
+                    ) : (
+                      <button key={p} onClick={() => fetchUsers(p)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          p === page ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}>{p}</button>
+                    )
+                  )}
+                <button onClick={() => fetchUsers(page + 1)} disabled={page >= totalPages || loading}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Sau
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Modals */}

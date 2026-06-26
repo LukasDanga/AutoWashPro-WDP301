@@ -22,7 +22,9 @@ exports.addVehicle = async (userId, data) => {
     await session.commitTransaction();
     return vehicle;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -67,7 +69,9 @@ exports.updateVehicle = async (vehicleId, userId, updates) => {
     await session.commitTransaction();
     return vehicle;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -97,7 +101,9 @@ exports.deleteVehicle = async (vehicleId, userId) => {
     await session.commitTransaction();
     return vehicle;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();

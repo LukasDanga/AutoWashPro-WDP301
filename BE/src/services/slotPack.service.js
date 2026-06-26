@@ -133,7 +133,7 @@ exports.createSlotPack = async (data) => {
 
     // Reserve voucher nếu có
     if (appliedVoucherCode) {
-      await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount);
+      await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount, session);
     }
 
     await session.commitTransaction();
@@ -148,7 +148,9 @@ exports.createSlotPack = async (data) => {
 
     return slotPack;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
@@ -169,18 +171,52 @@ exports.getMySlotPacks = async (userId, filters = {}) => {
     .sort({ createdAt: -1 });
 };
 
-exports.getAllSlotPacks = async (filters = {}) => {
+exports.getAllSlotPacks = async (filters = {}, userRole, userBranchId) => {
   const query = {};
   if (filters.userId)   query.userId   = filters.userId;
-  if (filters.branchId) query.branchId = filters.branchId;
   if (filters.status)   query.status   = filters.status;
+  if (userRole === 'manager' && userBranchId) {
+    query.branchId = userBranchId;
+  } else if (filters.branchId) {
+    query.branchId = filters.branchId;
+  }
 
-  return SlotPack.find(query)
-    .populate('userId',    'name email phone tier')
-    .populate('branchId',  'name address')
-    .populate('packageId', 'name price duration')
-    .populate('vehicleId', 'licensePlate vehicleType brand color')
-    .sort({ priority: -1, createdAt: -1 }); // ưu tiên cao lên trước
+  // ── Search by keyword (name, phone, packCode) ──
+  if (filters.search && filters.search.trim()) {
+    const keyword = filters.search.trim();
+    const regex = new RegExp(keyword, 'i');
+
+    // Find matching user IDs by name or phone
+    const matchingUsers = await User.find({
+      $or: [{ name: regex }, { phone: regex }],
+    }).select('_id').lean();
+    const userIds = matchingUsers.map(u => u._id);
+
+    query.$or = [
+      { packCode: regex },
+      { userId: { $in: userIds } },
+    ];
+  }
+
+  // ── Pagination ──
+  const page  = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(filters.limit, 10) || 9));
+  const skip  = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    SlotPack.find(query)
+      .populate('userId',    'name email phone tier')
+      .populate('branchId',  'name address')
+      .populate('packageId', 'name price duration')
+      .populate('vehicleId', 'licensePlate vehicleType brand color')
+      .sort({ priority: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    SlotPack.countDocuments(query),
+  ]);
+
+  return { data, total, page, totalPages: Math.ceil(total / limit) };
 };
 
 exports.getSlotPackById = async (id, userId, userRole) => {
@@ -197,7 +233,7 @@ exports.getSlotPackById = async (id, userId, userRole) => {
   return pack;
 };
 
-exports.getSlotPackByCode = async (packCode, userRole) => {
+exports.getSlotPackByCode = async (packCode, userRole, userBranchId) => {
   if (userRole !== 'admin' && userRole !== 'manager') {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
@@ -208,6 +244,12 @@ exports.getSlotPackByCode = async (packCode, userRole) => {
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 
   if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (userRole === 'manager') {
+    const packBranch = String(pack.branchId?._id || pack.branchId);
+    if (!userBranchId || String(userBranchId) !== packBranch) {
+      throw Object.assign(new Error('Slot pack does not belong to your branch'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
   return pack;
 };
 
@@ -289,7 +331,9 @@ exports.useSlot = async (packId, staffId, data = {}) => {
 
     return { slotPack: pack, booking };
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();

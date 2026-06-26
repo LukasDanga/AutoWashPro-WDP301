@@ -9,6 +9,7 @@
  */
 
 require('dotenv').config();
+require('./src/config/dns'); // Override DNS for MongoDB Atlas SRV resolution
 const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { showToast as fireToast } from '@/lib/toast';
+import { confirmDialog } from '@/lib/confirm';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -47,7 +49,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
   }
 
   async function handleDeleteVehicle(vId) {
-    if (!confirm('Xóa xe này?')) return;
+    if (!(await confirmDialog({ title: 'Xóa xe', message: 'Bạn có chắc chắn muốn xóa xe này?', confirmLabel: 'Xóa', danger: true }))) return;
     try {
       await fetch(`${apiBase || API_BASE}/vehicles/${vId}`, {
         method: 'DELETE',
@@ -118,8 +120,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
   }
 
   function showToast(message) {
-    setToast({ show: true, message });
-    setTimeout(() => setToast({ show: false, message: '' }), 3000);
+    fireToast(message);
   }
 
   const tier = TIER_MAP[user?.tier] || TIER_MAP.bronze;

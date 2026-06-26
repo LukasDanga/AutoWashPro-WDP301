@@ -145,7 +145,25 @@ exports.getAllUsers = async (filters = {}) => {
   const query = {};
   if (filters.role) query.role = filters.role;
   if (filters.status) query.status = filters.status;
-  return User.find(query).sort({ createdAt: -1 });
+
+  if (filters.search && filters.search.trim()) {
+    const re = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: re }, { email: re }, { phone: re }];
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await Promise.all([
+    User.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    User.countDocuments(query),
+  ]);
+
+  return {
+    users,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasNextPage: page * limit < total, hasPrevPage: page > 1 },
+  };
 };
 
 exports.getUserById = async (id) => {

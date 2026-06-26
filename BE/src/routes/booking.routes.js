@@ -65,6 +65,12 @@ router.post('/recurring/:groupId/cancel', authenticate, authorize(ROLES.ADMIN, R
  */
 router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getAllBookings);
 
+// POST /api/bookings/confirm — Xác nhận hàng loạt đơn pending (truyền ids, hoặc rỗng = tất cả)
+router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  body('ids').optional().isArray(),
+  body('ids.*').optional().isMongoId(),
+], validate, bookingController.confirmBookings);
+
 router.get('/feedbacks', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getFeedbacks);
 
 router.get('/customers', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getCustomers);
@@ -106,7 +112,7 @@ router.get('/my', authenticate, bookingController.getMyBookings);
  *         schema:
  *           type: string
  */
-router.get('/slots', authenticate, bookingValidators.slots, validate, bookingController.getAvailableSlots);
+router.get('/slots', bookingValidators.slots, validate, bookingController.getAvailableSlots);
 
 /**
  * @swagger
@@ -278,7 +284,8 @@ router.patch('/:id/feedback/reply', authenticate, authorize(ROLES.ADMIN, ROLES.M
  *       404:
  *         description: Booking not found
  */
-router.post('/:id/rebook', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+// Đặt lại lịch — chỉ khách hàng (user) mới có quyền
+router.post('/:id/rebook', authenticate, authorize(ROLES.CUSTOMER), [
   param('id').isMongoId(),
   body('bookingDate').notEmpty().withMessage('bookingDate is required'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),

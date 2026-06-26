@@ -13,7 +13,8 @@ function api(path, opts = {}) {
 const today = new Date().toISOString().split('T')[0];
 
 const STATUS_LABEL = {
-  pending:     { label: 'Chờ xử lý',  color: 'bg-amber-100 text-amber-700' },
+  pending:     { label: 'Chờ xác nhận', color: 'bg-amber-100 text-amber-700' },
+  confirmed:   { label: 'Đã xác nhận', color: 'bg-indigo-100 text-indigo-700' },
   checked_in:  { label: 'Đã check-in', color: 'bg-blue-100 text-blue-700' },
   in_progress: { label: 'Đang rửa',    color: 'bg-violet-100 text-violet-700' },
   completed:   { label: 'Hoàn thành',  color: 'bg-emerald-100 text-emerald-700' },
@@ -77,7 +78,8 @@ export default function ManagerQuickCheckin({ onClose, onCheckedIn }) {
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
-  const canCheckin = (status) => ['pending', 'in_progress'].includes(status);
+  // Chỉ check-in được khi đơn đã được xác nhận
+  const canCheckin = (status) => status === 'confirmed';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -184,7 +186,7 @@ export default function ManagerQuickCheckin({ onClose, onCheckedIn }) {
                       </div>
 
                       {/* Action */}
-                      {canDo && (
+                      {canDo ? (
                         <button
                           onClick={() => checkin(b)}
                           disabled={checkingId === b._id}
@@ -194,7 +196,9 @@ export default function ManagerQuickCheckin({ onClose, onCheckedIn }) {
                             : <CheckCircle size={12} weight="fill" />}
                           Check-in
                         </button>
-                      )}
+                      ) : b.status === 'pending' ? (
+                        <span className="shrink-0 text-[10px] font-medium text-amber-600">Cần xác nhận đơn trước</span>
+                      ) : null}
                     </div>
                   );
                 })}

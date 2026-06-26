@@ -31,7 +31,7 @@ exports.createVoucher = async (data) => {
   return voucher;
 };
 
-exports.getAllVouchers = async (filters = {}) => {
+exports.getAllVouchers = async (filters = {}, userRole, userId) => {
   const query = {};
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
@@ -41,12 +41,46 @@ exports.getAllVouchers = async (filters = {}) => {
       { name: { $regex: filters.search, $options: 'i' } },
     ];
   }
-  return Voucher.find(query).populate('createdBy', 'name email').sort({ createdAt: -1 });
+  if (filters.startDate || filters.endDate) {
+    query.startDate = {};
+    if (filters.startDate) query.startDate.$gte = new Date(filters.startDate);
+    if (filters.endDate) query.startDate.$lte = new Date(filters.endDate);
+  }
+  if (filters.endDateOnly) {
+    query.endDate = { $gte: new Date(filters.endDateOnly) };
+  }
+  if (userRole === 'manager' && userId) {
+    query.createdBy = userId;
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Voucher.find(query).populate('createdBy', 'name email').sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Voucher.countDocuments(query),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
 };
 
-exports.getVoucherById = async (id) => {
+exports.getVoucherById = async (id, userRole, userId) => {
   const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
   return voucher;
 };
 
@@ -56,15 +90,23 @@ exports.getVoucherByCode = async (code) => {
   return voucher;
 };
 
-exports.updateVoucher = async (id, updates) => {
-  const voucher = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+exports.updateVoucher = async (id, updates, userRole, userId) => {
+  const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  return voucher;
+  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const updated = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  return updated;
 };
 
-exports.deleteVoucher = async (id) => {
-  const voucher = await Voucher.findByIdAndDelete(id);
+exports.deleteVoucher = async (id, userRole, userId) => {
+  const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  await Voucher.findByIdAndDelete(id);
   return voucher;
 };
 
@@ -135,12 +177,23 @@ exports.validateVoucher = async (code, bookingData, userId) => {
 /**
  * Reserve voucher for a booking (atomic decrement).
  * If payment fails, call rollbackVoucher() to restore remaining count.
+ * @param {Object} [parentSession] - Optional existing session from a parent transaction
  */
-exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+exports.reserveVoucher = async (code, userId, bookingId, discountAmount, parentSession) => {
+  const ownSession = !parentSession;
+  const session = parentSession || await mongoose.startSession();
+  if (ownSession) session.startTransaction();
 
   try {
+    // Kiểm tra đã reserve cho booking này chưa (idempotent)
+    const existingForBooking = await VoucherUsage.findOne({ bookingId, userId }).session(session);
+    if (existingForBooking) {
+      // Đã reserve rồi, skip
+      const voucher = await Voucher.findById(existingForBooking.voucherId).session(session);
+      if (ownSession) await session.commitTransaction();
+      return { voucher, usage: existingForBooking, alreadyReserved: true };
+    }
+
     const Booking = mongoose.model('Booking');
     const booking = await Booking.findById(bookingId).session(session);
     let isAlreadyReservedForGroup = false;
@@ -203,55 +256,89 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount) => {
     });
     await usage.save({ session });
 
-    await session.commitTransaction();
+    if (ownSession) await session.commitTransaction();
     return { voucher, usage };
   } catch (err) {
-    await session.abortTransaction();
+    if (ownSession) await session.abortTransaction();
     throw err;
   } finally {
-    session.endSession();
+    if (ownSession) session.endSession();
   }
 };
 
 /**
  * Rollback voucher reservation (restore remaining count).
  * Idempotent: safe to call multiple times — only restores if usage record exists.
+ * @param {Object} [parentSession] - Optional existing session from a parent transaction
  */
-exports.rollbackVoucher = async (code, userId, bookingId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+exports.rollbackVoucher = async (code, userId, bookingId, parentSession) => {
+  const ownSession = !parentSession;
+  const session = parentSession || await mongoose.startSession();
+  if (ownSession) session.startTransaction();
 
   try {
     const voucher = await Voucher.findOne({ code: code.toUpperCase() }).session(session);
     if (!voucher) {
       // Already rolled back or never reserved — safe to skip
-      await session.commitTransaction();
+      if (ownSession) await session.commitTransaction();
       return;
     }
 
     const usage = await VoucherUsage.findOne({ voucherId: voucher._id, userId, bookingId }).session(session);
     if (!usage) {
-      await session.commitTransaction();
+      if (ownSession) await session.commitTransaction();
       return;
     }
 
     await Voucher.findByIdAndUpdate(voucher._id, { $inc: { remaining: 1 } }, { session });
 
     await VoucherUsage.deleteOne({ _id: usage._id }).session(session);
-    await session.commitTransaction();
+    if (ownSession) await session.commitTransaction();
   } catch (err) {
-    await session.abortTransaction();
+    if (ownSession) await session.abortTransaction();
     throw err;
   } finally {
-    session.endSession();
+    if (ownSession) session.endSession();
   }
 };
 
-exports.getVoucherUsage = async (voucherId) => {
-  return VoucherUsage.find({ voucherId })
-    .populate('userId', 'name email phone tier')
-    .populate('bookingId', 'bookingDate startTime status')
-    .sort({ usedAt: -1 });
+exports.getVoucherUsage = async (voucherId, filters = {}) => {
+  const query = { voucherId };
+  if (filters.dateFrom || filters.dateTo) {
+    query.usedAt = {};
+    if (filters.dateFrom) query.usedAt.$gte = new Date(filters.dateFrom);
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
+      query.usedAt.$lte = to;
+    }
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    VoucherUsage.find(query)
+      .populate('userId', 'name email phone tier')
+      .populate('bookingId', 'bookingDate startTime status')
+      .sort({ usedAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    VoucherUsage.countDocuments(query),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
 };
 
 exports.getVoucherUsageReport = async () => {
@@ -475,7 +562,9 @@ exports.redeemPointsForVoucher = async (templateId, userId) => {
 
     return userVoucher;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();

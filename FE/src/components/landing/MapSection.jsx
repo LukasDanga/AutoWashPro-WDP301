@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-const branches = [
-  { id: 'hn1', city: 'Hà Nội', name: 'Cầu Giấy', address: '122 Cầu Giấy, Q. Cầu Giấy', phone: '0888.123.456', hours: '06:00 - 20:00', cx: 190, cy: 128 },
-  { id: 'hn2', city: 'Hà Nội', name: 'Thanh Xuân', address: 'Nguyễn Trãi, Q. Thanh Xuân', phone: '0888.123.457', hours: '06:00 - 20:00', cx: 197, cy: 135 },
-  { id: 'hcm1', city: 'TP.HCM', name: 'Quận 1', address: 'Lê Lợi, P. Bến Nghé', phone: '0888.123.458', hours: '06:00 - 21:00', cx: 236, cy: 684 },
-  { id: 'hcm2', city: 'TP.HCM', name: 'Thủ Đức', address: 'Võ Văn Ngân, P. Linh Chiểu', phone: '0888.123.459', hours: '06:00 - 21:00', cx: 246, cy: 673 },
-  { id: 'dn1', city: 'Đà Nẵng', name: 'Hải Châu', address: 'Nguyễn Văn Linh, Q. Hải Châu', phone: '0888.123.460', hours: '06:00 - 20:00', cx: 309, cy: 403 },
-];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const cities = ['Tất cả', 'Hà Nội', 'TP.HCM', 'Đà Nẵng'];
+function getCities(branches) {
+  const set = new Set(branches.map(b => b.city).filter(Boolean));
+  return ['Tất cả', ...Array.from(set)];
+}
 
 function parseSvgPaths(svgText) {
   const parser = new DOMParser();
@@ -27,6 +24,8 @@ export default function MapSection({ onSelectBranch }) {
   const [selectedId, setSelectedId] = useState(null);
   const [provincePaths, setProvincePaths] = useState([]);
   const [hoveredProvince, setHoveredProvince] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [cities, setCities] = useState(['Tất cả']);
 
   useEffect(() => {
     fetch('/assets/vietnam.svg')
@@ -34,6 +33,26 @@ export default function MapSection({ onSelectBranch }) {
       .then(text => {
         const paths = parseSvgPaths(text);
         setProvincePaths(paths);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/branches/public`)
+      .then(r => r.json())
+      .then(res => {
+        const list = (res?.data || []).map(b => ({
+          id: b._id,
+          city: b.city || '',
+          name: b.name.replace(/^AutoWash\s*/, ''),
+          address: b.address,
+          phone: b.phone || '',
+          hours: (b.openingTime || '07:00') + ' - ' + (b.closingTime || '18:00'),
+          cx: b.mapCoordinates?.svgCx || 0,
+          cy: b.mapCoordinates?.svgCy || 0,
+        })).filter(b => b.cx && b.cy);
+        setBranches(list);
+        setCities(getCities(list));
       })
       .catch(() => {});
   }, []);
@@ -46,35 +65,36 @@ export default function MapSection({ onSelectBranch }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.03),transparent_60%)]" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-12">
-        <div className="max-w-xl mb-12">
-          <span className="text-emerald-400 text-sm font-medium tracking-widest uppercase mb-4 block">
-            Hệ thống chi nhánh
-          </span>
-          <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-white">
-            Tìm chi nhánh gần bạn
-          </h2>
-          <p className="text-neutral-400 mt-4 leading-relaxed">12 chi nhánh trên toàn quốc. Chọn chi nhánh và đặt lịch ngay.</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-8">
-          {cities.map((c) => (
-            <button
-              key={c}
-              onClick={() => { setActiveCity(c); setSelectedId(null); }}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                activeCity === c
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-2 space-y-3 max-h-[550px] overflow-y-auto pr-2">
-            {filtered.map((b) => (
+          <div className="lg:col-span-2">
+            <div className="max-w-xl mb-8">
+              <span className="text-emerald-400 text-sm font-medium tracking-widest uppercase mb-4 block">
+                Hệ thống chi nhánh
+              </span>
+              <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-white">
+                Tìm chi nhánh gần bạn
+              </h2>
+              <p className="text-neutral-400 mt-4 leading-relaxed"> {branches.length} chi nhánh trên toàn quốc. Chọn chi nhánh và đặt lịch ngay.</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-6">
+              {cities.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => { setActiveCity(c); setSelectedId(null); }}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    activeCity === c
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              {filtered.map((b) => (
               <button
                 key={b.id}
                 onClick={() => setSelectedId(b.id)}
@@ -106,14 +126,15 @@ export default function MapSection({ onSelectBranch }) {
               </button>
             ))}
           </div>
+          </div>
 
           <div className="lg:col-span-3">
-            <div className="relative w-full rounded-2xl border border-neutral-800 bg-neutral-950 overflow-hidden backdrop-blur-sm"
+            <div className="relative h-full rounded-2xl border border-neutral-800 bg-neutral-950 overflow-hidden backdrop-blur-sm"
               style={{
                 boxShadow: 'inset 0 0 80px rgba(16,185,129,0.04), 0 0 60px rgba(16,185,129,0.02)',
               }}
             >
-              <svg viewBox="0 0 812 872" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+              <svg viewBox="0 0 812 872" className="w-full h-full" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
                     <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1" />
@@ -156,7 +177,7 @@ export default function MapSection({ onSelectBranch }) {
                   <path
                     key={p.id}
                     d={p.d}
-                    fill={hoveredProvince === p.id ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.02)'}
+                    fill={hoveredProvince === p.id ? 'rgba(16,185,129,0.08)' : 'transparent'}
                     stroke={hoveredProvince === p.id ? '#34d399' : 'rgba(16,185,129,0.25)'}
                     strokeWidth={hoveredProvince === p.id ? '1.2' : '0.5'}
                     filter={hoveredProvince === p.id ? 'url(#neon-glow)' : undefined}
@@ -165,16 +186,6 @@ export default function MapSection({ onSelectBranch }) {
                     style={{ transition: 'all 0.2s ease', cursor: 'default' }}
                   />
                 ))}
-
-                <path
-                  id="coastline-highlight"
-                  d={provincePaths.filter(p => ['quang-ninh', 'hai-phong', 'thai-binh', 'nam-dinh', 'ninh-binh', 'thanh-hoa', 'nghe-an', 'ha-tinh', 'quang-binh', 'quang-tri', 'thua-thien-hue', 'da-nang', 'quang-nam', 'quang-ngai', 'binh-dinh', 'phu-yen', 'khanh-hoa', 'ninh-thuan', 'binh-thuan', 'ba-ria-vung-tau', 'ho-chi-minh', 'tien-giang', 'ben-tre', 'tra-vinh', 'soc-trang', 'bac-lieu', 'ca-mau', 'kien-giang', 'an-giang', 'dong-thap', 'long-an'].includes(p.id)).map(p => p.d).join(' ')}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="1.8"
-                  filter="url(#neon-glow)"
-                  opacity="0.7"
-                />
 
                 {branches.map((b) => (
                   <g key={b.id} onClick={() => setSelectedId(b.id)} className="cursor-pointer">

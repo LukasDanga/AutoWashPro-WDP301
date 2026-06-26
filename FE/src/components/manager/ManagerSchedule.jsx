@@ -11,14 +11,16 @@ function api(path, opts = {}) {
 
 const STATUS_COLOR = {
   pending:     { bg: 'bg-amber-400',   text: 'text-white',     border: 'border-amber-500' },
-  checked_in:  { bg: 'bg-blue-500',    text: 'text-white',     border: 'border-blue-600' },
-  in_progress: { bg: 'bg-violet-500',  text: 'text-white',     border: 'border-violet-600' },
+  confirmed:   { bg: 'bg-indigo-500',  text: 'text-white',     border: 'border-indigo-600' },
+  checked_in:  { bg: 'bg-cyan-500',    text: 'text-white',     border: 'border-cyan-600' },
+  in_progress: { bg: 'bg-blue-500',    text: 'text-white',     border: 'border-blue-600' },
   completed:   { bg: 'bg-emerald-500', text: 'text-white',     border: 'border-emerald-600' },
   cancelled:   { bg: 'bg-slate-300',   text: 'text-slate-600', border: 'border-slate-400' },
 };
 
 const STATUS_LABEL = {
   pending: 'Chờ',
+  confirmed: 'Đã xác nhận',
   checked_in: 'Check-in',
   in_progress: 'Đang rửa',
   completed: 'Xong',
@@ -45,20 +47,34 @@ function parseMinutes(t) {
   return h * 60 + (m || 0);
 }
 
+// Đơn "mới": đang chờ xác nhận (chưa được manager xử lý)
+function isNewBooking(b) {
+  return b?.status === 'pending';
+}
+
 function BookingBar({ booking, startMin, endMin, onClick }) {
   const gridStart = parseMinutes('06:00');
   const left = ((startMin - gridStart) / 30) * SLOT_WIDTH_PX;
   const width = Math.max(((endMin - startMin) / 30) * SLOT_WIDTH_PX - 2, 40);
   const cfg = STATUS_COLOR[booking.status] || STATUS_COLOR.pending;
+  const fresh = isNewBooking(booking);
 
   return (
     <button
       onClick={() => onClick(booking)}
-      title={`${booking.userId?.name || '?'} | ${booking.startTime}–${booking.endTime} | ${STATUS_LABEL[booking.status]}`}
+      title={`${booking.userId?.name || '?'} | ${booking.startTime}–${booking.endTime} | ${STATUS_LABEL[booking.status]}${fresh ? ' • MỚI' : ''}`}
       style={{ left, width, top: 6 }}
-      className={`absolute h-11 rounded-lg border px-2 text-left text-[11px] font-medium overflow-hidden transition-opacity hover:opacity-80 ${cfg.bg} ${cfg.text} ${cfg.border}`}
+      className={`absolute h-11 rounded-lg border px-2 text-left text-[11px] font-medium overflow-hidden transition-opacity hover:opacity-80 ${cfg.bg} ${cfg.text} ${cfg.border} ${fresh ? 'ring-2 ring-red-400 ring-offset-1' : ''}`}
     >
-      <p className="truncate font-semibold leading-tight">{booking.userId?.name || '—'}</p>
+      {fresh && (
+        <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
+      )}
+      <p className="flex items-center gap-1 truncate font-semibold leading-tight">
+        {fresh && (
+          <span className="shrink-0 rounded-full bg-red-500 px-1 text-[8px] font-bold text-white leading-4">Mới</span>
+        )}
+        {booking.userId?.name || '—'}
+      </p>
       <p className="truncate opacity-80 leading-tight">{booking.vehicleId?.licensePlate || ''} · {booking.startTime}</p>
     </button>
   );
@@ -192,7 +208,14 @@ export default function ManagerSchedule() {
 
       {/* Status summary pills */}
       <div className="flex flex-wrap gap-2">
+        {(byStatus['pending'] || 0) > 0 && (
+          <div className="flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            <span>{byStatus['pending']} mới · chờ xác nhận</span>
+          </div>
+        )}
         {Object.entries(STATUS_LABEL).map(([k, label]) => {
+          if (k === 'pending') return null;
           const count = byStatus[k] || 0;
           if (!count) return null;
           const cfg = STATUS_COLOR[k];

@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  MapPin, Clock, ShieldCheck, Car, Truck, Bike, Calendar, Tag, Check, 
+  ArrowLeft, ArrowRight, RefreshCw, AlertCircle, Sparkles, Sun, Sunset, 
+  Copy, Info, CheckCircle2 
+} from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
 import SlotPackFlow from '../customer/SlotPackFlow.jsx';
 
@@ -7,7 +12,6 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
 
-// Correct getDay() values: Mon=1, Tue=2, ..., Sat=6, Sun=0
 const WEEKDAY_OPTIONS = [
   { label: 'T2', value: 1 },
   { label: 'T3', value: 2 },
@@ -39,12 +43,21 @@ function buildBookingDates() {
   });
 }
 
-export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory }) {
+const VEHICLE_TYPES = [
+  { value: 'sedan', label: 'Sedan' },
+  { value: 'suv', label: 'SUV' },
+  { value: 'pickup', label: 'Pickup' },
+  { value: 'van', label: 'Van' },
+  { value: 'motorcycle', label: 'Xe máy' },
+];
+
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId }) {
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
   const [tab, setTab] = useState('regular');
   const [step, setStep] = useState(1);
+  const [spCanAdvance, setSpCanAdvance] = useState(false);
 
   // Data from API
   const [branches, setBranches] = useState([]);
@@ -65,6 +78,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
 
+  // Guest vehicle form
+  const [guestVehicle, setGuestVehicle] = useState({ licensePlate: '', brand: '', model: '', type: 'sedan' });
+  const [vehicleError, setVehicleError] = useState('');
+
   // Booking state
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
@@ -73,6 +90,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastBooking, setLastBooking] = useState(null);
   const [result, setResult] = useState(null);
+
+  // Process pending booking after login
+  const [processingPending, setProcessingPending] = useState(false);
 
   // Load branches (public)
   useEffect(() => {
@@ -149,6 +169,153 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     fetchSlots();
   }, [selectedBranch, selectedPackage, currentDate?.iso, isLoggedIn, apiBase, token]);
 
+  // Restore pending booking selections after login, show step 5 for review
+  useEffect(() => {
+    if (!pendingBooking || !isLoggedIn || processingPending) return;
+    const pb = pendingBooking;
+    if (pb.tab) setTab(pb.tab);
+    const restoreBranch = branches.find(b => (b._id || b.id) === pb.branchId);
+    if (restoreBranch) setSelectedBranch(restoreBranch);
+    const restorePkg = packages.find(p => (p._id || p.id) === pb.packageId);
+    if (restorePkg) setSelectedPackage(restorePkg);
+    if (pb.selectedDate) setSelectedDate(pb.selectedDate);
+    if (pb.selectedTime) setSelectedTime(pb.selectedTime);
+    if (pb.selectedDays) setSelectedDays(pb.selectedDays);
+    if (pb.weeks) setWeeks(pb.weeks);
+    if (pb.selectedSubServices) setSelectedSubServices(pb.selectedSubServices);
+    setStep(5);
+  }, [pendingBooking, isLoggedIn, branches, packages]);
+
+  // Auto-select branch from URL param and jump to step 2
+  useEffect(() => {
+    if (!initialBranchId || branches.length === 0) return;
+    const match = branches.find(b => (b._id || b.id) === initialBranchId);
+    if (match) {
+      setSelectedBranch(match);
+      setStep(2);
+    }
+  }, [initialBranchId, branches]);
+
+  async function processPendingBooking() {
+    const pb = pendingBooking;
+    if (!pb) return;
+    setProcessingPending(true);
+    setBookingLoading(true);
+    setError('');
+
+    try {
+      // Create vehicle if guest provided info
+      let vehicleId = '';
+      const gv = pb.guestVehicle;
+      if (gv && gv.licensePlate && gv.licensePlate.trim()) {
+        // Check if vehicle already exists (from a previous failed attempt)
+        const existing = userVehicles.find(v =>
+          (v.licensePlate || '').replace(/\s+/g, '').toUpperCase() === gv.licensePlate.trim().replace(/\s+/g, '').toUpperCase()
+        );
+        if (existing) {
+          vehicleId = existing._id || existing.id || '';
+        }
+        if (!vehicleId) {
+          const vehRes = await fetch(`${apiBase}/vehicles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              licensePlate: gv.licensePlate.trim(),
+              brand: gv.brand?.trim() || 'Khác',
+              model: gv.model?.trim() || '',
+              vehicleType: gv.type || 'sedan',
+              color: 'Khác',
+            }),
+          });
+          if (!vehRes.ok) {
+            const errData = await vehRes.json().catch(() => null);
+            // If duplicate, vehicle was already created — fetch it
+            if (vehRes.status === 409) {
+              const found = userVehicles.find(v =>
+                (v.licensePlate || '').replace(/\s+/g, '').toUpperCase() === gv.licensePlate.trim().replace(/\s+/g, '').toUpperCase()
+              );
+              if (found) {
+                vehicleId = found._id || found.id || '';
+              } else {
+                throw new Error('Xe đã tồn tại nhưng không tìm thấy trong danh sách');
+              }
+            } else {
+              console.error('Vehicle creation failed:', vehRes.status, errData);
+              throw new Error(errData?.message || 'Không thể lưu thông tin xe');
+            }
+          } else {
+            const vehData = await vehRes.json();
+            const newVehicle = vehData?.data || vehData;
+            vehicleId = newVehicle?._id || newVehicle?.id || '';
+            if (onVehicleCreated && newVehicle) onVehicleCreated(newVehicle);
+          }
+        }
+      } else {
+        // Use selected or first existing vehicle
+        vehicleId = selectedVehicle || userVehicles[0]?._id || userVehicles[0]?.id || '';
+      }
+
+      // Create booking
+      const body = {
+        branchId: pb.branchId,
+        packageId: pb.packageId,
+        vehicleId,
+        bookingDate: pb.selectedDate || undefined,
+        startTime: pb.selectedTime,
+        voucherCode: pb.appliedVoucher?.code || undefined,
+        selectedSubServices: pb.selectedSubServices || [],
+        note: '',
+      };
+
+      const endpoint = pb.tab === 'recurring' ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(pb.tab === 'recurring' ? {
+          ...body,
+          weekdays: pb.selectedDays,
+          weeks: pb.weeks,
+          vehicleId: vehicleId || undefined,
+          selectedSubServices: pb.selectedSubServices || [],
+        } : body),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        console.error('Pending booking creation failed:', res.status, JSON.stringify(errData));
+        throw new Error(errData?.message || errData?.error || 'Không thể tạo lịch hẹn');
+      }
+
+      const payload = await res.json();
+      const booking = payload?.data || payload;
+      const code = booking?.bookingCode || booking?.code || '';
+      setBookingCode(code);
+      setLastBooking({
+        branch: selectedBranch || { name: '' },
+        vehicle: { licensePlate: gv?.licensePlate || '', name: gv?.brand || '' },
+        pkg: pkg || { name: '' },
+        currentDate: pb.selectedDate ? bookingDates.find(d => d.id === pb.selectedDate) : null,
+        selectedTime: pb.selectedTime,
+        total: pb.tab === 'recurring' ? (totalBase - discount) * (booking?.totalCreated || 1) : total,
+        discount: pb.tab === 'recurring' ? discount * (booking?.totalCreated || 1) : discount,
+        points: pb.tab === 'recurring' ? points * (booking?.totalCreated || 1) : points,
+        isPayingWithPack: false,
+        bookingCode: code,
+        subServices: pb.selectedSubServices || [],
+        recurringCount: pb.tab === 'recurring' ? booking?.totalCreated || 0 : undefined,
+      });
+      setShowSuccessModal(true);
+      onSetPendingBooking(null);
+    } catch (err) {
+      console.error('processPendingBooking error:', err);
+      setError(err.message || 'Không thể tạo lịch hẹn');
+      onSetPendingBooking(null);
+    } finally {
+      setBookingLoading(false);
+      setProcessingPending(false);
+    }
+  }
+
   // Sub-services
   const pkg = selectedPackage;
   const currentSubServices = selectedSubServices[pkg?._id || pkg?.id] || [];
@@ -164,7 +331,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const basePrice = pkg ? pkg.price : 0;
   const totalBase = basePrice + extraPrice;
 
-  // Valid slot packs for current selection
   const validPacks = useMemo(() => {
     if (!isLoggedIn) return [];
     return mySlotPacks.filter(p => {
@@ -199,7 +365,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const vehicle = userVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
 
-  // Recurring preview — uses correct getDay() values now
   const previewDates = useMemo(() => {
     if (tab !== 'recurring' || selectedDays.length === 0) return [];
     const dates = [];
@@ -219,32 +384,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedDays(prev => prev.includes(value) ? prev.filter(d => d !== value) : [...prev, value]);
   };
 
-  const reset = () => {
-    setStep(1);
-    setSelectedVehicle('');
-    setSelectedPackage(null);
-    setSelectedSubServices({});
-    setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
-    setSelectedTime('');
-    setSelectedDays([]);
-    setWeeks(4);
-    setAppliedVoucher(null);
-    setSelectedSlotPack(null);
-    setMessage('');
-    setError('');
-    setBookingCode('');
-    setResult(null);
-  };
-
-  const totalSteps = isLoggedIn ? 5 : 4;
+  const totalSteps = tab === 'slot_pack' ? 4 : 5;
 
   const canNextStep = () => {
+    if (tab === 'slot_pack') return spCanAdvance;
     if (step === 1) return selectedBranch;
     if (step === 2) return selectedPackage;
     if (step === 3) {
-      if (isLoggedIn) return selectedVehicle;
-      if (tab === 'regular') return selectedDate && selectedTime;
-      return selectedDays.length > 0 && selectedTime;
+      if (isLoggedIn) return selectedVehicle || userVehicles.length > 0;
+      return guestVehicle.licensePlate.trim().length > 0 && guestVehicle.brand.trim().length > 0;
     }
     if (step === 4) {
       if (tab === 'regular') return selectedDate && selectedTime;
@@ -253,8 +401,26 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return true;
   };
 
+  function storePendingAndAuth() {
+    const data = {
+      tab,
+      branchId: selectedBranch?._id || selectedBranch?.id,
+      packageId: pkg?._id || pkg?.id,
+      selectedSubServices: currentSubServices,
+      selectedDate: tab === 'regular' ? currentDate.iso : undefined,
+      selectedTime,
+      selectedDays: tab === 'recurring' ? selectedDays : undefined,
+      weeks: tab === 'recurring' ? weeks : undefined,
+      appliedVoucher,
+      guestVehicle: { ...guestVehicle },
+    };
+    onSetPendingBooking(data);
+    onOpenAuth();
+  }
+
   async function confirmBooking() {
-    if (!isLoggedIn) { onOpenAuth(); return; }
+    if (!isLoggedIn) { storePendingAndAuth(); return; }
+    if (pendingBooking) { await processPendingBooking(); return; }
     if (!selectedTime) { setError('Vui lòng chọn khung giờ.'); return; }
     if (!vehicle) { setError('Vui lòng chọn xe.'); return; }
     setBookingLoading(true); setMessage(''); setError(''); setBookingCode('');
@@ -300,7 +466,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }
 
   async function confirmRecurringBooking() {
-    if (!isLoggedIn) { onOpenAuth(); return; }
+    if (!isLoggedIn) { storePendingAndAuth(); return; }
+    if (pendingBooking) { await processPendingBooking(); return; }
     if (!selectedBranch || !selectedPackage || selectedDays.length === 0 || !selectedTime) {
       setError('Vui lòng điền đầy đủ thông tin.');
       return;
@@ -352,20 +519,93 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }
 
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-center gap-2 mb-10">
-      {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
-        <div key={s} className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-            step === s ? 'bg-emerald-600 text-white shadow-md'
-              : step > s ? 'bg-emerald-100 text-emerald-600'
-              : 'bg-slate-100 text-slate-400'
-          }`}>
-            {step > s ? '✓' : s}
+  const reset = () => {
+    setStep(initialBranchId ? 2 : 1);
+    setSelectedVehicle('');
+    setSelectedPackage(null);
+    setSelectedSubServices({});
+    setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
+    setSelectedTime('');
+    setSelectedDays([]);
+    setWeeks(4);
+    setAppliedVoucher(null);
+    setSelectedSlotPack(null);
+    setMessage('');
+    setError('');
+    setBookingCode('');
+    setResult(null);
+    setGuestVehicle({ licensePlate: '', brand: '', model: '', type: 'sedan' });
+    setVehicleError('');
+    setSpCanAdvance(false);
+  };
+
+  const getVehicleIcon = (type) => {
+    const t = (type || '').toLowerCase();
+    if (t.includes('motor') || t.includes('máy')) {
+      return <Bike className="w-5 h-5" />;
+    }
+    if (t.includes('suv') || t.includes('truck') || t.includes('pickup') || t.includes('van')) {
+      return <Truck className="w-5 h-5" />;
+    }
+    return <Car className="w-5 h-5" />;
+  };
+
+  const groupedSlots = useMemo(() => {
+    if (availableSlots.length === 0) return { morning: [], afternoon: [] };
+    
+    const morning = [];
+    const afternoon = [];
+    
+    availableSlots.forEach(slot => {
+      const hour = parseInt((slot.startTime || '').split(':')[0], 10);
+      if (hour < 12) {
+        morning.push(slot);
+      } else {
+        afternoon.push(slot);
+      }
+    });
+    
+    return { morning, afternoon };
+  }, [availableSlots]);
+
+  const renderStepIndicator = (labels) => (
+    <div className="relative flex items-center justify-between w-full max-w-2xl mx-auto mb-12 px-4">
+      {/* Background connecting line */}
+      <div className="absolute left-8 right-8 top-5 h-[2px] bg-slate-200 z-0" />
+      {/* Active progress fill */}
+      <div 
+        className="absolute left-8 top-5 h-[2px] bg-gradient-to-r from-emerald-400 to-emerald-600 z-0 transition-all duration-500 ease-in-out" 
+        style={{ width: `${((step - 1) / (labels.length - 1)) * 100}%` }}
+      />
+
+      {labels.map((lbl, i) => {
+        const s = i + 1;
+        const isCompleted = step > s;
+        const isActive = step === s;
+        return (
+          <div key={lbl} className="relative z-10 flex flex-col items-center flex-1">
+            <button
+              type="button"
+              disabled={s > step && !canNextStep()}
+              onClick={() => { if (s < step || canNextStep()) setStep(s); }}
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                isActive 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 scale-110 ring-4 ring-emerald-100'
+                  : isCompleted 
+                    ? 'bg-emerald-100 text-emerald-600 border border-emerald-200 hover:bg-emerald-200'
+                    : 'bg-white text-slate-400 border border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {isCompleted ? <Check className="w-5 h-5" /> : s}
+            </button>
+            <span className={`mt-3 text-[11px] md:text-xs font-semibold tracking-wide text-center transition-all duration-300 hidden sm:block ${
+              isActive ? 'text-emerald-600 font-bold' : isCompleted ? 'text-slate-700' : 'text-slate-400'
+            }`}>
+              {lbl}
+            </span>
           </div>
-          {s < totalSteps && <div className={`w-8 md:w-12 h-0.5 ${step > s ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -384,20 +624,32 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           <p className="text-slate-500 max-w-lg mx-auto">Chọn chi nhánh, chọn gói dịch vụ, chọn thời gian - và chúng tôi lo phần còn lại.</p>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-6 md:p-10">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] rounded-3xl p-6 md:p-10">
 
           {/* ── Tabs ── */}
-          <div className="flex items-center gap-1 bg-white rounded-xl p-1 border border-slate-200 w-fit mx-auto mb-8">
+          <div className="flex items-center gap-1.5 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1.5 border border-slate-200/50 w-fit mx-auto mb-10 shadow-inner">
             <button onClick={() => { setTab('regular'); reset(); }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'regular' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                tab === 'regular' 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/10 scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}>
               Đặt lịch thường
             </button>
             <button onClick={() => { setTab('recurring'); reset(); }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'recurring' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                tab === 'recurring' 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/10 scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}>
               Đặt lịch định kì
             </button>
             <button onClick={() => { setTab('slot_pack'); reset(); }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'slot_pack' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                tab === 'slot_pack' 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/10 scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}>
               Gói lượt
             </button>
           </div>
@@ -405,7 +657,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           {/* ── Slot Pack Tab ── */}
           {tab === 'slot_pack' && (
             isLoggedIn ? (
-              <SlotPackFlow user={user} vehicles={userVehicles} apiBase={apiBase} token={token} />
+              <>
+                {renderStepIndicator(['Chi nhánh', 'Xe & gói', 'Số lần', 'Thanh toán'])}
+                <SlotPackFlow step={step} setStep={setStep} user={user} vehicles={userVehicles} apiBase={apiBase} token={token} onCanAdvanceChange={setSpCanAdvance} onGoToHistory={onGoToHistory} />
+              </>
             ) : (
               <div className="text-center py-16 space-y-4">
                 <div className="text-5xl mb-2">🎫</div>
@@ -421,106 +676,69 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           {/* ── Regular + Recurring Step Flow ── */}
           {tab !== 'slot_pack' && (
             <>
-              {renderStepIndicator()}
+              {renderStepIndicator(tab === 'recurring'
+                ? ['Chi nhánh', 'Gói DV', 'Xe', 'Lịch định kỳ', 'Xác nhận']
+                : ['Chi nhánh', 'Gói DV', 'Xe', 'Thời gian', 'Xác nhận']
+              )}
 
               {/* STEP 1: Chi nhánh */}
               {step === 1 && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn chi nhánh</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin className="w-5 h-5 text-emerald-600" />
+                    <h3 className="text-lg font-bold text-slate-800">Chọn chi nhánh gần bạn</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {branches.length === 0 ? (
-                      <div className="col-span-2 text-center text-slate-400 py-8">Đang tải danh sách chi nhánh...</div>
-                    ) : branches.map((b) => (
-                      <button key={b._id || b.id} onClick={() => setSelectedBranch(b)}
-                        className={`text-left p-5 rounded-xl border transition-all ${
-                          (selectedBranch?._id || selectedBranch?.id) === (b._id || b.id)
-                            ? 'border-emerald-400 bg-emerald-50/50 shadow-sm'
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}>
-                        <div className="flex items-start gap-3">
-                          <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
-                          </svg>
-                          <div>
-                            <div className="font-semibold text-slate-800 text-sm">{b.name}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{b.address}</div>
-                            {b.openingTime && <div className="text-xs text-slate-400 mt-1">⏰ {b.openingTime} – {b.closingTime}</div>}
+                      <div className="col-span-2 text-center text-slate-400 py-12 flex flex-col items-center justify-center gap-3">
+                        <RefreshCw className="w-8 h-8 animate-spin text-slate-300" />
+                        <span>Đang tải danh sách chi nhánh...</span>
+                      </div>
+                    ) : branches.map((b) => {
+                      const isSelected = (selectedBranch?._id || selectedBranch?.id) === (b._id || b.id);
+                      return (
+                        <button 
+                          key={b._id || b.id} 
+                          type="button"
+                          onClick={() => setSelectedBranch(b)}
+                          className={`group text-left p-6 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-50/20 shadow-md ring-4 ring-emerald-500/5'
+                              : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-md'
+                          }`}
+                        >
+                          <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-10 blur-xl transition-all duration-300 ${
+                            isSelected ? 'bg-emerald-500 scale-125' : 'bg-slate-300 group-hover:bg-emerald-300'
+                          }`} />
+
+                          <div className="flex items-start gap-4">
+                            <div className={`p-3 rounded-xl transition-all duration-300 ${
+                              isSelected ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-500'
+                            }`}>
+                              <MapPin className="w-6 h-6" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-bold text-slate-800 text-base truncate group-hover:text-slate-900">{b.name}</h4>
+                                {isSelected && (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-sm text-slate-500 mt-1 line-clamp-2 leading-relaxed">{b.address}</p>
+                              
+                              <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-slate-50">
+                                {b.openingTime && (
+                                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {b.openingTime} – {b.closingTime}
+                                  </span>
+                                )}
+                                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100">
+                                  🟢 Đang hoạt động
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* STEP 2: Gói dịch vụ */}
-              {step === 2 && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-6">
-                    Chọn gói dịch vụ{isLoggedIn && selectedBranch ? ` tại ${selectedBranch.name}` : ''}
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {packages.length === 0 ? (
-                      <div className="col-span-2 text-center text-slate-400 py-8">Chi nhánh này chưa có gói dịch vụ nào.</div>
-                    ) : packages.map(p => {
-                      const pId = p._id || p.id;
-                      const isActive = pId === (selectedPackage?._id || selectedPackage?.id);
-                      return (
-                        <div key={pId}
-                          className={`rounded-xl border transition-all ${isActive ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white'}`}>
-                          <button onClick={() => setSelectedPackage(p)} className="w-full text-left p-5">
-                            <div className="flex items-start justify-between mb-2">
-                              <span className="font-semibold text-slate-800">{p.name}</span>
-                              <span className="text-emerald-600 font-bold">{formatCurrency(p.price)}</span>
-                            </div>
-                            <p className="text-xs text-slate-400 mb-1">{p.description}</p>
-                            <span className="text-xs text-slate-400">{p.duration} phút</span>
-                          </button>
-                          {isActive && p.subServices && p.subServices.length > 0 && (
-                            <div className="px-5 pb-4 pt-2 border-t border-slate-100">
-                              <strong className="text-xs text-emerald-600 block mb-2">Dịch vụ chọn thêm:</strong>
-                              {p.subServices.map(sub => {
-                                const checked = currentSubServices.includes(sub.name);
-                                return (
-                                  <label key={sub.name} className="flex items-center gap-2 py-1 cursor-pointer text-sm">
-                                    <input type="checkbox" checked={checked} disabled={!sub.isOptional}
-                                      onChange={() => {
-                                        setSelectedSubServices(prev => {
-                                          const current = prev[pId] || [];
-                                          return { ...prev, [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] };
-                                        });
-                                      }} />
-                                    <span className="flex-1 text-slate-700">{sub.name}</span>
-                                    <span className="text-emerald-600 font-medium text-xs">{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* STEP 3: Xe (chỉ hiện khi đã login) */}
-              {step === 3 && isLoggedIn && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn xe</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {userVehicles.length === 0 ? (
-                      <div className="col-span-2 text-center text-slate-400 py-8">Chưa có xe nào. Vui lòng thêm xe trong hồ sơ.</div>
-                    ) : userVehicles.map(v => {
-                      const vId = v._id || v.id;
-                      return (
-                        <button key={vId} onClick={() => setSelectedVehicle(vId)}
-                          className={`text-left p-5 rounded-xl border transition-all ${
-                            selectedVehicle === vId ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                          }`}>
-                          <div className="font-semibold text-slate-800 text-sm">{v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate}</div>
-                          <div className="text-xs text-slate-400 mt-1">{v.licensePlate || v.plate}</div>
-                          <div className="text-xs text-slate-400">{v.vehicleType || v.type || ''}</div>
                         </button>
                       );
                     })}
@@ -528,107 +746,426 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
+              {/* STEP 2: Gói dịch vụ */}
+              {step === 2 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    <h3 className="text-lg font-bold text-slate-800">
+                      Chọn gói dịch vụ{isLoggedIn && selectedBranch ? ` tại ${selectedBranch.name}` : ''}
+                    </h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {packages.length === 0 ? (
+                      <div className="col-span-2 text-center text-slate-400 py-12 flex flex-col items-center justify-center gap-3">
+                        <Info className="w-8 h-8 text-slate-300" />
+                        <span>Chi nhánh này chưa có gói dịch vụ nào.</span>
+                      </div>
+                    ) : packages.map((p, index) => {
+                      const pId = p._id || p.id;
+                      const isActive = pId === (selectedPackage?._id || selectedPackage?.id);
+                      const isPopular = p.price >= 150000 || index === 1;
+
+                      return (
+                        <div 
+                          key={pId}
+                          className={`group rounded-2xl border-2 transition-all duration-300 relative overflow-hidden flex flex-col ${
+                            isActive 
+                              ? 'border-emerald-500 bg-emerald-50/10 shadow-md ring-4 ring-emerald-500/5' 
+                              : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-md'
+                          }`}
+                        >
+                          {isPopular && (
+                            <div className="absolute right-0 top-0 bg-gradient-to-l from-emerald-600 to-teal-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider uppercase shadow-sm">
+                              Khuyên Dùng
+                            </div>
+                          )}
+
+                          <button 
+                            type="button"
+                            onClick={() => setSelectedPackage(p)} 
+                            className="w-full text-left p-6 flex-1 flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex items-start justify-between pr-16 mb-2">
+                                <span className="font-bold text-slate-800 text-lg group-hover:text-emerald-700 transition-colors">{p.name}</span>
+                              </div>
+                              <p className="text-xs text-slate-400 mb-4 line-clamp-2 leading-relaxed">{p.description}</p>
+                            </div>
+                            
+                            <div className="flex items-baseline justify-between mt-auto pt-4 border-t border-slate-50">
+                              <span className="inline-flex items-center gap-1 text-xs text-slate-400 font-semibold bg-slate-50 px-2 py-1 rounded-lg">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                {p.duration} phút
+                              </span>
+                              <span className="text-xl font-extrabold text-emerald-600">{formatCurrency(p.price)}</span>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Optional Sub-services below packages */}
+                  {selectedPackage && selectedPackage.subServices && selectedPackage.subServices.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-8 p-6 rounded-2xl bg-slate-100/50 border border-slate-200/50"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <Sparkles className="w-4 h-4 text-emerald-600" />
+                        <h4 className="text-sm font-bold text-slate-700">Dịch vụ đi kèm nâng cao (Tùy chọn)</h4>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {selectedPackage.subServices.map(sub => {
+                          const pId = selectedPackage._id || selectedPackage.id;
+                          const checked = currentSubServices.includes(sub.name);
+                          return (
+                            <button
+                              type="button"
+                              key={sub.name}
+                              disabled={!sub.isOptional}
+                              onClick={() => {
+                                setSelectedSubServices(prev => {
+                                  const current = prev[pId] || [];
+                                  return { 
+                                    ...prev, 
+                                    [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
+                                  };
+                                });
+                              }}
+                              className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all duration-300 ${
+                                checked
+                                  ? 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium'
+                                  : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                              } ${!sub.isOptional ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                                  checked 
+                                    ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                    : 'border-slate-300 bg-white'
+                                }`}>
+                                  {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </div>
+                                <span className="text-sm font-medium">{sub.name}</span>
+                              </div>
+                              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50/50 px-2.5 py-1 rounded-lg">
+                                {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* STEP 3: Xe */}
+              {step === 3 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  {isLoggedIn ? (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Car className="w-5 h-5 text-emerald-600" />
+                          <h3 className="text-lg font-bold text-slate-800">Chọn xe của bạn</h3>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {userVehicles.length === 0 ? (
+                          <div className="col-span-2 text-center text-slate-400 py-8">Chưa có xe nào.</div>
+                        ) : userVehicles.map(v => {
+                          const vId = v._id || v.id;
+                          const isSelected = selectedVehicle === vId;
+                          return (
+                            <button 
+                              key={vId} 
+                              type="button"
+                              onClick={() => setSelectedVehicle(vId)}
+                              className={`group text-left p-5 rounded-2xl border-2 transition-all duration-300 relative flex items-start gap-4 ${
+                                isSelected 
+                                  ? 'border-emerald-500 bg-emerald-50/20 shadow-md ring-4 ring-emerald-500/5' 
+                                  : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-md'
+                              }`}
+                            >
+                              <div className={`p-3 rounded-xl transition-all duration-300 ${
+                                isSelected ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-500'
+                              }`}>
+                                {getVehicleIcon(v.vehicleType || v.type)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-bold text-slate-800 text-sm truncate">
+                                  {v.name || `${v.brand || ''} ${v.model || ''}`.trim() || 'Xe chưa đặt tên'}
+                                </div>
+                                <div className="text-xs text-slate-400 capitalize mt-0.5">{v.vehicleType || v.type || 'Sedan'}</div>
+                                
+                                <div className="inline-flex items-center mt-3 px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 tracking-wider shadow-sm font-mono">
+                                  {v.licensePlate || v.plate}
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Car className="w-5 h-5 text-emerald-600" />
+                        <h3 className="text-lg font-bold text-slate-800">Thông tin xe của bạn</h3>
+                      </div>
+                      <p className="text-sm text-slate-500 mb-6">Nhập thông tin xe để tiếp tục. Sau khi đăng nhập, xe sẽ tự động lưu vào tài khoản.</p>
+                      
+                      <div className="max-w-xl mx-auto bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biển số xe *</label>
+                            <input 
+                              type="text" 
+                              value={guestVehicle.licensePlate} 
+                              placeholder="Ví dụ: 30A-12345"
+                              onChange={e => setGuestVehicle(prev => ({ ...prev, licensePlate: e.target.value }))}
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-semibold uppercase tracking-wider font-mono" 
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Hãng xe *</label>
+                            <input 
+                              type="text" 
+                              value={guestVehicle.brand} 
+                              placeholder="Ví dụ: Toyota, Honda, Hyundai..."
+                              onChange={e => setGuestVehicle(prev => ({ ...prev, brand: e.target.value }))}
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" 
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Dòng xe (Model)</label>
+                          <input 
+                            type="text" 
+                            value={guestVehicle.model} 
+                            placeholder="Ví dụ: Camry, Tucson, SH..."
+                            onChange={e => setGuestVehicle(prev => ({ ...prev, model: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" 
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-3 uppercase tracking-wide">Loại xe *</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                            {VEHICLE_TYPES.map(t => {
+                              const isSelected = guestVehicle.type === t.value;
+                              return (
+                                <button
+                                  type="button"
+                                  key={t.value}
+                                  onClick={() => setGuestVehicle(prev => ({ ...prev, type: t.value }))}
+                                  className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center text-center gap-2 transition-all ${
+                                    isSelected
+                                      ? 'border-emerald-500 bg-emerald-50/20 text-emerald-800 font-bold'
+                                      : 'border-slate-100 bg-slate-50/50 text-slate-500 hover:border-slate-200'
+                                  }`}
+                                >
+                                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400'}`}>
+                                    {getVehicleIcon(t.value)}
+                                  </div>
+                                  <span className="text-xs">{t.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              )}
+
               {/* STEP 4: Thời gian */}
               {step === 4 && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-6">
-                    {tab === 'regular' ? 'Chọn thời gian' : 'Lịch định kỳ'}
-                  </h3>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-5 h-5 text-emerald-600" />
+                    <h3 className="text-lg font-bold text-slate-800">
+                      {tab === 'regular' ? 'Chọn ngày & giờ hẹn' : 'Lịch định kỳ'}
+                    </h3>
+                  </div>
 
                   {tab === 'regular' ? (
-                    <div className="mb-8">
-                      <label className="text-sm text-slate-500 block mb-3">Chọn ngày</label>
-                      <div className="flex gap-2 overflow-x-auto pb-2">
-                        {bookingDates.map((d) => (
-                          <button key={d.id} onClick={() => setSelectedDate(d.id)}
-                            className={`min-w-[60px] p-3 rounded-xl border text-center transition-all ${
-                              selectedDate === d.id ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                            }`}>
-                            <div className="text-xs text-slate-400 font-medium">{d.label}</div>
-                            <div className="text-base font-bold text-slate-800 mt-1">{d.day}</div>
-                            <div className="text-xs text-slate-400">Thg {d.month}</div>
-                          </button>
-                        ))}
+                    <div className="mb-6">
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chọn ngày</label>
+                      <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-200">
+                        {bookingDates.map((d) => {
+                          const isSelected = selectedDate === d.id;
+                          return (
+                            <button 
+                              key={d.id} 
+                              type="button"
+                              onClick={() => setSelectedDate(d.id)}
+                              className={`flex flex-col items-center justify-between min-w-[76px] p-4 rounded-2xl border-2 transition-all duration-300 ${
+                                isSelected 
+                                  ? 'border-emerald-500 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20 scale-105' 
+                                  : 'border-slate-100 bg-white hover:border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              <span className={`text-[10px] uppercase font-bold tracking-wider ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                                {d.label}
+                              </span>
+                              <span className="text-xl font-extrabold my-1">{d.day}</span>
+                              <span className={`text-[10px] font-semibold ${isSelected ? 'text-emerald-200' : 'text-slate-400'}`}>
+                                Thg {d.month}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
-                    <div className="mb-8">
-                      <label className="text-sm text-slate-500 block mb-3">Các ngày trong tuần</label>
+                    <div className="mb-6">
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Các ngày trong tuần</label>
                       <div className="flex gap-2">
                         {WEEKDAY_OPTIONS.map(({ label, value }) => (
-                          <button key={value} onClick={() => toggleDay(value)}
-                            className={`w-10 h-10 rounded-xl text-xs font-medium transition-all ${
-                              selectedDays.includes(value) ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
-                            }`}>{label}</button>
+                          <button 
+                            key={value} 
+                            type="button"
+                            onClick={() => toggleDay(value)}
+                            className={`w-12 h-12 rounded-xl text-sm font-bold transition-all ${
+                              selectedDays.includes(value) 
+                                ? 'bg-emerald-600 text-white shadow-md' 
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                            }`}
+                          >
+                            {label}
+                          </button>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  <div className="mb-8">
-                    <label className="text-sm text-slate-500 block mb-3">Chọn khung giờ{tab === 'recurring' ? ' cố định' : ''}</label>
-                    <div className="flex flex-wrap gap-2">
-                      {tab === 'regular' ? (
-                        slotsLoading ? (
-                          <div className="text-slate-400 text-sm py-2">Đang tải lịch trống...</div>
-                        ) : availableSlots.length > 0 ? (
-                          availableSlots.map(s => {
-                            const timeLabel = s.startTime;
-                            const isDisabled = !s.available;
-                            return (
-                              <button key={timeLabel} disabled={isDisabled}
-                                onClick={() => setSelectedTime(timeLabel)}
-                                className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-                                  selectedTime === timeLabel
-                                    ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm'
-                                    : isDisabled
-                                      ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
-                                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                                }`}>
-                                {timeLabel}
-                              </button>
-                            );
-                          })
-                        ) : (
-                          ['07:00','08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
-                            <button key={t} onClick={() => setSelectedTime(t)}
-                              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-                                selectedTime === t ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                              }`}>{t}</button>
-                          ))
-                        )
+                  <div className="mb-6">
+                    <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chọn khung giờ{tab === 'recurring' ? ' cố định' : ''}</label>
+                    <div className="space-y-6">
+                      {slotsLoading ? (
+                        <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
+                          <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
+                          <span className="text-sm">Đang tìm lịch trống...</span>
+                        </div>
                       ) : (
-                        TIME_SLOTS.map(t => (
-                          <button key={t} onClick={() => setSelectedTime(t)}
-                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-                              selectedTime === t ? 'border-emerald-400 bg-emerald-50/50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                            }`}>{t}</button>
-                        ))
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                          {/* Morning Section */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-amber-600">
+                              <Sun className="w-4 h-4" />
+                              <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi sáng</h4>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {groupedSlots.morning.length === 0 ? (
+                                <span className="text-xs text-slate-400 py-2">Không có lịch trống buổi sáng</span>
+                              ) : groupedSlots.morning.map(s => {
+                                const timeLabel = s.startTime;
+                                const isDisabled = !s.available;
+                                const isSelected = selectedTime === timeLabel;
+                                return (
+                                  <button 
+                                    key={timeLabel} 
+                                    type="button"
+                                    disabled={isDisabled}
+                                    onClick={() => setSelectedTime(timeLabel)}
+                                    className={`px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                      isSelected
+                                        ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
+                                        : isDisabled
+                                          ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
+                                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {timeLabel}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Afternoon Section */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-blue-600">
+                              <Sunset className="w-4 h-4" />
+                              <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi chiều</h4>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {groupedSlots.afternoon.length === 0 ? (
+                                <span className="text-xs text-slate-400 py-2">Không có lịch trống buổi chiều</span>
+                              ) : groupedSlots.afternoon.map(s => {
+                                const timeLabel = s.startTime;
+                                const isDisabled = !s.available;
+                                const isSelected = selectedTime === timeLabel;
+                                return (
+                                  <button 
+                                    key={timeLabel} 
+                                    type="button"
+                                    disabled={isDisabled}
+                                    onClick={() => setSelectedTime(timeLabel)}
+                                    className={`px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                      isSelected
+                                        ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
+                                        : isDisabled
+                                          ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
+                                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {timeLabel}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
 
                   {tab === 'recurring' && (
-                    <div>
-                      <label className="text-sm text-slate-500 block mb-3">Số tuần lặp lại</label>
-                      <div className="flex gap-2 flex-wrap">
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Số tuần lặp lại</label>
+                      <div className="flex gap-2 flex-wrap mb-4">
                         {WEEKS_OPTIONS.map(w => (
-                          <button key={w} onClick={() => setWeeks(w)}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                              weeks === w ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
-                            }`}>{w} tuần</button>
+                          <button 
+                            key={w} 
+                            type="button"
+                            onClick={() => setWeeks(w)}
+                            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                              weeks === w 
+                                ? 'bg-emerald-600 text-white shadow-md' 
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                            }`}
+                          >
+                            {w} tuần
+                          </button>
                         ))}
                       </div>
                       {previewDates.length > 0 && (
-                        <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-                          <p className="text-xs text-slate-500 mb-2">📋 Dự kiến: <strong className="text-slate-700">{previewDates.length} buổi</strong></p>
-                          <div className="flex flex-wrap gap-1">
+                        <div className="p-4 rounded-xl bg-white border border-slate-150 shadow-sm">
+                          <p className="text-xs text-slate-500 mb-2.5 font-semibold">📋 Danh sách buổi giặt dự kiến ({previewDates.length} buổi):</p>
+                          <div className="flex flex-wrap gap-1.5">
                             {previewDates.slice(0, 10).map((d, i) => (
-                              <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                              <span key={i} className="text-[10px] font-medium px-2 py-1 rounded-lg bg-slate-50 border border-slate-100 text-slate-600">
                                 {d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })}
                               </span>
                             ))}
-                            {previewDates.length > 10 && <span className="text-[10px] text-slate-400">+{previewDates.length - 10}</span>}
+                            {previewDates.length > 10 && (
+                              <span className="text-[10px] font-bold text-slate-400 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
+                                +{previewDates.length - 10} buổi nữa
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -637,202 +1174,383 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
-              {/* STEP 5 / Confirm */}
-              {((step === 5 && isLoggedIn) || (step === 4 && !isLoggedIn)) && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-                  <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-8 h-8 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
-                    </svg>
+              {/* STEP 5: Xác nhận */}
+              {step === 5 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-xl mx-auto space-y-6">
+                  <div className="text-center mb-6">
+                    <div className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center mx-auto mb-3 text-emerald-500">
+                      <Sparkles className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800">Xác nhận lịch hẹn của bạn</h3>
+                    <p className="text-sm text-slate-500 mt-1">Vui lòng kiểm tra lại thông tin chi tiết trước khi đặt chỗ</p>
                   </div>
-                  <h3 className="text-xl font-semibold text-slate-800 mb-2">Xác nhận đặt lịch</h3>
 
-                  <div className="max-w-sm mx-auto mt-8 space-y-3 text-left">
-                    <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-500 text-sm">Chi nhánh</span>
-                      <span className="text-slate-800 font-medium text-sm">{selectedBranch?.name}</span>
-                    </div>
-                    {isLoggedIn && vehicle && (
-                      <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
-                        <span className="text-slate-500 text-sm">Xe</span>
-                        <span className="text-slate-800 font-medium text-sm">{vehicle.licensePlate || vehicle.name}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-500 text-sm">Gói dịch vụ</span>
-                      <span className="text-slate-800 font-medium text-sm">{pkg?.name}</span>
-                    </div>
-                    <div className="flex justify-between p-4 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-500 text-sm">Thời gian</span>
-                      <span className="text-slate-800 font-medium text-sm">
-                        {tab === 'regular'
-                          ? `${currentDate?.label} ${selectedTime}`
-                          : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần · ${previewDates.length} buổi`
-                        }
-                      </span>
-                    </div>
-
-                    {isLoggedIn && (
-                      <div className="pt-4 border-t border-slate-200 space-y-3">
-                        {tab === 'regular' && validPacks.length > 0 && (
-                          <div className="p-4 rounded-xl bg-white border border-slate-200">
-                            <label className="text-xs text-slate-500 block mb-2">Thanh toán bằng Gói Lượt:</label>
-                            <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                              value={selectedSlotPack || ''}
-                              onChange={e => { setSelectedSlotPack(e.target.value || null); if (e.target.value) setAppliedVoucher(null); }}>
-                              <option value="">Không sử dụng gói lượt</option>
-                              {validPacks.map(p => (
-                                <option key={p._id || p.id} value={p._id || p.id}>Còn {p.remainingSlots} lần</option>
-                              ))}
-                            </select>
+                  {/* Booking Ticket Card */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-100/30 overflow-hidden relative">
+                    {/* Top ticket strip decoration */}
+                    <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600" />
+                    
+                    {/* Ticket circles decoration at sides */}
+                    <div className="absolute top-1/2 -left-3 w-6 h-6 rounded-full bg-slate-50 border-r border-slate-200/60 z-10 -translate-y-1/2" />
+                    <div className="absolute top-1/2 -right-3 w-6 h-6 rounded-full bg-slate-50 border-l border-slate-200/60 z-10 -translate-y-1/2" />
+                    
+                    <div className="p-6 md:p-8 space-y-6">
+                      {/* Grid details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-6 border-b border-dashed border-slate-200">
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Chi nhánh</span>
+                            <span className="text-sm font-bold text-slate-700">{selectedBranch?.name}</span>
                           </div>
-                        )}
-                        {!isPayingWithPack && (
-                          <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={setAppliedVoucher} orderAmount={totalBase} compact />
-                        )}
-                      </div>
-                    )}
+                        </div>
 
-                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-emerald-700 font-semibold text-sm">Tổng cộng</span>
-                        <span className="text-emerald-700 font-bold">{formatCurrency(total)}</span>
+                        <div className="flex items-start gap-3">
+                          <Car className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Phương tiện</span>
+                            <span className="text-sm font-bold text-slate-700">
+                              {pendingBooking?.guestVehicle?.licensePlate ? (
+                                `${pendingBooking.guestVehicle.licensePlate} (${pendingBooking.guestVehicle.brand} ${pendingBooking.guestVehicle.model})`
+                              ) : isLoggedIn && vehicle ? (
+                                `${vehicle.licensePlate || vehicle.name}`
+                              ) : !isLoggedIn && guestVehicle.licensePlate ? (
+                                `${guestVehicle.licensePlate} (${guestVehicle.brand} ${guestVehicle.model})`
+                              ) : (
+                                'Chưa chọn xe'
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Dịch vụ chính</span>
+                            <span className="text-sm font-bold text-slate-700">{pkg?.name}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <Calendar className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Thời gian</span>
+                            <span className="text-sm font-bold text-slate-700">
+                              {tab === 'regular'
+                                ? `${currentDate?.label || ''}, ${selectedTime}`
+                                : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần (${previewDates.length} buổi)`
+                              }
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      {isLoggedIn && discount > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-emerald-600">Khuyến mãi</span>
-                          <span className="text-emerald-600">-{formatCurrency(discount)}</span>
+
+                      {/* Optional Sub-services summary */}
+                      {currentSubServices.length > 0 && (
+                        <div className="pb-6 border-b border-dashed border-slate-200">
+                          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2">Dịch vụ chọn thêm</span>
+                          <div className="flex flex-wrap gap-2">
+                            {currentSubServices.map(subName => (
+                              <span key={subName} className="text-xs font-semibold px-3 py-1 rounded-xl bg-slate-50 border border-slate-100 text-slate-600">
+                                {subName}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
-                      {isLoggedIn && points > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-emerald-600">Tích điểm</span>
-                          <span className="text-emerald-600">+{points} điểm</span>
+
+                      {/* Payment Options */}
+                      {isLoggedIn && (
+                        <div className="space-y-4 pb-6 border-b border-dashed border-slate-200">
+                          {tab === 'regular' && validPacks.length > 0 && (
+                            <div className="p-4 rounded-2xl bg-emerald-50/20 border border-emerald-100 space-y-2">
+                              <label className="text-xs font-bold text-emerald-800 uppercase tracking-wide block">Thanh toán bằng Gói Lượt:</label>
+                              <select 
+                                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm bg-white font-semibold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
+                                value={selectedSlotPack || ''}
+                                onChange={e => { 
+                                  setSelectedSlotPack(e.target.value || null); 
+                                  if (e.target.value) setAppliedVoucher(null); 
+                                }}
+                              >
+                                <option value="">Không sử dụng gói lượt</option>
+                                {validPacks.map(p => (
+                                  <option key={p._id || p.id} value={p._id || p.id}>
+                                    Gói {p.packageId?.name} (Còn {p.remainingSlots} lần)
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {!isPayingWithPack && (
+                            <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={setAppliedVoucher} orderAmount={totalBase} compact />
+                          )}
                         </div>
                       )}
-                      {tab === 'recurring' && pkg && previewDates.length > 0 && (
-                        <>
-                          <div className="border-t border-emerald-200 pt-2 mt-2" />
-                          <div className="flex justify-between text-xs">
-                            <span className="text-emerald-600">Tổng dự kiến ({previewDates.length} buổi)</span>
-                            <span className="text-emerald-600 font-bold">{formatCurrency((totalBase - discount) * previewDates.length)}</span>
+
+                      {/* Financial Breakdown */}
+                      <div className="space-y-2.5 pt-2">
+                        <div className="flex justify-between text-sm text-slate-500">
+                          <span>Giá gốc dịch vụ</span>
+                          <span className="font-semibold">{formatCurrency(totalBase)}</span>
+                        </div>
+                        {isLoggedIn && discount > 0 && (
+                          <div className="flex justify-between text-sm text-emerald-600">
+                            <span>Mã giảm giá</span>
+                            <span>-{formatCurrency(discount)}</span>
                           </div>
-                        </>
-                      )}
+                        )}
+                        {isLoggedIn && points > 0 && (
+                          <div className="flex justify-between text-xs text-slate-400">
+                            <span>Tích điểm thành viên</span>
+                            <span>+{points} điểm</span>
+                          </div>
+                        )}
+                        {tab === 'recurring' && pkg && previewDates.length > 0 && (
+                          <div className="flex justify-between text-xs text-slate-400 border-t border-slate-100 pt-2.5">
+                            <span>Tổng số buổi định kỳ</span>
+                            <span>{previewDates.length} buổi</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
+                          <span className="text-base font-bold text-slate-800">
+                            {tab === 'recurring' ? 'Tổng dự kiến (tạm tính)' : 'Thành tiền'}
+                          </span>
+                          <span className="text-2xl font-extrabold text-emerald-600">
+                            {tab === 'recurring' 
+                              ? formatCurrency((totalBase - discount) * previewDates.length) 
+                              : formatCurrency(total)
+                            }
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {result && tab === 'recurring' && (
-                    <div className="mt-4 space-y-1">
-                      {result.totalCreated > 0 && <div className="text-sm text-emerald-600 font-semibold">✓ Đã tạo {result.totalCreated} lịch hẹn!</div>}
-                      {result.totalFailed > 0 && <div className="text-sm text-amber-500 font-medium">⚠ {result.totalFailed} ngày bị bỏ qua do trùng slot.</div>}
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 space-y-1">
+                      {result.totalCreated > 0 && <div className="text-sm text-emerald-700 font-bold">✓ Đã tạo thành công {result.totalCreated} lịch hẹn!</div>}
+                      {result.totalFailed > 0 && <div className="text-sm text-amber-600 font-semibold">⚠ {result.totalFailed} ngày bị bỏ qua do trùng lịch.</div>}
                     </div>
                   )}
 
-                  {error && <div className="mt-4 text-red-500 font-medium text-sm">{error}</div>}
-
-                  {tab === 'regular' ? (
-                    <button onClick={confirmBooking} disabled={bookingLoading}
-                      className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)] transition-all duration-300 disabled:opacity-50">
-                      {bookingLoading ? 'Đang tạo...' : isLoggedIn ? 'Xác nhận đặt chỗ' : 'Đăng nhập để xác nhận'}
-                    </button>
-                  ) : (
-                    <button onClick={confirmRecurringBooking} disabled={bookingLoading || previewDates.length === 0}
-                      className="mt-8 px-10 py-3.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)] transition-all duration-300 disabled:opacity-50">
-                      {bookingLoading ? 'Đang tạo lịch...' : `Xác nhận ${previewDates.length} buổi`}
-                    </button>
+                  {error && (
+                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-sm font-semibold flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <span>{error}</span>
+                    </div>
                   )}
-                  {!isLoggedIn && <p className="text-slate-400 text-xs mt-3">Bạn cần đăng nhập để hoàn tất đặt lịch</p>}
+                  {processingPending && (
+                    <div className="flex items-center justify-center gap-2 text-emerald-600 font-semibold py-2">
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <span>Đang xử lý đặt lịch sau đăng nhập...</span>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="text-center pt-4">
+                    {tab === 'regular' ? (
+                      <button 
+                        type="button"
+                        onClick={confirmBooking} 
+                        disabled={bookingLoading}
+                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                      >
+                        {bookingLoading ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span>Đang tạo lịch hẹn...</span>
+                          </>
+                        ) : isLoggedIn ? (
+                          'Xác nhận đặt chỗ ngay'
+                        ) : (
+                          'Đăng nhập để đặt lịch'
+                        )}
+                      </button>
+                    ) : (
+                      <button 
+                        type="button"
+                        onClick={confirmRecurringBooking} 
+                        disabled={bookingLoading || previewDates.length === 0}
+                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                      >
+                        {bookingLoading ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span>Đang tạo lịch hẹn...</span>
+                          </>
+                        ) : isLoggedIn ? (
+                          `Xác nhận ${previewDates.length} buổi đặt định kỳ`
+                        ) : (
+                          'Đăng nhập để đặt lịch định kỳ'
+                        )}
+                      </button>
+                    )}
+                    
+                    {!isLoggedIn && (
+                      <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3 text-left">
+                        <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Bạn cần đăng nhập để hoàn tất đặt chỗ. Thông tin xe bạn nhập ở bước trước sẽ được tự động lưu vào tài khoản sau khi đăng nhập thành công.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               )}
-
-              {/* Navigation */}
-              <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-200">
-                {step > 1 ? (
-                  <button onClick={() => setStep(step - 1)}
-                    className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
-                    Quay lại
-                  </button>
-                ) : <div />}
-                {step < totalSteps ? (
-                  <button onClick={() => setStep(step + 1)} disabled={!canNextStep()}
-                    className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                      canNextStep() ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                    }`}>
-                    Tiếp theo
-                  </button>
-                ) : (
-                  <button onClick={reset}
-                    className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
-                    Đặt lại
-                  </button>
-                )}
-              </div>
             </>
+          )}
+
+          {/* ── Shared Navigation ── */}
+          {(tab !== 'slot_pack' || isLoggedIn) && (
+            <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-100">
+              {step > 1 ? (
+                <button 
+                  type="button"
+                  onClick={() => setStep(step - 1)}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-800 transition-colors active:scale-[0.98]"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Quay lại
+                </button>
+              ) : <div />}
+              
+              {step < totalSteps ? (
+                <button 
+                  type="button"
+                  onClick={() => setStep(step + 1)} 
+                  disabled={!canNextStep()}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] bg-emerald-600 text-white shadow-md shadow-emerald-500/10 hover:bg-emerald-505"
+                  style={{
+                    backgroundColor: canNextStep() ? '#10b981' : '#f1f5f9',
+                    color: canNextStep() ? '#ffffff' : '#94a3b8',
+                    cursor: canNextStep() ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <span>Tiếp theo</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button 
+                  type="button"
+                  onClick={reset}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-500 text-sm font-bold hover:bg-slate-50 hover:text-slate-700 transition-colors active:scale-[0.98]"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Đặt lại từ đầu
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
 
       <AnimatePresence>
         {showSuccessModal && lastBooking && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
-            onClick={() => { setShowSuccessModal(false); reset(); }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[1.5rem] w-full max-w-lg p-8 shadow-xl max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}>
-              <div className="text-center mb-6">
-                <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-7 h-7 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900">Đặt lịch thành công!</h3>
-                <p className="text-sm text-slate-500 mt-1">Mã đặt chỗ: <span className="font-semibold text-emerald-600">{lastBooking.bookingCode}</span></p>
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => { setShowSuccessModal(false); reset(); }}
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100/80 overflow-hidden max-h-[90vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header block (Light and simple) */}
+              <div className="pt-8 pb-4 text-center px-6 bg-white border-b border-slate-50">
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                  className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-3"
+                >
+                  <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
+                </motion.div>
+                
+                <h3 className="text-xl font-bold text-slate-800">Đặt lịch thành công</h3>
+                <p className="text-slate-400 text-xs mt-1 leading-relaxed">Cảm ơn bạn đã sử dụng dịch vụ của AutoWash Pro</p>
               </div>
 
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-500">Chi nhánh</span>
-                  <span className="font-medium text-slate-800">{lastBooking.branch?.name}</span>
-                </div>
-                {lastBooking.vehicle && (
-                  <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-500">Xe</span>
-                    <span className="font-medium text-slate-800">{lastBooking.vehicle.licensePlate || lastBooking.vehicle.name}</span>
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {/* Booking Code Callout */}
+                <div className="text-center bg-slate-50 border border-slate-100/60 p-4 rounded-2xl">
+                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Mã đặt lịch của bạn</span>
+                  <div className="flex items-center justify-center gap-2 mt-1.5 font-mono">
+                    <span className="text-xl font-extrabold text-emerald-600 tracking-wider">
+                      {lastBooking.bookingCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(lastBooking.bookingCode);
+                        alert('Đã copy mã đặt lịch!');
+                      }}
+                      className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 transition-colors"
+                      title="Sao chép"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                )}
-                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-500">Gói dịch vụ</span>
-                  <span className="font-medium text-slate-800">{lastBooking.pkg?.name}</span>
                 </div>
-                {lastBooking.subServices?.length > 0 && (
-                  <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-500">DV chọn thêm</span>
-                    <span className="font-medium text-slate-800">{lastBooking.subServices.join(', ')}</span>
+
+                {/* Details list */}
+                <div className="divide-y divide-slate-100 text-sm">
+                  <div className="flex justify-between py-3">
+                    <span className="text-slate-400 text-xs font-semibold">Chi nhánh</span>
+                    <span className="font-bold text-slate-700 text-sm">{lastBooking.branch?.name}</span>
                   </div>
-                )}
-                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-500">Thời gian</span>
-                  <span className="font-medium text-slate-800">
-                    {lastBooking.currentDate
-                      ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
-                      : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
-                  </span>
-                </div>
-                <div className="flex justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-emerald-700 font-semibold">Tổng thanh toán</span>
-                  <span className="text-emerald-700 font-bold">{formatCurrency(lastBooking.total)}</span>
+                  {lastBooking.vehicle && (
+                    <div className="flex justify-between py-3">
+                      <span className="text-slate-400 text-xs font-semibold">Xe</span>
+                      <span className="font-bold text-slate-700 text-sm">{lastBooking.vehicle.licensePlate || lastBooking.vehicle.name}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-3">
+                    <span className="text-slate-400 text-xs font-semibold">Gói dịch vụ</span>
+                    <span className="font-bold text-slate-700 text-sm">{lastBooking.pkg?.name}</span>
+                  </div>
+                  {lastBooking.subServices?.length > 0 && (
+                    <div className="flex justify-between py-3 text-right">
+                      <span className="text-slate-400 text-xs font-semibold shrink-0">Dịch vụ phụ</span>
+                      <span className="font-bold text-slate-700 text-sm pl-4">{lastBooking.subServices.join(', ')}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-3">
+                    <span className="text-slate-400 text-xs font-semibold">Thời gian hẹn</span>
+                    <span className="font-bold text-slate-700 text-sm">
+                      {lastBooking.currentDate
+                        ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
+                        : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-4">
+                    <span className="font-bold text-sm text-slate-500">Tổng thanh toán</span>
+                    <span className="font-black text-lg text-emerald-600">{formatCurrency(lastBooking.total)}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-8">
-                <button onClick={() => { setShowSuccessModal(false); reset(); }}
-                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              {/* Action buttons */}
+              <div className="p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => { setShowSuccessModal(false); reset(); }}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98]"
+                >
                   Đóng
                 </button>
-                <button onClick={() => { setShowSuccessModal(false); reset(); onGoToHistory?.(); }}
-                  className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">
+                <button 
+                  type="button"
+                  onClick={() => { setShowSuccessModal(false); reset(); onGoToHistory?.(); }}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]"
+                >
                   Lịch sử đặt
                 </button>
               </div>

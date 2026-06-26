@@ -14,10 +14,14 @@ exports.getMySlotPacks = catchAsync(async (req, res) => {
   success(res, packs, 'Slot packs retrieved');
 });
 
-/** GET /api/slot-packs — Admin/Manager xem tất cả gói */
+/** GET /api/slot-packs — Admin/Manager xem tất cả gói (search + pagination) */
 exports.getAllSlotPacks = catchAsync(async (req, res) => {
-  const packs = await slotPackService.getAllSlotPacks(req.query);
-  success(res, packs, 'All slot packs retrieved');
+  const result = await slotPackService.getAllSlotPacks(req.query, req.user.role, req.user.branchId);
+  success(res, result.data, 'All slot packs retrieved', 200, {
+    total: result.total,
+    page: result.page,
+    totalPages: result.totalPages,
+  });
 });
 
 /** GET /api/slot-packs/:id — Chi tiết 1 gói */
@@ -28,7 +32,7 @@ exports.getSlotPackById = catchAsync(async (req, res) => {
 
 /** GET /api/slot-packs/code/:code — Lookup bằng mã (manager checkin) */
 exports.getSlotPackByCode = catchAsync(async (req, res) => {
-  const pack = await slotPackService.getSlotPackByCode(req.params.code, req.user.role);
+  const pack = await slotPackService.getSlotPackByCode(req.params.code, req.user.role, req.user.branchId);
   success(res, pack, 'Slot pack retrieved');
 });
 

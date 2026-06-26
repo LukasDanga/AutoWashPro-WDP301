@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -266,6 +267,11 @@ function VoucherUsageModal({ voucherId, onClose }) {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-800">{u.userId?.name || '—'}</span>
                         {u.userId?.tier && <TierBadge tier={u.userId.tier} />}
+                        {u.usedAt && (Date.now() - new Date(u.usedAt).getTime() < 24 * 60 * 60 * 1000) && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
@@ -351,7 +357,7 @@ export default function ManagerVouchers() {
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('list');
-  const notify = (msg, type = 'success') => setToast({ message: msg, type });
+  const notify = (msg, type = 'success') => showToast(msg, type);
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -486,7 +492,7 @@ export default function ManagerVouchers() {
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-slate-800">{v.name}</p>
-                        {v.description && <p className="text-[11px] text-slate-400 truncate max-w-[180px]">{v.description}</p>}
+                        {v.description && <p className="text-[11px] text-slate-400 truncate max-w-[180px]" title={v.description}>{v.description}</p>}
                       </td>
                       <td className="px-4 py-3 text-slate-700">
                         {v.type === 'percentage' ? `${v.value}%` : `${Number(v.value).toLocaleString('vi-VN')}₫`}
@@ -497,7 +503,7 @@ export default function ManagerVouchers() {
                         {formatDate(v.startDate)} – {formatDate(v.endDate)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive(v) ? 'bg-emerald-50 text-emerald-700' : isExpired(v) ? 'bg-slate-100 text-slate-400' : 'bg-rose-50 text-rose-600'}`}>
+                        <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive(v) ? 'bg-emerald-50 text-emerald-700' : isExpired(v) ? 'bg-slate-100 text-slate-400' : 'bg-rose-50 text-rose-600'}`}>
                           {isActive(v) ? 'Đang hoạt động' : isExpired(v) ? 'Hết hạn' : 'Tắt'}
                         </span>
                       </td>

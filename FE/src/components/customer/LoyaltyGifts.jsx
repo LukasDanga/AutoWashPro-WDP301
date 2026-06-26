@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, Coins, CaretRight, Star, Tag, Ticket, CheckCircle } from '@phosphor-icons/react';
+import { confirmDialog } from '@/lib/confirm';
 
 export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const [vouchers, setVouchers] = useState([]);
@@ -12,7 +13,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const fetchVouchers = async () => {
     setLoading(true);
     try {
-      const resTpl = await fetch(`${apiBase}/vouchers`, { headers: { Authorization: `Bearer ${token}` } });
+      const resTpl = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${token}` } });
       const dataTpl = await resTpl.json();
       const allVouchers = dataTpl.data || [];
       const templates = allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0);
@@ -27,7 +28,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   useEffect(() => { fetchVouchers(); }, [apiBase, token]);
 
   const handleRedeem = async (templateId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn đổi điểm lấy Voucher này?')) return;
+    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
     setRedeemLoading(true); setMessage('');
     try {
       const res = await fetch(`${apiBase}/vouchers/redeem-points`, {

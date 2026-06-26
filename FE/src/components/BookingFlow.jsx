@@ -62,6 +62,8 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
+  const [pendingDeposit, setPendingDeposit] = useState(null); // booking đang chờ đặt cọc
+  const [depositLoading, setDepositLoading] = useState(false);
   const [mySlotPacks, setMySlotPacks] = useState([]);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
   const [activeNav, setActiveNav] = useState('booking');
@@ -221,9 +223,33 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const payload = await response.json();
       const booking = payload?.data || payload;
       setBookingCode(booking?.bookingCode || booking?.code || '');
-      setMessage(`Đã giữ chỗ ${pkg?.name || 'Dịch vụ'} tại ${branch.name} lúc ${selectedTime}.`);
+      // Đơn lẻ/định kỳ cần đặt cọc trước; gói lượt đã trả trước → không cọc
+      if (booking?.depositAmount > 0 && !booking?.depositPaid) {
+        setPendingDeposit(booking);
+        setMessage('');
+      } else {
+        setMessage(`Đã giữ chỗ ${pkg?.name || 'Dịch vụ'} tại ${branch.name} lúc ${selectedTime}.`);
+      }
     } catch (error) { setMessage(error.message || 'Không thể tạo lịch hẹn'); }
     finally { setBookingLoading(false); }
+  }
+
+  async function payDeposit() {
+    if (!pendingDeposit) return;
+    setDepositLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: pendingDeposit._id, method: 'momo', paymentType: 'deposit' }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.message || 'Thanh toán cọc thất bại');
+      setMessage(`Đã đặt cọc ${formatCurrency(pendingDeposit.depositAmount)} thành công. Lịch của bạn đang chờ chi nhánh xác nhận.`);
+      setBookingCode(pendingDeposit.bookingCode || '');
+      setPendingDeposit(null);
+    } catch (e) { setMessage(e.message || 'Thanh toán cọc thất bại'); }
+    finally { setDepositLoading(false); }
   }
 
   return (
@@ -467,12 +493,48 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
           ) : null}
 
           {activeNav === 'recurring' ? <div style={{ paddingTop: 8 }}><RecurringBookingFlow user={currentUser} vehicles={vehicleList} apiBase={apiBase} token={token} /></div> : null}
-          {activeNav === 'slot_pack' ? <div style={{ paddingTop: 8 }}><SlotPackFlow user={currentUser} vehicles={vehicleList} apiBase={apiBase} token={token} /></div> : null}
+          {activeNav === 'slot_pack' ? <div style={{ paddingTop: 8 }}><SlotPackFlow user={currentUser} vehicles={vehicleList} apiBase={apiBase} token={token} onGoToHistory={() => setActiveNav('history')} /></div> : null}
           {activeNav === 'history' ? <div style={{ paddingTop: 8 }}><BookingsHistory apiBase={apiBase} token={token} /></div> : null}
           {activeNav === 'gifts' ? <div style={{ paddingTop: 8 }}><LoyaltyGifts apiBase={apiBase} token={token} user={currentUser} refreshUser={refreshUser} /></div> : null}
           {activeNav === 'profile' ? <div style={{ paddingTop: 8 }}><CustomerProfile apiBase={apiBase} token={token} /></div> : null}
         </main>
       </div>
+
+      {pendingDeposit && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 420, background: '#fff', borderRadius: 20, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Đặt cọc giữ chỗ</h3>
+              <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                Để tránh giữ chỗ ảo, vui lòng đặt cọc trước. Phần còn lại thanh toán khi hoàn thành dịch vụ.
+              </p>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#64748b', fontSize: '0.9rem' }}>Tổng tiền dịch vụ</span>
+                  <strong style={{ color: '#0f172a' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#10b981', fontSize: '0.9rem', fontWeight: 600 }}>Tiền cọc (30%)</span>
+                  <strong style={{ color: '#10b981', fontSize: '1.05rem' }}>{formatCurrency(pendingDeposit.depositAmount || 0)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px dashed rgba(16,185,129,0.25)' }}>
+                  <span style={{ color: '#64748b', fontSize: '0.85rem' }}>Còn lại trả khi xong</span>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || 0) - (pendingDeposit.depositAmount || 0)))}</span>
+                </div>
+              </div>
+              <button type="button" onClick={payDeposit} disabled={depositLoading}
+                style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
+                {depositLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN CỌC ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+              </button>
+              <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center' }}>
+                Tiền cọc sẽ không được hoàn lại nếu bạn không đến đúng giờ hẹn.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

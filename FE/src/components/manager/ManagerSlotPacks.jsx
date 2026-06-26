@@ -52,23 +52,48 @@ export default function ManagerSlotPacks({ user }) {
   const [lookupError, setLookupError] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [branchId, setBranchId] = useState(user?.branchId || null);
 
-  const branchId = user?.branchId;
-
-  const loadPacks = useCallback(async () => {
-    if (!branchId) return;
+  const loadPacks = useCallback(async (bId) => {
+    if (!bId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const params = new URLSearchParams({ branchId });
+      const params = new URLSearchParams({ branchId: bId });
       if (statusFilter) params.set('status', statusFilter);
       const res = await api(`/slot-packs?${params}`);
       const data = await res.json();
       setPacks(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [branchId, statusFilter]);
+  }, [statusFilter]);
 
-  useEffect(() => { loadPacks(); }, [loadPacks]);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      let bId = user?.branchId;
+
+      if (!bId) {
+        try {
+          const res = await api('/branches');
+          const p = await res.json();
+          const data = p?.data ?? p;
+          if (Array.isArray(data) && data.length > 0) {
+            bId = data[0]._id;
+          }
+        } catch { /* silent */ }
+      }
+
+      if (cancelled) return;
+      setBranchId(bId);
+      loadPacks(bId);
+    }
+
+    init();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => { if (branchId) loadPacks(branchId); }, [statusFilter]);
 
   async function handleLookup() {
     if (!lookupCode.trim()) return;
@@ -97,7 +122,7 @@ export default function ManagerSlotPacks({ user }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi sử dụng slot');
       setLookupResult(data.data || data);
-      loadPacks();
+      loadPacks(branchId);
     } catch (err) {
       setLookupError(err.message);
     }
@@ -174,7 +199,7 @@ export default function ManagerSlotPacks({ user }) {
               {tab.label}
             </button>
           ))}
-          <button onClick={loadPacks}
+          <button onClick={() => loadPacks(branchId)}
             className="shrink-0 ml-auto px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors">
             Làm mới
           </button>
@@ -195,7 +220,14 @@ export default function ManagerSlotPacks({ user }) {
                 <div key={pack._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-mono font-bold text-slate-800 text-sm">{pack.packCode}</div>
+                      <div className="font-mono font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        {pack.packCode}
+                        {pack.createdAt && (Date.now() - new Date(pack.createdAt).getTime() < 24 * 60 * 60 * 1000) && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">
                         {pack.userId?.name || 'Khách hàng'}
                       </div>
