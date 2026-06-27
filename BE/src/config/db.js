@@ -9,12 +9,11 @@ const connectDB = async (uri) => {
     const originalStartSession = mongoose.startSession.bind(mongoose);
     mongoose.startSession = async function() {
       const session = await originalStartSession();
-      const isReplicaSet = !!mongoose.connection.client?.topology?.s?.description?.type?.includes('ReplicaSet');
-      if (!isReplicaSet) {
-        session.startTransaction = () => {};
-        session.commitTransaction = async () => {};
-        session.abortTransaction = async () => {};
-      }
+      // No-op all transaction methods in dev (standalone MongoDB doesn't support transactions)
+      session.startTransaction = () => {};
+      session.commitTransaction = async () => {};
+      session.abortTransaction = async () => {};
+      session.inTransaction = () => false;
       return session;
     };
   } catch (err) {
