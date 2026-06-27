@@ -1,0 +1,160 @@
+/**
+ * AutoWashPro API Client
+ * Axios instance with interceptors
+ */
+
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import * as SecureStore from 'expo-secure-store';
+
+// Configuration
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+// Storage keys
+const ACCESS_TOKEN_KEY = 'aw_accessToken';
+const REFRESH_TOKEN_KEY = 'aw_refreshToken';
+
+// Create axios instance
+const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Response interceptor - unwrap data from { success, data }
+apiClient.interceptors.response.use(
+  (response) => {
+    // If response has { success, data }, unwrap it
+    if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+      response.data = response.data.data;
+    }
+    return response;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Token refresh state
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string | null) => void> = [];
+
+// Subscribe to token refresh
+const subscribeTokenRefresh = (callback: (token: string | null) => void) => {
+  refreshSubscribers.push(callback);
+};
+
+// Notify all subscribers with new token
+const onRefreshComplete = (token: string | null) => {
+  refreshSubscribers.forEach((callback) => callback(token));
+  refreshSubscribers = [];
+};
+
+// Get tokens from storage
+const getAccessToken = async (): Promise<string | null> => {
+  return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+};
+
+const getRefreshToken = async (): Promise<string | null> => {
+  return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+};
+
+// Request interceptor - Add auth token
+apiClient.interceptors.request.use(
+  async (config: InternalAxiosRequestConfig) => {
+    const token = await getAccessToken();
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor - Handle token refresh
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Handle 401 Unauthorized
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // Wait for token refresh to complete
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh((token: string | null) => {
+            if (!token) {
+              reject(error);
+              return;
+            }
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            resolve(apiClient(originalRequest));
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = await getRefreshToken();
+        if (!refreshToken) {
+          throw new Error('No refresh token');
+        }
+
+// Call refresh token endpoint
+      const response = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+        refreshToken,
+      });
+
+      // Refresh endpoint returns { success, data: { accessToken, refreshToken } }
+      const payload = response.data?.data ?? response.data;
+      const { accessToken, refreshToken: newRefreshToken } = payload ?? {};
+
+      if (!accessToken || !newRefreshToken) {
+        throw new Error('Invalid refresh response');
+      }
+
+      // Store new tokens
+      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
+      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+
+        // Retry original request
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        }
+        onRefreshComplete(accessToken);
+        isRefreshing = false;
+
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        isRefreshing = false;
+        refreshSubscribers = [];
+
+        // Clear tokens on refresh failure
+        await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Export api client
+export { apiClient };
+
+// Helper function to get full image URL
+export const getImageUrl = (path?: string): string | undefined => {
+  if (!path) return undefined;
+  if (path.startsWith('http')) return path;
+  return `${API_BASE_URL.replace('/api', '')}${path}`;
+};
+
+// Export API base URL for use in components
+export { API_BASE_URL };
