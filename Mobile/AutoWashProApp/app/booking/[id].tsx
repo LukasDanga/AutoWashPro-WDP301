@@ -330,6 +330,14 @@ export default function BookingDetailScreen() {
 
       {/* Bottom Actions */}
       <View style={styles.bottomActions}>
+        {isAuthenticated && (
+          <Button
+            title="💬 Chat với AI"
+            variant="secondary"
+            onPress={() => router.push('/chat')}
+            style={styles.chatButton}
+          />
+        )}
         {canCancel && (
           <Button
             title="Hủy đặt lịch"
@@ -456,12 +464,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    gap: spacing.md,
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  chatButton: {
+    backgroundColor: colors.primary,
   },
   cancelButton: {
     flex: 1,
+    minWidth: 120,
   },
   rebookButton: {
     flex: 1,
+    minWidth: 120,
   },
 });

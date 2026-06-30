@@ -212,7 +212,7 @@ export default function HomeScreen() {
             </AppText>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.quickAction}
             onPress={() => router.push('/profile')}
           >
@@ -223,6 +223,36 @@ export default function HomeScreen() {
               Tài khoản
             </AppText>
           </TouchableOpacity>
+        </View>
+
+        {/* Extra Quick Actions: Chatbot & QR Check-in */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.quickAction}
+            onPress={() => router.push('/chat')}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: '#EDE7F6' }]}>
+              <Text style={styles.quickActionEmoji}>🤖</Text>
+            </View>
+            <AppText variant="bodySmall" style={styles.quickActionText}>
+              Chat AI
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickAction}
+            onPress={() => router.push('/checkin')}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={styles.quickActionEmoji}>📷</Text>
+            </View>
+            <AppText variant="bodySmall" style={styles.quickActionText}>
+              Check-in QR
+            </AppText>
+          </TouchableOpacity>
+
+          <View style={styles.quickAction} />
+          <View style={styles.quickAction} />
         </View>
 
         {/* Featured Packages */}
