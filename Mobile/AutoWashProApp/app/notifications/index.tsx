@@ -16,6 +16,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useNotifications } from '../../src/contexts/NotificationContext';
 import { notificationApi } from '../../src/api';
 import { 
   Text as AppText, 
@@ -41,6 +42,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, string> = {
 export default function NotificationsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const { markAsRead: contextMarkAsRead, markAllAsRead: contextMarkAllAsRead } = useNotifications();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +84,7 @@ export default function NotificationsScreen() {
   const handleMarkAllRead = async () => {
     setIsMarkingAllRead(true);
     try {
-      await notificationApi.markAllAsRead();
+      await contextMarkAllAsRead();
       setNotifications(notifications.map(n => ({ ...n, isRead: true })));
       Alert.alert('Thành công', 'Đã đánh dấu tất cả là đã đọc');
     } catch (error: any) {
@@ -94,9 +96,9 @@ export default function NotificationsScreen() {
 
   const handleMarkAsRead = async (notification: Notification) => {
     if (notification.isRead) return;
-    
+
     try {
-      await notificationApi.markAsRead(notification._id);
+      await contextMarkAsRead(notification._id);
       setNotifications(prev =>
         prev.map(n => n._id === notification._id ? { ...n, isRead: true } : n)
       );

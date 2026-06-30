@@ -50,6 +50,8 @@ export default function RootLayout() {
           <Stack.Screen name="voucher" options={{ headerShown: false }} />
           <Stack.Screen name="vehicle" options={{ headerShown: false }} />
           <Stack.Screen name="payment" options={{ headerShown: false }} />
+          <Stack.Screen name="chat" options={{ headerShown: false }} />
+          <Stack.Screen name="checkin" options={{ headerShown: false }} />
         </Stack>
       </NotificationProvider>
     </AuthProvider>

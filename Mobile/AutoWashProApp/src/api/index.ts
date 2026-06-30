@@ -14,3 +14,4 @@ export { voucherApi } from './voucher';
 export { slotPackApi } from './slotPack';
 export { notificationApi } from './notification';
 export { publicApi } from './public';
+export { chatbotApi } from './chatbot';
