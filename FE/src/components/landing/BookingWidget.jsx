@@ -65,6 +65,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [mySlotPacks, setMySlotPacks] = useState([]);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [todaySlots, setTodaySlots] = useState([]);
+  const [todaySlotsLoading, setTodaySlotsLoading] = useState(false);
 
   // Selections
   const [selectedBranch, setSelectedBranch] = useState(null);
@@ -90,6 +92,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastBooking, setLastBooking] = useState(null);
   const [result, setResult] = useState(null);
+
+  // Deposit payment state
+  const [pendingDeposit, setPendingDeposit] = useState(null);
+  const [depositPayment, setDepositPayment] = useState(null);
+  const [depositQrStep, setDepositQrStep] = useState('select'); // 'select' | 'qr' | 'success'
+  const [depositLoading, setDepositLoading] = useState(false);
+  const [depositMethod, setDepositMethod] = useState('momo');
+  const [depositPollCount, setDepositPollCount] = useState(0);
 
   // Process pending booking after login
   const [processingPending, setProcessingPending] = useState(false);
@@ -126,6 +136,23 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
     loadPackages();
   }, [selectedBranch]);
+
+  // Fetch today slots preview when branch + first package are available
+  useEffect(() => {
+    if (!selectedBranch) { setTodaySlots([]); return; }
+    const firstPkg = packages[0];
+    if (!firstPkg) { setTodaySlots([]); return; }
+    const today = bookingDates[0]?.iso;
+    if (!today) return;
+    setTodaySlotsLoading(true);
+    const branchId = selectedBranch._id || selectedBranch.id;
+    const pkgId = firstPkg._id || firstPkg.id;
+    fetch(`${API_BASE}/bookings/slots?branchId=${branchId}&date=${today}&packageId=${pkgId}`)
+      .then(r => r.json())
+      .then(payload => setTodaySlots(payload?.data || []))
+      .catch(() => setTodaySlots([]))
+      .finally(() => setTodaySlotsLoading(false));
+  }, [selectedBranch, packages]);
 
   // Load slot packs (when logged in)
   useEffect(() => {
@@ -304,7 +331,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         subServices: pb.selectedSubServices || [],
         recurringCount: pb.tab === 'recurring' ? booking?.totalCreated || 0 : undefined,
       });
-      setShowSuccessModal(true);
+
+      // Check if deposit payment is required
+      if (booking?.depositAmount > 0 && !booking?.depositPaid) {
+        setPendingDeposit(booking);
+        setDepositQrStep('select');
+        setDepositPayment(null);
+      } else {
+        setShowSuccessModal(true);
+      }
       onSetPendingBooking(null);
     } catch (err) {
       console.error('processPendingBooking error:', err);
@@ -312,7 +347,90 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       onSetPendingBooking(null);
     } finally {
       setBookingLoading(false);
-      setProcessingPending(false);
+    }
+  }
+
+  async function payDeposit() {
+    if (!pendingDeposit) return;
+    setDepositLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${apiBase}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          bookingId: pendingDeposit._id,
+          method: depositMethod,
+          paymentType: 'deposit',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi thanh toán cọc');
+
+      const payment = data?.data || data;
+
+      // Show QR code for bank transfer
+      setDepositPayment(payment);
+      setDepositQrStep('qr');
+      setDepositPollCount(0);
+    } catch (err) {
+      setError(err.message || 'Lỗi thanh toán cọc');
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
+  // Poll payment status when QR is shown
+  useEffect(() => {
+    if (depositQrStep !== 'qr' || !depositPayment) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${apiBase}/payments/booking/${pendingDeposit?._id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const p = data?.data || data;
+        if (p?.status === 'paid') {
+          clearInterval(interval);
+          setDepositQrStep('success');
+          setTimeout(() => {
+            setPendingDeposit(null);
+            setDepositPayment(null);
+            setDepositQrStep('select');
+            setShowSuccessModal(true);
+          }, 1500);
+        }
+        setDepositPollCount(c => c + 1);
+      } catch (e) { /* ignore polling errors */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [depositQrStep, depositPayment, pendingDeposit, apiBase, token]);
+
+  // Simulate payment confirmation (for demo)
+  async function simulatePaymentConfirm() {
+    if (!depositPayment) return;
+    try {
+      const res = await fetch(`${apiBase}/payments/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: depositPayment.transactionId,
+          gatewayTransactionId: `SIM${Date.now()}`,
+          success: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi xác nhận thanh toán');
+      setDepositQrStep('success');
+      setTimeout(() => {
+        setPendingDeposit(null);
+        setDepositPayment(null);
+        setDepositQrStep('select');
+        setShowSuccessModal(true);
+      }, 1500);
+    } catch (err) {
+      setError(err.message || 'Lỗi xác nhận thanh toán');
     }
   }
 
@@ -457,7 +575,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         bookingCode: booking?.bookingCode || booking?.code || '',
         subServices: currentSubServices,
       });
-      setShowSuccessModal(true);
+
+      // Check if deposit payment is required
+      if (booking?.depositAmount > 0 && !booking?.depositPaid && !isPayingWithPack) {
+        setPendingDeposit(booking);
+        setDepositQrStep('select');
+        setDepositPayment(null);
+      } else {
+        setShowSuccessModal(true);
+      }
     } catch (err) {
       setError(err.message || 'Không thể tạo lịch hẹn');
     } finally {
@@ -569,7 +695,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }, [availableSlots]);
 
   const renderStepIndicator = (labels) => (
-    <div className="relative flex items-center justify-between w-full max-w-2xl mx-auto mb-12 px-4">
+    <div className="relative flex items-center justify-between w-full max-w-2xl mx-auto mb-6 px-4">
       {/* Background connecting line */}
       <div className="absolute left-8 right-8 top-5 h-[2px] bg-slate-200 z-0" />
       {/* Active progress fill */}
@@ -612,22 +738,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const dayLabel = (value) => WEEKDAY_OPTIONS.find(o => o.value === value)?.label || String(value);
 
   return (
-    <section id="booking" className="relative py-24 md:py-32 bg-white overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.03),transparent_60%)]" />
+    <section id="booking" className="relative bg-white min-h-[calc(100dvh-64px)] overflow-hidden">
 
-      <div className="relative z-10 max-w-[1000px] mx-auto px-6 md:px-12">
-        <div className="text-center mb-12">
-          <span className="text-emerald-600 text-sm font-medium tracking-widest uppercase mb-4 block">Đặt lịch</span>
-          <h2 className="text-3xl md:text-5xl tracking-tighter leading-none text-slate-900 mb-4">
-            Trải nghiệm đặt lịch
-          </h2>
-          <p className="text-slate-500 max-w-lg mx-auto">Chọn chi nhánh, chọn gói dịch vụ, chọn thời gian - và chúng tôi lo phần còn lại.</p>
-        </div>
+      <div className="max-w-[1000px] mx-auto px-6 md:px-12 py-6">
 
-        <div className="bg-white/80 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] rounded-3xl p-6 md:p-10">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] rounded-3xl p-6 md:p-8">
 
           {/* ── Tabs ── */}
-          <div className="flex items-center gap-1.5 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1.5 border border-slate-200/50 w-fit mx-auto mb-10 shadow-inner">
+          <div className="flex items-center gap-1.5 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1.5 border border-slate-200/50 w-fit mx-auto mb-6 shadow-inner">
             <button onClick={() => { setTab('regular'); reset(); }}
               className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
                 tab === 'regular' 
@@ -859,8 +977,43 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             </button>
                           );
                         })}
+                  </div>
+
+                  {/* ── Today availability preview ── */}
+                  {selectedBranch && (
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Clock className="w-4 h-5 text-emerald-600" />
+                        <h4 className="text-sm font-bold text-slate-700">Lịch trống hôm nay</h4>
+                        {todaySlotsLoading && <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />}
                       </div>
+                      {todaySlotsLoading ? (
+                        <p className="text-xs text-slate-400">Đang kiểm tra lịch trống...</p>
+                      ) : todaySlots.filter(s => s.available).length === 0 ? (
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                          <p className="text-xs text-amber-700 font-medium">Hôm nay đã hết lịch trống. Bạn có thể chọn ngày khác ở bước chọn thời gian.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-500 mb-2">Còn <span className="font-bold text-emerald-600">{todaySlots.filter(s => s.available).length}</span> khung giờ trống:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {todaySlots.filter(s => s.available).slice(0, 12).map(s => (
+                              <span key={s.startTime} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[11px] font-semibold text-emerald-700">
+                                {s.startTime}
+                              </span>
+                            ))}
+                            {todaySlots.filter(s => s.available).length > 12 && (
+                              <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-500">
+                                +{todaySlots.filter(s => s.available).length - 12}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </motion.div>
+                  )}
+                </motion.div>
                   )}
                 </motion.div>
               )}
@@ -1058,6 +1211,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
                           <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
                           <span className="text-sm">Đang tìm lịch trống...</span>
+                        </div>
+                      ) : availableSlots.filter(s => s.available).length === 0 ? (
+                        <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                          <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-amber-800">Hết lịch trống</p>
+                            <p className="text-xs text-amber-600">Ngày này đã hết chỗ. Vui lòng chọn ngày khác.</p>
+                          </div>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -1554,6 +1715,188 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   Lịch sử đặt
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Deposit Payment Modal */}
+      <AnimatePresence>
+        {pendingDeposit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => { if (!depositLoading && depositQrStep === 'select') { setPendingDeposit(null); setError(''); } }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100/80 overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {depositQrStep === 'qr' && depositPayment?.qrCode ? (
+                <>
+                  {/* QR Code View */}
+                  <div className="pt-8 pb-4 text-center px-6">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                      depositPayment.method === 'momo' ? 'bg-pink-500' :
+                      depositPayment.method === 'vnpay' ? 'bg-blue-600' :
+                      'bg-emerald-50 border-2 border-emerald-100'
+                    }`}>
+                      {depositPayment.method === 'momo' ? (
+                        <span className="text-white text-xl font-black">M</span>
+                      ) : depositPayment.method === 'vnpay' ? (
+                        <span className="text-white text-xl font-black">V</span>
+                      ) : (
+                        <svg className="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                        </svg>
+                      )}
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800">
+                      {depositPayment.method === 'momo' ? 'Quét mã MoMo' :
+                       depositPayment.method === 'vnpay' ? 'Quét mã VNPay' :
+                       'Chuyển khoản ngân hàng'}
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-1">
+                      {depositPayment.method === 'momo' ? 'Dùng app MoMo quét mã QR' :
+                       depositPayment.method === 'vnpay' ? 'Dùng app VNPay quét mã QR' :
+                       'Quét mã QR bằng app ngân hàng bất kỳ'}
+                    </p>
+                  </div>
+
+                  <div className="px-8 pb-2 flex justify-center">
+                    <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shadow-sm">
+                      <img src={depositPayment.qrCode} alt="QR code" className="w-56 h-56" />
+                    </div>
+                  </div>
+
+                  <div className="px-8 py-4 space-y-2">
+                    <div className="bg-slate-50 rounded-xl p-3 text-center">
+                      <div className="text-xs text-slate-400 mb-1">Số tiền cần chuyển</div>
+                      <div className="text-2xl font-black text-emerald-600">{formatCurrency(depositPayment.amount || pendingDeposit.depositAmount || 0)}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
+                      <span className="text-xs text-slate-400 font-semibold">Mã giao dịch</span>
+                      <span className="text-sm font-bold text-slate-700 font-mono">{depositPayment.transactionId}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-1 text-xs text-slate-400 pt-1">
+                      <RefreshCw className={`w-3 h-3 ${depositPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
+                      Đang kiểm tra thanh toán...
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-slate-50 border-t border-slate-100 space-y-2">
+                    <button type="button" onClick={simulatePaymentConfirm}
+                      className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
+                      Đã chuyển khoản
+                    </button>
+                    <button type="button" onClick={() => { setPendingDeposit(null); setDepositPayment(null); setDepositQrStep('select'); setError(''); }}
+                      className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                      Hủy
+                    </button>
+                  </div>
+                </>
+              ) : depositQrStep === 'success' ? (
+                <>
+                  {/* Success animation */}
+                  <div className="pt-12 pb-8 text-center px-6">
+                    <div className="w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-800">Đặt cọc thành công!</h3>
+                    <p className="text-slate-400 text-sm mt-2">Cảm ơn bạn, lịch hẹn đã được xác nhận.</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Selection View (default) */}
+                  {/* Header */}
+                  <div className="pt-8 pb-4 text-center px-6 bg-white border-b border-slate-50">
+                    <div className="w-16 h-16 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-8 h-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800">Thanh toán đặt cọc</h3>
+                    <p className="text-slate-400 text-xs mt-1 leading-relaxed">Vui lòng đặt cọc để hoàn tất đặt lịch</p>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    <div className="bg-slate-50 border border-slate-100/60 p-4 rounded-2xl space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400 font-semibold">Tổng dịch vụ</span>
+                        <span className="font-bold text-slate-700">{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-amber-600 font-semibold">Đặt cọc (30%)</span>
+                        <span className="font-black text-lg text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
+                      </div>
+                      <div className="h-px bg-slate-200" />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
+                        <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (pendingDeposit.depositAmount || 0)))}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Phương thức thanh toán</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { value: 'momo', label: 'MoMo', color: '#ff2d78', icon: 'M' },
+                          { value: 'vnpay', label: 'VNPay', color: '#0066ff', icon: 'V' },
+                          { value: 'bank', label: 'Ngân hàng', color: '#10b981', icon: '' },
+                        ].map(m => (
+                          <button
+                            key={m.value}
+                            type="button"
+                            onClick={() => setDepositMethod(m.value)}
+                            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                              depositMethod === m.value
+                                ? 'border-emerald-500 bg-emerald-50/30 shadow-sm'
+                                : 'border-slate-100 bg-white hover:border-slate-200'
+                            }`}
+                          >
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{ backgroundColor: m.color }}>
+                              {m.value === 'bank' ? (
+                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                                </svg>
+                              ) : m.icon}
+                            </div>
+                            <span className={`text-xs font-bold ${depositMethod === m.value ? 'text-emerald-700' : 'text-slate-500'}`}>
+                              {m.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {error && (
+                      <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-500 font-semibold">{error}</div>
+                    )}
+                  </div>
+
+                  <div className="p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
+                    <button type="button" onClick={() => { if (!depositLoading) { setPendingDeposit(null); setError(''); } }} disabled={depositLoading}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98] disabled:opacity-50">
+                      Bỏ qua
+                    </button>
+                    <button type="button" onClick={payDeposit} disabled={depositLoading}
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
+                      {depositLoading ? (
+                        <><RefreshCw className="w-4 h-4 animate-spin" />{'ĐANG XỬ LÝ...'}</>
+                      ) : (
+                        'ĐẶT CỌC ' + formatCurrency(pendingDeposit.depositAmount || 0)
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}

@@ -148,11 +148,11 @@ const bookingValidators = {
 const paymentValidators = {
   create: [
     body('bookingId').isMongoId().withMessage('Invalid booking ID'),
-    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
+    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay', 'bank']),
   ],
   confirm: [
     body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
-    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
+    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay', 'bank']),
     body('gatewayTransactionId').optional().trim(),
   ],
   refund: [

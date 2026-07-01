@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import {
   LockKey,
   User,
-  Envelope,
   Eye,
   EyeSlash,
   ArrowRight,
@@ -12,8 +11,8 @@ import {
 import Label from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-const ADMIN_QUICK_LOGIN = { identifier: 'admin@washpro.vn', password: 'Admin123!' };
-const MANAGER_QUICK_LOGIN = { identifier: 'manager@washpro.vn', password: 'Manager123!' };
+const ADMIN_QUICK_LOGIN = { identifier: 'admin@washpro.vn', password: '123456' };
+const MANAGER_QUICK_LOGIN = { identifier: 'manager1@washpro.vn', password: '123456' };
 
 export default function AuthScreen({ authLoading, onLogin, onRegister, onBack }) {
   const location = useLocation();
@@ -63,7 +62,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
           <p className="text-sm font-semibold text-slate-500">Đang kiểm tra phiên đăng nhập...</p>
@@ -73,102 +72,113 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-800 font-sans">
-      {/* Left Split-Screen Panel (Desktop only) */}
-      <div className="hidden w-1/2 flex-col justify-between p-16 bg-[#fafbfc] relative overflow-hidden lg:flex">
-        {/* Soft background glow decoration */}
-        <div className="absolute -left-20 -top-20 h-[400px] w-[400px] rounded-full bg-emerald-500/5 blur-[100px] pointer-events-none" />
-        <div className="absolute -right-20 -bottom-20 h-[400px] w-[400px] rounded-full bg-emerald-500/5 blur-[100px] pointer-events-none" />
+    <div className="relative h-screen overflow-hidden font-sans">
+      {/* Full-page car wash background */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=1920&q=80)' }}
+      />
+      {/* Gray overlay to mute the image */}
+      <div className="absolute inset-0 bg-slate-200/70" />
 
-        {/* Logo and App Title */}
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white text-2xl shadow-lg shadow-emerald-500/10">
-            🚗
-          </div>
-          <div>
-            <h1 className="text-lg font-black tracking-widest text-slate-800 uppercase">AUTOWASH PRO</h1>
-            <span className="inline-block mt-0.5 rounded-full bg-emerald-50 text-emerald-600 px-2.5 py-0.5 border border-emerald-100/50 text-[9px] font-extrabold tracking-widest">
-              CLIENT HUB
-            </span>
-          </div>
-        </div>
-
-        {/* Hero message matching the mockup */}
-        <div className="relative z-10 max-w-lg my-auto">
-          <h2 className="text-4xl md:text-5xl lg:text-[54px] font-black leading-[1.1] tracking-tight text-slate-800">
-            Dịch vụ chăm sóc <br />
-            xe <br />
-            <span className="text-emerald-600">đẳng cấp mới.</span>
-          </h2>
-          <p className="mt-6 text-sm md:text-base text-slate-500 leading-relaxed max-w-md">
-            Hệ thống quản lý thông minh giúp bạn đặt lịch và theo dõi quá trình chăm sóc xế yêu dễ dàng hơn bao giờ hết.
-          </p>
-
-          {/* Stats matching the mockup */}
-          <div className="flex items-center mt-12 pt-8 border-t border-slate-100">
-            <div>
-              <div className="text-2xl font-black text-emerald-600">5,000+</div>
-              <div className="text-xs text-slate-400 font-bold mt-1">Khách hàng tin tưởng</div>
-            </div>
-            <div className="h-10 w-px bg-slate-200/60 mx-8" />
-            <div>
-              <div className="text-2xl font-black text-emerald-600">15+</div>
-              <div className="text-xs text-slate-400 font-bold mt-1">Trung tâm toàn quốc</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer info */}
-        <div className="relative z-10 text-xs font-semibold text-slate-400">
-          &copy; 2026 AutoWash Pro. All rights reserved.
-        </div>
-      </div>
-
-      {/* Right Form Panel */}
-      <div className="flex w-full flex-col justify-center px-6 py-12 bg-gradient-to-tr from-slate-200/50 via-slate-100/80 to-slate-200/30 lg:w-1/2 lg:px-20 xl:px-32 relative">
-        <div className="mx-auto w-full max-w-md">
-          {/* Mobile Logo */}
-          <div className="mb-10 flex items-center gap-4 lg:hidden">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white text-2xl shadow-lg">
-              🚗
+      {/* Main content */}
+      <div className="relative z-10 flex h-full items-center justify-between px-8 lg:px-20 xl:px-32">
+        {/* Left: Brand content floating on background */}
+        <div className="hidden lg:flex flex-col justify-between h-full max-w-lg py-10">
+          {/* Logo */}
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
+              <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-widest text-slate-800 uppercase">AUTOWASH PRO</h1>
-              <span className="inline-block mt-0.5 rounded-full bg-emerald-50 text-emerald-600 px-2.5 py-0.5 border border-emerald-100/50 text-[9px] font-extrabold tracking-widest">
+              <h1 className="text-xl font-black tracking-widest text-slate-800 uppercase">AUTOWASHPRO</h1>
+              <span className="inline-block mt-0.5 rounded-full bg-emerald-50 text-emerald-600 px-3 py-0.5 border border-emerald-200 text-[10px] font-extrabold tracking-widest">
                 CLIENT HUB
               </span>
             </div>
           </div>
 
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="mb-6 flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Quay lại
-            </button>
-          )}
+          {/* Hero text */}
+          <div className="my-auto">
+            <h2 className="text-4xl lg:text-5xl font-black leading-[1.05] tracking-tight text-slate-800">
+              Dịch vụ chăm sóc <br />
+              xe <br />
+              <span className="text-emerald-600">đẳng cấp mới.</span>
+            </h2>
+            <p className="mt-4 text-sm text-slate-600 leading-relaxed max-w-md">
+              Hệ thống quản lý thông minh giúp bạn đặt lịch và theo dõi quá trình chăm sóc xế yêu dễ dàng hơn bao giờ hết.
+            </p>
 
-          {/* Floating White Card Form */}
-          <div className="mx-auto w-full max-w-md rounded-[40px] bg-white p-8 md:p-10 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.04)] border border-slate-100/60 backdrop-blur-sm">
+            {/* Stats */}
+            <div className="flex items-center gap-8 mt-6">
+              <div>
+                <div className="text-2xl font-black text-emerald-600">5,000+</div>
+                <div className="text-xs text-slate-500 font-semibold mt-1">Khách hàng tin tưởng</div>
+              </div>
+              <div className="h-10 w-px bg-slate-300" />
+              <div>
+                <div className="text-2xl font-black text-emerald-600">15+</div>
+                <div className="text-xs text-slate-500 font-semibold mt-1">Trung tâm toàn quốc</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Form card floating on background */}
+        <div className="w-full max-w-md mx-auto lg:mx-0">
+          <div className="bg-white/95 backdrop-blur-sm rounded-[40px] p-6 md:p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)]">
+            {/* Mobile Logo */}
+            <div className="mb-5 flex items-center gap-3 lg:hidden">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-base font-black tracking-widest text-slate-800 uppercase">AUTOWASHPRO</h1>
+                <span className="inline-block mt-0.5 rounded-full bg-emerald-50 text-emerald-600 px-2 py-0.5 border border-emerald-200 text-[8px] font-extrabold tracking-widest">
+                  CLIENT HUB
+                </span>
+              </div>
+            </div>
+
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Quay lại
+              </button>
+            )}
+
             <h2 className="text-3xl font-black text-slate-800 tracking-tight">
               Chào mừng
             </h2>
-            <p className="mt-2 text-xs md:text-sm text-slate-400">
+            <p className="mt-2 text-sm text-slate-400">
               {authMode === 'login' ? 'Vui lòng đăng nhập để tiếp tục.' : 'Tạo tài khoản mới để bắt đầu.'}
             </p>
 
             {/* Toggle Tabs */}
-            <div className="my-8 flex rounded-2xl bg-slate-100/80 p-1.5">
+            <div className="my-5 flex rounded-2xl bg-slate-100/80 p-1.5">
               <button
                 type="button"
                 className={cn(
                   'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
                   authMode === 'login'
-                    ? 'bg-white text-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+                    ? 'bg-white text-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
                     : 'text-slate-400 hover:text-slate-600'
                 )}
                 onClick={() => { setAuthMode('login'); setAuthError(''); setStatusMessage(''); }}
@@ -180,7 +190,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                 className={cn(
                   'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
                   authMode === 'register'
-                    ? 'bg-white text-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+                    ? 'bg-white text-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
                     : 'text-slate-400 hover:text-slate-600'
                 )}
                 onClick={() => { setAuthMode('register'); setAuthError(''); setStatusMessage(''); }}
@@ -190,18 +200,18 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
             </div>
 
             {location.state?.adminAuthError && (
-              <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-555 font-semibold">{location.state.adminAuthError}</div>
+              <div className="mb-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-555 font-semibold">{location.state.adminAuthError}</div>
             )}
             {authError && (
-              <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-500 font-semibold">{authError}</div>
+              <div className="mb-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-500 font-semibold">{authError}</div>
             )}
             {statusMessage && (
-              <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-xs md:text-sm text-emerald-600 font-semibold">{statusMessage}</div>
+              <div className="mb-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-xs md:text-sm text-emerald-600 font-semibold">{statusMessage}</div>
             )}
 
             {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div className="space-y-2">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-1.5">
                   <Label htmlFor="login-phone" className="text-xs font-bold text-slate-600">
                     Email hoặc Số điện thoại
                   </Label>
@@ -220,12 +230,12 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="login-pass" className="text-xs font-bold text-slate-600">
                     Mật khẩu
                   </Label>
                   <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
-                    <LockKey size={20} className="text-slate-400 mr-3" />
+                    <LockKey size={18} className="text-slate-400 mr-3" />
                     <input
                       id="login-pass"
                       type={showLoginPass ? 'text' : 'password'}
@@ -239,12 +249,12 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                       onClick={() => setShowLoginPass(!showLoginPass)}
                       className="text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none ml-2"
                     >
-                      {showLoginPass ? <EyeSlash size={20} /> : <Eye size={20} />}
+                      {showLoginPass ? <EyeSlash size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center justify-between pt-1">
                   <label className="flex items-center gap-2 text-slate-500 text-xs md:text-sm cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -264,15 +274,15 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3.5 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
                 >
                   {loginLoading ? 'ĐANG ĐĂNG NHẬP...' : 'TIẾP TỤC'}
                   {!loginLoading && <ArrowRight size={18} weight="bold" />}
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleRegister} className="space-y-6">
-                <div className="space-y-2">
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="space-y-1.5">
                   <Label htmlFor="reg-email" className="text-xs font-bold text-slate-600">
                     Email
                   </Label>
@@ -291,12 +301,12 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="reg-pass" className="text-xs font-bold text-slate-600">
                     Mật khẩu
                   </Label>
                   <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
-                    <LockKey size={20} className="text-slate-400 mr-3" />
+                    <LockKey size={18} className="text-slate-400 mr-3" />
                     <input
                       id="reg-pass"
                       type={showRegPass ? 'text' : 'password'}
@@ -310,7 +320,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                       onClick={() => setShowRegPass(!showRegPass)}
                       className="text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none ml-2"
                     >
-                      {showRegPass ? <EyeSlash size={20} /> : <Eye size={20} />}
+                      {showRegPass ? <EyeSlash size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
@@ -318,7 +328,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                 <button
                   type="submit"
                   disabled={registerLoading}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3.5 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
                 >
                   {registerLoading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG KÝ'}
                   {!registerLoading && <ArrowRight size={18} weight="bold" />}
@@ -327,7 +337,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
             )}
 
             {/* Quick Login Section */}
-            <div className="relative my-8 text-center">
+            <div className="relative my-5 text-center">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-100" />
               </div>
@@ -336,12 +346,12 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
               </span>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={handleQuickAdminLogin}
                 disabled={loginLoading}
-                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3.5 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
+                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
               >
                 <User size={18} className="text-slate-400" />
                 <span>Admin</span>
@@ -350,7 +360,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                 type="button"
                 onClick={handleQuickManagerLogin}
                 disabled={loginLoading}
-                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3.5 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
+                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
               >
                 <Briefcase size={18} className="text-slate-400" />
                 <span>Manager</span>
@@ -358,7 +368,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
             </div>
 
             {/* Footer links */}
-            <div className="flex items-center justify-center gap-8 mt-10 text-xs font-bold text-slate-400">
+            <div className="flex items-center justify-center gap-8 mt-5 text-xs font-bold text-slate-400">
               <a href="#" onClick={(e) => e.preventDefault()} className="hover:text-slate-600 transition-colors">
                 Trợ giúp
               </a>
