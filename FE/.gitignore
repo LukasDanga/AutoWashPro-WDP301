@@ -29,3 +29,6 @@ build/
 
 # Misc
 *.tmp
+
+# Vite temp files
+*.timestamp-*
