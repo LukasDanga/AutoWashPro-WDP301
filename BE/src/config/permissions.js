@@ -39,6 +39,12 @@ const permissions = {
     confirm: [ROLES.ADMIN, ROLES.MANAGER],
     refund: [ROLES.ADMIN, ROLES.MANAGER],
   },
+  refundRequests: {
+    create: [ROLES.CUSTOMER],
+    readAll: [ROLES.ADMIN, ROLES.MANAGER],
+    readOne: [ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER],
+    review: [ROLES.ADMIN, ROLES.MANAGER],
+  },
   vouchers: {
     create: [ROLES.ADMIN, ROLES.MANAGER],
     readAll: [ROLES.ADMIN, ROLES.MANAGER],

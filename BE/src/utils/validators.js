@@ -165,6 +165,21 @@ const paymentValidators = {
   ],
 };
 
+const refundRequestValidators = {
+  create: [
+    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    body('reason').trim().notEmpty().withMessage('Reason is required').isLength({ max: 500 }),
+  ],
+  review: [
+    param('id').isMongoId().withMessage('Invalid refund request ID'),
+    body('decision').notEmpty().withMessage('Decision is required').isIn(['approved', 'rejected']),
+    body('reviewNote').optional().trim().isLength({ max: 500 }),
+  ],
+  getById: [
+    param('id').isMongoId().withMessage('Invalid refund request ID'),
+  ],
+};
+
 const voucherValidators = {
   create: [
     body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 200 }),
@@ -236,4 +251,4 @@ const notificationValidators = {
   ],
 };
 
-module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, voucherValidators, checkinValidators, notificationValidators };
+module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, refundRequestValidators, voucherValidators, checkinValidators, notificationValidators };
