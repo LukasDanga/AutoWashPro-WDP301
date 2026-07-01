@@ -1114,6 +1114,7 @@ exports.getFeedbacks = async (user, filters = {}) => {
     Booking.find(query)
       .populate('userId', 'name email phone avatar tier')
       .populate('packageId', 'name')
+      .populate('branchId', 'name')
       .sort({ feedbackAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit),

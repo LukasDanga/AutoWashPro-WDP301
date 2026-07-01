@@ -1139,7 +1139,7 @@ function getTodayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 export default function ManagerBookings() {
   const [bookings, setBookings] = useState([]);
@@ -1155,6 +1155,7 @@ export default function ManagerBookings() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
@@ -1175,10 +1176,11 @@ export default function ManagerBookings() {
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const data = p?.data ?? p;
+      const pagination = data?.pagination;
       setBookings(data?.bookings ?? (Array.isArray(data) ? data : []));
-      setTotal(data?.total ?? 0);
-      setPage(data?.page ?? pg);
-      setTotalPages(data?.totalPages ?? 1);
+      setTotal(pagination?.total ?? data?.total ?? 0);
+      setPage(pagination?.page ?? data?.page ?? pg);
+      setTotalPages(pagination?.totalPages ?? data?.totalPages ?? 1);
     } catch (err) { setError(err.message || 'Không thể tải dữ liệu'); }
     finally { setLoading(false); }
   }, []); // eslint-disable-line
@@ -1205,9 +1207,11 @@ export default function ManagerBookings() {
   };
 
   const handleCancel = async (id) => {
+    const reason = cancelReason.trim();
     setConfirmCancelId(null);
+    setCancelReason('');
     try {
-      const res = await api(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: 'Quản lý hủy' }) });
+      const res = await api(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason || 'Quản lý hủy' }) });
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const updated = p?.data ?? p;
@@ -1368,21 +1372,21 @@ export default function ManagerBookings() {
                     <p className="text-[11px] text-slate-400">{b.userId?.phone ?? ''}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
-                      {b.bookingType && (
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[b.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>
+                    <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
+                    {b.bookingType && (
+                      <div className="mt-1">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[b.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>
                           {TYPE_MAP[b.bookingType]?.label || b.bookingType}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-slate-700">{new Date(b.bookingDate).toLocaleDateString('vi-VN')}</p>
                     <p className="text-[11px] text-slate-400">{b.startTime}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
+                    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
                       {b.paymentStatus === 'paid' ? 'Đã thanh toán' : b.paymentStatus ?? 'Chưa TT'}
                     </span>
                   </td>
@@ -1429,29 +1433,21 @@ export default function ManagerBookings() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-1">
-            <button onClick={() => handlePageChange(page - 1)} disabled={page <= 1 || loading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
-              ← Trước
-            </button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pg = Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
-              return (
-                <button key={pg} onClick={() => handlePageChange(pg)} disabled={loading}
-                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
-                    pg === page ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}>
-                  {pg}
-                </button>
-              );
-            })}
-            <button onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages || loading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
-              Sau →
-            </button>
-          </div>
-          <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} lịch hẹn</p>
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <button disabled={page <= 1} onClick={() => handlePageChange(page - 1)}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            ‹ Trước
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button key={p} onClick={() => handlePageChange(p)} disabled={loading}
+              className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                page === p ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}>{p}</button>
+          ))}
+          <button disabled={page >= totalPages} onClick={() => handlePageChange(page + 1)}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            Sau ›
+          </button>
         </div>
       )}
       </>)}
@@ -1468,15 +1464,45 @@ export default function ManagerBookings() {
         />
       )}
 
-      <ConfirmDialog
-        open={!!confirmCancelId}
-        title="Xác nhận hủy lịch"
-        message="Bạn có chắc chắn muốn hủy lịch đặt này? Hành động không thể hoàn tác."
-        confirmLabel="Hủy lịch"
-        danger
-        onConfirm={() => handleCancel(confirmCancelId)}
-        onCancel={() => setConfirmCancelId(null)}
-      />
+      {/* Cancel Modal */}
+      {confirmCancelId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
+          onClick={e => e.target === e.currentTarget && (() => { setConfirmCancelId(null); setCancelReason(''); })()}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <h2 className="text-[15px] font-semibold text-slate-800">Xác nhận hủy lịch</h2>
+              <button onClick={() => { setConfirmCancelId(null); setCancelReason(''); }}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-slate-600">Bạn có chắc chắn muốn hủy lịch đặt này? Hành động không thể hoàn tác.</p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Lý do hủy</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value)}
+                  placeholder="Nhập lý do hủy (tùy chọn)..."
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100 transition-colors resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 border-t border-slate-100 px-6 py-4 justify-end">
+              <button onClick={() => { setConfirmCancelId(null); setCancelReason(''); }}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                Giữ lại
+              </button>
+              <button onClick={() => handleCancel(confirmCancelId)}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition-colors">
+                Hủy lịch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmAllOpen}
