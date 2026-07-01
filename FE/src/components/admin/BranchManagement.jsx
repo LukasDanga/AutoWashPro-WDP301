@@ -162,6 +162,8 @@ const EMPTY = {
   status: 'active',
   image: '',
   managerId: '',
+  svgCx: '',
+  svgCy: '',
 };
 
 function Field({ label, required, error, children }) {
@@ -180,7 +182,12 @@ const inp =
   'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
 
 function BranchForm({ initial, onSave, onCancel, saving }) {
-  const [form, setForm] = useState({ ...EMPTY, ...initial });
+  const [form, setForm] = useState(() => ({
+    ...EMPTY,
+    ...initial,
+    svgCx: initial?.mapCoordinates?.svgCx ?? '',
+    svgCy: initial?.mapCoordinates?.svgCy ?? '',
+  }));
   const [errors, setErrors] = useState({});
   const [managers, setManagers] = useState([]);
   const [managersLoading, setManagersLoading] = useState(true);
@@ -219,7 +226,11 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) return setErrors(errs);
-    onSave(form);
+    const { svgCx, svgCy, ...rest } = form;
+    onSave({
+      ...rest,
+      mapCoordinates: { svgCx: Number(svgCx) || 0, svgCy: Number(svgCy) || 0 },
+    });
   };
 
   return (
@@ -280,6 +291,17 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
           <option value="inactive">Ngừng hoạt động</option>
         </select>
       </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Tọa độ X (svgCx)" error={errors.svgCx}>
+          <input id="f-svgCx" type="number" className={inp} value={form.svgCx}
+            onChange={(e) => set('svgCx', e.target.value)} placeholder="VD: 236" />
+        </Field>
+        <Field label="Tọa độ Y (svgCy)" error={errors.svgCy}>
+          <input id="f-svgCy" type="number" className={inp} value={form.svgCy}
+            onChange={(e) => set('svgCy', e.target.value)} placeholder="VD: 684" />
+        </Field>
+      </div>
 
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
         <button type="button" onClick={onCancel} disabled={saving}
