@@ -642,6 +642,15 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       await voucherService.rollbackVoucher(booking.voucherCode, booking.userId, id, session).catch(() => {});
     }
 
+    // Hoàn lượt nếu khách tự hủy đơn gói lượt (hệ thống hủy thì không hoàn)
+    if (booking.bookingType === 'slot_pack_usage' && cancelledBy === 'customer' && booking.slotPackId) {
+      await SlotPack.findByIdAndUpdate(
+        booking.slotPackId,
+        { $inc: { remainingSlots: 1, usedSlots: -1 } },
+        { session }
+      ).catch(() => {});
+    }
+
     await session.commitTransaction();
 
     notificationService.send(
