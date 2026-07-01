@@ -21,17 +21,28 @@ exports.createVoucher = async (data) => {
   const existing = await Voucher.findOne({ code: code.toUpperCase() });
   if (existing) throw Object.assign(new Error('Voucher code already exists'), { statusCode: 409, code: 'DUPLICATE_CODE' });
 
-  const voucher = new Voucher({
+  const payload = {
     ...data,
     code: code.toUpperCase(),
     remaining: data.quantity,
     createdBy: data.createdBy,
-  });
+  };
+
+  // Nếu có branchId → tự động giới hạn voucher chỉ dùng được ở chi nhánh đó
+  if (data.branchId) {
+    payload.branchId = data.branchId;
+    payload.applicableToAllBranches = false;
+    if (!data.applicableBranches || data.applicableBranches.length === 0) {
+      payload.applicableBranches = [data.branchId];
+    }
+  }
+
+  const voucher = new Voucher(payload);
   await voucher.save();
   return voucher;
 };
 
-exports.getAllVouchers = async (filters = {}, userRole, userId) => {
+exports.getAllVouchers = async (filters = {}, userRole, userId, userBranchId) => {
   const query = {};
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
@@ -49,8 +60,10 @@ exports.getAllVouchers = async (filters = {}, userRole, userId) => {
   if (filters.endDateOnly) {
     query.endDate = { $gte: new Date(filters.endDateOnly) };
   }
-  if (userRole === 'manager' && userId) {
-    query.createdBy = userId;
+  if (userRole === 'manager' && userBranchId) {
+    query.branchId = userBranchId;
+  } else if (filters.branchId) {
+    query.branchId = filters.branchId;
   }
 
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
@@ -75,11 +88,15 @@ exports.getAllVouchers = async (filters = {}, userRole, userId) => {
   };
 };
 
-exports.getVoucherById = async (id, userRole, userId) => {
+exports.getVoucherById = async (id, userRole, userId, userBranchId) => {
   const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  if (userRole === 'manager') {
+    const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
+    const createdByUser = String(voucher.createdBy) === String(userId);
+    if (!ownedByBranch && !createdByUser) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
   }
   return voucher;
 };
@@ -90,21 +107,29 @@ exports.getVoucherByCode = async (code) => {
   return voucher;
 };
 
-exports.updateVoucher = async (id, updates, userRole, userId) => {
+exports.updateVoucher = async (id, updates, userRole, userId, userBranchId) => {
   const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  if (userRole === 'manager') {
+    const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
+    const createdByUser = String(voucher.createdBy) === String(userId);
+    if (!ownedByBranch && !createdByUser) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
   }
   const updated = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
   return updated;
 };
 
-exports.deleteVoucher = async (id, userRole, userId) => {
+exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
   const voucher = await Voucher.findById(id);
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  if (userRole === 'manager') {
+    const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
+    const createdByUser = String(voucher.createdBy) === String(userId);
+    if (!ownedByBranch && !createdByUser) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
   }
   await Voucher.findByIdAndDelete(id);
   return voucher;
