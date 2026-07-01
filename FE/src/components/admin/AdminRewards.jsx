@@ -68,11 +68,11 @@ const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-s
 const EMPTY_VOUCHER = {
   code: '', name: '', description: '', type: 'percentage', value: '',
   maxDiscount: '', minOrder: '', quantity: '', startDate: '', endDate: '',
-  applicableToAllBranches: true, applicableToAllPackages: true, status: 'active',
+  branchId: '', applicableToAllBranches: true, applicableToAllPackages: true, status: 'active',
 };
 
-function VoucherModal({ initial, onSave, onClose, saving }) {
-  const [form, setForm] = useState({ ...EMPTY_VOUCHER, ...initial });
+function VoucherModal({ initial, onSave, onClose, saving, branches = [] }) {
+  const [form, setForm] = useState({ ...EMPTY_VOUCHER, ...initial, branchId: initial?.branchId?._id || initial?.branchId || '' });
   const [errors, setErrors] = useState({});
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); };
 
@@ -143,6 +143,16 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Mô tả</label>
             <input className={inp} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="..." />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Chi nhánh áp dụng</label>
+            <select className={inp} value={form.branchId} onChange={(e) => set('branchId', e.target.value)}>
+              <option value="">— Tất cả chi nhánh —</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>{b.name}</option>
+              ))}
+            </select>
+            <p className="mt-0.5 text-[11px] text-slate-400">Để trống nếu voucher áp dụng cho tất cả chi nhánh.</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -481,6 +491,7 @@ function DashboardOverview({ vouchers }) {
 /* ═══ Main ═══ */
 export default function AdminRewards() {
   const [vouchers, setVouchers] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -495,6 +506,13 @@ export default function AdminRewards() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  useEffect(() => {
+    api('/branches').then(r => r.json()).then(p => {
+      const list = p?.data ?? p;
+      setBranches(Array.isArray(list) ? list : []);
+    }).catch(() => {});
+  }, []);
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -888,10 +906,10 @@ export default function AdminRewards() {
       )}
 
       {modal === 'create' && (
-        <VoucherModal initial={null} onSave={handleCreate} onClose={() => setModal(null)} saving={saving} />
+        <VoucherModal initial={null} onSave={handleCreate} onClose={() => setModal(null)} saving={saving} branches={branches} />
       )}
       {modal === 'edit' && selected && (
-        <VoucherModal initial={selected} onSave={handleUpdate} onClose={() => setModal(null)} saving={saving} />
+        <VoucherModal initial={selected} onSave={handleUpdate} onClose={() => setModal(null)} saving={saving} branches={branches} />
       )}
       {modal === 'usage' && selected && (
         <VoucherUsageModal voucherId={selected._id} onClose={() => setModal(null)} />

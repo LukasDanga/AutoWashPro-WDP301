@@ -2,17 +2,18 @@ const voucherService = require('../services/voucher.service');
 const { catchAsync, success } = require('../utils/helpers');
 
 exports.createVoucher = catchAsync(async (req, res) => {
-  const voucher = await voucherService.createVoucher({ ...req.body, createdBy: req.userId });
+  const branchId = req.user.role === 'manager' ? req.user.branchId : req.body.branchId;
+  const voucher = await voucherService.createVoucher({ ...req.body, createdBy: req.userId, branchId });
   success(res, voucher, 'Voucher created', 201);
 });
 
 exports.getAllVouchers = catchAsync(async (req, res) => {
-  const result = await voucherService.getAllVouchers(req.query, req.user.role, req.userId);
+  const result = await voucherService.getAllVouchers(req.query, req.user.role, req.userId, req.user.branchId);
   success(res, result.data, 'Vouchers retrieved', 200, result.pagination);
 });
 
 exports.getVoucherById = catchAsync(async (req, res) => {
-  const voucher = await voucherService.getVoucherById(req.params.id, req.user.role, req.userId);
+  const voucher = await voucherService.getVoucherById(req.params.id, req.user.role, req.userId, req.user.branchId);
   success(res, voucher, 'Voucher retrieved');
 });
 
@@ -22,12 +23,12 @@ exports.getVoucherByCode = catchAsync(async (req, res) => {
 });
 
 exports.updateVoucher = catchAsync(async (req, res) => {
-  const voucher = await voucherService.updateVoucher(req.params.id, req.body, req.user.role, req.userId);
+  const voucher = await voucherService.updateVoucher(req.params.id, req.body, req.user.role, req.userId, req.user.branchId);
   success(res, voucher, 'Voucher updated');
 });
 
 exports.deleteVoucher = catchAsync(async (req, res) => {
-  await voucherService.deleteVoucher(req.params.id, req.user.role, req.userId);
+  await voucherService.deleteVoucher(req.params.id, req.user.role, req.userId, req.user.branchId);
   success(res, null, 'Voucher deleted');
 });
 
