@@ -25,12 +25,14 @@ const DEPOSIT_RATE = 0.3;
 const NO_SHOW_STRIKE_THRESHOLD = 3;
 const STRIKE_DEPOSIT_RATE = 1;
 
-// Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút
-const LATE_WARNING_OFFSET_MINUTES = 10;
+// Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút.
+// Grace mặc định chỉ 5 phút (xem autoCancel.job.js) nên offset cũng phải nhỏ hơn nó,
+// nếu không cảnh báo sẽ rơi vào trước cả giờ hẹn.
+const LATE_WARNING_OFFSET_MINUTES = 2;
 
 // Mỗi lần quản lý gia hạn thêm cho 1 booking sắp bị auto-cancel, và tổng tối đa được gia hạn
-const GRACE_EXTENSION_STEP_MINUTES = 15;
-const MAX_GRACE_EXTENSION_MINUTES = 30;
+const GRACE_EXTENSION_STEP_MINUTES = 5;
+const MAX_GRACE_EXTENSION_MINUTES = 15;
 
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
@@ -421,15 +423,22 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   return booking;
 };
 
-exports.updateBooking = async (id, updates, userRole) => {
+exports.updateBooking = async (id, updates, userRole, userId) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const booking = await Booking.findById(id).session(session);
     if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    if (userRole === 'customer' && String(booking.userId) !== String(userId)) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
     if (booking.status === 'completed' || booking.status === 'cancelled') {
       throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+    }
+    // Khách hàng chỉ được tự đổi giờ/ngày (vd: theo gợi ý khi sắp bị auto-cancel), không đổi chi nhánh/gói
+    if (userRole === 'customer' && (updates.branchId !== undefined || updates.packageId !== undefined)) {
+      throw Object.assign(new Error('Không thể đổi chi nhánh hoặc gói dịch vụ'), { statusCode: 400, code: 'FORBIDDEN_FIELD' });
     }
 
     const allowedFields = ['bookingDate', 'startTime', 'note', 'packageId', 'branchId'];
@@ -475,7 +484,13 @@ exports.updateBooking = async (id, updates, userRole) => {
     }
 
     Object.assign(booking, filtered);
-    if (isRescheduled) booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
+    if (isRescheduled) {
+      booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
+      // Đổi giờ = tính lại hạn auto-cancel từ đầu cho khung giờ mới
+      booking.lateWarningSentAt = undefined;
+      booking.suggestedSlotStartTime = undefined;
+      booking.graceExtensionMinutes = 0;
+    }
     await booking.save({ session });
 
     await session.commitTransaction();

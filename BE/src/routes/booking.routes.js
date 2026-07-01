@@ -129,12 +129,12 @@ router.get('/:id', authenticate, bookingController.getBookingById);
  * @swagger
  * /api/bookings/{id}:
  *   put:
- *     summary: Update booking
+ *     summary: Update booking (admin/manager can edit any field; customer can only reschedule their own booking's date/time/note)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
  */
-router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingValidators.update, validate, bookingController.updateBooking);
+router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.update, validate, bookingController.updateBooking);
 
 /**
  * @swagger

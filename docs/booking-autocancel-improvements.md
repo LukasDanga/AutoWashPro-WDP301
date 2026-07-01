@@ -71,14 +71,59 @@ ngoài đặt lại từ đầu. Các thay đổi dưới đây thêm 4 lớp lo
 | `BE/src/models/notification.schema.js` | + type `booking_at_risk`, `booking_grace_extended` |
 | `BE/src/services/booking.service.js` | + hằng số strike/warning/grace, `getDepositRate()`, `findNearestAvailableSlot()`, viết lại `autoCancelNoShows()` (2 bước: cảnh báo rồi hủy), + `extendGracePeriod()`, deposit theo `getDepositRate()` trong `createBooking`/`createRecurringBooking`, redemption `noShowCount` khi `completed` |
 | `BE/src/jobs/autoCancel.job.js` | Cập nhật log/comment cho hành vi 2 bước |
-| `BE/src/controllers/booking.controller.js` | + `extendGracePeriod` |
-| `BE/src/routes/booking.routes.js` | + `PATCH /:id/extend-grace` (manager/admin) |
+| `BE/src/controllers/booking.controller.js` | + `extendGracePeriod`; `updateBooking` truyền `req.userId` |
+| `BE/src/routes/booking.routes.js` | + `PATCH /:id/extend-grace` (manager/admin); `PUT /:id` mở thêm cho customer |
 | `FE/src/components/manager/ManagerBookings.jsx` | + component `AtRiskNotice` (badge cảnh báo + nút gia hạn + gợi ý giờ) trong bảng danh sách booking |
+| `FE/src/components/customer/BookingsHistory.jsx` | + component `AtRiskBanner` (cảnh báo + nút tự đổi giờ) ở Calendar view, List view, và Detail modal |
+
+## 5. UI phía khách hàng (bổ sung 2026-07-01, phần 2)
+
+- **File:** `BE/src/services/booking.service.js` — `updateBooking(id, updates, userRole, userId)`:
+  trước đây `PUT /bookings/:id` chỉ dành cho admin/manager và **không kiểm tra chủ sở hữu**. Đã thêm:
+  - Ownership check: customer chỉ sửa được booking của chính mình (403 nếu không phải chủ).
+  - Customer bị chặn đổi `branchId`/`packageId` (chỉ đổi `bookingDate`/`startTime`/`note`), tránh
+    lạm dụng endpoint dùng chung với manager.
+  - Khi reschedule (đổi ngày/giờ), reset `lateWarningSentAt`, `suggestedSlotStartTime`,
+    `graceExtensionMinutes` về mặc định — nếu không, đổi giờ xong vẫn giữ cờ "đã cảnh báo" cũ nên
+    hệ thống sẽ không bao giờ cảnh báo lại cho khung giờ mới.
+- **File:** `BE/src/routes/booking.routes.js` — `PUT /:id` mở thêm cho `ROLES.CUSTOMER`.
+- **File:** `BE/src/controllers/booking.controller.js` — `updateBooking` truyền thêm `req.userId`.
+- **File:** `FE/src/components/customer/BookingsHistory.jsx` — component mới `AtRiskBanner`:
+  hiển thị banner vàng "⏰ Bạn chưa check-in — sắp bị hệ thống tự hủy!" khi booking đang
+  `pending`/`confirmed` và có `lateWarningSentAt`; nếu có `suggestedSlotStartTime` thì thêm nút
+  "Đổi sang {giờ}" gọi thẳng `PUT /bookings/:id` để tự đổi giờ (không cần gọi hotline). Gắn ở 3 chỗ:
+  danh sách ngày được chọn trong Calendar view, từng dòng trong List view, và đầu modal chi tiết.
+
+## Đã kiểm thử thực tế (không chỉ đọc code)
+
+Chạy `BE` (`npm run dev`, cổng 5000) + `FE` (`npm run dev`, cổng 5173) thật với MongoDB local, tạo
+tài khoản khách hàng thật (`binhtntse182370@fpt.edu.vn` / mật khẩu `Customer@123`) qua
+`POST /api/auth/register`, rồi gọi thẳng API thật (không mock) để xác nhận từng phần:
+
+- Tạo booking → deposit 30% mặc định ✅; sau khi set `noShowCount = 3` thủ công, tạo booking mới →
+  deposit tự nhảy lên 100% ✅ (`getDepositRate`).
+- Backdate 1 booking vào giữa cửa sổ cảnh báo, gọi `autoCancelNoShows(30)` trực tiếp → đúng 1
+  notification `booking_at_risk` được tạo, `lateWarningSentAt` được set, không cảnh báo lặp lại ✅.
+- `PATCH /bookings/:id/extend-grace` bằng tài khoản manager đúng chi nhánh → `graceExtensionMinutes`
+  +15, xóa cờ cảnh báo cũ ✅.
+- `PUT /bookings/:id` bằng khách sở hữu → đổi giờ thành công, `rescheduleCount` +1, các cờ
+  cảnh báo/gia hạn được reset ✅. Một khách khác không sở hữu gọi cùng endpoint → 403 `FORBIDDEN` ✅.
+  Khách sở hữu cố đổi `branchId` → 400 `FORBIDDEN_FIELD` ✅.
+- Backdate booking qua khỏi hạn (30 phút), gọi lại `autoCancelNoShows(30)` → booking chuyển
+  `cancelled`/`cancelledBy: system`, `User.noShowCount` +1, thông báo hủy có kèm gợi ý giờ trống
+  (`09:30`) vì lần này giờ hẹn giả lập nằm trong khung giờ hoạt động của chi nhánh ✅.
+  Đưa booking đó qua trọn vòng đời tới `completed` → `noShowCount` giảm lại 1 (redemption) ✅.
+- FE dev server khởi động sạch; cả `ManagerBookings.jsx` và `BookingsHistory.jsx` được Vite
+  transform thành công (không lỗi cú pháp JSX).
+- **Chưa xác nhận bằng mắt trong trình duyệt thật** — sandbox này không có Playwright/`chromium-cli`
+  cài sẵn nên không chụp được screenshot. Để bù lại, đã để sẵn 1 booking "đang ở trạng thái sắp bị
+  hủy" (`confirmed`, `lateWarningSentAt` đã set) trong tài khoản test — mở FE
+  (`http://localhost:5173`), đăng nhập bằng `binhtntse182370@fpt.edu.vn` / `Customer@123`, vào mục
+  lịch sử đặt chỗ sẽ thấy banner vàng ngay. Booking này sẽ tự bị cron hủy thật trong ~10 phút tới vì
+  cron vẫn đang chạy nền — đúng luồng thật, không phải giả lập.
 
 ## Chưa làm (out of scope lần này)
 
-- Chưa có UI cho khách hàng (customer) xem cảnh báo/gợi ý đổi giờ trong `BookingsHistory.jsx` —
-  hiện tại thông tin này chỉ tới qua Notification (bell) có sẵn.
-- Chưa thêm badge "sắp hết hạn" ở CalendarView (chỉ thêm ở bảng Table).
+- Chưa thêm badge "sắp hết hạn" ở CalendarView của manager (chỉ thêm ở bảng Table).
 - Chưa có job riêng để "reset" `noShowCount` theo thời gian (vd: hết hạn sau 90 ngày) — hiện chỉ
   giảm khi khách hoàn thành booking thành công.
