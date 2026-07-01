@@ -19,6 +19,8 @@ const packageSchema = new mongoose.Schema(
         isOptional: { type: Boolean, default: true },
       },
     ],
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );
