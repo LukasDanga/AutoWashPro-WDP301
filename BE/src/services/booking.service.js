@@ -76,7 +76,7 @@ exports.createBooking = async (data) => {
     const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice, selectedSubServices, slotPackId } = data;
 
     const [pkg, branch, vehicle, user] = await Promise.all([
-      Package.findById(packageId).session(session),
+      Package.findOne({ _id: packageId, isDeleted: { $ne: true } }).session(session),
       Branch.findById(branchId).session(session),
       Vehicle.findById(vehicleId).session(session),
       User.findById(userId).session(session),
@@ -745,7 +745,7 @@ exports.deleteBooking = async (id, userRole) => {
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),
-    Package.findById(packageId),
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
@@ -817,7 +817,7 @@ exports.createRecurringBooking = async (data) => {
 
   // --- Validate base entities (ngoài transaction — chỉ đọc) ---
   const [pkg, branch, vehicle, user] = await Promise.all([
-    Package.findById(packageId),
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
     Branch.findById(branchId),
     Vehicle.findById(vehicleId),
     User.findById(userId),

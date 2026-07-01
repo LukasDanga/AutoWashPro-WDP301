@@ -26,6 +26,8 @@ const voucherSchema = new mongoose.Schema(
     isBirthdayVoucher: { type: Boolean, default: false },
     isTemplate: { type: Boolean, default: false },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );

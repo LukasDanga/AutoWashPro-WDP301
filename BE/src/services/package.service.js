@@ -7,7 +7,7 @@ exports.createPackage = async (data) => {
 };
 
 exports.getAllPackages = async (filters = {}) => {
-  const query = {};
+  const query = { isDeleted: { $ne: true } };
   if (filters.status) query.status = filters.status;
   if (filters.branchId) query.branchId = filters.branchId;
   if (filters.search) {
@@ -24,7 +24,7 @@ exports.getAllPackages = async (filters = {}) => {
 };
 
 exports.getPackageById = async (id, userRole, userBranchId) => {
-  const pkg = await Package.findById(id);
+  const pkg = await Package.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -33,7 +33,7 @@ exports.getPackageById = async (id, userRole, userBranchId) => {
 };
 
 exports.updatePackage = async (id, updates, userRole, userBranchId) => {
-  const pkg = await Package.findById(id);
+  const pkg = await Package.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -43,11 +43,11 @@ exports.updatePackage = async (id, updates, userRole, userBranchId) => {
 };
 
 exports.deletePackage = async (id, userRole, userBranchId) => {
-  const pkg = await Package.findById(id);
+  const pkg = await Package.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
-  await Package.findByIdAndDelete(id);
+  await Package.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
   return pkg;
 };

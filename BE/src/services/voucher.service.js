@@ -43,7 +43,7 @@ exports.createVoucher = async (data) => {
 };
 
 exports.getAllVouchers = async (filters = {}, userRole, userId, userBranchId) => {
-  const query = {};
+  const query = { isDeleted: { $ne: true } };
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
   if (filters.search) {
@@ -89,7 +89,7 @@ exports.getAllVouchers = async (filters = {}, userRole, userId, userBranchId) =>
 };
 
 exports.getVoucherById = async (id, userRole, userId, userBranchId) => {
-  const voucher = await Voucher.findById(id);
+  const voucher = await Voucher.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   if (userRole === 'manager') {
     const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
@@ -102,13 +102,13 @@ exports.getVoucherById = async (id, userRole, userId, userBranchId) => {
 };
 
 exports.getVoucherByCode = async (code) => {
-  const voucher = await Voucher.findOne({ code: code.toUpperCase() });
+  const voucher = await Voucher.findOne({ code: code.toUpperCase(), isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   return voucher;
 };
 
 exports.updateVoucher = async (id, updates, userRole, userId, userBranchId) => {
-  const voucher = await Voucher.findById(id);
+  const voucher = await Voucher.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   if (userRole === 'manager') {
     const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
@@ -122,7 +122,7 @@ exports.updateVoucher = async (id, updates, userRole, userId, userBranchId) => {
 };
 
 exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
-  const voucher = await Voucher.findById(id);
+  const voucher = await Voucher.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   if (userRole === 'manager') {
     const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
@@ -131,12 +131,12 @@ exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
       throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
-  await Voucher.findByIdAndDelete(id);
+  await Voucher.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
   return voucher;
 };
 
 exports.validateVoucher = async (code, bookingData, userId) => {
-  const voucher = await Voucher.findOne({ code: code.toUpperCase() });
+  const voucher = await Voucher.findOne({ code: code.toUpperCase(), isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   if (voucher.status !== 'active') throw Object.assign(new Error('Voucher is inactive'), { statusCode: 400, code: 'VOUCHER_INACTIVE' });
   if (voucher.isTemplate) throw Object.assign(new Error('Voucher template cannot be used directly'), { statusCode: 400, code: 'VOUCHER_IS_TEMPLATE' });
@@ -248,6 +248,7 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount, parentS
           code: code.toUpperCase(),
           remaining: { $gt: 0 },
           status: 'active',
+          isDeleted: { $ne: true },
           startDate: { $lte: new Date() },
           endDate: { $gte: new Date() },
         },
@@ -450,6 +451,7 @@ exports.getAvailableVouchersForUser = async (userId) => {
   // Lấy tất cả voucher active, còn hạn, còn hàng, không phải template
   const allVouchers = await Voucher.find({
     status: 'active',
+    isDeleted: { $ne: true },
     isTemplate: false,
     startDate: { $lte: now },
     endDate:   { $gte: now },
@@ -462,6 +464,7 @@ exports.getAvailableVouchersForUser = async (userId) => {
   // Redeemable templates (đổi điểm)
   const templates = await Voucher.find({
     status: 'active',
+    isDeleted: { $ne: true },
     isTemplate: true,
     requiredPoints: { $gt: 0 },
     remaining: { $gt: 0 },
