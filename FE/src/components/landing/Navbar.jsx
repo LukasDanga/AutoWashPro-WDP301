@@ -36,13 +36,14 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
     return () => window.removeEventListener('scroll', handleScroll);
   }, [prevScroll]);
 
-  const isHome = location.pathname === '/';
+  const isHome = location.pathname === '/' || location.pathname === '/about';
 
   const pageTitle = {
     '/booking': 'Đặt lịch',
     '/packages': 'Gói slot',
     '/gifts': 'Quà tặng',
     '/map': 'Cửa hàng',
+    '/about': 'Giới thiệu',
     '/history': 'Lịch sử đặt',
     '/payments': 'Lịch sử thanh toán',
     '/notifications': 'Thông báo',
@@ -50,6 +51,7 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
   }[location.pathname] || '';
 
   const navItems = [
+    { label: 'Giới thiệu', to: '/about' },
     { label: 'Đặt lịch', to: '/booking' },
     { label: 'Gói slot', to: '/packages' },
     { label: 'Quà tặng', to: '/gifts' },
