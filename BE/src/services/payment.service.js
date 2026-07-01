@@ -287,7 +287,11 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
     query.userId = userId;
   } else {
     if (filters.userId) query.userId = filters.userId;
-    if (filters.status) query.status = filters.status;
+    if (filters.status) {
+      query.status = filters.status;
+    } else {
+      query.status = { $ne: 'pending' };
+    }
     if (filters.method) query.method = filters.method;
     if (filters.today === 'true' || filters.today === true) {
       const start = new Date();
@@ -331,10 +335,6 @@ exports.refundPayment = async (bookingId) => {
       throw Object.assign(new Error('Only paid payments can be refunded'), { statusCode: 400, code: 'INVALID_REFUND' });
     }
 
-    if (booking.status === 'completed') {
-      await session.abortTransaction();
-      throw Object.assign(new Error('Cannot refund a completed booking'), { statusCode: 400, code: 'BOOKING_COMPLETED' });
-    }
     if (booking.status === 'in_progress') {
       await session.abortTransaction();
       throw Object.assign(new Error('Cannot refund a booking in progress'), { statusCode: 400, code: 'BOOKING_IN_PROGRESS' });
