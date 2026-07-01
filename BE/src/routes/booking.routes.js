@@ -149,6 +149,32 @@ router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER),
 
 /**
  * @swagger
+ * /api/bookings/{id}/extend-grace:
+ *   patch:
+ *     summary: Extend the no-show grace period for a booking at risk of auto-cancellation (manager/admin)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Grace period extended
+ *       400:
+ *         description: Invalid status or extension limit reached
+ *       404:
+ *         description: Booking not found
+ */
+router.patch('/:id/extend-grace', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId(),
+], validate, bookingController.extendGracePeriod);
+
+/**
+ * @swagger
  * /api/bookings/{id}/cancel:
  *   post:
  *     summary: Cancel booking

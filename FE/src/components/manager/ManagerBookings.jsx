@@ -135,6 +135,42 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
   );
 }
 
+/* ── "sắp bị auto-cancel" cảnh báo + nút gia hạn thủ công (đồng bộ với QR check-in) ── */
+function AtRiskNotice({ booking, onUpdated, notify }) {
+  const [busy, setBusy] = useState(false);
+  if (!['pending', 'confirmed'].includes(booking.status) || !booking.lateWarningSentAt) return null;
+
+  const extend = async () => {
+    setBusy(true);
+    try {
+      const res = await api(`/bookings/${booking._id}/extend-grace`, { method: 'PATCH' });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || 'Gia hạn thất bại');
+      onUpdated(payload?.data ?? payload);
+      notify('Đã gia hạn thêm 15 phút cho đơn', 'success');
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="mt-1 flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title="Khách chưa check-in, sắp bị hệ thống tự hủy">
+        <Clock size={10} weight="fill" /> Sắp hết hạn
+      </span>
+      {(booking.graceExtensionMinutes || 0) < 30 && (
+        <button onClick={extend} disabled={busy}
+          className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 disabled:opacity-50 transition-colors">
+          {busy ? '...' : 'Gia hạn +15p'}
+        </button>
+      )}
+      {booking.suggestedSlotStartTime && (
+        <span className="text-[10px] text-slate-400">Gợi ý đổi giờ: {booking.suggestedSlotStartTime}</span>
+      )}
+    </div>
+  );
+}
+
 /* ── rebook modal ── */
 function RebookModal({ booking, onClose, onRebooked, notify }) {
   const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })();
@@ -1392,6 +1428,7 @@ export default function ManagerBookings() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
+                    <AtRiskNotice booking={b} onUpdated={handleUpdated} notify={notify} />
                   </td>
                   <td className="px-4 py-3 text-center">
                     {(() => {

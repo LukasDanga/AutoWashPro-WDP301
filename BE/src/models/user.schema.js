@@ -20,6 +20,8 @@ const userSchema = new mongoose.Schema(
     lifetimePoints: { type: Number, default: 0 },
     tier: { type: String, enum: ['bronze', 'silver', 'gold', 'diamond'], default: 'bronze' },
     pointsExpiresAt: { type: Date },
+    // Số lần bị hệ thống tự hủy do no-show (chưa đến quá giờ). Giảm dần khi hoàn thành booking thành công.
+    noShowCount: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

@@ -47,6 +47,11 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   success(res, booking, 'Booking status updated');
 });
 
+exports.extendGracePeriod = catchAsync(async (req, res) => {
+  const booking = await bookingService.extendGracePeriod(req.params.id, req.user.role, req.user.branchId);
+  success(res, booking, 'Đã gia hạn thời gian check-in cho đơn');
+});
+
 exports.cancelBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, req.body.cancellationReason);
   success(res, booking, 'Booking cancelled');
