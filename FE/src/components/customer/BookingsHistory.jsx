@@ -20,6 +20,58 @@ function StatusBadge({ status }) {
   return <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.label}</span>;
 }
 
+/* ── cảnh báo "sắp bị hủy tự động" + đổi giờ nhanh sang slot gợi ý ── */
+function AtRiskBanner({ booking, apiBase, token, onRescheduled }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  if (!['pending', 'confirmed'].includes(booking.status) || !booking.lateWarningSentAt) return null;
+
+  async function rescheduleToSuggested() {
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch(`${apiBase}/bookings/${booking._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ startTime: booking.suggestedSlotStartTime }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.message || 'Đổi giờ thất bại');
+      onRescheduled(payload?.data || payload);
+      showToast(`Đã đổi giờ sang ${booking.suggestedSlotStartTime}`);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{
+      marginTop: 10, padding: '10px 12px', borderRadius: 10,
+      background: '#fffbeb', border: '1px solid #fde68a',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#b45309' }}>
+        ⏰ Bạn chưa check-in — sắp bị hệ thống tự hủy!
+      </div>
+      {booking.suggestedSlotStartTime && (
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: '#92400e' }}>
+            Khung giờ trống gần nhất hôm nay: <b>{booking.suggestedSlotStartTime}</b>
+          </span>
+          <button onClick={rescheduleToSuggested} disabled={busy} style={{
+            padding: '5px 12px', borderRadius: 8, border: 'none',
+            background: '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
+            cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+          }}>
+            {busy ? 'Đang đổi...' : `Đổi sang ${booking.suggestedSlotStartTime}`}
+          </button>
+        </div>
+      )}
+      {err && <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626' }}>{err}</div>}
+    </div>
+  );
+}
+
 function formatCurrency(n) {
   return Number(n || 0).toLocaleString('vi-VN') + 'đ';
 }
@@ -315,6 +367,11 @@ export default function BookingsHistory({ apiBase, token }) {
     }
   }
 
+  function handleRescheduled(updated) {
+    setBookings((prev) => prev.map((b) => (b._id === updated._id ? { ...b, ...updated } : b)));
+    setDetailBooking((prev) => (prev && prev._id === updated._id ? { ...prev, ...updated } : prev));
+  }
+
   async function handleRebook(b) {
     setRebookTarget(b);
     setRebookDate('');
@@ -589,6 +646,7 @@ export default function BookingsHistory({ apiBase, token }) {
                         <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
                       </div>
+                      <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                     </div>
                   ))}
                 </div>
@@ -629,6 +687,7 @@ export default function BookingsHistory({ apiBase, token }) {
               {/* Status */}
               <div style={{ marginBottom: 16 }}>
                 <StatusBadge status={detailBooking.status} />
+                <AtRiskBanner booking={detailBooking} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
               </div>
 
               {/* Info rows */}
@@ -1121,6 +1180,7 @@ export default function BookingsHistory({ apiBase, token }) {
                     <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
                   </div>
+                  <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                   {(b.status === 'completed' || b.status === 'cancelled') && (
                     <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
                       <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}

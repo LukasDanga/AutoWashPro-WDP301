@@ -34,7 +34,7 @@ exports.getBookingById = catchAsync(async (req, res) => {
 });
 
 exports.updateBooking = catchAsync(async (req, res) => {
-  const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role);
+  const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role, req.userId);
   success(res, booking, 'Booking updated');
 });
 

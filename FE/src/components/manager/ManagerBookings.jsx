@@ -158,10 +158,10 @@ function AtRiskNotice({ booking, onUpdated, notify }) {
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title="Khách chưa check-in, sắp bị hệ thống tự hủy">
         <Clock size={10} weight="fill" /> Sắp hết hạn
       </span>
-      {(booking.graceExtensionMinutes || 0) < 30 && (
+      {(booking.graceExtensionMinutes || 0) < 15 && (
         <button onClick={extend} disabled={busy}
           className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 disabled:opacity-50 transition-colors">
-          {busy ? '...' : 'Gia hạn +15p'}
+          {busy ? '...' : 'Gia hạn +5p'}
         </button>
       )}
       {booking.suggestedSlotStartTime && (
