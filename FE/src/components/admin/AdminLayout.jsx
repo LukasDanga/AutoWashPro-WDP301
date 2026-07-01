@@ -21,6 +21,7 @@ function resolvePageMeta(pathname) {
   if (pathname.startsWith('/admin/activity')) return ADMIN_PAGE_META.activity;
   if (pathname.startsWith('/admin/bookings')) return ADMIN_PAGE_META.bookings;
   if (pathname.startsWith('/admin/payments')) return ADMIN_PAGE_META.payments;
+  if (pathname.startsWith('/admin/refund-requests')) return ADMIN_PAGE_META['refund-requests'];
   if (pathname.startsWith('/admin/slot-packs')) return ADMIN_PAGE_META['slot-packs'];
   if (pathname.startsWith('/admin/profile')) return ADMIN_PAGE_META.profile;
   return ADMIN_PAGE_META.overview;
