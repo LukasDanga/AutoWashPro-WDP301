@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Users, MagnifyingGlass, UserCircle, ArrowClockwise } from '@phosphor-icons/react';
+import { Users, MagnifyingGlass, ArrowClockwise } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
 function api(path) {
@@ -9,7 +9,7 @@ function api(path) {
   });
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 export default function ManagerCustomers() {
   const [customers, setCustomers] = useState([]);
@@ -124,24 +124,14 @@ export default function ManagerCustomers() {
                     customers.map((c, i) => (
                       <tr key={c._id || i} className="hover:bg-muted/30 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            {c.user?.avatar ? (
-                              <img src={c.user.avatar} className="h-10 w-10 rounded-full object-cover border border-border" alt="" />
-                            ) : (
-                              <UserCircle size={40} className="text-slate-300" weight="fill" />
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground">{c.user?.name || 'Khách vãng lai'}</span>
+                            {c.user?.tier && <TierBadge tier={c.user.tier} />}
+                            {c.user?.createdAt && (Date.now() - new Date(c.user.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000) && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                              </span>
                             )}
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-foreground">{c.user?.name || 'Khách vãng lai'}</span>
-                                {c.user?.tier && <TierBadge tier={c.user.tier} />}
-                                {c.user?.createdAt && (Date.now() - new Date(c.user.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000) && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground capitalize">{c.user?.role || 'customer'}</div>
-                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">

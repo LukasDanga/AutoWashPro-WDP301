@@ -68,22 +68,28 @@ const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-s
 const EMPTY_VOUCHER = {
   code: '', name: '', description: '', type: 'percentage', value: '',
   maxDiscount: '', minOrder: '', quantity: '', startDate: '', endDate: '',
-  applicableToAllBranches: true, applicableToAllPackages: true, status: 'active',
+  branchId: '', applicableToAllBranches: true, applicableToAllPackages: true, status: 'active',
 };
 
-function VoucherModal({ initial, onSave, onClose, saving }) {
-  const [form, setForm] = useState({ ...EMPTY_VOUCHER, ...initial });
+function VoucherModal({ initial, onSave, onClose, saving, branches = [] }) {
+  const [form, setForm] = useState({ ...EMPTY_VOUCHER, ...initial, branchId: initial?.branchId?._id || initial?.branchId || '' });
   const [errors, setErrors] = useState({});
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); };
 
   const validate = () => {
     const e = {};
+    const today = new Date().toISOString().split('T')[0];
     if (!form.code.trim()) e.code = 'Nhập mã voucher';
     if (!form.name.trim()) e.name = 'Nhập tên voucher';
     if (!form.value) e.value = 'Nhập giá trị';
     if (!form.quantity) e.quantity = 'Nhập số lượng';
     if (!form.startDate) e.startDate = 'Chọn ngày bắt đầu';
     if (!form.endDate) e.endDate = 'Chọn ngày kết thúc';
+    if (form.startDate && form.startDate < today) e.startDate = 'Ngày bắt đầu không được ở quá khứ';
+    if (form.endDate && form.endDate < today) e.endDate = 'Ngày kết thúc không được ở quá khứ';
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      e.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+    }
     return e;
   };
 
@@ -137,6 +143,16 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Mô tả</label>
             <input className={inp} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="..." />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Chi nhánh áp dụng</label>
+            <select className={inp} value={form.branchId} onChange={(e) => set('branchId', e.target.value)}>
+              <option value="">— Tất cả chi nhánh —</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>{b.name}</option>
+              ))}
+            </select>
+            <p className="mt-0.5 text-[11px] text-slate-400">Để trống nếu voucher áp dụng cho tất cả chi nhánh.</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -475,6 +491,7 @@ function DashboardOverview({ vouchers }) {
 /* ═══ Main ═══ */
 export default function AdminRewards() {
   const [vouchers, setVouchers] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -489,6 +506,13 @@ export default function AdminRewards() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  useEffect(() => {
+    api('/branches').then(r => r.json()).then(p => {
+      const list = p?.data ?? p;
+      setBranches(Array.isArray(list) ? list : []);
+    }).catch(() => {});
+  }, []);
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -551,25 +575,26 @@ export default function AdminRewards() {
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
-        <button 
-          onClick={() => setActiveTab('dashboard')}
-          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'dashboard' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-        >
-          Tổng quan
-        </button>
-        <button 
-          onClick={() => setActiveTab('list')}
-          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-        >
-          Danh sách Voucher
-        </button>
-        <button 
-          onClick={() => setActiveTab('report')}
-          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'report' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-        >
-          Báo cáo sử dụng
-        </button>
+      <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
+        {[
+          { key: 'dashboard', label: 'Tổng quan', icon: Coin },
+          { key: 'list',      label: 'Danh sách Voucher', icon: Tag },
+          { key: 'report',    label: 'Báo cáo sử dụng', icon: ClockCounterClockwise },
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-medium transition-all ${
+                isActive
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}>
+              <Icon size={14} />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === 'dashboard' && (
@@ -881,10 +906,10 @@ export default function AdminRewards() {
       )}
 
       {modal === 'create' && (
-        <VoucherModal initial={null} onSave={handleCreate} onClose={() => setModal(null)} saving={saving} />
+        <VoucherModal initial={null} onSave={handleCreate} onClose={() => setModal(null)} saving={saving} branches={branches} />
       )}
       {modal === 'edit' && selected && (
-        <VoucherModal initial={selected} onSave={handleUpdate} onClose={() => setModal(null)} saving={saving} />
+        <VoucherModal initial={selected} onSave={handleUpdate} onClose={() => setModal(null)} saving={saving} branches={branches} />
       )}
       {modal === 'usage' && selected && (
         <VoucherUsageModal voucherId={selected._id} onClose={() => setModal(null)} />

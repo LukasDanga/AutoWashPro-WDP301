@@ -72,12 +72,18 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
 
   const validate = () => {
     const e = {};
+    const today = new Date().toISOString().split('T')[0];
     if (!form.code.trim()) e.code = 'Nhập mã voucher';
     if (!form.name.trim()) e.name = 'Nhập tên voucher';
     if (!form.value) e.value = 'Nhập giá trị';
     if (!form.quantity) e.quantity = 'Nhập số lượng';
     if (!form.startDate) e.startDate = 'Chọn ngày bắt đầu';
     if (!form.endDate) e.endDate = 'Chọn ngày kết thúc';
+    if (form.startDate && form.startDate < today) e.startDate = 'Ngày bắt đầu không được ở quá khứ';
+    if (form.endDate && form.endDate < today) e.endDate = 'Ngày kết thúc không được ở quá khứ';
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      e.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+    }
     return e;
   };
 
@@ -197,12 +203,12 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày bắt đầu <span className="text-red-500">*</span></label>
-              <input type="date" className={inp} value={form.startDate?.split('T')[0] ?? form.startDate} onChange={(e) => set('startDate', e.target.value)} />
+              <input type="date" className={inp} min={new Date().toISOString().split('T')[0]} value={form.startDate?.split('T')[0] ?? form.startDate} onChange={(e) => set('startDate', e.target.value)} />
               {errors.startDate && <p className="mt-0.5 text-[11px] text-red-500">{errors.startDate}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày kết thúc <span className="text-red-500">*</span></label>
-              <input type="date" className={inp} value={form.endDate?.split('T')[0] ?? form.endDate} onChange={(e) => set('endDate', e.target.value)} />
+              <input type="date" className={inp} min={form.startDate?.split('T')[0] || new Date().toISOString().split('T')[0]} value={form.endDate?.split('T')[0] ?? form.endDate} onChange={(e) => set('endDate', e.target.value)} />
               {errors.endDate && <p className="mt-0.5 text-[11px] text-red-500">{errors.endDate}</p>}
             </div>
           </div>

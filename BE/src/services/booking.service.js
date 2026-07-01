@@ -76,7 +76,7 @@ exports.createBooking = async (data) => {
     const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice, selectedSubServices, slotPackId } = data;
 
     const [pkg, branch, vehicle, user] = await Promise.all([
-      Package.findById(packageId).session(session),
+      Package.findOne({ _id: packageId, isDeleted: { $ne: true } }).session(session),
       Branch.findById(branchId).session(session),
       Vehicle.findById(vehicleId).session(session),
       User.findById(userId).session(session),
@@ -642,6 +642,15 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       await voucherService.rollbackVoucher(booking.voucherCode, booking.userId, id, session).catch(() => {});
     }
 
+    // Hoàn lượt nếu khách tự hủy đơn gói lượt (hệ thống hủy thì không hoàn)
+    if (booking.bookingType === 'slot_pack_usage' && cancelledBy === 'customer' && booking.slotPackId) {
+      await SlotPack.findByIdAndUpdate(
+        booking.slotPackId,
+        { $inc: { remainingSlots: 1, usedSlots: -1 } },
+        { session }
+      ).catch(() => {});
+    }
+
     await session.commitTransaction();
 
     notificationService.send(
@@ -745,7 +754,7 @@ exports.deleteBooking = async (id, userRole) => {
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),
-    Package.findById(packageId),
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
@@ -817,7 +826,7 @@ exports.createRecurringBooking = async (data) => {
 
   // --- Validate base entities (ngoài transaction — chỉ đọc) ---
   const [pkg, branch, vehicle, user] = await Promise.all([
-    Package.findById(packageId),
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
     Branch.findById(branchId),
     Vehicle.findById(vehicleId),
     User.findById(userId),
@@ -1114,6 +1123,7 @@ exports.getFeedbacks = async (user, filters = {}) => {
     Booking.find(query)
       .populate('userId', 'name email phone avatar tier')
       .populate('packageId', 'name')
+      .populate('branchId', 'name')
       .sort({ feedbackAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit),

@@ -1,100 +1,123 @@
-import { motion } from 'framer-motion';
-import { useInView } from 'framer-motion';
-import { useRef, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { Star, MessageSquare } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const CARD_BG = ['bg-white'];
+const FALLBACK_REVIEWS = [
+  { id: 't1', name: 'Lê Văn Cường', location: 'AutoWash Pro Thủ Đức', content: 'Dịch vụ tốt, đội ngũ chuyên nghiệp. Tôi đặt lịch trước qua website, đến nơi có khoang trống vào rửa ngay không phải xếp hàng chờ đợi cực kỳ tiện lợi.', rating: 5, color: 'emerald' },
+  { id: 't2', name: 'Phạm Thị Dung', location: 'AutoWash Pro Quận 1', content: 'Rửa rất sạch, nhân viên nhiệt tình hỗ trợ dọn sạch nội thất bụi bẩn. Phòng chờ có điều hòa mát mẻ và nước uống phục vụ chu đáo.', rating: 5, color: 'blue' },
+  { id: 't3', name: 'Nguyễn Văn An', location: 'AutoWash Pro Quận 7', content: 'Công nghệ rửa xe tiên tiến với bọt tuyết chuẩn quốc tế, bảo vệ nước sơn bóng của xe hiệu quả. Đặt lịch rất mượt mà.', rating: 5, color: 'violet' },
+  { id: 't4', name: 'Trần Minh Tuấn', location: 'AutoWash Pro Cầu Giấy', content: 'Ceramic coating dọn xe cực kỳ bóng bẩy, nhân viên chu đáo hướng dẫn kỹ các lưu ý bảo vệ sơn xe rất tận tâm.', rating: 5, color: 'amber' },
+  { id: 't5', name: 'Hoàng Thị Mai', location: 'AutoWash Pro Tân Bình', content: 'Giao diện Web trực quan. Giá cả minh bạch, chất lượng dọn dẹp xe tuyệt vời đến từng chi tiết nhỏ nhất. Sẽ quay lại.', rating: 5, color: 'rose' },
+];
 
-function StarRating({ rating }) {
+const MARQUEE_KEYFRAMES = `
+@keyframes marquee-right { 0% { transform: translateX(0); } 100% { transform: translateX(-33.33%); } }
+@keyframes marquee-left { 0% { transform: translateX(-33.33%); } 100% { transform: translateX(0); } }
+.animate-marquee-right { animation: marquee-right var(--speed, 35s) linear infinite; }
+.animate-marquee-left { animation: marquee-left var(--speed, 45s) linear infinite; }
+.marquee-container:hover .animate-marquee-right,
+.marquee-container:hover .animate-marquee-left { animation-play-state: paused; }
+`;
+
+function getColorClasses(colorName) {
+  switch (colorName) {
+    case 'emerald': return 'bg-emerald-100 text-emerald-700';
+    case 'blue': return 'bg-blue-100 text-blue-700';
+    case 'violet': return 'bg-violet-100 text-violet-700';
+    case 'amber': return 'bg-amber-100 text-amber-700';
+    case 'rose': return 'bg-rose-100 text-rose-700';
+    default: return 'bg-slate-100 text-slate-700';
+  }
+}
+
+function TestimonialCard({ item }) {
+  const parts = item.name?.trim().split(/\s+/) || [];
+  const avatarText = parts.length >= 2 ? (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase() : (parts[0]?.[0] || '').toUpperCase();
   return (
-    <div className="flex gap-0.5">
-      {Array.from({ length: 5 }, (_, i) => (
-        <svg key={i} className={`w-4 h-4 ${i < rating ? 'text-amber-400' : 'text-slate-200'}`} viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-      ))}
+    <div className="w-[380px] shrink-0 p-7 bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-xl hover:shadow-emerald-50/60 transition-all duration-300 mx-3 flex flex-col justify-between">
+      <div>
+        <div className="flex gap-1 text-yellow-400 mb-4">
+          {[...Array(item.rating)].map((_, i) => <Star key={i} className="w-4 h-4 fill-current" />)}
+        </div>
+        <p className="text-slate-600 text-sm leading-relaxed italic mb-6">&ldquo;{item.content}&rdquo;</p>
+      </div>
+      <div className="flex items-center gap-3.5 border-t border-slate-100 pt-4">
+        <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-inner ${getColorClasses(item.color)}`}>
+          {avatarText}
+        </div>
+        <div className="text-left truncate">
+          <p className="font-bold text-slate-900 text-sm">{item.name}</p>
+          <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">{item.location}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-const FALLBACK_REVIEWS = [
-  { name: 'Anh Hạnh', location: 'AutoWash Cầu Giấy', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AH', color: 'emerald' },
-  { name: 'Chị Minh', location: 'AutoWash Thu Duc', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CM', color: 'blue' },
-  { name: 'Anh Thành', location: 'AutoWash Quận 1', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AT', color: 'violet' },
-  // Duplicate for alternating effect
-  { name: 'Chị Lan', location: 'AutoWash Quận 7', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CL', color: 'emerald' },
-  { name: 'Anh Hoàng', location: 'AutoWash Đà Nẵng', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'AH', color: 'blue' },
-  { name: 'Chị Nga', location: 'AutoWash Hải Châu', content: 'Rất ấn tượng với trải nghiệm mượt mà, giác tôi kiểm tra ngay trên chi nhánh. Chỉ cần vài chạm và có xe là sạch.', rating: 5, initials: 'CN', color: 'violet' },
-];
-
-const COLOR_MAP = {
-  emerald: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  blue: { bg: 'bg-blue-100', text: 'text-blue-700' },
-  violet: { bg: 'bg-violet-100', text: 'text-violet-700' },
-};
-
 export default function TestimonialsSection() {
   const [testimonials, setTestimonials] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
 
   useEffect(() => {
-    async function fetchTestimonials() {
-      try {
-        const res = await fetch(`${API_BASE}/testimonials`);
-        const payload = await res.json();
-        const data = payload?.data || payload || [];
-        setTestimonials(Array.isArray(data) && data.length > 0 ? data : FALLBACK_REVIEWS);
-      } catch (e) {
-        setTestimonials(FALLBACK_REVIEWS);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchTestimonials();
+    fetch(`${API_BASE}/testimonials`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Network error');
+        return res.json();
+      })
+      .then((data) => {
+        const arr = data?.data || data || [];
+        if (Array.isArray(arr) && arr.length > 0) setTestimonials(arr);
+        else setTestimonials(FALLBACK_REVIEWS);
+      })
+      .catch(() => setTestimonials(FALLBACK_REVIEWS));
   }, []);
 
   const items = testimonials.length > 0 ? testimonials : FALLBACK_REVIEWS;
+  if (items.length === 0) return null;
+
+  const marqueeRow1 = [...items, ...items, ...items];
+  const marqueeRow2 = [...items, ...items, ...items];
 
   return (
-    <section ref={ref} id="testimonials" className="relative py-24 md:py-32 overflow-hidden bg-emerald-50/30">
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-center mb-16">
-          <span className="text-emerald-600 text-xs font-semibold tracking-widest uppercase mb-4 block">KHÁCH HÀNG NÓI GÌ</span>
-          <h2 className="text-4xl md:text-6xl font-extrabold tracking-tighter leading-none text-slate-900 mb-4">Hàng ngàn khách hàng hài lòng</h2>
-          <p className="text-slate-500 max-w-xl mx-auto text-sm md:text-base">Những đánh giá chân thực từ khách hàng đã trải nghiệm dịch vụ tại AutoWash Pro.</p>
-        </motion.div>
+    <section id="testimonials-section" className="relative py-24 md:py-32 bg-slate-50 overflow-hidden font-sans">
+      <style>{MARQUEE_KEYFRAMES}</style>
 
-        {loading ? (
-          <div className="text-center text-slate-400 py-16">Đang tải đánh giá...</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {items.slice(0, 6).map((t, i) => {
-              const color = COLOR_MAP[t.color] || COLOR_MAP.emerald;
-              const initials = t.initials || t.name?.charAt(0) || 'K';
-              const bgClass = CARD_BG[i % CARD_BG.length];
-              return (
-                <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-                  transition={{ duration: 0.4, delay: i * 0.1 }}
-                  className={`${bgClass} border border-slate-200 rounded-2xl p-8 hover:shadow-lg hover:shadow-emerald-50/50 transition-all duration-500`}>
-                  <StarRating rating={t.rating || 5} />
-                  <p className="text-sm text-slate-600 leading-relaxed mt-4 mb-6 italic">"{t.content}"</p>
-                  <div className="flex items-center gap-3 border-t border-slate-200 pt-4">
-                    <div className={`w-10 h-10 rounded-full ${color.bg} flex items-center justify-center ${color.text} text-sm font-bold`}>
-                      {initials}
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">{t.name}</div>
-                      <div className="text-xs text-slate-400">{t.location}</div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
+      <div className="absolute top-10 left-10 w-96 h-96 bg-emerald-100/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-96 h-96 bg-teal-100/30 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="max-w-[1400px] mx-auto px-6 md:px-12 mb-16">
+        <div className="text-center max-w-2xl mx-auto">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100/60 text-emerald-600 mb-4 shadow-xs">
+            <MessageSquare className="w-5 h-5" />
           </div>
-        )}
+          <p className="text-emerald-600 text-xs font-bold tracking-widest uppercase">Khách hàng nói gì</p>
+          <h2 className="mt-3 text-3xl md:text-5xl font-black tracking-tight text-slate-900">Hàng ngàn khách hàng hài lòng</h2>
+          <p className="mt-4 text-sm md:text-base text-slate-500 leading-relaxed">
+            Xem những đánh giá khách quan nhất từ những người sở hữu xế hộp đã lựa chọn và trải nghiệm dịch vụ tại AutoWashPro.
+          </p>
+        </div>
+      </div>
+
+      <div className="marquee-container flex flex-col gap-6 md:gap-8 cursor-grab select-none">
+        <div className="flex overflow-hidden w-full relative">
+          <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-slate-50 to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-slate-50 to-transparent z-10 pointer-events-none" />
+          <div className="animate-marquee-right flex" style={{ '--speed': '35s' }}>
+            {marqueeRow1.map((item, index) => (
+              <TestimonialCard key={`r1-${item.id || index}-${index}`} item={item} />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex overflow-hidden w-full relative">
+          <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-slate-50 to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-slate-50 to-transparent z-10 pointer-events-none" />
+          <div className="animate-marquee-left flex" style={{ '--speed': '45s' }}>
+            {marqueeRow2.map((item, index) => (
+              <TestimonialCard key={`r2-${item.id || index}-${index}`} item={item} />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

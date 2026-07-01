@@ -70,6 +70,30 @@ router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), slotPackCon
 
 /**
  * @swagger
+ * /api/slot-packs/usage-history:
+ *   get:
+ *     summary: Lịch sử sử dụng gói lượt (tất cả booking slot_pack_usage)
+ *     tags: [SlotPacks]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/usage-history', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), slotPackController.getUsageHistory);
+
+/**
+ * @swagger
+ * /api/slot-packs/{id}/usage-history:
+ *   get:
+ *     summary: Lịch sử sử dụng của 1 gói cụ thể
+ *     tags: [SlotPacks]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/:id/usage-history', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId().withMessage('Invalid slot pack ID'),
+], validate, slotPackController.getSlotPackUsageHistory);
+
+/**
+ * @swagger
  * /api/slot-packs/code/{code}:
  *   get:
  *     summary: Lookup gói bằng mã packCode (manager checkin)

@@ -11,6 +11,7 @@ import {
   Package,
   Ticket,
   CalendarBlank,
+  ArrowUUpLeft,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -56,6 +57,12 @@ export const MANAGER_MENU_ITEMS = [
     label: 'Voucher',
     to: '/manager/vouchers',
     icon: Tag,
+  },
+  {
+    id: 'refund-requests',
+    label: 'Yêu cầu hoàn tiền',
+    to: '/manager/refund-requests',
+    icon: ArrowUUpLeft,
   },
   {
     id: 'customers',
@@ -110,6 +117,10 @@ export const MANAGER_PAGE_META = {
   vouchers: {
     title: 'Quản lý voucher',
     description: 'Tạo và quản lý mã giảm giá áp dụng tại chi nhánh.',
+  },
+  'refund-requests': {
+    title: 'Yêu cầu hoàn tiền',
+    description: 'Xem xét và duyệt các yêu cầu hoàn tiền do khách hàng gửi.',
   },
   customers: {
     title: 'Quản lý khách hàng',

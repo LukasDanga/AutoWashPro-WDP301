@@ -364,6 +364,68 @@ exports.cancelSlotPack = async (packId, userId, userRole) => {
   return pack;
 };
 
+// ─── Usage History ────────────────────────────────────────────────────────────
+
+/**
+ * Lấy lịch sử sử dụng gói lượt (tất cả bookings có bookingType = slot_pack_usage).
+ * Hỗ trợ phân页, tìm kiếm, lọc theo chi nhánh / gói slot cụ thể.
+ */
+exports.getUsageHistory = async (filters = {}, userRole, userBranchId) => {
+  const query = { bookingType: 'slot_pack_usage' };
+
+  if (filters.slotPackId) query.slotPackId = filters.slotPackId;
+
+  // Manager chỉ thấy chi nhánh mình
+  if (userRole === 'manager' && userBranchId) {
+    query.branchId = userBranchId;
+  } else if (filters.branchId) {
+    query.branchId = filters.branchId;
+  }
+
+  // Tìm kiếm theo tên / SĐT khách hàng
+  if (filters.search && filters.search.trim()) {
+    const keyword = filters.search.trim();
+    const regex = new RegExp(keyword, 'i');
+    const matchingUsers = await User.find({
+      $or: [{ name: regex }, { phone: regex }],
+    }).select('_id').lean();
+    const userIds = matchingUsers.map(u => u._id);
+    query.userId = { $in: userIds };
+  }
+
+  // Lọc theo ngày
+  if (filters.date) {
+    const start = new Date(filters.date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(filters.date);
+    end.setHours(23, 59, 59, 999);
+    query.bookingDate = { $gte: start, $lte: end };
+  }
+
+  // Lọc theo trạng thái booking
+  if (filters.status) query.status = filters.status;
+
+  const page  = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(filters.limit, 10) || 15));
+  const skip  = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Booking.find(query)
+      .populate('userId',    'name email phone tier')
+      .populate('branchId',  'name address')
+      .populate('packageId', 'name price duration')
+      .populate('vehicleId', 'licensePlate vehicleType brand')
+      .populate('slotPackId', 'packCode totalSlots usedSlots remainingSlots')
+      .sort({ bookingDate: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Booking.countDocuments(query),
+  ]);
+
+  return { data, total, page, totalPages: Math.ceil(total / limit) };
+};
+
 // ─── Preview chiết khấu (không lưu DB) ───────────────────────────────────────
 
 exports.previewDiscount = (totalSlots, unitPrice) => {

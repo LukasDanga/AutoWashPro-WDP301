@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthScreen from './components/AuthScreen.jsx';
 import LandingPage from './components/landing/LandingPage.jsx';
+import AboutPage from './components/landing/AboutPage.jsx';
 import BookingPage from './components/landing/BookingPage.jsx';
 import PackagesPage from './components/landing/PackagesPage.jsx';
 import GiftStorePage from './components/landing/GiftStorePage.jsx';
@@ -238,6 +239,10 @@ export default function App() {
 
   if (path === '/map') {
     return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+  }
+
+  if (path === '/about') {
+    return <AboutPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
