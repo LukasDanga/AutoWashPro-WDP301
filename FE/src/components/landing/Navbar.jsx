@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
-  const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -36,21 +35,8 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
     return () => window.removeEventListener('scroll', handleScroll);
   }, [prevScroll]);
 
-  const isHome = location.pathname === '/' || location.pathname === '/about';
-
-  const pageTitle = {
-    '/booking': 'Đặt lịch',
-    '/packages': 'Gói slot',
-    '/gifts': 'Quà tặng',
-    '/map': 'Cửa hàng',
-    '/about': 'Giới thiệu',
-    '/history': 'Lịch sử đặt',
-    '/payments': 'Lịch sử thanh toán',
-    '/notifications': 'Thông báo',
-    '/profile': 'Hồ sơ',
-  }[location.pathname] || '';
-
   const navItems = [
+    { label: 'Trang chủ', to: '/' },
     { label: 'Giới thiệu', to: '/about' },
     { label: 'Đặt lịch', to: '/booking' },
     { label: 'Gói slot', to: '/packages' },
@@ -60,21 +46,6 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
 
   function isActive(to) {
     return location.pathname === to;
-  }
-
-  if (!isHome) {
-    return (
-      <header className="sticky top-0 z-[5000] bg-white/80 backdrop-blur-xl border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-            Quay lại
-          </Link>
-          <h1 className="text-sm font-bold text-slate-800">{pageTitle}</h1>
-          <div className="w-20" />
-        </div>
-      </header>
-    );
   }
 
   return (
