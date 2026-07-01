@@ -78,12 +78,18 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
 
   const validate = () => {
     const e = {};
+    const today = new Date().toISOString().split('T')[0];
     if (!form.code.trim()) e.code = 'Nhập mã voucher';
     if (!form.name.trim()) e.name = 'Nhập tên voucher';
     if (!form.value) e.value = 'Nhập giá trị';
     if (!form.quantity) e.quantity = 'Nhập số lượng';
     if (!form.startDate) e.startDate = 'Chọn ngày bắt đầu';
     if (!form.endDate) e.endDate = 'Chọn ngày kết thúc';
+    if (form.startDate && form.startDate < today) e.startDate = 'Ngày bắt đầu không được ở quá khứ';
+    if (form.endDate && form.endDate < today) e.endDate = 'Ngày kết thúc không được ở quá khứ';
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      e.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+    }
     return e;
   };
 

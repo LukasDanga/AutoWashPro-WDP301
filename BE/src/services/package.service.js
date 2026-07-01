@@ -9,9 +9,18 @@ exports.createPackage = async (data) => {
 exports.getAllPackages = async (filters = {}) => {
   const query = {};
   if (filters.status) query.status = filters.status;
-  if (filters.name) query.name = { $regex: filters.name, $options: 'i' };
   if (filters.branchId) query.branchId = filters.branchId;
-  return Package.find(query).sort({ price: 1 });
+  if (filters.search) {
+    query.name = { $regex: filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+  }
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 9));
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    Package.find(query).sort({ price: 1 }).skip(skip).limit(limit),
+    Package.countDocuments(query),
+  ]);
+  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 };
 
 exports.getPackageById = async (id, userRole, userBranchId) => {

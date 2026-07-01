@@ -64,8 +64,9 @@ export default function AdminBookings() {
       const data = await res.json();
       const list = data?.data?.bookings || data?.data || [];
       setBookings(Array.isArray(list) ? list : []);
-      setTotalPages(data?.data?.totalPages || 1);
-      setTotal(data?.data?.total || 0);
+      const pag = data?.data?.pagination;
+      setTotalPages(pag?.totalPages || 1);
+      setTotal(pag?.total || 0);
       setPage(pg);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }

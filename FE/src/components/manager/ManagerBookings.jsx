@@ -1176,10 +1176,11 @@ export default function ManagerBookings() {
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const data = p?.data ?? p;
+      const pagination = data?.pagination;
       setBookings(data?.bookings ?? (Array.isArray(data) ? data : []));
-      setTotal(data?.total ?? 0);
-      setPage(data?.page ?? pg);
-      setTotalPages(data?.totalPages ?? 1);
+      setTotal(pagination?.total ?? data?.total ?? 0);
+      setPage(pagination?.page ?? data?.page ?? pg);
+      setTotalPages(pagination?.totalPages ?? data?.totalPages ?? 1);
     } catch (err) { setError(err.message || 'Không thể tải dữ liệu'); }
     finally { setLoading(false); }
   }, []); // eslint-disable-line

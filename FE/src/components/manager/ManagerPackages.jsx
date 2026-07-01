@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { showToast } from '@/lib/toast';
+import { MagnifyingGlass, X, ArrowClockwise } from '@phosphor-icons/react';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -24,6 +26,7 @@ const CATEGORIES = [
 ];
 const VEHICLE_TYPES = ['sedan', 'suv', 'pickup', 'van', 'motorcycle'];
 const inp = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400';
+const PAGE_SIZE = 9;
 
 export default function ManagerPackages({ user }) {
   const [packages, setPackages] = useState([]);
@@ -35,16 +38,30 @@ export default function ManagerPackages({ user }) {
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
   const [branchId, setBranchId] = useState(user?.branchId || null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [confirmToggleId, setConfirmToggleId] = useState(null);
+  const debounce = useRef(null);
 
-  async function loadPackages(bId) {
+  const loadPackages = useCallback(async (bId, q, pg) => {
     setLoading(true);
     try {
-      const res = await api(`/packages?branchId=${bId}`);
+      const params = new URLSearchParams({ branchId: bId });
+      if (q) params.append('search', q);
+      params.append('page', pg);
+      params.append('limit', PAGE_SIZE);
+      const res = await api(`/packages?${params}`);
       const p = await res.json();
-      setPackages(Array.isArray(p?.data) ? p.data : Array.isArray(p) ? p : []);
+      const data = p?.data ?? [];
+      setPackages(Array.isArray(data) ? data : []);
+      const pag = p?.pagination;
+      setTotalPages(pag?.totalPages || 1);
+      setTotal(pag?.total || 0);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,13 +82,27 @@ export default function ManagerPackages({ user }) {
 
       if (cancelled) return;
       setBranchId(bId);
-      if (bId) loadPackages(bId);
+      if (bId) loadPackages(bId, '', 1);
       else setLoading(false);
     }
 
     init();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, loadPackages]);
+
+  const handleSearch = (v) => {
+    setSearch(v);
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => {
+      setPage(1);
+      loadPackages(branchId, v, 1);
+    }, 380);
+  };
+
+  const handlePage = (pg) => {
+    setPage(pg);
+    loadPackages(branchId, search, pg);
+  };
 
   function openCreate() {
     setEditPkg(null);
@@ -145,7 +176,8 @@ export default function ManagerPackages({ user }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi lưu gói dịch vụ');
       setShowModal(false);
-      loadPackages(branchId);
+      showToast(editPkg ? 'Cập nhật gói thành công!' : 'Tạo gói thành công!');
+      loadPackages(branchId, search, page);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -153,11 +185,13 @@ export default function ManagerPackages({ user }) {
     }
   }
 
-  async function toggleStatus(pkg) {
+  async function handleToggle(pkg) {
     const newStatus = pkg.status === 'active' ? 'inactive' : 'active';
+    setConfirmToggleId(null);
     try {
       await api(`/packages/${pkg._id || pkg.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
-      loadPackages(branchId);
+      showToast(newStatus === 'active' ? 'Đã kích hoạt gói dịch vụ!' : 'Đã tạm dừng gói dịch vụ!');
+      loadPackages(branchId, search, page);
     } catch { /* silent */ }
   }
 
@@ -165,7 +199,8 @@ export default function ManagerPackages({ user }) {
     try {
       await api(`/packages/${id}`, { method: 'DELETE' });
       setDeleteId(null);
-      loadPackages(branchId);
+      showToast('Xóa gói dịch vụ thành công!');
+      loadPackages(branchId, search, page);
     } catch { /* silent */ }
   }
 
@@ -180,12 +215,26 @@ export default function ManagerPackages({ user }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">Quản lý gói dịch vụ và các tiện ích chọn thêm tại chi nhánh</p>
-        <button onClick={openCreate}
-          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors">
-          + Thêm gói
-        </button>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Tìm gói dịch vụ..."
+            className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
+          {search && (
+            <button onClick={() => { setSearch(''); setPage(1); loadPackages(branchId, '', 1); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-slate-400">{total} gói</p>
+          <button onClick={openCreate}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors">
+            + Thêm gói
+          </button>
+        </div>
       </div>
 
       {!branchId ? (
@@ -194,14 +243,15 @@ export default function ManagerPackages({ user }) {
           <p className="text-sm">Tài khoản chưa được phân công chi nhánh. Vui lòng liên hệ admin.</p>
         </div>
       ) : loading ? (
-        <div className="flex items-center justify-center py-20 text-slate-400 text-sm">Đang tải...</div>
+        <div className="flex items-center justify-center py-20 text-slate-400 text-sm"><ArrowClockwise size={18} className="animate-spin mr-2" />Đang tải...</div>
       ) : packages.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-20 text-slate-400">
           <span className="text-4xl">📦</span>
-          <p className="text-sm">Chi nhánh chưa có gói dịch vụ nào.</p>
-          <button onClick={openCreate} className="text-sm text-emerald-600 underline">Tạo gói đầu tiên</button>
+          <p className="text-sm">{search ? 'Không tìm thấy gói dịch vụ nào.' : 'Chi nhánh chưa có gói dịch vụ nào.'}</p>
+          {!search && <button onClick={openCreate} className="text-sm text-emerald-600 underline">Tạo gói đầu tiên</button>}
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {packages.map(pkg => {
             const id = pkg._id || pkg.id;
@@ -212,7 +262,7 @@ export default function ManagerPackages({ user }) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="font-semibold text-slate-800 truncate">{pkg.name}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{pkg.description || '—'}</p>
+                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2" title={pkg.description || ''}>{pkg.description || '—'}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
                     {isActive ? 'Hoạt động' : 'Tạm dừng'}
@@ -253,7 +303,7 @@ export default function ManagerPackages({ user }) {
                     className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                     Sửa
                   </button>
-                  <button onClick={() => toggleStatus(pkg)}
+                  <button onClick={() => setConfirmToggleId(pkg)}
                     className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                       isActive
                         ? 'border border-amber-200 text-amber-600 hover:bg-amber-50'
@@ -270,6 +320,28 @@ export default function ManagerPackages({ user }) {
             );
           })}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <button disabled={page <= 1} onClick={() => handlePage(page - 1)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              ‹ Trước
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => handlePage(p)}
+                className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                  page === p
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>{p}</button>
+            ))}
+            <button disabled={page >= totalPages} onClick={() => handlePage(page + 1)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Sau ›
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Create/Edit Modal */}
@@ -282,7 +354,6 @@ export default function ManagerPackages({ user }) {
             </div>
 
             <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-              {/* Basic info */}
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-slate-500 block mb-1">Tên gói *</label>
@@ -330,7 +401,6 @@ export default function ManagerPackages({ user }) {
                 </div>
               </div>
 
-              {/* Sub-services */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dịch vụ chọn thêm</label>
@@ -416,6 +486,39 @@ export default function ManagerPackages({ user }) {
               <button onClick={() => handleDelete(deleteId)}
                 className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
                 Xoá
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toggle Confirm */}
+      {confirmToggleId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 text-center space-y-4">
+            <span className="text-4xl">{confirmToggleId.status === 'active' ? '⏸️' : '▶️'}</span>
+            <p className="text-slate-700 font-medium">
+              {confirmToggleId.status === 'active'
+                ? 'Xác nhận tạm dừng gói dịch vụ này?'
+                : 'Xác nhận kích hoạt lại gói dịch vụ này?'}
+            </p>
+            <p className="text-xs text-slate-400">
+              {confirmToggleId.status === 'active'
+                ? 'Khách hàng sẽ không thể đặt gói này cho đến khi được kích hoạt lại.'
+                : 'Gói dịch vụ sẽ hiển thị trở lại cho khách hàng.'}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmToggleId(null)}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                Huỷ
+              </button>
+              <button onClick={() => handleToggle(confirmToggleId)}
+                className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-colors ${
+                  confirmToggleId.status === 'active'
+                    ? 'bg-amber-500 hover:bg-amber-600'
+                    : 'bg-emerald-600 hover:bg-emerald-500'
+                }`}>
+                {confirmToggleId.status === 'active' ? 'Tạm dừng' : 'Kích hoạt'}
               </button>
             </div>
           </div>
