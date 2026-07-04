@@ -30,7 +30,7 @@ const VOUCHER_TYPE_MAP = {
 export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const id = location.pathname.split('/').pop();
+  const id = location.pathname.split('/').filter(Boolean).pop();
   const [branch, setBranch] = useState(null);
   const [packages, setPackages] = useState([]);
   const [vouchers, setVouchers] = useState([]);

@@ -25,10 +25,6 @@ import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { cn } from '@/lib/utils';
 import TierBadge from '@/components/ui/TierBadge';
 
-const apiBase = getApiBaseUrl();
-const token = getStoredToken();
-const headers = { Authorization: `Bearer ${token}` };
-
 function fmt(n) {
   return new Intl.NumberFormat('vi-VN').format(n ?? 0);
 }
@@ -148,6 +144,8 @@ export default function AdminOverview() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const apiBase = getApiBaseUrl();
+      const headers = { Authorization: `Bearer ${getStoredToken()}` };
       const qs = buildQueryString();
       const qsFull = qs ? `?${qs}` : '';
       const [resReport, resBranches, resUsers, resBookings, resTrends, resStats, resBranchRev] = await Promise.all([
