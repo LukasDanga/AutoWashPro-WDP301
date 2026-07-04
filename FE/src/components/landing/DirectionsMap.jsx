@@ -35,6 +35,7 @@ function decodePolyline(encoded) {
 export default function DirectionsMap({ destLat, destLng, destAddress, destName, onClose }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const routeLayersRef = useRef([]);
   const [userLoc, setUserLoc] = useState(null);
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -84,14 +85,18 @@ export default function DirectionsMap({ destLat, destLng, destAddress, destName,
     setLoading(true);
     setError('');
 
+    routeLayersRef.current.forEach((l) => { try { mapInstance.current.removeLayer(l); } catch {} });
+    routeLayersRef.current = [];
+
     const userIcon = L.divIcon({
       className: '',
       html: `<div style="background:#2563eb;width:18px;height:18px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
       iconSize: [18, 18],
       iconAnchor: [9, 9],
     });
-    L.marker([userLoc.lat, userLoc.lng], { icon: userIcon }).addTo(mapInstance.current)
+    const marker = L.marker([userLoc.lat, userLoc.lng], { icon: userIcon }).addTo(mapInstance.current)
       .bindPopup('Vị trí của bạn');
+    routeLayersRef.current.push(marker);
 
     fetch(`${OSRM_BASE}/${userLoc.lng},${userLoc.lat};${destLng},${destLat}?overview=full&geometries=polyline&steps=true`)
       .then((r) => r.json())
@@ -106,7 +111,8 @@ export default function DirectionsMap({ destLat, destLng, destAddress, destName,
         });
 
         const coords = decodePolyline(r.geometry);
-        L.polyline(coords, { color: '#059669', weight: 5, opacity: 0.8 }).addTo(mapInstance.current);
+        const polyline = L.polyline(coords, { color: '#059669', weight: 5, opacity: 0.8 }).addTo(mapInstance.current);
+        routeLayersRef.current.push(polyline);
 
         const bounds = L.latLngBounds(coords);
         mapInstance.current.fitBounds(bounds, { padding: [50, 50] });

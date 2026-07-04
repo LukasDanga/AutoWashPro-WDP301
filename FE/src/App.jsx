@@ -123,7 +123,7 @@ export default function App() {
         navigate('/manager', { replace: true });
       }
     });
-  }, []);
+  }, [token, loadSession, navigate]);
 
   async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {

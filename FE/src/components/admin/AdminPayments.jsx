@@ -343,7 +343,7 @@ export default function AdminPayments() {
   const [dateFilter, setDateFilter] = useState('');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
-  const [newIds, setNewIds] = useState(new Set());
+  const [newIds, setNewIds] = useState(() => new Set());
   const [confirming, setConfirming] = useState(false);
   const [refundTarget, setRefundTarget] = useState(null);
   const [refunding, setRefunding] = useState(false);

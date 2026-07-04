@@ -17,8 +17,15 @@ const applyVoucher = (voucher, amount) => {
 };
 
 exports.createVoucher = async (data) => {
-  const code = data.code || generateCode();
-  const existing = await Voucher.findOne({ code: code.toUpperCase() });
+  const userProvidedCode = !!data.code;
+  let code = data.code || generateCode();
+  let existing = await Voucher.findOne({ code: code.toUpperCase() });
+  let attempts = 0;
+  while (existing && !userProvidedCode && attempts < 5) {
+    code = generateCode();
+    existing = await Voucher.findOne({ code: code.toUpperCase() });
+    attempts++;
+  }
   if (existing) throw Object.assign(new Error('Voucher code already exists'), { statusCode: 409, code: 'DUPLICATE_CODE' });
 
   const payload = {
@@ -60,7 +67,10 @@ exports.getAllVouchers = async (filters = {}, userRole, userId, userBranchId) =>
   if (filters.endDateOnly) {
     query.endDate = { $gte: new Date(filters.endDateOnly) };
   }
-  if (userRole === 'manager' && userBranchId) {
+  if (userRole === 'manager') {
+    if (!userBranchId) {
+      return { data: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } };
+    }
     query.branchId = userBranchId;
   } else if (filters.branchId) {
     query.branchId = filters.branchId;
@@ -613,8 +623,6 @@ exports.getPublicVouchersByBranch = async (branchId) => {
       { applicableToAllBranches: true },
       { applicableBranches: branchId },
       { branchId },
-      { $and: [{ branchId: { $exists: false } }, { applicableBranches: { $size: 0 } }] },
-      { $and: [{ branchId: null }, { applicableBranches: { $size: 0 } }] },
     ],
   };
   return Voucher.find(query).sort({ createdAt: -1 }).limit(20);

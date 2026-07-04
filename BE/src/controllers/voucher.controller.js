@@ -3,6 +3,9 @@ const { catchAsync, success } = require('../utils/helpers');
 
 exports.createVoucher = catchAsync(async (req, res) => {
   const branchId = req.user.role === 'manager' ? req.user.branchId : req.body.branchId;
+  if (req.user.role === 'manager' && !branchId) {
+    throw Object.assign(new Error('Manager must have a branch assigned'), { statusCode: 400, code: 'MANAGER_NO_BRANCH' });
+  }
   const voucher = await voucherService.createVoucher({ ...req.body, createdBy: req.userId, branchId });
   success(res, voucher, 'Voucher created', 201);
 });
