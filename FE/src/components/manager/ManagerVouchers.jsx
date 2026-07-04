@@ -62,7 +62,7 @@ const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-s
 const EMPTY_VOUCHER = {
   code: '', name: '', description: '', type: 'percentage', value: '',
   maxDiscount: '', minOrder: '', quantity: '', startDate: '', endDate: '',
-  applicableToAllBranches: true, applicableToAllPackages: true, status: 'active',
+  branchId: '', applicableToAllBranches: false, applicableToAllPackages: true, status: 'active',
 };
 
 function VoucherModal({ initial, onSave, onClose, saving }) {
@@ -353,7 +353,7 @@ function VoucherUsageReportTab() {
 }
 
 /* ═══ Main ═══ */
-export default function ManagerVouchers() {
+export default function ManagerVouchers({ user }) {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -364,6 +364,8 @@ export default function ManagerVouchers() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('list');
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  const managerBranchId = user?.branchId || '';
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -384,7 +386,8 @@ export default function ManagerVouchers() {
   const handleCreate = async (form) => {
     setSaving(true);
     try {
-      const res = await api('/vouchers', { method: 'POST', body: JSON.stringify(form) });
+      const payload = { ...form, branchId: managerBranchId };
+      const res = await api('/vouchers', { method: 'POST', body: JSON.stringify(payload) });
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json(); const created = p?.data ?? p;
       setVouchers((prev) => [created, ...prev]);

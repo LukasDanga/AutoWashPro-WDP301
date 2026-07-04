@@ -17,6 +17,11 @@ exports.getVoucherById = catchAsync(async (req, res) => {
   success(res, voucher, 'Voucher retrieved');
 });
 
+exports.getPublicVouchersByBranch = catchAsync(async (req, res) => {
+  const vouchers = await voucherService.getPublicVouchersByBranch(req.query.branchId);
+  success(res, vouchers, 'Vouchers retrieved');
+});
+
 exports.getVoucherByCode = catchAsync(async (req, res) => {
   const voucher = await voucherService.getVoucherByCode(req.params.code);
   success(res, voucher, 'Voucher retrieved');

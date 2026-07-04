@@ -16,6 +16,11 @@ exports.getPublicBranches = catchAsync(async (req, res) => {
   success(res, branches, 'Branches retrieved');
 });
 
+exports.getPublicBranchById = catchAsync(async (req, res) => {
+  const branch = await branchService.getPublicBranchById(req.params.id);
+  success(res, branch, 'Branch retrieved');
+});
+
 exports.getBranchById = catchAsync(async (req, res) => {
   const branch = await branchService.getBranchById(req.params.id, req.user.role, req.userId);
   success(res, branch, 'Branch retrieved');

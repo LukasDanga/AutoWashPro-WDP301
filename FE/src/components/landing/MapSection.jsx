@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -20,6 +21,7 @@ function parseSvgPaths(svgText) {
 }
 
 export default function MapSection({ onSelectBranch }) {
+  const navigate = useNavigate();
   const [activeCity, setActiveCity] = useState('Tất cả');
   const [selectedId, setSelectedId] = useState(null);
   const [provincePaths, setProvincePaths] = useState([]);
@@ -96,9 +98,9 @@ export default function MapSection({ onSelectBranch }) {
 
             <div className="space-y-3">
               {filtered.map((b) => (
-              <button
+               <button
                 key={b.id}
-                onClick={() => setSelectedId(b.id)}
+                onClick={() => navigate(`/branch/${b.id}`)}
                 className={`w-full text-left p-5 rounded-xl border transition-all ${
                   selectedId === b.id
                     ? 'border-emerald-500/50 bg-emerald-500/10 shadow-sm'
@@ -112,7 +114,7 @@ export default function MapSection({ onSelectBranch }) {
                       <path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
                     </svg>
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-neutral-200 text-sm">{b.name}</span>
                       <span className="text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">{b.city}</span>
@@ -127,6 +129,9 @@ export default function MapSection({ onSelectBranch }) {
                          ✉️ {b.email}
                        </div>
                      )}
+                     <div className="mt-2 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
+                       Xem chi tiết →
+                     </div>
                   </div>
                 </div>
               </button>
@@ -268,12 +273,20 @@ export default function MapSection({ onSelectBranch }) {
                      {selected.phone && <span>📞 {selected.phone}</span>}
                      {selected.email && <span>✉️ {selected.email}</span>}
                    </div>
-                  <button
-                    onClick={() => onSelectBranch?.(selected)}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"
-                  >
-                    Đặt lịch tại đây
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/branch/${selected.id}`)}
+                      className="flex-1 py-2.5 rounded-xl border border-neutral-700 text-neutral-300 text-sm font-medium hover:bg-neutral-800 transition-colors"
+                    >
+                      Chi tiết
+                    </button>
+                    <button
+                      onClick={() => onSelectBranch?.(selected)}
+                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"
+                    >
+                      Đặt lịch tại đây
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </div>
