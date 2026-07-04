@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Drop } from '@phosphor-icons/react';
 import DashboardShell from '@/components/layout/DashboardShell';
+import useSSE from '@/hooks/useSSE';
 import { ADMIN_BRAND, ADMIN_MENU_ITEMS, ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import NotificationBell from '@/components/ui/NotificationBell';
@@ -33,26 +34,50 @@ export default function AdminLayout({ user, onLogout }) {
   const meta = resolvePageMeta(location.pathname);
   const [badges, setBadges] = useState({});
 
-  // Đếm số mục "mới / cần xử lý" toàn hệ thống: đơn chờ xác nhận + đánh giá chưa phản hồi
+  // Đếm số mục "mới / cần xử lý" toàn hệ thống: đơn chờ xác nhận + đánh giá chưa phản hồi + thanh toán chưa xem
   useEffect(() => {
     let alive = true;
     async function loadCounts() {
       try {
-        const [bRes, fRes] = await Promise.all([
+        const [bRes, fRes, pRes] = await Promise.all([
           api('/bookings?status=pending&limit=1'),
           api('/bookings/feedbacks?replied=false&limit=1'),
+          api('/payments/unviewed-count'),
         ]);
         const bData = await bRes.json().catch(() => ({}));
         const fData = await fRes.json().catch(() => ({}));
+        const pData = await pRes.json().catch(() => ({}));
         const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
         const unrepliedReviews = fData?.data?.total ?? 0;
-        if (alive) setBadges({ bookings: pendingBookings, reviews: unrepliedReviews });
+        const unviewedPayments = pData?.data?.count ?? 0;
+        if (alive) setBadges({ bookings: pendingBookings, reviews: unrepliedReviews, payments: unviewedPayments });
       } catch { /* silent */ }
     }
     loadCounts();
     const t = setInterval(loadCounts, 60000);
     return () => { alive = false; clearInterval(t); };
   }, [location.pathname]);
+
+  // Cập nhật real-time badge thanh toán khi có payment mới
+  const token = getStoredToken();
+  useSSE(token, 'payment_new', useCallback(() => {
+    api('/payments/unviewed-count')
+      .then(r => r.json())
+      .then(d => { const c = d?.data?.count ?? 0; setBadges(prev => ({ ...prev, payments: c })); })
+      .catch(() => {});
+  }, []));
+
+  // Khi admin xem detail thanh toán từ AdminPayments → cập nhật sidebar badge
+  const refreshPaymentCount = useCallback(() => {
+    api('/payments/unviewed-count')
+      .then(r => r.json())
+      .then(d => { const c = d?.data?.count ?? 0; setBadges(prev => ({ ...prev, payments: c })); })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    window.addEventListener('payment-viewed', refreshPaymentCount);
+    return () => window.removeEventListener('payment-viewed', refreshPaymentCount);
+  }, [refreshPaymentCount]);
 
   async function handleLogout() {
     await onLogout?.();

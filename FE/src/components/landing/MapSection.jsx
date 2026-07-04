@@ -47,6 +47,7 @@ export default function MapSection({ onSelectBranch }) {
           name: b.name.replace(/^AutoWash\s*/, ''),
           address: b.address,
           phone: b.phone || '',
+          email: b.email || '',
           hours: (b.openingTime || '07:00') + ' - ' + (b.closingTime || '18:00'),
           cx: b.mapCoordinates?.svgCx || 0,
           cy: b.mapCoordinates?.svgCy || 0,
@@ -118,9 +119,14 @@ export default function MapSection({ onSelectBranch }) {
                     </div>
                     <p className="text-xs text-neutral-500 mt-1">{b.address}</p>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-neutral-500">
-                      <span>{b.hours}</span>
-                      <span>{b.phone}</span>
-                    </div>
+                       <span>{b.hours}</span>
+                       {b.phone && <span>📞 {b.phone}</span>}
+                     </div>
+                     {b.email && (
+                       <div className="mt-1 text-xs text-neutral-500">
+                         ✉️ {b.email}
+                       </div>
+                     )}
                   </div>
                 </div>
               </button>
@@ -257,10 +263,11 @@ export default function MapSection({ onSelectBranch }) {
                     </div>
                     <span className="text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">{selected.city}</span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-neutral-500 mb-4">
-                    <span>{selected.hours}</span>
-                    <span>{selected.phone}</span>
-                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-500 mb-4">
+                     <span>🕐 {selected.hours}</span>
+                     {selected.phone && <span>📞 {selected.phone}</span>}
+                     {selected.email && <span>✉️ {selected.email}</span>}
+                   </div>
                   <button
                     onClick={() => onSelectBranch?.(selected)}
                     className="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"

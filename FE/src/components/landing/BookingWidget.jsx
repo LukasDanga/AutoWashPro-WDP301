@@ -51,11 +51,11 @@ const VEHICLE_TYPES = [
   { value: 'motorcycle', label: 'Xe máy' },
 ];
 
-export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId }) {
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab }) {
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
-  const [tab, setTab] = useState('regular');
+  const [tab, setTab] = useState(initialTab || 'regular');
   const [step, setStep] = useState(1);
   const [spCanAdvance, setSpCanAdvance] = useState(false);
 

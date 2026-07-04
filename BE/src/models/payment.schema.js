@@ -17,6 +17,7 @@ const paymentSchema = new mongoose.Schema(
     gatewayTransactionId: { type: String },
     failureReason: { type: String },
     retryCount: { type: Number, default: 0 },
+    viewedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

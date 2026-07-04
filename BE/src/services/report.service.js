@@ -10,6 +10,9 @@ exports.getRevenueReport = async (filters, userRole, userBranchId) => {
     if (userBranchId) {
       matchStage.branchId = new mongoose.Types.ObjectId(userBranchId);
     }
+  } else if (filters.branchIds) {
+    const ids = filters.branchIds.split(',').filter(Boolean).map(id => new mongoose.Types.ObjectId(id.trim()));
+    if (ids.length > 0) matchStage.branchId = { $in: ids };
   } else if (filters.branchId) {
     matchStage.branchId = new mongoose.Types.ObjectId(filters.branchId);
   }

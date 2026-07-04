@@ -8,7 +8,7 @@ import CustomerProfile from './customer/CustomerProfile.jsx';
 import VoucherPicker from './VoucherPicker.jsx';
 
 const sidebarItems = [
-  { id: 'dashboard', label: 'Bảng điều khiển', hint: 'Thành viên & phương tiện', icon: '♡' },
+  { id: 'dashboard', label: 'Giới thiệu', hint: 'Các giải pháp đặt lịch', icon: '💡' },
   { id: 'booking', label: 'Đặt lịch thường', hint: 'Hẹn rửa xe 24/7', icon: '📅' },
   { id: 'recurring', label: 'Đặt lịch định kỳ', hint: 'Lặp lại hằng tuần', icon: '🔁' },
   { id: 'slot_pack', label: 'Gói slot rửa xe', hint: 'Mua trước — dùng dần', icon: '🎫' },
@@ -66,7 +66,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [depositLoading, setDepositLoading] = useState(false);
   const [mySlotPacks, setMySlotPacks] = useState([]);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
-  const [activeNav, setActiveNav] = useState('booking');
+  const [activeNav, setActiveNav] = useState('dashboard');
   const [currentUser, setCurrentUser] = useState(user);
 
   useEffect(() => {
@@ -301,6 +301,75 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
         </aside>
 
         <main className="aw-main">
+          {activeNav === 'dashboard' ? (
+            <div className="space-y-6" style={{ contentVisibility: 'auto' }}>
+              <section className="aw-hero" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.04) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '28px', borderRadius: '30px', border: '1px solid rgba(0,0,0,0.06)', boxShadow: 'var(--shadow)', marginBottom: '18px' }}>
+                <div className="aw-section-kicker" style={{ color: '#10b981', fontSize: '0.82rem', tracking: '0.12em', textTransform: 'uppercase' }}>CỔNG HỘI VIÊN AUTOWASHPRO</div>
+                <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: '8px 0 6px', color: 'var(--text)' }}>Xin chào, {currentUser?.name || 'Người dùng'}!</h2>
+                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6' }}>Chào mừng bạn đến với Cổng dịch vụ trực tuyến. Hãy chọn giải pháp đặt lịch tối ưu bên dưới để chăm sóc phương tiện của bạn.</p>
+              </section>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px', marginTop: '18px' }}>
+                {/* Đặt lịch thường */}
+                <div className="aw-card-section" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div className="aw-logo" style={{ width: '48px', height: '48px', borderRadius: '14px', fontSize: '20px', background: 'linear-gradient(180deg, var(--accent), var(--accent-2))', color: '#fff', boxShadow: 'none', display: 'grid', placeItems: 'center' }}>📅</div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)', margin: 0 }}>Đặt lịch thường</h3>
+                    <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.5 }}>
+                      Đặt lịch đơn lẻ linh hoạt 24/7. Tự chọn chi nhánh, gói dịch vụ và khung giờ rửa phù hợp với thời gian của bạn.
+                    </p>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                      <li>✓ Đặt giữ chỗ nhanh trong 2 phút</li>
+                      <li>✓ Chỉ cần đặt cọc trước 30% online</li>
+                      <li>✓ Check-in tức thì bằng mã QR code</li>
+                    </ul>
+                  </div>
+                  <button onClick={() => setActiveNav('booking')} style={{ width: '100%', marginTop: '24px', padding: '12px', borderRadius: '14px', border: 'none', background: '#10b981', color: '#fff', fontSize: '0.86rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.15s' }}>
+                    Bắt đầu đặt ngay
+                  </button>
+                </div>
+
+                {/* Đặt lịch định kỳ */}
+                <div className="aw-card-section" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div className="aw-logo" style={{ width: '48px', height: '48px', borderRadius: '14px', fontSize: '20px', background: 'linear-gradient(180deg, var(--accent), var(--accent-2))', color: '#fff', boxShadow: 'none', display: 'grid', placeItems: 'center' }}>🔁</div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)', margin: 0 }}>Đặt lịch định kỳ</h3>
+                    <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.5 }}>
+                      Lên lịch tự động hàng tuần một lần duy nhất. Đảm bảo xế cưng luôn được làm sạch đúng lịch mà không cần thao tác nhiều lần.
+                    </p>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                      <li>✓ Tự tạo lịch biểu tự động mỗi tuần</li>
+                      <li>✓ Được ưu tiên giữ slot giờ cao điểm</li>
+                      <li>✓ Quản lý dời lịch, hủy buổi linh hoạt</li>
+                    </ul>
+                  </div>
+                  <button onClick={() => setActiveNav('recurring')} style={{ width: '100%', marginTop: '24px', padding: '12px', borderRadius: '14px', border: 'none', background: '#10b981', color: '#fff', fontSize: '0.86rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.15s' }}>
+                    Lên lịch định kỳ
+                  </button>
+                </div>
+
+                {/* Gói slot prepaid */}
+                <div className="aw-card-section" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div className="aw-logo" style={{ width: '48px', height: '48px', borderRadius: '14px', fontSize: '20px', background: 'linear-gradient(180deg, var(--accent), var(--accent-2))', color: '#fff', boxShadow: 'none', display: 'grid', placeItems: 'center' }}>🎫</div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)', margin: 0 }}>Gói slot prepaid</h3>
+                    <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.5 }}>
+                      Giải pháp tiết kiệm vượt trội cho khách hàng thân thiết. Mua trước số lượt rửa xe, dùng dần với chiết khấu lên đến 15%.
+                    </p>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                      <li>✓ Chiết khấu trực tiếp tới 15% gói</li>
+                      <li>✓ Đặt lịch rửa xe KHÔNG cần cọc 30%</li>
+                      <li>✓ Sử dụng linh hoạt cho nhiều xe</li>
+                    </ul>
+                  </div>
+                  <button onClick={() => setActiveNav('slot_pack')} style={{ width: '100%', marginTop: '24px', padding: '12px', borderRadius: '14px', border: 'none', background: '#10b981', color: '#fff', fontSize: '0.86rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.15s' }}>
+                    Mua gói slot ngay
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {activeNav === 'booking' ? (
           <>
           <section className="aw-hero" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.04) 0%, transparent 100%)' }}>
