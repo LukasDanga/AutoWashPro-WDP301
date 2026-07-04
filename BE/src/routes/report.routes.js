@@ -14,5 +14,8 @@ const { ROLES } = require('../config/permissions');
  *       - bearerAuth: []
  */
 router.get('/revenue', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), reportController.getRevenueReport);
+router.get('/revenue-trends', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), reportController.getRevenueTrends);
+router.get('/booking-stats', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), reportController.getBookingStats);
+router.get('/revenue-by-branch', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), reportController.getRevenueByBranch);
 
 module.exports = router;

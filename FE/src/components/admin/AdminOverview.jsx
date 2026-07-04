@@ -7,12 +7,20 @@ import {
   Users,
   Money,
   CreditCard,
-  CaretRight,
   CalendarBlank,
   CaretDown,
   Funnel,
   X,
+  ArrowUp,
+  ArrowDown,
+  TrendUp,
+  CirclesFour,
+  Storefront,
 } from '@phosphor-icons/react';
+import {
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { cn } from '@/lib/utils';
 import TierBadge from '@/components/ui/TierBadge';
@@ -31,31 +39,29 @@ function fmtCurrency(n) {
 
 function fmtDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  return new Date(iso).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 }
 
 function toLocalDateInput(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 const TIME_FILTERS = [
-  { key: 'all',     label: 'Tất cả' },
-  { key: 'today',   label: 'Hôm nay' },
-  { key: '7d',      label: '7 ngày' },
-  { key: '30d',     label: '30 ngày' },
-  { key: 'month',   label: 'Tháng này' },
+  { key: 'all', label: 'Tất cả' },
+  { key: 'today', label: 'Hôm nay' },
+  { key: '7d', label: '7 ngày' },
+  { key: '30d', label: '30 ngày' },
+  { key: 'month', label: 'Tháng này' },
   { key: 'quarter', label: 'Quý này' },
-  { key: 'year',    label: 'Năm nay' },
+  { key: 'year', label: 'Năm nay' },
 ];
 
 function getDateRange(key) {
   const now = new Date();
   const start = new Date();
   let endDate = now.toISOString();
-
   switch (key) {
     case 'today':
       start.setHours(0, 0, 0, 0);
@@ -85,27 +91,32 @@ function getDateRange(key) {
     default:
       return {};
   }
-
-  return {
-    startDate: start.toISOString(),
-    endDate,
-  };
+  return { startDate: start.toISOString(), endDate };
 }
 
 const STATUS_META = {
-  pending:     { label: 'Chờ xử lý',   bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-400' },
-  checked_in:  { label: 'Đã check-in', bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-400' },
-  in_progress: { label: 'Đang rửa',    bg: 'bg-sky-50',    text: 'text-sky-700',    dot: 'bg-sky-400' },
-  completed:   { label: 'Hoàn thành',  bg: 'bg-emerald-50',text: 'text-emerald-700', dot: 'bg-emerald-400' },
-  cancelled:   { label: 'Đã hủy',      bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-400' },
+  pending:     { label: 'Chờ xử lý',   color: '#f59e0b', bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-400' },
+  checked_in:  { label: 'Đã check-in', color: '#3b82f6', bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-400' },
+  in_progress: { label: 'Đang rửa',    color: '#0ea5e9', bg: 'bg-sky-50',    text: 'text-sky-700',    dot: 'bg-sky-400' },
+  completed:   { label: 'Hoàn thành',  color: '#10b981', bg: 'bg-emerald-50',text: 'text-emerald-700', dot: 'bg-emerald-400' },
+  cancelled:   { label: 'Đã hủy',      color: '#ef4444', bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-400' },
 };
 
-const TIER_COLORS = {
-  bronze:  'text-amber-700 bg-amber-50',
-  silver:  'text-slate-600 bg-slate-100',
-  gold:    'text-yellow-700 bg-yellow-50',
-  diamond: 'text-cyan-700 bg-cyan-50',
-};
+const PIE_COLORS = ['#f59e0b', '#3b82f6', '#0ea5e9', '#10b981', '#ef4444', '#8b5cf6'];
+
+function CustomTooltip({ active, payload, label, currency }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-md text-xs">
+      <p className="mb-1 font-semibold text-slate-700">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} className="text-slate-500" style={{ color: p.color }}>
+          {p.name}: <span className="font-bold">{currency ? fmtCurrency(p.value) : fmt(p.value)}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminOverview() {
   const [loading, setLoading] = useState(true);
@@ -113,8 +124,10 @@ export default function AdminOverview() {
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [revenueTrends, setRevenueTrends] = useState([]);
+  const [bookingStats, setBookingStats] = useState({ stats: [], total: 0 });
+  const [branchRevenue, setBranchRevenue] = useState([]);
 
-  // Filter state
   const [timeFilter, setTimeFilter] = useState('all');
   const [selectedBranches, setSelectedBranches] = useState([]);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -129,30 +142,39 @@ export default function AdminOverview() {
       if (appliedFilters.startDate) params.startDate = appliedFilters.startDate;
       if (appliedFilters.endDate) params.endDate = appliedFilters.endDate;
     }
-    const qs = new URLSearchParams(params).toString();
-    return qs;
+    return new URLSearchParams(params).toString();
   }, [appliedFilters]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const qs = buildQueryString();
-      const [resReport, resBranches, resUsers, resBookings] = await Promise.all([
-        fetch(`${apiBase}/reports/revenue${qs ? '?' + qs : ''}`, { headers }),
+      const qsFull = qs ? `?${qs}` : '';
+      const [resReport, resBranches, resUsers, resBookings, resTrends, resStats, resBranchRev] = await Promise.all([
+        fetch(`${apiBase}/reports/revenue${qsFull}`, { headers }),
         fetch(`${apiBase}/branches`, { headers }),
         fetch(`${apiBase}/auth/users?all=true`, { headers }),
-        fetch(`${apiBase}/bookings?limit=10${qs ? '&' + qs : ''}`, { headers }),
+        fetch(`${apiBase}/bookings?limit=10${qsFull}`, { headers }),
+        fetch(`${apiBase}/reports/revenue-trends${qsFull}`, { headers }),
+        fetch(`${apiBase}/reports/booking-stats${qsFull}`, { headers }),
+        fetch(`${apiBase}/reports/revenue-by-branch${qsFull}`, { headers }),
       ]);
-      const [reportData, branchesData, usersData, bookingsData] = await Promise.all([
+      const [reportData, branchesData, usersData, bookingsData, trendsData, statsData, branchRevData] = await Promise.all([
         resReport.json().then(r => r?.data ?? r),
         resBranches.json().then(r => r?.data ?? r),
         resUsers.json().then(r => r?.data ?? r),
         resBookings.json().then(r => r?.data ?? r),
+        resTrends.json().then(r => r?.data ?? r),
+        resStats.json().then(r => r?.data ?? r),
+        resBranchRev.json().then(r => r?.data ?? r),
       ]);
       setReport(reportData);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
       setUsers(Array.isArray(usersData?.users) ? usersData.users : Array.isArray(usersData) ? usersData : []);
       setBookings(bookingsData?.bookings ?? (Array.isArray(bookingsData) ? bookingsData : []));
+      setRevenueTrends(Array.isArray(trendsData) ? trendsData : []);
+      setBookingStats(statsData?.stats ? { stats: statsData.stats, total: statsData.total } : { stats: [], total: 0 });
+      setBranchRevenue(Array.isArray(branchRevData?.branchRevenue) ? branchRevData.branchRevenue : []);
     } catch (e) {
       console.error('Failed to load overview data', e);
     } finally {
@@ -190,9 +212,7 @@ export default function AdminOverview() {
   }
 
   function toggleBranch(id) {
-    setSelectedBranches(prev =>
-      prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
-    );
+    setSelectedBranches(prev => prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]);
   }
 
   function clearFilters() {
@@ -214,6 +234,10 @@ export default function AdminOverview() {
             <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
           ))}
         </div>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="h-72 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-72 animate-pulse rounded-xl bg-slate-100" />
+        </div>
         <div className="h-64 animate-pulse rounded-xl bg-slate-100" />
         <div className="h-48 animate-pulse rounded-xl bg-slate-100" />
       </div>
@@ -230,32 +254,74 @@ export default function AdminOverview() {
   const byCustomer = report?.byCustomer ?? [];
   const maxPkgRevenue = byPackage.length > 0 ? Math.max(...byPackage.map(p => p.totalRevenue)) : 1;
 
+  // Compute trend from revenueTrends
+  const trendData = revenueTrends;
+  const trendRevenue = trendData.length >= 2
+    ? ((trendData[trendData.length - 1].revenue - trendData[0].revenue) / (trendData[0].revenue || 1)) * 100
+    : 0;
+  const trendBookings = trendData.length >= 2
+    ? ((trendData[trendData.length - 1].bookingsCount - trendData[0].bookingsCount) / (trendData[0].bookingsCount || 1)) * 100
+    : 0;
+
   const statCards = [
-    { label: 'Tổng doanh thu',   value: fmtCurrency(revenue),     icon: <CurrencyDollar size={20} weight="duotone" className="text-emerald-600" />, bg: 'bg-emerald-50' },
-    { label: 'Tổng lượt đặt',    value: fmt(totalBookings),       icon: <CalendarCheck size={20} weight="duotone" className="text-blue-600" />,    bg: 'bg-blue-50' },
-    { label: 'Chi nhánh',        value: `${activeBranches}/${branches.length}`, icon: <Buildings size={20} weight="duotone" className="text-violet-600" />, bg: 'bg-violet-50' },
-    { label: 'Khách hàng',       value: fmt(customers.length),    icon: <Users size={20} weight="duotone" className="text-amber-600" />,           bg: 'bg-amber-50' },
+    {
+      label: 'Tổng doanh thu', value: fmtCurrency(revenue),
+      icon: <CurrencyDollar size={20} weight="duotone" className="text-emerald-600" />,
+      bg: 'bg-emerald-50', trend: trendRevenue, trendLabel: 'so với đầu kỳ',
+    },
+    {
+      label: 'Tổng lượt đặt', value: fmt(totalBookings),
+      icon: <CalendarCheck size={20} weight="duotone" className="text-blue-600" />,
+      bg: 'bg-blue-50', trend: trendBookings, trendLabel: 'so với đầu kỳ',
+    },
+    {
+      label: 'Chi nhánh', value: `${activeBranches}/${branches.length}`,
+      icon: <Buildings size={20} weight="duotone" className="text-violet-600" />,
+      bg: 'bg-violet-50',
+    },
+    {
+      label: 'Khách hàng', value: fmt(customers.length),
+      icon: <Users size={20} weight="duotone" className="text-amber-600" />,
+      bg: 'bg-amber-50',
+    },
   ];
+
+  // Prepare pie data for booking stats
+  const pieData = bookingStats.stats
+    .filter(s => s._id)
+    .map(s => ({
+      name: STATUS_META[s._id]?.label || s._id,
+      value: s.count,
+      color: STATUS_META[s._id]?.color || '#94a3b8',
+    }));
 
   return (
     <div className="space-y-6">
+
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div key={s.label} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${s.bg}`}>
+          <div key={s.label} className="relative flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-xs overflow-hidden">
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${s.bg}`}>
               {s.icon}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-bold text-slate-800">{s.value}</p>
               <p className="text-xs text-slate-500">{s.label}</p>
+              {s.trend !== undefined && (
+                <div className={cn('mt-1 flex items-center gap-0.5 text-[11px] font-medium', s.trend >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                  {s.trend >= 0 ? <ArrowUp size={10} weight="bold" /> : <ArrowDown size={10} weight="bold" />}
+                  <span>{Math.abs(s.trend).toFixed(1)}%</span>
+                  <span className="text-slate-400 ml-0.5">{s.trendLabel}</span>
+                </div>
+              )}
             </div>
           </div>
         ))}
       </div>
 
       {/* Filter section */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
         <div className="flex items-center gap-2">
           <Funnel size={16} weight="duotone" className={cn('text-slate-400', isFiltering && 'text-emerald-500')} />
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bộ lọc</span>
@@ -263,8 +329,6 @@ export default function AdminOverview() {
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">ĐANG LỌC</span>
           )}
         </div>
-
-        {/* Row 1: Quick time + Branch select */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {TIME_FILTERS.map(f => (
@@ -278,8 +342,6 @@ export default function AdminOverview() {
               </button>
             ))}
           </div>
-
-          {/* Branch multi-select */}
           <div className="relative">
             <button onClick={() => setBranchOpen(!branchOpen)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">
@@ -306,8 +368,6 @@ export default function AdminOverview() {
             )}
           </div>
         </div>
-
-        {/* Row 2: Custom date range */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">Từ:</span>
@@ -335,12 +395,121 @@ export default function AdminOverview() {
         </div>
       </div>
 
-      {/* Revenue split + top packages */}
+      {/* Row 1: Revenue trend chart + Booking status pie */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        {/* Revenue trend line chart */}
+        <div className="lg:col-span-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="mb-4 flex items-center gap-2">
+            <TrendUp size={18} weight="duotone" className="text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-700">Xu hướng doanh thu</h3>
+          </div>
+          {trendData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-400">Chưa có dữ liệu</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={trendData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                  tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                <Tooltip content={<CustomTooltip currency />} />
+                <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2.5} fill="url(#revenueGrad)" name="Doanh thu" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Booking status pie */}
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="mb-4 flex items-center gap-2">
+            <CirclesFour size={18} weight="duotone" className="text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-700">Trạng thái đặt lịch</h3>
+          </div>
+          {pieData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-400">Chưa có dữ liệu</p>
+          ) : (
+            <div className="flex flex-col items-center">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-2 flex flex-wrap justify-center gap-3">
+                {pieData.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span>{entry.name}</span>
+                    <span className="font-semibold text-slate-700">{entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: Booking trend + Revenue by branch */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Revenue split */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        {/* Booking trend bar */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="mb-4 flex items-center gap-2">
             <ChartLine size={18} weight="duotone" className="text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-700">Lượt đặt theo thời gian</h3>
+          </div>
+          {trendData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-400">Chưa có dữ liệu</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={trendData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="bookingsCount" fill="#6366f1" radius={[4, 4, 0, 0]} name="Lượt đặt" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Revenue by branch bar */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="mb-4 flex items-center gap-2">
+            <Storefront size={18} weight="duotone" className="text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-700">Doanh thu theo chi nhánh</h3>
+          </div>
+          {branchRevenue.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-400">Chưa có dữ liệu</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={branchRevenue} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                  tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                <YAxis type="category" dataKey="branchName" tick={{ fontSize: 11, fill: '#475569' }} tickLine={false} axisLine={false} width={120} />
+                <Tooltip content={<CustomTooltip currency />} />
+                <Bar dataKey="revenue" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Doanh thu" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Revenue split + top packages */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="mb-4 flex items-center gap-2">
+            <Money size={18} weight="duotone" className="text-slate-500" />
             <h3 className="text-sm font-semibold text-slate-700">Doanh thu theo phương thức</h3>
           </div>
           <div className="space-y-4">
@@ -367,8 +536,7 @@ export default function AdminOverview() {
           </div>
         </div>
 
-        {/* Top packages */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="mb-4 flex items-center gap-2">
             <ChartLine size={18} weight="duotone" className="text-slate-500" />
             <h3 className="text-sm font-semibold text-slate-700">Gói dịch vụ hàng đầu</h3>
@@ -395,12 +563,10 @@ export default function AdminOverview() {
       </div>
 
       {/* Recent bookings */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CalendarCheck size={18} weight="duotone" className="text-slate-500" />
-            <h3 className="text-sm font-semibold text-slate-700">Lượt đặt gần đây</h3>
-          </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="mb-4 flex items-center gap-2">
+          <CalendarCheck size={18} weight="duotone" className="text-slate-500" />
+          <h3 className="text-sm font-semibold text-slate-700">Lượt đặt gần đây</h3>
         </div>
         {bookings.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">Chưa có lượt đặt nào</p>
@@ -447,7 +613,7 @@ export default function AdminOverview() {
       </div>
 
       {/* Top customers */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="mb-4 flex items-center gap-2">
           <Users size={18} weight="duotone" className="text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-700">Khách hàng thân thiết</h3>
