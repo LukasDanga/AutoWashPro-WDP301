@@ -1,5 +1,6 @@
 import Navbar from './Navbar';
 import Footer from './Footer';
+import PackagesSection from './PackagesSection';
 import { motion } from 'framer-motion';
 
 const stats = [
@@ -247,32 +248,8 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20 bg-gradient-to-br from-emerald-600 to-emerald-700 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-10 left-10 w-64 h-64 rounded-full bg-white blur-3xl" />
-          <div className="absolute bottom-10 right-10 w-80 h-80 rounded-full bg-emerald-300 blur-3xl" />
-        </div>
-        <div className="relative max-w-3xl mx-auto px-6 text-center">
-          <motion.h2 {...fadeInUp(0)} className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-            Sẵn sàng để xe của bạn tỏa sáng?
-          </motion.h2>
-          <motion.p {...fadeInUp(1)} className="text-emerald-100/80 text-lg mb-8 max-w-xl mx-auto">
-            Đặt lịch ngay hôm nay và trải nghiệm dịch vụ rửa xe chuyên nghiệp tại AutoWashPro.
-          </motion.p>
-          <motion.div {...fadeInUp(2)} className="flex items-center justify-center gap-4 flex-wrap">
-            <a href="/booking"
-              className="inline-flex items-center gap-2 rounded-xl bg-white text-emerald-700 px-6 py-3 font-bold hover:bg-emerald-50 transition-colors shadow-lg shadow-emerald-900/20">
-              Đặt lịch ngay
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-            </a>
-            <a href="/map"
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/50 text-emerald-100 px-6 py-3 font-medium hover:bg-white/10 transition-colors">
-              Tìm chi nhánh
-            </a>
-          </motion.div>
-        </div>
-      </section>
+      {/* Giải pháp đặt lịch */}
+      <PackagesSection />
 
       <Footer />
     </div>

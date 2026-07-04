@@ -151,6 +151,12 @@ exports.getAllUsers = async (filters = {}) => {
     query.$or = [{ name: re }, { email: re }, { phone: re }];
   }
 
+  if (filters.all === 'true' || filters.all === true) {
+    const users = await User.find(query).sort({ createdAt: -1 });
+    const total = users.length;
+    return { users, pagination: { total } };
+  }
+
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
   const skip = (page - 1) * limit;

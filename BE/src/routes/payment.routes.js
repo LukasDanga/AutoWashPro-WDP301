@@ -72,6 +72,28 @@ router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), pay
  */
 router.post('/refund', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), paymentValidators.refund, validate, bookingController.refundPayment);
 
+/**
+ * @swagger
+ * /api/payments/unviewed-count:
+ *   get:
+ *     summary: Count unviewed payments (admin/manager)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/unviewed-count', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.countUnviewedPayments);
+
+/**
+ * @swagger
+ * /api/payments/{id}/viewed:
+ *   patch:
+ *     summary: Mark payment as viewed (admin/manager)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.patch('/:id/viewed', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.markPaymentViewed);
+
 // Callback from MoMo/VNPay gateway (no auth required — called by payment gateway)
 router.post('/callback', paymentValidators.callback, validate, bookingController.confirmPaymentCallback);
 

@@ -39,7 +39,7 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
     { label: 'Trang chủ', to: '/' },
     { label: 'Giới thiệu', to: '/about' },
     { label: 'Đặt lịch', to: '/booking' },
-    { label: 'Gói slot', to: '/packages' },
+
     { label: 'Quà tặng', to: '/gifts' },
     { label: 'Cửa hàng', to: '/map' },
   ];

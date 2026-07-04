@@ -101,6 +101,16 @@ exports.getMyPayments = catchAsync(async (req, res) => {
   success(res, payments, 'My payments retrieved');
 });
 
+exports.markPaymentViewed = catchAsync(async (req, res) => {
+  const payment = await paymentService.markPaymentViewed(req.params.id, req.user.role);
+  success(res, payment, 'Payment marked as viewed');
+});
+
+exports.countUnviewedPayments = catchAsync(async (req, res) => {
+  const count = await paymentService.countUnviewedPayments();
+  success(res, { count }, 'Unviewed payments count');
+});
+
 exports.refundPayment = catchAsync(async (req, res) => {
   const { bookingId } = req.body;
   const payment = await paymentService.refundPayment(bookingId);

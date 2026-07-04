@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const QRCode = require('qrcode');
 const { Payment, Booking } = require('../models');
 const notificationService = require('./notification.service');
+const sseService = require('./sse.service');
 const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 
@@ -128,6 +129,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     const label = isDeposit ? 'tiền cọc' : 'phần còn lại';
     notificationService.send(booking.userId, 'Thanh toán thành công', `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng tiền mặt.`, 'payment_confirmed', { bookingId, paymentId: payment._id }).catch(() => {});
     notificationService.sendToAdminAndManager(booking.branchId, isDeposit ? 'Khách đã đặt cọc' : 'Thanh toán hoàn tất', `Khách hàng đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ cho lịch hẹn.`, 'payment_confirmed', { bookingId, branchId: booking.branchId }).catch(() => {});
+    sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: booking._id });
     return payment;
   }
 
@@ -195,16 +197,23 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     const label = payment.paymentType === 'deposit' ? 'tiền cọc' : 'thanh toán';
     notificationService.send(booking.userId, 'Thanh toán thành công', `${label} ${payment.amount.toLocaleString('vi-VN')}đ bằng ${payment.method.toUpperCase()} đã được xác nhận.`, 'payment_confirmed', { bookingId: booking._id, paymentId: payment._id }).catch(() => {});
     notificationService.sendToAdminAndManager(booking.branchId, `Thanh toán ${payment.method.toUpperCase()}`, `Khách hàng đã ${label} ${payment.amount.toLocaleString('vi-VN')}đ qua ${payment.method.toUpperCase()}.`, 'payment_confirmed', { bookingId: booking._id, branchId: booking.branchId }).catch(() => {});
-
+    sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: booking._id });
     return payment;
   } catch (err) {
-    if (session.inTransaction()) { await session.abortTransaction(); }
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
   }
 };
 
+exports.countUnviewedPayments = async () => {
+  const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await Payment.updateMany({ viewedAt: null, createdAt: { $lte: expiry } }, { viewedAt: expiry });
+  return Payment.countDocuments({ viewedAt: null, status: 'paid' });
+};
 exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, success) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -244,6 +253,11 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     }
 
     await session.commitTransaction();
+
+    if (success) {
+      sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: payment.bookingId });
+    }
+
     return payment;
   } catch (err) {
     if (session.inTransaction()) {
@@ -268,6 +282,15 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
 
 exports.getPaymentById = async (id) => {
   const payment = await Payment.findById(id);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  return payment;
+};
+
+exports.markPaymentViewed = async (id, userRole) => {
+  if (userRole === 'customer') {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const payment = await Payment.findByIdAndUpdate(id, { viewedAt: new Date() }, { new: true });
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   return payment;
 };
@@ -299,6 +322,10 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
       query.createdAt = { $gte: start, $lte: end };
     }
   }
+  // Auto-mark payments older than 24h as viewed
+  const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await Payment.updateMany({ viewedAt: null, createdAt: { $lte: expiry } }, { viewedAt: expiry });
+
   return Payment.find(query)
     .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
     .populate('userId', 'name email phone')

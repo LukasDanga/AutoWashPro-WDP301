@@ -10,6 +10,8 @@ import {
   CaretRight,
   CalendarBlank,
   CaretDown,
+  Funnel,
+  X,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { cn } from '@/lib/utils';
@@ -33,8 +35,15 @@ function fmtDate(iso) {
   return d.toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 }
 
+function toLocalDateInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 const TIME_FILTERS = [
   { key: 'all',     label: 'Tất cả' },
+  { key: 'today',   label: 'Hôm nay' },
   { key: '7d',      label: '7 ngày' },
   { key: '30d',     label: '30 ngày' },
   { key: 'month',   label: 'Tháng này' },
@@ -48,6 +57,9 @@ function getDateRange(key) {
   let endDate = now.toISOString();
 
   switch (key) {
+    case 'today':
+      start.setHours(0, 0, 0, 0);
+      break;
     case '7d':
       start.setDate(now.getDate() - 6);
       start.setHours(0, 0, 0, 0);
@@ -101,18 +113,34 @@ export default function AdminOverview() {
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [timeFilter, setTimeFilter] = useState('all');
 
-  const load = useCallback(async (filter) => {
+  // Filter state
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [selectedBranches, setSelectedBranches] = useState([]);
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState(null);
+
+  const buildQueryString = useCallback(() => {
+    const params = {};
+    if (appliedFilters) {
+      if (appliedFilters.branchIds) params.branchIds = appliedFilters.branchIds;
+      if (appliedFilters.startDate) params.startDate = appliedFilters.startDate;
+      if (appliedFilters.endDate) params.endDate = appliedFilters.endDate;
+    }
+    const qs = new URLSearchParams(params).toString();
+    return qs;
+  }, [appliedFilters]);
+
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const dateParams = getDateRange(filter);
-      const qs = new URLSearchParams(dateParams).toString();
-
+      const qs = buildQueryString();
       const [resReport, resBranches, resUsers, resBookings] = await Promise.all([
         fetch(`${apiBase}/reports/revenue${qs ? '?' + qs : ''}`, { headers }),
         fetch(`${apiBase}/branches`, { headers }),
-        fetch(`${apiBase}/auth/users`, { headers }),
+        fetch(`${apiBase}/auth/users?all=true`, { headers }),
         fetch(`${apiBase}/bookings?limit=10${qs ? '&' + qs : ''}`, { headers }),
       ]);
       const [reportData, branchesData, usersData, bookingsData] = await Promise.all([
@@ -123,16 +151,60 @@ export default function AdminOverview() {
       ]);
       setReport(reportData);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
-      setUsers(Array.isArray(usersData) ? usersData : []);
+      setUsers(Array.isArray(usersData?.users) ? usersData.users : Array.isArray(usersData) ? usersData : []);
       setBookings(bookingsData?.bookings ?? (Array.isArray(bookingsData) ? bookingsData : []));
     } catch (e) {
       console.error('Failed to load overview data', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildQueryString]);
 
-  useEffect(() => { load(timeFilter); }, [timeFilter, load]);
+  useEffect(() => { load(); }, [load]);
+
+  function handleQuickFilter(key) {
+    setTimeFilter(key);
+    if (key === 'all') {
+      setAppliedFilters(null);
+      setCustomStart('');
+      setCustomEnd('');
+    } else {
+      const range = getDateRange(key);
+      setCustomStart(toLocalDateInput(range.startDate));
+      setCustomEnd(toLocalDateInput(range.endDate));
+      setAppliedFilters({
+        ...(selectedBranches.length > 0 ? { branchIds: selectedBranches.join(',') } : {}),
+        startDate: range.startDate,
+        endDate: range.endDate,
+      });
+    }
+  }
+
+  function applyCustomRange() {
+    const applied = {};
+    if (selectedBranches.length > 0) applied.branchIds = selectedBranches.join(',');
+    if (customStart) applied.startDate = new Date(customStart).toISOString();
+    if (customEnd) applied.endDate = new Date(customEnd + 'T23:59:59').toISOString();
+    setAppliedFilters(Object.keys(applied).length > 0 ? applied : null);
+    setTimeFilter('');
+  }
+
+  function toggleBranch(id) {
+    setSelectedBranches(prev =>
+      prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
+    );
+  }
+
+  function clearFilters() {
+    setAppliedFilters(null);
+    setTimeFilter('all');
+    setSelectedBranches([]);
+    setCustomStart('');
+    setCustomEnd('');
+    setBranchOpen(false);
+  }
+
+  const isFiltering = appliedFilters !== null;
 
   if (loading) {
     return (
@@ -182,21 +254,84 @@ export default function AdminOverview() {
         ))}
       </div>
 
-      {/* Time filter */}
-      <div className="flex items-center gap-2">
-        <CalendarBlank size={16} weight="duotone" className="text-slate-400" />
-        <span className="text-xs font-medium text-slate-500">Thời gian:</span>
-        <div className="flex items-center gap-1.5">
-          {TIME_FILTERS.map(f => (
-            <button key={f.key} onClick={() => setTimeFilter(f.key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
-                timeFilter === f.key
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
-              }`}>
-              {f.label}
+      {/* Filter section */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <Funnel size={16} weight="duotone" className={cn('text-slate-400', isFiltering && 'text-emerald-500')} />
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bộ lọc</span>
+          {isFiltering && (
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">ĐANG LỌC</span>
+          )}
+        </div>
+
+        {/* Row 1: Quick time + Branch select */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {TIME_FILTERS.map(f => (
+              <button key={f.key} onClick={() => handleQuickFilter(f.key)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+                  timeFilter === f.key
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Branch multi-select */}
+          <div className="relative">
+            <button onClick={() => setBranchOpen(!branchOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">
+              <Buildings size={14} />
+              {selectedBranches.length === 0 ? 'Tất cả chi nhánh' : `${selectedBranches.length} chi nhánh`}
+              <CaretDown size={12} weight="bold" />
             </button>
-          ))}
+            {branchOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setBranchOpen(false)} />
+                <div className="absolute left-0 top-full mt-1 z-20 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                  {branches.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-slate-400">Không có chi nhánh</p>
+                  ) : branches.map(b => (
+                    <label key={b._id}
+                      className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors">
+                      <input type="checkbox" checked={selectedBranches.includes(b._id)} onChange={() => toggleBranch(b._id)}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-400" />
+                      <span className="truncate">{b.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Custom date range */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Từ:</span>
+            <input type="date" value={customStart} onChange={e => { setCustomStart(e.target.value); setTimeFilter(''); }}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Đến:</span>
+            <input type="date" value={customEnd} onChange={e => { setCustomEnd(e.target.value); setTimeFilter(''); }}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button onClick={applyCustomRange}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+              Áp dụng
+            </button>
+            {isFiltering && (
+              <button onClick={clearFilters}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                <X size={12} />
+                Xóa bộ lọc
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
