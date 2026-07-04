@@ -126,7 +126,6 @@ const options = {
     path.resolve(__dirname, '../routes/booking.routes.js'),
     path.resolve(__dirname, '../routes/payment.routes.js'),
     path.resolve(__dirname, '../routes/voucher.routes.js'),
-    path.resolve(__dirname, '../routes/checkin.routes.js'),
     path.resolve(__dirname, '../routes/notification.routes.js'),
   ],
 };

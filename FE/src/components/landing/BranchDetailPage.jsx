@@ -38,18 +38,6 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
   const [showDirections, setShowDirections] = useState(false);
   const [dirMenuOpen, setDirMenuOpen] = useState(false);
 
-  function requestDirections() {
-    if (!lat || !lng) return;
-    setShowDirections(true);
-    setDirMenuOpen(false);
-  }
-
-  function openGoogleMaps() {
-    if (!lat || !lng) return;
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
-    setDirMenuOpen(false);
-  }
-
   useEffect(() => {
     if (!dirMenuOpen) return;
     const fn = (e) => { if (!e.target.closest('[data-dir-menu]')) setDirMenuOpen(false); };
@@ -128,6 +116,18 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
   const formattedHours = branch.openingTime && branch.closingTime
     ? `${branch.openingTime} - ${branch.closingTime}`
     : '07:00 - 18:00';
+
+  function requestDirections() {
+    if (!lat || !lng) return;
+    setShowDirections(true);
+    setDirMenuOpen(false);
+  }
+
+  function openGoogleMaps() {
+    if (!lat || !lng) return;
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+    setDirMenuOpen(false);
+  }
 
   return (
     <div className="min-h-screen bg-white">

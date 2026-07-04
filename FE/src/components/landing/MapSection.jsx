@@ -281,7 +281,7 @@ export default function MapSection({ onSelectBranch }) {
                       Chi tiết
                     </button>
                     <button
-                      onClick={() => onSelectBranch?.(selected)}
+                      onClick={() => navigate(`/booking?branchId=${selected.id}`)}
                       className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"
                     >
                       Đặt lịch tại đây

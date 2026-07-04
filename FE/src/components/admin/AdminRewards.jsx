@@ -316,7 +316,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {usages.map((u, i) => (
-                    <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <tr key={u._id || i} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
                         <div>
                           <div className="flex items-center gap-2">
