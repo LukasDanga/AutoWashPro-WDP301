@@ -503,6 +503,7 @@ export default function AdminRewards() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const notify = (msg, type = 'success') => showToast(msg, type);
@@ -520,6 +521,7 @@ export default function AdminRewards() {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (statusFilter) params.append('status', statusFilter);
+      if (branchFilter) params.append('branchId', branchFilter);
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
       params.append('page', page);
@@ -532,7 +534,7 @@ export default function AdminRewards() {
       if (p?.pagination) setPagination(p.pagination);
     } catch (err) { setError(err.message || 'Không thể tải voucher'); }
     finally { setLoading(false); }
-  }, [search, statusFilter, startDate, endDate, page]);
+  }, [search, statusFilter, branchFilter, startDate, endDate, page]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
@@ -752,6 +754,16 @@ export default function AdminRewards() {
                 <option value="active">Hoạt động</option>
                 <option value="inactive">Tắt</option>
               </select>
+              <select
+                value={branchFilter}
+                onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+              >
+                <option value="">Tất cả chi nhánh</option>
+                {branches.map((b) => (
+                  <option key={b._id} value={b._id}>{b.name}</option>
+                ))}
+              </select>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">Từ ngày:</span>
                 <input
@@ -770,9 +782,9 @@ export default function AdminRewards() {
                   className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
                 />
               </div>
-              {(statusFilter || startDate || endDate) && (
+              {(statusFilter || branchFilter || startDate || endDate) && (
                 <button
-                  onClick={() => { setStatusFilter(''); setStartDate(''); setEndDate(''); setPage(1); }}
+                  onClick={() => { setStatusFilter(''); setBranchFilter(''); setStartDate(''); setEndDate(''); setPage(1); }}
                   className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Xóa bộ lọc

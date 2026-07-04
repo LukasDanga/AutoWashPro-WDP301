@@ -7,6 +7,7 @@ import BookingPage from './components/landing/BookingPage.jsx';
 import PackagesPage from './components/landing/PackagesPage.jsx';
 import GiftStorePage from './components/landing/GiftStorePage.jsx';
 import MapPage from './components/landing/MapPage.jsx';
+import BranchDetailPage from './components/landing/BranchDetailPage.jsx';
 import ProfilePage from './components/landing/ProfilePage.jsx';
 import HistoryPage from './components/landing/HistoryPage.jsx';
 import PaymentHistoryPage from './components/landing/PaymentHistoryPage.jsx';
@@ -239,6 +240,10 @@ export default function App() {
 
   if (path === '/map') {
     return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+  }
+
+  if (path.startsWith('/branch/')) {
+    return <BranchDetailPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/about') {

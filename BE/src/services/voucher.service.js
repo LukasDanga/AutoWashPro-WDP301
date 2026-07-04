@@ -116,6 +116,8 @@ exports.updateVoucher = async (id, updates, userRole, userId, userBranchId) => {
     if (!ownedByBranch && !createdByUser) {
       throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
     }
+    delete updates.branchId;
+    delete updates.applicableToAllBranches;
   }
   const updated = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
   return updated;
@@ -597,4 +599,23 @@ exports.redeemPointsForVoucher = async (templateId, userId) => {
   } finally {
     session.endSession();
   }
+};
+
+exports.getPublicVouchersByBranch = async (branchId) => {
+  const now = new Date();
+  const query = {
+    status: 'active',
+    isTemplate: { $ne: true },
+    isDeleted: { $ne: true },
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    $or: [
+      { applicableToAllBranches: true },
+      { applicableBranches: branchId },
+      { branchId },
+      { $and: [{ branchId: { $exists: false } }, { applicableBranches: { $size: 0 } }] },
+      { $and: [{ branchId: null }, { applicableBranches: { $size: 0 } }] },
+    ],
+  };
+  return Voucher.find(query).sort({ createdAt: -1 }).limit(20);
 };
