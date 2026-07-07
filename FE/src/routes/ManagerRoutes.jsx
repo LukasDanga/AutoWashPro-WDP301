@@ -12,6 +12,7 @@ import ManagerFeedbacks from '@/components/manager/ManagerFeedbacks';
 import ManagerPackages from '@/components/manager/ManagerPackages';
 import ManagerSlotPacks from '@/components/manager/ManagerSlotPacks';
 import ManagerSchedule from '@/components/manager/ManagerSchedule';
+import RefundRequests from '@/components/shared/RefundRequests';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
 export default function ManagerRoutes() {
@@ -83,6 +84,7 @@ export default function ManagerRoutes() {
         <Route path="schedule" element={<ManagerSchedule user={user} />} />
         <Route path="branch" element={<ManagerBranch user={user} />} />
         <Route path="vouchers" element={<ManagerVouchers user={user} />} />
+        <Route path="refund-requests" element={<RefundRequests />} />
         <Route path="revenue" element={<ManagerRevenue user={user} />} />
         <Route path="customers" element={<ManagerCustomers user={user} />} />
         <Route path="feedbacks" element={<ManagerFeedbacks user={user} />} />

@@ -48,6 +48,30 @@ exports.cancelSlotPack = catchAsync(async (req, res) => {
   success(res, pack, 'Slot pack cancelled');
 });
 
+/** GET /api/slot-packs/usage-history — Lịch sử sử dụng gói lượt (admin/manager) */
+exports.getUsageHistory = catchAsync(async (req, res) => {
+  const result = await slotPackService.getUsageHistory(req.query, req.user.role, req.user.branchId);
+  success(res, result.data, 'Usage history retrieved', 200, {
+    total: result.total,
+    page: result.page,
+    totalPages: result.totalPages,
+  });
+});
+
+/** GET /api/slot-packs/:id/usage-history — Lịch sử sử dụng của 1 gói cụ thể */
+exports.getSlotPackUsageHistory = catchAsync(async (req, res) => {
+  const result = await slotPackService.getUsageHistory(
+    { ...req.query, slotPackId: req.params.id },
+    req.user.role,
+    req.user.branchId,
+  );
+  success(res, result.data, 'Slot pack usage history retrieved', 200, {
+    total: result.total,
+    page: result.page,
+    totalPages: result.totalPages,
+  });
+});
+
 /** GET /api/slot-packs/preview — Preview giá trước khi mua (không cần auth) */
 exports.previewDiscount = catchAsync(async (req, res) => {
   const { totalSlots, unitPrice } = req.query;

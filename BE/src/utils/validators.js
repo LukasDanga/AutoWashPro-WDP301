@@ -148,11 +148,11 @@ const bookingValidators = {
 const paymentValidators = {
   create: [
     body('bookingId').isMongoId().withMessage('Invalid booking ID'),
-    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
+    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay', 'bank']),
   ],
   confirm: [
     body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
-    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay']),
+    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'momo', 'vnpay', 'bank']),
     body('gatewayTransactionId').optional().trim(),
   ],
   refund: [
@@ -162,6 +162,21 @@ const paymentValidators = {
     body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
     body('gatewayTransactionId').optional().trim(),
     body('success').isBoolean().withMessage('Success flag is required'),
+  ],
+};
+
+const refundRequestValidators = {
+  create: [
+    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    body('reason').trim().notEmpty().withMessage('Reason is required').isLength({ max: 500 }),
+  ],
+  review: [
+    param('id').isMongoId().withMessage('Invalid refund request ID'),
+    body('decision').notEmpty().withMessage('Decision is required').isIn(['approved', 'rejected']),
+    body('reviewNote').optional().trim().isLength({ max: 500 }),
+  ],
+  getById: [
+    param('id').isMongoId().withMessage('Invalid refund request ID'),
   ],
 };
 
@@ -236,4 +251,4 @@ const notificationValidators = {
   ],
 };
 
-module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, voucherValidators, checkinValidators, notificationValidators };
+module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, refundRequestValidators, voucherValidators, checkinValidators, notificationValidators };

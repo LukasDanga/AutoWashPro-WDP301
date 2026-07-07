@@ -21,6 +21,12 @@ const bookingSchema = new mongoose.Schema(
     cancelledBy: { type: String, enum: ['customer', 'admin', 'manager', 'system'] },
     cancellationReason: { type: String, trim: true, maxlength: 500 },
     rescheduleCount: { type: Number, default: 0 },
+    // Cảnh báo sắp bị auto-cancel đã gửi lúc nào (tránh gửi lặp lại mỗi lần cron chạy)
+    lateWarningSentAt: { type: Date },
+    // Slot trống gần nhất được gợi ý đổi giờ khi sắp/đã bị hủy tự động (HH:mm)
+    suggestedSlotStartTime: { type: String },
+    // Số phút được quản lý gia hạn thêm (cộng dồn vào grace period mặc định)
+    graceExtensionMinutes: { type: Number, default: 0, min: 0 },
     // Booking type: 'single' = đặt lịch thường, 'recurring' = định kỳ, 'slot_pack_usage' = dùng gói slot
     bookingType: { type: String, enum: ['single', 'recurring', 'slot_pack_usage'], default: 'single' },
     // UUID nhóm các booking trong 1 lần đặt định kỳ

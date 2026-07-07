@@ -1,14 +1,28 @@
 const mongoose = require('mongoose');
+const QRCode = require('qrcode');
 const { Payment, Booking } = require('../models');
 const notificationService = require('./notification.service');
+const sseService = require('./sse.service');
 const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-const VALID_METHODS = ['cash', 'momo', 'vnpay'];
+const VALID_METHODS = ['cash', 'momo', 'vnpay', 'bank'];
 
 const simulateMomoPayment = (amount, transactionId) => `https://momo.vn/pay?amount=${amount}&txn=${transactionId}`;
 const simulateVNPayPayment = (amount, transactionId) => `https://vnpay.vn/pay?amount=${amount}&txn=${transactionId}`;
+
+const generateQrDataUrl = async (transactionId, amount, method) => {
+  let content;
+  if (method === 'momo') {
+    content = `2|99|${transactionId}|${(amount * 1000).toFixed(0)}|momo_qr|transfer`;
+  } else if (method === 'vnpay') {
+    content = `${transactionId}|VNA|${amount.toFixed(0)}|VNPAYQR`;
+  } else {
+    content = `AUTOWASH\nMã GD: ${transactionId}\nSố tiền: ${amount.toLocaleString('vi-VN')}đ`;
+  }
+  return QRCode.toDataURL(content, { width: 300, margin: 1 });
+};
 
 exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full') => {
   if (!VALID_METHODS.includes(method)) {
@@ -36,7 +50,6 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   const fullPrice = booking.finalPrice ?? booking.packageId.price;
   const deposit = booking.depositAmount || 0;
 
-  // ── Xác định số tiền cần thu theo loại thanh toán ──
   let amount;
   let isDeposit = false;
   if (paymentType === 'deposit') {
@@ -45,11 +58,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     amount = deposit;
     isDeposit = true;
   } else {
-    // remaining/full: nếu đã cọc thì chỉ thu phần còn lại
     amount = booking.depositPaid ? Math.max(0, fullPrice - deposit) : fullPrice;
   }
 
-  // Đặt cọc được phép khi đơn còn pending/confirmed; thu phần còn lại khi in_progress/completed
   const allowedStatuses = isDeposit
     ? ['pending', 'confirmed']
     : ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
@@ -58,7 +69,13 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   }
 
   const existingPending = await Payment.findOne({ bookingId, status: 'pending' });
-  if (existingPending) return existingPending;
+  if (existingPending && method !== 'cash') {
+    if (isDeposit && !existingPending.qrCode) {
+      existingPending.qrCode = await generateQrDataUrl(existingPending.transactionId, amount, method);
+      await existingPending.save();
+    }
+    return existingPending;
+  }
 
   const targetUserId = booking.userId;
 
@@ -69,7 +86,6 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   );
 
   if (booking.voucherCode) {
-    // Kiểm tra voucher đã reserve ở booking chưa
     const VoucherUsage = mongoose.model('VoucherUsage');
     const existingUsage = await VoucherUsage.findOne({ bookingId, userId: targetUserId });
     if (!existingUsage) {
@@ -77,9 +93,8 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     }
   }
 
-  // Tiền cọc luôn được thanh toán tức thì (mô phỏng cổng thanh toán cho demo);
-  // phần còn lại bằng tiền mặt cũng thanh toán tức thì.
-  if (isDeposit || method === 'cash') {
+  // Cash: auto-confirm ngay lập tức
+  if (method === 'cash') {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
@@ -99,48 +114,35 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method },
           { session }
         );
-        // Tích điểm theo tổng giá trị đơn (chỉ khi tất toán hoàn toàn)
         await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
       }
 
       await session.commitTransaction();
     } catch (err) {
-      if (session.inTransaction()) {
-        await session.abortTransaction();
-      }
-      if (booking.voucherCode) {
-        await voucherService.rollbackVoucher(booking.voucherCode, targetUserId, bookingId).catch(() => {});
-      }
+      if (session.inTransaction()) { await session.abortTransaction(); }
+      if (booking.voucherCode) { await voucherService.rollbackVoucher(booking.voucherCode, targetUserId, bookingId).catch(() => {}); }
       throw err;
     } finally {
       session.endSession();
     }
 
     const label = isDeposit ? 'tiền cọc' : 'phần còn lại';
-    notificationService.send(
-      booking.userId,
-      'Thanh toán thành công',
-      `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng ${method === 'cash' ? 'tiền mặt' : method.toUpperCase()}.`,
-      'payment_confirmed',
-      { bookingId, paymentId: payment._id }
-    ).catch(() => {});
-
-    notificationService.sendToAdminAndManager(
-      booking.branchId,
-      isDeposit ? 'Khách đã đặt cọc' : 'Thanh toán hoàn tất',
-      `Khách hàng đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ cho lịch hẹn.`,
-      'payment_confirmed',
-      { bookingId, branchId: booking.branchId }
-    ).catch(() => {});
-
+    notificationService.send(booking.userId, 'Thanh toán thành công', `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng tiền mặt.`, 'payment_confirmed', { bookingId, paymentId: payment._id }).catch(() => {});
+    notificationService.sendToAdminAndManager(booking.branchId, isDeposit ? 'Khách đã đặt cọc' : 'Thanh toán hoàn tất', `Khách hàng đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ cho lịch hẹn.`, 'payment_confirmed', { bookingId, branchId: booking.branchId }).catch(() => {});
+    sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: booking._id });
     return payment;
   }
 
-  const paymentUrl = method === 'momo'
-    ? simulateMomoPayment(amount, payment.transactionId)
-    : simulateVNPayPayment(amount, payment.transactionId);
-
-  payment.paymentUrl = paymentUrl;
+  // Momo/VNPay/Bank: tạo QR code (deposit) hoặc payment URL (remaining/full)
+  if (isDeposit) {
+    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method);
+  } else if (method === 'bank') {
+    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method);
+  } else {
+    payment.paymentUrl = method === 'momo'
+      ? simulateMomoPayment(amount, payment.transactionId)
+      : simulateVNPayPayment(amount, payment.transactionId);
+  }
   await payment.save();
   return payment;
 };
@@ -182,30 +184,20 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     payment.paidAt = new Date();
     payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
     await payment.save({ session });
-    await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
 
-    // Tích điểm
-    await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+    if (payment.paymentType === 'deposit') {
+      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
+    } else {
+      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+      await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+    }
 
     await session.commitTransaction();
 
-    notificationService.send(
-      booking.userId,
-      'Thanh toán thành công',
-      `Thanh toán ${booking.finalPrice?.toLocaleString('vi-VN') || payment.amount.toLocaleString('vi-VN')}đ bằng ${payment.method.toUpperCase()} đã được xác nhận.`,
-      'payment_confirmed',
-      { bookingId: booking._id, paymentId: payment._id }
-    ).catch(() => {});
-
-    // Notify admin + manager
-    notificationService.sendToAdminAndManager(
-      booking.branchId,
-      `Thanh toán ${payment.method.toUpperCase()}`,
-      `Khách hàng đã thanh toán ${(booking.finalPrice || payment.amount).toLocaleString('vi-VN')}đ qua ${payment.method.toUpperCase()}.`,
-      'payment_confirmed',
-      { bookingId: booking._id, branchId: booking.branchId }
-    ).catch(() => {});
-
+    const label = payment.paymentType === 'deposit' ? 'tiền cọc' : 'thanh toán';
+    notificationService.send(booking.userId, 'Thanh toán thành công', `${label} ${payment.amount.toLocaleString('vi-VN')}đ bằng ${payment.method.toUpperCase()} đã được xác nhận.`, 'payment_confirmed', { bookingId: booking._id, paymentId: payment._id }).catch(() => {});
+    notificationService.sendToAdminAndManager(booking.branchId, `Thanh toán ${payment.method.toUpperCase()}`, `Khách hàng đã ${label} ${payment.amount.toLocaleString('vi-VN')}đ qua ${payment.method.toUpperCase()}.`, 'payment_confirmed', { bookingId: booking._id, branchId: booking.branchId }).catch(() => {});
+    sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: booking._id });
     return payment;
   } catch (err) {
     if (session.inTransaction()) {
@@ -217,6 +209,11 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
   }
 };
 
+exports.countUnviewedPayments = async () => {
+  const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await Payment.updateMany({ viewedAt: null, createdAt: { $lte: expiry } }, { viewedAt: expiry });
+  return Payment.countDocuments({ viewedAt: null, status: 'paid' });
+};
 exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, success) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -239,10 +236,13 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       payment.paidAt = new Date();
       payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
       await payment.save({ session });
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
-      
-      // Tích điểm
-      await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+
+      if (payment.paymentType === 'deposit') {
+        await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
+      } else {
+        await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+        await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+      }
     } else {
       payment.status = 'failed';
       await payment.save({ session });
@@ -253,6 +253,11 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     }
 
     await session.commitTransaction();
+
+    if (success) {
+      sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: payment.bookingId });
+    }
+
     return payment;
   } catch (err) {
     if (session.inTransaction()) {
@@ -281,13 +286,26 @@ exports.getPaymentById = async (id) => {
   return payment;
 };
 
+exports.markPaymentViewed = async (id, userRole) => {
+  if (userRole === 'customer') {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  const payment = await Payment.findByIdAndUpdate(id, { viewedAt: new Date() }, { new: true });
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  return payment;
+};
+
 exports.getAllPayments = async (filters = {}, userRole, userId) => {
   const query = {};
   if (userRole === 'customer') {
     query.userId = userId;
   } else {
     if (filters.userId) query.userId = filters.userId;
-    if (filters.status) query.status = filters.status;
+    if (filters.status) {
+      query.status = filters.status;
+    } else {
+      query.status = { $ne: 'pending' };
+    }
     if (filters.method) query.method = filters.method;
     if (filters.today === 'true' || filters.today === true) {
       const start = new Date();
@@ -304,6 +322,10 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
       query.createdAt = { $gte: start, $lte: end };
     }
   }
+  // Auto-mark payments older than 24h as viewed
+  const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await Payment.updateMany({ viewedAt: null, createdAt: { $lte: expiry } }, { viewedAt: expiry });
+
   return Payment.find(query)
     .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
     .populate('userId', 'name email phone')
@@ -331,10 +353,6 @@ exports.refundPayment = async (bookingId) => {
       throw Object.assign(new Error('Only paid payments can be refunded'), { statusCode: 400, code: 'INVALID_REFUND' });
     }
 
-    if (booking.status === 'completed') {
-      await session.abortTransaction();
-      throw Object.assign(new Error('Cannot refund a completed booking'), { statusCode: 400, code: 'BOOKING_COMPLETED' });
-    }
     if (booking.status === 'in_progress') {
       await session.abortTransaction();
       throw Object.assign(new Error('Cannot refund a booking in progress'), { statusCode: 400, code: 'BOOKING_IN_PROGRESS' });

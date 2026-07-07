@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import useSSE from '@/hooks/useSSE';
 import { showToast } from '@/lib/toast';
 import {
   CurrencyDollar,
@@ -28,6 +29,17 @@ function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getStoredToken()}`, ...opts.headers },
     ...opts,
   });
+}
+async function readErr(res) {
+  try { const j = await res.json(); return j?.message || `Lỗi ${res.status}`; } catch { return `Lỗi ${res.status}`; }
+}
+function Spinner({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.5" strokeLinecap="round" className="animate-spin" aria-hidden>
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+    </svg>
+  );
 }
 
 function formatCurrency(v) {
@@ -331,12 +343,20 @@ export default function AdminPayments() {
   const [dateFilter, setDateFilter] = useState('');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  const [newIds, setNewIds] = useState(() => new Set());
   const [confirming, setConfirming] = useState(false);
   const [refundTarget, setRefundTarget] = useState(null);
   const [refunding, setRefunding] = useState(false);
   const [refundSuccess, setRefundSuccess] = useState(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  const markViewed = useCallback(async (id) => {
+    try {
+      await api(`/payments/${id}/viewed`, { method: 'PATCH' });
+      window.dispatchEvent(new CustomEvent('payment-viewed'));
+    } catch {}
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -350,14 +370,19 @@ export default function AdminPayments() {
         params.set('date', dateFilter);
       }
       const res = await api(`/payments?${params}`);
-      if (!res.ok) throw new Error('Không thể tải danh sách thanh toán');
-      const data = await res.json();
-      setPayments(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+      if (!res.ok) { const e = await readErr(res); throw new Error(e); }
+      const payload = await res.json();
+      const list = payload?.data || payload || [];
+      const arr = Array.isArray(list) ? list : [];
+      setPayments(arr);
+      setNewIds(new Set(arr.filter(p => !p.viewedAt && p.status === 'paid').map(p => p._id)));
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
   }, [statusFilter, methodFilter, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  const token = getStoredToken();
+  useSSE(token, 'payment_new', load);
 
   // Stats
   const total = payments.length;
@@ -525,7 +550,12 @@ export default function AdminPayments() {
                   return (
                     <tr key={p._id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-mono text-xs font-bold text-slate-700">{p.transactionId || '—'}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-slate-700">{p.transactionId || '—'}</span>
+                          {newIds.has(p._id) && (
+                            <span className="text-[10px] font-bold text-white bg-red-500 rounded-full px-1.5 py-0.5 animate-pulse">MỚI</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-800">{p.userId?.name || '—'}</div>
@@ -541,7 +571,7 @@ export default function AdminPayments() {
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{formatDate(p.createdAt)}</td>
                       <td className="px-4 py-3">
-                        <button onClick={() => setDetail(p)} title="Xem chi tiết"
+                        <button onClick={() => { markViewed(p._id); setNewIds(prev => { const n = new Set(prev); n.delete(p._id); return n; }); setDetail(p); }} title="Xem chi tiết"
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                           <Eye size={14} />
                         </button>

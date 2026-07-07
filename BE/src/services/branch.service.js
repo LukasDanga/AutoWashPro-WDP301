@@ -39,6 +39,12 @@ exports.getBranchById = async (id, userRole, userId) => {
   return branch;
 };
 
+exports.getPublicBranchById = async (id) => {
+  const branch = await Branch.findById(id);
+  if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+  return branch;
+};
+
 exports.updateBranch = async (id, updates, userRole, userId) => {
   const branch = await Branch.findById(id);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });

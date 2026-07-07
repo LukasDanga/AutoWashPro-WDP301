@@ -63,6 +63,7 @@ router.post('/', authenticate, authorize(ROLES.ADMIN), branchValidators.create, 
  */
 router.get('/', authenticate, branchController.getAllBranches);
 router.get('/public', branchController.getPublicBranches);
+router.get('/public/:id', branchController.getPublicBranchById);
 
 /**
  * @swagger

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { showToast } from '@/lib/toast';
 
 const DAYS_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
@@ -17,6 +18,58 @@ const STATUS_MAP = {
 function StatusBadge({ status }) {
   const s = STATUS_MAP[status] ?? { label: status, cls: 'bg-slate-100 text-slate-500 border-slate-200' };
   return <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.label}</span>;
+}
+
+/* ── cảnh báo "sắp bị hủy tự động" + đổi giờ nhanh sang slot gợi ý ── */
+function AtRiskBanner({ booking, apiBase, token, onRescheduled }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  if (!['pending', 'confirmed'].includes(booking.status) || !booking.lateWarningSentAt) return null;
+
+  async function rescheduleToSuggested() {
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch(`${apiBase}/bookings/${booking._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ startTime: booking.suggestedSlotStartTime }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.message || 'Đổi giờ thất bại');
+      onRescheduled(payload?.data || payload);
+      showToast(`Đã đổi giờ sang ${booking.suggestedSlotStartTime}`);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{
+      marginTop: 10, padding: '10px 12px', borderRadius: 10,
+      background: '#fffbeb', border: '1px solid #fde68a',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#b45309' }}>
+        ⏰ Bạn chưa check-in — sắp bị hệ thống tự hủy!
+      </div>
+      {booking.suggestedSlotStartTime && (
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: '#92400e' }}>
+            Khung giờ trống gần nhất hôm nay: <b>{booking.suggestedSlotStartTime}</b>
+          </span>
+          <button onClick={rescheduleToSuggested} disabled={busy} style={{
+            padding: '5px 12px', borderRadius: 8, border: 'none',
+            background: '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
+            cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+          }}>
+            {busy ? 'Đang đổi...' : `Đổi sang ${booking.suggestedSlotStartTime}`}
+          </button>
+        </div>
+      )}
+      {err && <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626' }}>{err}</div>}
+    </div>
+  );
 }
 
 function formatCurrency(n) {
@@ -84,6 +137,14 @@ export default function BookingsHistory({ apiBase, token }) {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelError, setCancelError] = useState('');
 
+  // Refund request modal
+  const [refundRequests, setRefundRequests] = useState([]);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundError, setRefundError] = useState('');
+
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -106,6 +167,29 @@ export default function BookingsHistory({ apiBase, token }) {
     load();
     return () => { mounted = false; };
   }, [apiBase, token]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadRefundRequests() {
+      try {
+        const res = await fetch(`${apiBase}/refund-requests/my`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const data = payload?.data || payload;
+        if (mounted) setRefundRequests(Array.isArray(data) ? data : []);
+      } catch {
+        // ignore - refund status is a non-critical enhancement
+      }
+    }
+    loadRefundRequests();
+    return () => { mounted = false; };
+  }, [apiBase, token]);
+
+  function findRefundRequest(bookingId) {
+    return refundRequests.find((r) => String(r.bookingId?._id || r.bookingId) === String(bookingId));
+  }
 
   // Group bookings by date
   const bookingsByDate = useMemo(() => {
@@ -249,6 +333,43 @@ export default function BookingsHistory({ apiBase, token }) {
     } finally {
       setCancelLoading(false);
     }
+  }
+
+  function openRefundRequest(booking) {
+    setRefundTarget(booking);
+    setRefundReason('');
+    setRefundError('');
+    setShowRefundModal(true);
+  }
+
+  async function submitRefundRequest() {
+    if (!refundTarget) return;
+    if (!refundReason.trim()) { setRefundError('Vui lòng nhập lý do hoàn tiền'); return; }
+    setRefundLoading(true);
+    setRefundError('');
+    try {
+      const res = await fetch(`${apiBase}/refund-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: refundTarget._id, reason: refundReason.trim() }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.message || 'Không thể gửi yêu cầu hoàn tiền');
+      const created = payload?.data || payload;
+      setRefundRequests((prev) => [created, ...prev]);
+      setShowRefundModal(false);
+      setRefundTarget(null);
+      showToast('Đã gửi yêu cầu hoàn tiền, vui lòng chờ quản lý duyệt.');
+    } catch (e) {
+      setRefundError(e.message);
+    } finally {
+      setRefundLoading(false);
+    }
+  }
+
+  function handleRescheduled(updated) {
+    setBookings((prev) => prev.map((b) => (b._id === updated._id ? { ...b, ...updated } : b)));
+    setDetailBooking((prev) => (prev && prev._id === updated._id ? { ...prev, ...updated } : prev));
   }
 
   async function handleRebook(b) {
@@ -525,6 +646,7 @@ export default function BookingsHistory({ apiBase, token }) {
                         <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
                       </div>
+                      <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                     </div>
                   ))}
                 </div>
@@ -565,6 +687,7 @@ export default function BookingsHistory({ apiBase, token }) {
               {/* Status */}
               <div style={{ marginBottom: 16 }}>
                 <StatusBadge status={detailBooking.status} />
+                <AtRiskBanner booking={detailBooking} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
               </div>
 
               {/* Info rows */}
@@ -640,6 +763,27 @@ export default function BookingsHistory({ apiBase, token }) {
                   )}
                 </div>
               )}
+              {['paid', 'deposit_paid'].includes(detailBooking.paymentStatus) && (() => {
+                const existing = findRefundRequest(detailBooking._id);
+                if (existing?.status === 'pending') {
+                  return (
+                    <div style={{
+                      padding: '10px 0', borderRadius: 12, background: '#fffbeb', border: '1px solid #fde68a',
+                      textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#b45309',
+                    }}>
+                      ⏳ Yêu cầu hoàn tiền đang chờ duyệt
+                    </div>
+                  );
+                }
+                return (
+                  <button onClick={() => openRefundRequest(detailBooking)} style={{
+                    width: '100%', padding: '12px 0', borderRadius: 12, border: '1px solid #fecaca',
+                    background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    💸 Yêu cầu hoàn tiền
+                  </button>
+                );
+              })()}
               <button onClick={() => setDetailBooking(null)} style={{
                 width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
                 background: '#0f172a', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
@@ -930,6 +1074,78 @@ export default function BookingsHistory({ apiBase, token }) {
         </div>
       )}
 
+      {/* ═══ REFUND REQUEST MODAL ═══ */}
+      {showRefundModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
+        }} onClick={() => { if (!refundLoading) { setShowRefundModal(false); setRefundTarget(null); setRefundError(''); } }}>
+          <div style={{
+            width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Yêu cầu hoàn tiền</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                {refundTarget?.packageName || refundTarget?.packageId?.name || 'Dịch vụ'} · {formatCurrency(refundTarget?.totalAmount || refundTarget?.finalPrice)}
+              </div>
+            </div>
+            <div style={{ padding: '20px 24px' }}>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px 0' }}>
+                Yêu cầu của bạn sẽ được gửi tới quản lý chi nhánh xem xét. Vui lòng mô tả rõ lý do để được duyệt nhanh hơn.
+              </p>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                Lý do hoàn tiền <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <textarea
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                maxLength={500}
+                rows={4}
+                placeholder="Ví dụ: dịch vụ chưa đạt yêu cầu, đặt nhầm lịch..."
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 12, resize: 'none',
+                  border: '1.5px solid #e2e8f0', fontSize: 14, color: '#0f172a',
+                  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                  background: '#f8fafc',
+                }}
+                onFocus={(e) => { e.target.style.borderColor = '#ef4444'; e.target.style.background = '#fff'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
+              />
+              <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{refundReason.length}/500</div>
+              {refundError && (
+                <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>
+                  {refundError}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { setShowRefundModal(false); setRefundTarget(null); setRefundError(''); }}
+                disabled={refundLoading}
+                style={{
+                  flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
+                  background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >Huỷ</button>
+              <button
+                onClick={submitRefundRequest}
+                disabled={refundLoading}
+                style={{
+                  flex: 2, padding: '12px 0', borderRadius: 12, border: 'none',
+                  background: refundLoading ? '#fca5a5' : '#ef4444', color: '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: refundLoading ? 'not-allowed' : 'pointer',
+                  opacity: refundLoading ? 0.7 : 1,
+                }}
+              >{refundLoading ? 'Đang gửi...' : '💸 Gửi yêu cầu'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══ LIST VIEW ═══ */}
       {viewMode === 'list' && !loading && (
         <div className="aw-card-section">
@@ -964,6 +1180,7 @@ export default function BookingsHistory({ apiBase, token }) {
                     <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
                   </div>
+                  <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                   {(b.status === 'completed' || b.status === 'cancelled') && (
                     <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
                       <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}

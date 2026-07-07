@@ -18,6 +18,7 @@ const voucherSchema = new mongoose.Schema(
     applicableToAllPackages: { type: Boolean, default: false },
     applicableToAllBranches: { type: Boolean, default: false },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     maxUsagePerUser: { type: Number, default: 1 },
     requiredPoints: { type: Number, default: 0, min: 0 },
@@ -25,6 +26,8 @@ const voucherSchema = new mongoose.Schema(
     isBirthdayVoucher: { type: Boolean, default: false },
     isTemplate: { type: Boolean, default: false },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );

@@ -11,8 +11,8 @@ exports.createPackage = catchAsync(async (req, res) => {
 });
 
 exports.getAllPackages = catchAsync(async (req, res) => {
-  const packages = await packageService.getAllPackages(req.query);
-  success(res, packages, 'Packages retrieved');
+  const result = await packageService.getAllPackages(req.query);
+  success(res, result.data, 'Packages retrieved', 200, result.pagination);
 });
 
 exports.getPackageById = catchAsync(async (req, res) => {

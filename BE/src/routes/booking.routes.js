@@ -129,12 +129,12 @@ router.get('/:id', authenticate, bookingController.getBookingById);
  * @swagger
  * /api/bookings/{id}:
  *   put:
- *     summary: Update booking
+ *     summary: Update booking (admin/manager can edit any field; customer can only reschedule their own booking's date/time/note)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
  */
-router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingValidators.update, validate, bookingController.updateBooking);
+router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.update, validate, bookingController.updateBooking);
 
 /**
  * @swagger
@@ -146,6 +146,32 @@ router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingV
  *       - bearerAuth: []
  */
 router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
+
+/**
+ * @swagger
+ * /api/bookings/{id}/extend-grace:
+ *   patch:
+ *     summary: Extend the no-show grace period for a booking at risk of auto-cancellation (manager/admin)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Grace period extended
+ *       400:
+ *         description: Invalid status or extension limit reached
+ *       404:
+ *         description: Booking not found
+ */
+router.patch('/:id/extend-grace', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId(),
+], validate, bookingController.extendGracePeriod);
 
 /**
  * @swagger

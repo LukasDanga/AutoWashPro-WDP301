@@ -62,7 +62,7 @@ const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-s
 const EMPTY_VOUCHER = {
   code: '', name: '', description: '', type: 'percentage', value: '',
   maxDiscount: '', minOrder: '', quantity: '', startDate: '', endDate: '',
-  applicableToAllBranches: true, applicableToAllPackages: true, status: 'active',
+  branchId: '', applicableToAllBranches: false, applicableToAllPackages: true, status: 'active',
 };
 
 function VoucherModal({ initial, onSave, onClose, saving }) {
@@ -72,12 +72,18 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
 
   const validate = () => {
     const e = {};
+    const today = new Date().toISOString().split('T')[0];
     if (!form.code.trim()) e.code = 'Nhập mã voucher';
     if (!form.name.trim()) e.name = 'Nhập tên voucher';
     if (!form.value) e.value = 'Nhập giá trị';
     if (!form.quantity) e.quantity = 'Nhập số lượng';
     if (!form.startDate) e.startDate = 'Chọn ngày bắt đầu';
     if (!form.endDate) e.endDate = 'Chọn ngày kết thúc';
+    if (form.startDate && form.startDate < today) e.startDate = 'Ngày bắt đầu không được ở quá khứ';
+    if (form.endDate && form.endDate < today) e.endDate = 'Ngày kết thúc không được ở quá khứ';
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      e.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+    }
     return e;
   };
 
@@ -197,12 +203,12 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày bắt đầu <span className="text-red-500">*</span></label>
-              <input type="date" className={inp} value={form.startDate?.split('T')[0] ?? form.startDate} onChange={(e) => set('startDate', e.target.value)} />
+              <input type="date" className={inp} min={new Date().toISOString().split('T')[0]} value={form.startDate?.split('T')[0] ?? form.startDate} onChange={(e) => set('startDate', e.target.value)} />
               {errors.startDate && <p className="mt-0.5 text-[11px] text-red-500">{errors.startDate}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ngày kết thúc <span className="text-red-500">*</span></label>
-              <input type="date" className={inp} value={form.endDate?.split('T')[0] ?? form.endDate} onChange={(e) => set('endDate', e.target.value)} />
+              <input type="date" className={inp} min={form.startDate?.split('T')[0] || new Date().toISOString().split('T')[0]} value={form.endDate?.split('T')[0] ?? form.endDate} onChange={(e) => set('endDate', e.target.value)} />
               {errors.endDate && <p className="mt-0.5 text-[11px] text-red-500">{errors.endDate}</p>}
             </div>
           </div>
@@ -262,7 +268,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {usages.map((u, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                  <tr key={u._id || i} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-800">{u.userId?.name || '—'}</span>
@@ -347,7 +353,7 @@ function VoucherUsageReportTab() {
 }
 
 /* ═══ Main ═══ */
-export default function ManagerVouchers() {
+export default function ManagerVouchers({ user }) {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -358,6 +364,8 @@ export default function ManagerVouchers() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('list');
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  const managerBranchId = user?.branchId || '';
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -378,7 +386,8 @@ export default function ManagerVouchers() {
   const handleCreate = async (form) => {
     setSaving(true);
     try {
-      const res = await api('/vouchers', { method: 'POST', body: JSON.stringify(form) });
+      const payload = { ...form, branchId: managerBranchId };
+      const res = await api('/vouchers', { method: 'POST', body: JSON.stringify(payload) });
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json(); const created = p?.data ?? p;
       setVouchers((prev) => [created, ...prev]);

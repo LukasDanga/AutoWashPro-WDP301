@@ -59,6 +59,8 @@ function EditModal({ branch, onSave, onClose, saving }) {
     openingTime: branch.openingTime ?? '07:00',
     closingTime: branch.closingTime ?? '18:00',
     image: branch.image ?? '',
+    svgCx: branch.mapCoordinates?.svgCx ?? '',
+    svgCy: branch.mapCoordinates?.svgCy ?? '',
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -79,7 +81,11 @@ function EditModal({ branch, onSave, onClose, saving }) {
             <X size={16} />
           </button>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4 overflow-y-auto max-h-[70vh] px-6 py-5">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          const { svgCx, svgCy, ...rest } = form;
+          onSave({ ...rest, mapCoordinates: { svgCx: Number(svgCx) || 0, svgCy: Number(svgCy) || 0 } });
+        }} className="space-y-4 overflow-y-auto max-h-[70vh] px-6 py-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Tên chi nhánh</label>
@@ -106,6 +112,16 @@ function EditModal({ branch, onSave, onClose, saving }) {
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Giờ đóng</label>
               <input type="time" className={inp} value={form.closingTime} onChange={(e) => set('closingTime', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Tọa độ X (svgCx)</label>
+              <input type="number" className={inp} value={form.svgCx} onChange={(e) => set('svgCx', e.target.value)} placeholder="VD: 236" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Tọa độ Y (svgCy)</label>
+              <input type="number" className={inp} value={form.svgCy} onChange={(e) => set('svgCy', e.target.value)} placeholder="VD: 684" />
             </div>
           </div>
           <div>

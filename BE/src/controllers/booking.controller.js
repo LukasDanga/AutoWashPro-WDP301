@@ -34,7 +34,7 @@ exports.getBookingById = catchAsync(async (req, res) => {
 });
 
 exports.updateBooking = catchAsync(async (req, res) => {
-  const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role);
+  const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role, req.userId);
   success(res, booking, 'Booking updated');
 });
 
@@ -45,6 +45,11 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   }
   const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId);
   success(res, booking, 'Booking status updated');
+});
+
+exports.extendGracePeriod = catchAsync(async (req, res) => {
+  const booking = await bookingService.extendGracePeriod(req.params.id, req.user.role, req.user.branchId);
+  success(res, booking, 'Đã gia hạn thời gian check-in cho đơn');
 });
 
 exports.cancelBooking = catchAsync(async (req, res) => {
@@ -94,6 +99,16 @@ exports.getAllPayments = catchAsync(async (req, res) => {
 exports.getMyPayments = catchAsync(async (req, res) => {
   const payments = await paymentService.getAllPayments({}, 'customer', req.userId);
   success(res, payments, 'My payments retrieved');
+});
+
+exports.markPaymentViewed = catchAsync(async (req, res) => {
+  const payment = await paymentService.markPaymentViewed(req.params.id, req.user.role);
+  success(res, payment, 'Payment marked as viewed');
+});
+
+exports.countUnviewedPayments = catchAsync(async (req, res) => {
+  const count = await paymentService.countUnviewedPayments();
+  success(res, { count }, 'Unviewed payments count');
 });
 
 exports.refundPayment = catchAsync(async (req, res) => {

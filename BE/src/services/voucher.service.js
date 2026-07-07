@@ -17,22 +17,40 @@ const applyVoucher = (voucher, amount) => {
 };
 
 exports.createVoucher = async (data) => {
-  const code = data.code || generateCode();
-  const existing = await Voucher.findOne({ code: code.toUpperCase() });
+  const userProvidedCode = !!data.code;
+  let code = data.code || generateCode();
+  let existing = await Voucher.findOne({ code: code.toUpperCase() });
+  let attempts = 0;
+  while (existing && !userProvidedCode && attempts < 5) {
+    code = generateCode();
+    existing = await Voucher.findOne({ code: code.toUpperCase() });
+    attempts++;
+  }
   if (existing) throw Object.assign(new Error('Voucher code already exists'), { statusCode: 409, code: 'DUPLICATE_CODE' });
 
-  const voucher = new Voucher({
+  const payload = {
     ...data,
     code: code.toUpperCase(),
     remaining: data.quantity,
     createdBy: data.createdBy,
-  });
+  };
+
+  // Nếu có branchId → tự động giới hạn voucher chỉ dùng được ở chi nhánh đó
+  if (data.branchId) {
+    payload.branchId = data.branchId;
+    payload.applicableToAllBranches = false;
+    if (!data.applicableBranches || data.applicableBranches.length === 0) {
+      payload.applicableBranches = [data.branchId];
+    }
+  }
+
+  const voucher = new Voucher(payload);
   await voucher.save();
   return voucher;
 };
 
-exports.getAllVouchers = async (filters = {}, userRole, userId) => {
-  const query = {};
+exports.getAllVouchers = async (filters = {}, userRole, userId, userBranchId) => {
+  const query = { isDeleted: { $ne: true } };
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
   if (filters.search) {
@@ -49,8 +67,13 @@ exports.getAllVouchers = async (filters = {}, userRole, userId) => {
   if (filters.endDateOnly) {
     query.endDate = { $gte: new Date(filters.endDateOnly) };
   }
-  if (userRole === 'manager' && userId) {
-    query.createdBy = userId;
+  if (userRole === 'manager') {
+    if (!userBranchId) {
+      return { data: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } };
+    }
+    query.branchId = userBranchId;
+  } else if (filters.branchId) {
+    query.branchId = filters.branchId;
   }
 
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
@@ -75,43 +98,57 @@ exports.getAllVouchers = async (filters = {}, userRole, userId) => {
   };
 };
 
-exports.getVoucherById = async (id, userRole, userId) => {
-  const voucher = await Voucher.findById(id);
+exports.getVoucherById = async (id, userRole, userId, userBranchId) => {
+  const voucher = await Voucher.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  if (userRole === 'manager') {
+    const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
+    const createdByUser = String(voucher.createdBy) === String(userId);
+    if (!ownedByBranch && !createdByUser) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
   }
   return voucher;
 };
 
 exports.getVoucherByCode = async (code) => {
-  const voucher = await Voucher.findOne({ code: code.toUpperCase() });
+  const voucher = await Voucher.findOne({ code: code.toUpperCase(), isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   return voucher;
 };
 
-exports.updateVoucher = async (id, updates, userRole, userId) => {
-  const voucher = await Voucher.findById(id);
+exports.updateVoucher = async (id, updates, userRole, userId, userBranchId) => {
+  const voucher = await Voucher.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  if (userRole === 'manager') {
+    const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
+    const createdByUser = String(voucher.createdBy) === String(userId);
+    if (!ownedByBranch && !createdByUser) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+    delete updates.branchId;
+    delete updates.applicableToAllBranches;
   }
   const updated = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
   return updated;
 };
 
-exports.deleteVoucher = async (id, userRole, userId) => {
-  const voucher = await Voucher.findById(id);
+exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
+  const voucher = await Voucher.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (userRole === 'manager' && String(voucher.createdBy) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  if (userRole === 'manager') {
+    const ownedByBranch = userBranchId && voucher.branchId && String(voucher.branchId) === String(userBranchId);
+    const createdByUser = String(voucher.createdBy) === String(userId);
+    if (!ownedByBranch && !createdByUser) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
   }
-  await Voucher.findByIdAndDelete(id);
+  await Voucher.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
   return voucher;
 };
 
 exports.validateVoucher = async (code, bookingData, userId) => {
-  const voucher = await Voucher.findOne({ code: code.toUpperCase() });
+  const voucher = await Voucher.findOne({ code: code.toUpperCase(), isDeleted: { $ne: true } });
   if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   if (voucher.status !== 'active') throw Object.assign(new Error('Voucher is inactive'), { statusCode: 400, code: 'VOUCHER_INACTIVE' });
   if (voucher.isTemplate) throw Object.assign(new Error('Voucher template cannot be used directly'), { statusCode: 400, code: 'VOUCHER_IS_TEMPLATE' });
@@ -223,6 +260,7 @@ exports.reserveVoucher = async (code, userId, bookingId, discountAmount, parentS
           code: code.toUpperCase(),
           remaining: { $gt: 0 },
           status: 'active',
+          isDeleted: { $ne: true },
           startDate: { $lte: new Date() },
           endDate: { $gte: new Date() },
         },
@@ -425,6 +463,7 @@ exports.getAvailableVouchersForUser = async (userId) => {
   // Lấy tất cả voucher active, còn hạn, còn hàng, không phải template
   const allVouchers = await Voucher.find({
     status: 'active',
+    isDeleted: { $ne: true },
     isTemplate: false,
     startDate: { $lte: now },
     endDate:   { $gte: now },
@@ -437,6 +476,7 @@ exports.getAvailableVouchersForUser = async (userId) => {
   // Redeemable templates (đổi điểm)
   const templates = await Voucher.find({
     status: 'active',
+    isDeleted: { $ne: true },
     isTemplate: true,
     requiredPoints: { $gt: 0 },
     remaining: { $gt: 0 },
@@ -569,4 +609,21 @@ exports.redeemPointsForVoucher = async (templateId, userId) => {
   } finally {
     session.endSession();
   }
+};
+
+exports.getPublicVouchersByBranch = async (branchId) => {
+  const now = new Date();
+  const query = {
+    status: 'active',
+    isTemplate: { $ne: true },
+    isDeleted: { $ne: true },
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    $or: [
+      { applicableToAllBranches: true },
+      { applicableBranches: branchId },
+      { branchId },
+    ],
+  };
+  return Voucher.find(query).sort({ createdAt: -1 }).limit(20);
 };

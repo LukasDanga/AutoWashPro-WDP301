@@ -17,11 +17,11 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
   const [activeTab, setActiveTab] = useState('info');
   const [vehicles, setVehicles] = useState(initialVehicles || []);
   const [showAddVehicle, setShowAddVehicle] = useState(false);
-  const [form, setForm] = useState({ licensePlate: '', vehicleType: 'car', brand: '', model: '', color: '', year: '' });
+  const [form, setForm] = useState({ licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '' });
   const [submitting, setSubmitting] = useState(false);
   const [showEditVehicle, setShowEditVehicle] = useState(false);
   const [editVehicle, setEditVehicle] = useState(null);
-  const [editFormVehicle, setEditFormVehicle] = useState({ licensePlate: '', vehicleType: 'car', brand: '', model: '', color: '', year: '' });
+  const [editFormVehicle, setEditFormVehicle] = useState({ licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [editing, setEditing] = useState(false);
@@ -359,9 +359,10 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                     <label className="text-xs font-medium text-slate-500 block mb-1.5">Loại xe *</label>
                     <select required value={form.vehicleType} onChange={e => setForm(f => ({ ...f, vehicleType: e.target.value }))}
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400">
-                      <option value="car">Xe con</option>
+                      <option value="sedan">Xe con</option>
                       <option value="suv">SUV</option>
-                      <option value="truck">Xe tải</option>
+                      <option value="pickup">Xe bán tải</option>
+                      <option value="van">Xe tải</option>
                       <option value="motorcycle">Xe máy</option>
                     </select>
                   </div>
@@ -422,9 +423,10 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                     <label className="text-xs font-medium text-slate-500 block mb-1.5">Loại xe *</label>
                     <select required value={editFormVehicle.vehicleType} onChange={e => setEditFormVehicle(f => ({ ...f, vehicleType: e.target.value }))}
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400">
-                      <option value="car">Xe con</option>
+                      <option value="sedan">Xe con</option>
                       <option value="suv">SUV</option>
-                      <option value="truck">Xe tải</option>
+                      <option value="pickup">Xe bán tải</option>
+                      <option value="van">Xe tải</option>
                       <option value="motorcycle">Xe máy</option>
                     </select>
                   </div>

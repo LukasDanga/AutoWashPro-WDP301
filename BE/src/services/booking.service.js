@@ -21,8 +21,24 @@ const VALID_TRANSITIONS = {
 // Tỉ lệ đặt cọc trước cho đơn lẻ + định kỳ (gói lượt đã trả trước toàn bộ)
 const DEPOSIT_RATE = 0.3;
 
+// Khách bị hệ thống tự hủy (no-show) từ ngưỡng này trở lên phải cọc 100% cho lần đặt tiếp theo
+const NO_SHOW_STRIKE_THRESHOLD = 3;
+const STRIKE_DEPOSIT_RATE = 1;
+
+// Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút.
+// Grace mặc định chỉ 5 phút (xem autoCancel.job.js) nên offset cũng phải nhỏ hơn nó,
+// nếu không cảnh báo sẽ rơi vào trước cả giờ hẹn.
+const LATE_WARNING_OFFSET_MINUTES = 2;
+
+// Mỗi lần quản lý gia hạn thêm cho 1 booking sắp bị auto-cancel, và tổng tối đa được gia hạn
+const GRACE_EXTENSION_STEP_MINUTES = 5;
+const MAX_GRACE_EXTENSION_MINUTES = 15;
+
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
+
+// Khách có từ NO_SHOW_STRIKE_THRESHOLD lần bị hệ thống tự hủy trở lên phải cọc 100% (chống spam/no-show lặp lại)
+const getDepositRate = (user) => ((user?.noShowCount || 0) >= NO_SHOW_STRIKE_THRESHOLD ? STRIKE_DEPOSIT_RATE : DEPOSIT_RATE);
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -68,6 +84,39 @@ const getDayBounds = (dateStr) => ({
   lte: new Date(`${dateStr}T23:59:59.999Z`),
 });
 
+/**
+ * Tìm slot trống gần nhất (cùng ngày, cùng chi nhánh) sau mốc afterMinutes, dùng để gợi ý
+ * đổi giờ cho khách khi booking sắp/đã bị auto-cancel thay vì chỉ hủy suông.
+ */
+const findNearestAvailableSlot = async ({ branchId, bookingDateStr, duration, afterMinutes, excludeBookingId }) => {
+  const branch = await Branch.findById(branchId);
+  if (!branch) return null;
+
+  const { gte, lte } = getDayBounds(bookingDateStr);
+  const existing = await Booking.find({
+    _id: { $ne: excludeBookingId },
+    branchId,
+    bookingDate: { $gte: gte, $lte: lte },
+    status: { $in: ACTIVE_SLOT_STATUSES },
+  }).select('startTime endTime');
+
+  const capacity = branch.capacity || 2;
+  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+
+  for (const slot of slots) {
+    const sns = parseTime(slot.startTime);
+    if (sns === null || sns <= afterMinutes) continue;
+    const sne = parseTime(slot.endTime);
+    const overlappingCount = existing.filter((b) => {
+      const bs = parseTime(b.startTime);
+      const be = parseTime(b.endTime);
+      return bs !== null && be !== null && isSlotOverlap(sns, sne, bs, be);
+    }).length;
+    if (overlappingCount < capacity) return slot;
+  }
+  return null;
+};
+
 exports.createBooking = async (data) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -76,7 +125,7 @@ exports.createBooking = async (data) => {
     const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice, selectedSubServices, slotPackId } = data;
 
     const [pkg, branch, vehicle, user] = await Promise.all([
-      Package.findById(packageId).session(session),
+      Package.findOne({ _id: packageId, isDeleted: { $ne: true } }).session(session),
       Branch.findById(branchId).session(session),
       Vehicle.findById(vehicleId).session(session),
       User.findById(userId).session(session),
@@ -203,10 +252,11 @@ exports.createBooking = async (data) => {
       paymentStatus = 'paid';
     }
 
-    // Đặt cọc 30% cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc)
+    // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
+    // Khách có lịch sử no-show (>= NO_SHOW_STRIKE_THRESHOLD lần) phải cọc 100% để hạn chế đặt-rồi-không-đến.
     const depositAmount = bookingType === 'slot_pack_usage'
       ? 0
-      : Math.round((computedFinalPrice * DEPOSIT_RATE) / 1000) * 1000;
+      : Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
 
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
@@ -373,15 +423,22 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   return booking;
 };
 
-exports.updateBooking = async (id, updates, userRole) => {
+exports.updateBooking = async (id, updates, userRole, userId) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const booking = await Booking.findById(id).session(session);
     if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    if (userRole === 'customer' && String(booking.userId) !== String(userId)) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
     if (booking.status === 'completed' || booking.status === 'cancelled') {
       throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+    }
+    // Khách hàng chỉ được tự đổi giờ/ngày (vd: theo gợi ý khi sắp bị auto-cancel), không đổi chi nhánh/gói
+    if (userRole === 'customer' && (updates.branchId !== undefined || updates.packageId !== undefined)) {
+      throw Object.assign(new Error('Không thể đổi chi nhánh hoặc gói dịch vụ'), { statusCode: 400, code: 'FORBIDDEN_FIELD' });
     }
 
     const allowedFields = ['bookingDate', 'startTime', 'note', 'packageId', 'branchId'];
@@ -427,7 +484,13 @@ exports.updateBooking = async (id, updates, userRole) => {
     }
 
     Object.assign(booking, filtered);
-    if (isRescheduled) booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
+    if (isRescheduled) {
+      booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
+      // Đổi giờ = tính lại hạn auto-cancel từ đầu cho khung giờ mới
+      booking.lateWarningSentAt = undefined;
+      booking.suggestedSlotStartTime = undefined;
+      booking.graceExtensionMinutes = 0;
+    }
     await booking.save({ session });
 
     await session.commitTransaction();
@@ -532,6 +595,11 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
             }
           }
         }
+        // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)
+        await User.findOneAndUpdate(
+          { _id: currentBooking.userId, noShowCount: { $gt: 0 } },
+          { $inc: { noShowCount: -1 } }
+        ).catch(() => {});
       } catch { /* silent — side effects must not fail the main response */ }
     });
   }
@@ -642,6 +710,15 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       await voucherService.rollbackVoucher(booking.voucherCode, booking.userId, id, session).catch(() => {});
     }
 
+    // Hoàn lượt nếu khách tự hủy đơn gói lượt (hệ thống hủy thì không hoàn)
+    if (booking.bookingType === 'slot_pack_usage' && cancelledBy === 'customer' && booking.slotPackId) {
+      await SlotPack.findByIdAndUpdate(
+        booking.slotPackId,
+        { $inc: { remainingSlots: 1, usedSlots: -1 } },
+        { session }
+      ).catch(() => {});
+    }
+
     await session.commitTransaction();
 
     notificationService.send(
@@ -674,7 +751,16 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
 /**
  * Tự động hủy các đơn quá hạn mà khách không đến (no-show).
- * Đơn vẫn ở 'pending' hoặc 'confirmed' (chưa check-in) và đã quá giờ bắt đầu + graceMinutes.
+ * Đơn vẫn ở 'pending' hoặc 'confirmed' (chưa check-in) và đã quá giờ bắt đầu + graceMinutes
+ * (+ graceExtensionMinutes nếu quản lý đã gia hạn thủ công cho đơn đó).
+ *
+ * Trước khi hủy thật sự, gửi 1 lần cảnh báo "sắp bị hủy" ở mốc
+ * (deadline - LATE_WARNING_OFFSET_MINUTES) kèm gợi ý khung giờ trống gần nhất trong ngày,
+ * để khách có cơ hội check-in hoặc chủ động đổi giờ thay vì bị hủy đột ngột.
+ *
+ * Khi hủy thật, cộng 1 "strike" no-show cho khách (User.noShowCount) — ảnh hưởng tỉ lệ
+ * đặt cọc của lần đặt tiếp theo (xem getDepositRate).
+ *
  * Được gọi định kỳ bởi cron job.
  */
 exports.autoCancelNoShows = async (graceMinutes = 30) => {
@@ -683,26 +769,69 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
   const candidates = await Booking.find({
     status: { $in: ['pending', 'confirmed'] },
     bookingDate: { $lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
-  }).select('startTime bookingDate status voucherCode userId branchId packageId');
+  })
+    .select('startTime endTime bookingDate status voucherCode userId branchId packageId lateWarningSentAt graceExtensionMinutes')
+    .populate('packageId', 'duration');
 
   let cancelledCount = 0;
+  let warnedCount = 0;
 
   for (const b of candidates) {
     const startMin = parseTime(b.startTime);
+    const endMin = parseTime(b.endTime);
     if (startMin === null) continue;
 
     const startDateTime = new Date(b.bookingDate);
     startDateTime.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
-    const deadline = new Date(startDateTime.getTime() + graceMinutes * 60 * 1000);
-    if (now < deadline) continue;
 
+    const effectiveGrace = graceMinutes + (b.graceExtensionMinutes || 0);
+    const deadline = new Date(startDateTime.getTime() + effectiveGrace * 60 * 1000);
+    const warnAt = new Date(deadline.getTime() - LATE_WARNING_OFFSET_MINUTES * 60 * 1000);
+
+    if (now < warnAt) continue; // còn sớm, chưa cần quan tâm đơn này
+
+    const bookingDateStr = new Date(b.bookingDate).toISOString().split('T')[0];
+    const duration = b.packageId?.duration || (endMin !== null ? endMin - startMin : 30);
+
+    if (now < deadline) {
+      // Trong cửa sổ cảnh báo — gửi 1 lần duy nhất
+      if (b.lateWarningSentAt) continue;
+
+      const suggested = await findNearestAvailableSlot({
+        branchId: b.branchId,
+        bookingDateStr,
+        duration,
+        afterMinutes: endMin !== null ? endMin : startMin,
+        excludeBookingId: b._id,
+      }).catch(() => null);
+
+      await Booking.updateOne(
+        { _id: b._id, status: b.status },
+        { lateWarningSentAt: now, suggestedSlotStartTime: suggested?.startTime || undefined }
+      );
+
+      const minutesLeft = Math.max(1, Math.round((deadline - now) / 60000));
+      notificationService.send(
+        b.userId,
+        'Lịch hẹn sắp bị hủy tự động',
+        `Bạn chưa check-in cho lịch hẹn lúc ${b.startTime}. Còn khoảng ${minutesLeft} phút trước khi hệ thống tự hủy đơn.`
+          + (suggested ? ` Bạn cũng có thể đổi sang khung giờ ${suggested.startTime} còn trống hôm nay.` : ''),
+        'booking_at_risk',
+        { bookingId: b._id, minutesLeft, suggestedSlotStartTime: suggested?.startTime }
+      ).catch(() => {});
+
+      warnedCount += 1;
+      continue;
+    }
+
+    // Đã quá hạn (kể cả phần gia hạn nếu có) — hủy thật sự
     const updated = await Booking.findOneAndUpdate(
       { _id: b._id, status: b.status },
       {
         status: 'cancelled',
         cancelledAt: now,
         cancelledBy: 'system',
-        cancellationReason: `Tự động hủy: khách không đến sau ${graceMinutes} phút kể từ giờ hẹn`,
+        cancellationReason: `Tự động hủy: khách không đến sau ${effectiveGrace} phút kể từ giờ hẹn`,
       },
       { new: true }
     );
@@ -713,12 +842,24 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
       await voucherService.rollbackVoucher(b.voucherCode, b.userId, b._id).catch(() => {});
     }
 
+    // Strike no-show — khách bị hủy tự động nhiều lần sẽ phải cọc 100% cho lần đặt sau
+    await User.findByIdAndUpdate(b.userId, { $inc: { noShowCount: 1 } }).catch(() => {});
+
+    const suggested = await findNearestAvailableSlot({
+      branchId: b.branchId,
+      bookingDateStr,
+      duration,
+      afterMinutes: startMin,
+      excludeBookingId: b._id,
+    }).catch(() => null);
+
     notificationService.send(
       b.userId,
       'Lịch hẹn đã bị hủy tự động',
-      `Lịch hẹn lúc ${b.startTime} đã bị hủy do bạn không đến đúng giờ. Tiền cọc (nếu có) sẽ không được hoàn lại.`,
+      `Lịch hẹn lúc ${b.startTime} đã bị hủy do bạn không đến đúng giờ. Tiền cọc (nếu có) sẽ không được hoàn lại.`
+        + (suggested ? ` Bạn có thể đặt lại vào khung giờ ${suggested.startTime} còn trống hôm nay.` : ''),
       'booking_cancelled',
-      { bookingId: b._id }
+      { bookingId: b._id, suggestedSlotStartTime: suggested?.startTime }
     ).catch(() => {});
 
     notificationService.sendToAdminAndManager(
@@ -730,7 +871,49 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
     ).catch(() => {});
   }
 
-  return { cancelled: cancelledCount, checked: candidates.length };
+  return { cancelled: cancelledCount, warned: warnedCount, checked: candidates.length };
+};
+
+/**
+ * Quản lý/admin gia hạn thêm grace period cho 1 đơn cụ thể đang sắp bị auto-cancel
+ * (vd: khách đã báo trễ hoặc đang trên đường tới). Mỗi lần gia hạn +GRACE_EXTENSION_STEP_MINUTES,
+ * tối đa MAX_GRACE_EXTENSION_MINUTES cho 1 đơn. Reset cờ cảnh báo để có thể cảnh báo lại
+ * nếu khách vẫn chưa check-in sau khi gia hạn.
+ */
+exports.extendGracePeriod = async (id, userRole, userBranchId) => {
+  const booking = await Booking.findById(id);
+  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+
+  if (userRole === 'manager') {
+    if (!userBranchId || String(userBranchId) !== String(booking.branchId)) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
+  if (!['pending', 'confirmed'].includes(booking.status)) {
+    throw Object.assign(new Error('Chỉ có thể gia hạn đơn đang chờ hoặc đã xác nhận'), { statusCode: 400, code: 'INVALID_STATUS' });
+  }
+  if ((booking.graceExtensionMinutes || 0) >= MAX_GRACE_EXTENSION_MINUTES) {
+    throw Object.assign(new Error(`Đơn này đã được gia hạn tối đa ${MAX_GRACE_EXTENSION_MINUTES} phút`), { statusCode: 400, code: 'GRACE_LIMIT_REACHED' });
+  }
+
+  const updated = await Booking.findByIdAndUpdate(
+    id,
+    {
+      $inc: { graceExtensionMinutes: GRACE_EXTENSION_STEP_MINUTES },
+      $unset: { lateWarningSentAt: '' },
+    },
+    { new: true }
+  );
+
+  notificationService.send(
+    booking.userId,
+    'Lịch hẹn của bạn đã được gia hạn',
+    `Nhân viên đã gia hạn thêm ${GRACE_EXTENSION_STEP_MINUTES} phút cho lịch hẹn lúc ${booking.startTime}. Vui lòng đến check-in sớm nhất có thể.`,
+    'booking_grace_extended',
+    { bookingId: id, graceExtensionMinutes: updated.graceExtensionMinutes }
+  ).catch(() => {});
+
+  return updated;
 };
 
 exports.deleteBooking = async (id, userRole) => {
@@ -745,7 +928,7 @@ exports.deleteBooking = async (id, userRole) => {
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),
-    Package.findById(packageId),
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
@@ -817,7 +1000,7 @@ exports.createRecurringBooking = async (data) => {
 
   // --- Validate base entities (ngoài transaction — chỉ đọc) ---
   const [pkg, branch, vehicle, user] = await Promise.all([
-    Package.findById(packageId),
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
     Branch.findById(branchId),
     Vehicle.findById(vehicleId),
     User.findById(userId),
@@ -879,8 +1062,8 @@ exports.createRecurringBooking = async (data) => {
     computedFinalPrice = vResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
   }
 
-  // --- Đặt cọc 30% cho mỗi buổi định kỳ ---
-  const depositAmount = Math.round((computedFinalPrice * DEPOSIT_RATE) / 1000) * 1000;
+  // --- Đặt cọc cho mỗi buổi định kỳ (100% nếu khách đang bị strike no-show) ---
+  const depositAmount = Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
 
   // --- Build danh sách các ngày cần tạo booking ---
   const recurringGroupId = crypto.randomUUID();
@@ -1114,6 +1297,7 @@ exports.getFeedbacks = async (user, filters = {}) => {
     Booking.find(query)
       .populate('userId', 'name email phone avatar tier')
       .populate('packageId', 'name')
+      .populate('branchId', 'name')
       .sort({ feedbackAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit),
