@@ -1,0 +1,410 @@
+# AutoWashPro Mobile — UI Conventions
+
+> Style: **Modern Minimal + Premium** với bảng màu **Xanh dương tin cậy** (#2563EB).
+> Áp dụng cho toàn bộ `AutoWashProApp/src/**` và `AutoWashProApp/app/**`.
+
+---
+
+## 1. Theme System
+
+### 1.1 Colors — luôn dùng hook
+
+```tsx
+// ✅ ĐÚNG — dynamic, hỗ trợ dark mode
+import { useColors } from '../../src/theme/ThemeContext';
+const colors = useColors();
+<Text style={{ color: colors.textPrimary }}>...</Text>
+
+// ⚠️ BACKWARD-COMPAT — chỉ dùng trong services, contexts, file không có access tới theme
+import { colors } from '../../src/theme/colors'; // lightColors fallback
+```
+
+### 1.2 Typography
+
+```tsx
+import { Text } from '../../src/components/common';
+
+<Text variant="h1">Tiêu đề</Text>
+<Text variant="body" weight="600">Body bold</Text>
+<Text variant="caption" color="textSecondary">Caption</Text>
+<Text variant="price" color="primary">250.000 ₫</Text>   // tabular-nums tự động
+```
+
+Variants: `display`, `displaySm`, `h1`–`h4`, `bodyLarge`, `body`, `bodySmall`, `caption`, `button`, `buttonSmall`, `label`, `labelSmall`, `overline`, `price`, `priceLarge`, `priceSmall`.
+
+### 1.3 Spacing — 4pt / 8dp grid
+
+| Token | Value | Use |
+|---|---|---|
+| `xs` | 4 | gap nhỏ |
+| `sm` | 8 | padding tight |
+| `md` | 16 | spacing chuẩn |
+| `lg` | 24 | section gap |
+| `xl` | 32 | page padding dọc |
+| `xxl` | 48 | bottom safe area |
+
+```tsx
+import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
+<View style={{ padding: spacing.md, borderRadius: borderRadius.lg, ...shadows.sm }} />
+```
+
+### 1.4 Tokens
+
+```tsx
+import { duration, opacity, zIndex, scale, elevation } from '../../src/theme/tokens';
+```
+
+- Animation: 150/200/250/300/350ms (page transitions)
+- Skeleton shimmer: `duration.shimmer` (1500ms)
+- Touch target tối thiểu: 44pt
+- Scale press feedback: `0.95`–`0.98`
+
+### 1.5 Gradients
+
+```tsx
+import { toGradientColors, getGradients } from '../../src/theme/gradients';
+import { useTheme } from '../../src/theme/ThemeContext';
+
+const { isDark } = useTheme();
+const gradients = getGradients(isDark);
+
+<LinearGradient
+  colors={toGradientColors(gradients.hero)}
+  start={{ x: 0, y: 0 }}
+  end={{ x: 1, y: 1 }}
+>
+```
+
+> Luôn dùng `toGradientColors(gradients.X)` để convert từ `GradientStop[]` sang
+> `string[]` mà `expo-linear-gradient` yêu cầu. Tránh `.map((s) => s.color) as any`
+> vì sẽ ném `NullPointerException` trên native.
+
+Hoặc dùng `<Header variant="gradient" />` / `<ScreenContainer background="gradient" />` thay vì tự wrap.
+
+---
+
+## 2. Components
+
+### 2.1 Cấu trúc chuẩn của một screen
+
+```tsx
+import {
+  ScreenContainer,
+  Header,
+  Card,
+  Button,
+  Text as AppText,
+  Icon,
+} from '../../src/components/common';
+import { useColors } from '../../src/theme/ThemeContext';
+
+export default function MyScreen() {
+  const router = useRouter();
+  const colors = useColors();
+
+  return (
+    <ScreenContainer background="subtle">
+      <Header title="Tiêu đề" showBack rightAction={<IconButton ... />} />
+      {/* body */}
+    </ScreenContainer>
+  );
+}
+```
+
+### 2.2 Danh sách components
+
+| Component | Khi nào dùng |
+|---|---|
+| `ScreenContainer` | Wrapper mọi screen (thay SafeAreaView + ScrollView + padding thủ công) |
+| `Header` | Top bar: `variant="standard"` / `"large"` / `"gradient"`, `showBack`, `rightAction` |
+| `Button` | CTA: `variant="primary"` / `"secondary"` / `"outline"` / `"ghost"` / `"gradient"` / `"danger"`, `size="small"` / `"medium"` / `"large"` |
+| `IconButton` | Touch-compliant icon button (hitSlop 8, accessibilityLabel bắt buộc) |
+| `Text` | Typography wrapper (hỗ trợ variant, weight, color tokens) |
+| `Card` | Container content: `variant="default"` / `"outlined"` / `"elevated"` / `"flat"`, có onPress |
+| `Input` | Form input: label, error, hint, password toggle |
+| `SearchBar` | Tìm kiếm có focus animation |
+| `Chip` | Pill/tag/filter có variant + selected state |
+| `Badge` | Status indicator (`BookingStatusBadge`, `PaymentStatusBadge`, `TierBadge`) |
+| `StatCard` | Metric card (label + value + icon + trend) |
+| `SectionHeader` | Section title với action link |
+| `ListItem` | Row pattern: icon + title + subtitle + trailing |
+| `SegmentedControl` | Tab filter trong page (history, payment) |
+| `EmptyState` | Empty/error state với icon + message + CTA |
+| `Skeleton` / `SkeletonListItem` / `SkeletonCard` | Loading placeholders với shimmer 1500ms |
+| `Loading` / `LoadingOverlay` | Spinner |
+| `BottomSheet` | Modal sheet (swipe-down, backdrop dismiss) |
+| `Toast` / `useToast()` | Non-blocking feedback (thay `Alert.alert` khi có thể) |
+| `PressableScale` | Interactive wrapper với scale animation |
+| `Icon`, `Icons` | Vector icon (Ionicons); **không emoji** |
+
+### 2.3 Patterns thường dùng
+
+#### List view với pull-to-refresh
+
+```tsx
+<ScreenContainer background="subtle">
+  <Header title="..." showBack />
+  <FlatList
+    data={items}
+    renderItem={renderItem}
+    keyExtractor={(it) => it.id}
+    contentContainerStyle={{ padding: 16 }}
+    refreshControl={
+      <RefreshControl
+        refreshing={isRefreshing}
+        onRefresh={onRefresh}
+        colors={[colors.primary]}
+        tintColor={colors.primary}
+      />
+    }
+    ListEmptyComponent={<EmptyState iconName="..." title="..." message="..." />}
+  />
+</ScreenContainer>
+```
+
+#### Form
+
+```tsx
+<ScreenContainer keyboardAvoiding>
+  <Header title="..." showBack />
+  <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+    <Input label="..." value={x} onChangeText={setX} error={errors.x} />
+    <Button title="Lưu" onPress={save} fullWidth size="large" />
+  </ScrollView>
+</ScreenContainer>
+```
+
+#### Confirm dialog (BottomSheet thay Alert)
+
+```tsx
+const [open, setOpen] = useState(false);
+
+<BottomSheet visible={open} onClose={() => setOpen(false)} title="Xác nhận">
+  <View style={{ flexDirection: 'row', gap: 12 }}>
+    <Button title="Hủy" variant="outline" onPress={() => setOpen(false)} style={{ flex: 1 }} />
+    <Button title="Đồng ý" variant="danger" onPress={confirm} style={{ flex: 1 }} />
+  </View>
+</BottomSheet>
+```
+
+---
+
+## 3. Iconography
+
+**KHÔNG dùng emoji làm icon.** Tất cả icon phải là vector từ `<Icon name="..." />` (Ionicons).
+
+```tsx
+// ✅ ĐÚNG
+<Icon name="car-outline" size={20} color={colors.primary} />
+<Icon name={Icons.cardOutline} size={22} color={colors.textPrimary} />
+
+// ❌ SAI
+<Text style={{ fontSize: 24 }}>🚗</Text>
+```
+
+### Bảng tham chiếu nhanh
+
+| Emoji | Vector icon |
+|---|---|
+| ☀️ | `sunny-outline` |
+| 🌙 | `moon-outline` |
+| 🌤️ | `cloudy-day` hoặc `cloud-outline` |
+| 🔔 | `notifications-outline` |
+| ⏰ | `time-outline` |
+| 🎉 | `gift-outline` |
+| 🔊 | `volume-high-outline` |
+| 📳 | `tablet-portrait-outline` |
+| 🌐 | `globe-outline` |
+| 🔐 🔒 | `lock-closed-outline` |
+| 📱 | `phone-portrait-outline` |
+| 📧 | `mail-outline` |
+| 🗑️ | `trash-outline` |
+| 📊 | `stats-chart-outline` |
+| 📜 📄 | `document-text-outline` |
+| ℹ️ | `information-circle-outline` |
+| ⭐ | `star` |
+| ☆ | `star-outline` |
+| ❤️ | `heart` |
+| 🚪 | `log-out-outline` |
+| 💬 | `chatbubble-outline` |
+| 💵 | `cash-outline` |
+| 💳 | `card-outline` |
+| 📅 | `calendar-outline` |
+| 📋 | `receipt-outline` |
+| 📍 | `location-outline` |
+| 🚗 | `car-outline` |
+| 🚙 | `car-sport-outline` |
+| 🏍️ | `bicycle-outline` |
+| 🚐 | `bus-outline` |
+| 🛻 | `car-outline` |
+| ✏️ | `create-outline` |
+| ✨ | `sparkles-outline` |
+| 🎫 | `pricetag-outline` |
+| 📦 | `cube-outline` |
+| 👥 | `people-outline` |
+| 💰 | `cash-outline` |
+| ⏳ | `hourglass-outline` |
+| 🏪 | `storefront-outline` |
+| 🐛 | `bug-outline` |
+| 💡 | `bulb-outline` |
+| 😔 | `sad-outline` |
+| 😍 | `happy-outline` |
+| 📤 | `share-outline` |
+| 📷 | `camera-outline` |
+| ← | `chevron-back` (Header `showBack`) |
+| › | `chevron-forward` |
+
+Để thêm icon mới: cập nhật `src/components/common/Icon.tsx` → `Icons` object (as const).
+
+---
+
+## 4. Accessibility
+
+Mọi interactive element phải có:
+
+```tsx
+<Pressable
+  accessibilityRole="button"
+  accessibilityLabel="Mô tả rõ ràng"
+  accessibilityHint="Hành động sẽ xảy ra"
+  accessibilityState={{ disabled, selected, busy }}
+  hitSlop={8}
+>
+```
+
+- Touch target ≥ 44pt (`minHeight: 44`)
+- Contrast WCAG AA (text ≥ 4.5:1, large text ≥ 3:1)
+- Icon-only buttons **phải** có `accessibilityLabel`
+- Loading state: `accessibilityState.busy = true`
+- Truyền `accessibilityRole` chính xác: `button` / `tab` / `link` / `text` / `header` / `search` / `image` / `switch`
+
+---
+
+## 5. Haptics
+
+Dùng `expo-haptics` cho mọi interactive action quan trọng:
+
+```tsx
+import * as Haptics from 'expo-haptics';
+
+const handlePress = () => {
+  try { Haptics.selectionAsync(); } catch {}
+  // light tap cho selection, tab switch
+  // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) cho primary CTA
+  // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium) cho destructive
+};
+```
+
+Button component đã tích hợp sẵn qua prop `hapticFeedback` / `hapticStyle`.
+
+---
+
+## 6. States
+
+Mọi screen / async flow phải có đủ 4 states:
+
+1. **Loading** — Skeleton (preferred cho list) hoặc `Loading fullScreen` (cho single-fetch)
+2. **Empty** — `EmptyState` với icon + message + optional CTA
+3. **Error** — `EmptyState` với `iconName="alert-circle-outline"` + retry CTA
+4. **Success** — content chính
+
+```tsx
+if (isLoading) return <Loading fullScreen message="Đang tải..." />;
+if (error) return <EmptyState iconName="alert-circle-outline" title="Lỗi" message={error} actionLabel="Thử lại" onAction={reload} />;
+if (!data || data.length === 0) return <EmptyState iconName="..." title="Chưa có dữ liệu" message="..." />;
+```
+
+---
+
+## 7. Dark Mode
+
+- Light + dark mode phải test cả hai.
+- Dark mode chỉ hoạt động nếu dùng `useColors()` hook (KHÔNG dùng `import { colors }` static).
+- StyleSheet.create ở module scope không access được hook → dùng inline style cho colors, hoặc thêm static fallback (`import { colors as staticColors }`).
+
+```tsx
+// ✅ Trong component
+const colors = useColors();
+<View style={{ backgroundColor: colors.surface }} />
+
+// ✅ Trong StyleSheet.create (module scope)
+const styles = StyleSheet.create({
+  card: { backgroundColor: '#F8FAFC' }, // hardcoded fallback (sub-optimal nhưng acceptable)
+});
+
+// ✅ Tốt nhất: tạo style factory trong component
+const getStyles = (colors: any) => ({
+  card: { backgroundColor: colors.surface },
+});
+```
+
+---
+
+## 8. Pre-delivery Verification Checklist
+
+Trước khi merge / release:
+
+- [ ] Không còn emoji làm icon
+- [ ] Tất cả icon dùng cùng family (Ionicons) qua `<Icon name="..." />`
+- [ ] Touch targets ≥ 44pt
+- [ ] Light + dark mode tested (chuyển trong Settings → Hiển thị)
+- [ ] Text contrast WCAG AA (text thường ≥ 4.5:1, large text ≥ 3:1)
+- [ ] Safe area respected (dùng ScreenContainer)
+- [ ] Spacing theo 4pt/8dp grid (xs=4, sm=8, md=16, lg=24, xl=32)
+- [ ] Press feedback có trên mọi interactive (Button/IconButton đã xử lý)
+- [ ] Loading state: Skeleton cho list, Loading cho full-screen
+- [ ] Empty state có icon + message + optional CTA
+- [ ] Error state có retry
+- [ ] No horizontal scroll (kiểm tra trên màn hình nhỏ nhất 320pt)
+- [ ] Haptic feedback ở primary CTA + tab switch + selection
+- [ ] accessibilityLabel + accessibilityRole cho mọi icon-only button
+- [ ] Form: keyboard avoiding view, returnKeyType, autoCapitalize đúng
+- [ ] TypeScript: `npx tsc --noEmit` không có lỗi
+
+---
+
+## 9. Common Mistakes
+
+❌ Import colors tĩnh trong component:
+```tsx
+import { colors } from '../../src/theme/colors';
+```
+
+❌ Emoji làm icon:
+```tsx
+<Text style={{ fontSize: 24 }}>🚗</Text>
+```
+
+❌ Inline hex colors:
+```tsx
+<View style={{ backgroundColor: '#2563EB' }} />
+```
+
+❌ Custom back button text:
+```tsx
+<TouchableOpacity onPress={router.back}><Text>←</Text></TouchableOpacity>
+```
+
+❌ Alert.alert cho confirm thông thường:
+```tsx
+Alert.alert('Xác nhận', '...', [...]);
+```
+
+❌ TouchableOpacity cho icon-only button thiếu accessibilityLabel:
+```tsx
+<TouchableOpacity onPress={...}><Icon name="close" /></TouchableOpacity>
+```
+
+❌ Hardcoded sizes:
+```tsx
+padding: 13 // phải là 12 hoặc 14
+```
+
+---
+
+## 10. References
+
+- Design tokens: `src/theme/colors.ts`, `spacing.ts`, `typography.ts`, `tokens.ts`, `gradients.ts`
+- Theme context: `src/theme/ThemeContext.tsx` (`useColors`, `useTheme`)
+- Common components: `src/components/common/*`
+- Component index: `src/components/common/index.ts`
