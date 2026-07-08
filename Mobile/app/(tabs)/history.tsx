@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   FlatList,
+  ScrollView,
   StyleSheet,
   RefreshControl,
   Modal,
@@ -651,24 +652,26 @@ export default function HistoryScreen() {
                     <BookingStatusBadge status={detailBooking.status} />
                   </View>
 
-                  {detailInfoRows(detailBooking, colors).map(([label, value]) => (
-                    <View key={label} style={[styles.infoRow, { borderBottomColor: colors.border }]}>
-                      <AppText variant="caption" color="textSecondary">{label}</AppText>
-                      <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{value}</AppText>
-                    </View>
-                  ))}
-
-                  {detailBooking.feedback ? (
-                    <View style={[styles.feedbackBox, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
-                      <AppText variant="caption" style={{ color: '#D97706', fontWeight: '700', marginBottom: 4 }}>⭐ Đánh giá</AppText>
-                      <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
-                        {[1, 2, 3, 4, 5].map(s => (
-                          <AppText key={s} style={{ color: s <= (detailBooking.rating || 0) ? '#F59E0B' : '#D1D5DB' }}>★</AppText>
-                        ))}
+                  <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
+                    {detailInfoRows(detailBooking, colors).map(([label, value]) => (
+                      <View key={label} style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+                        <AppText variant="caption" color="textSecondary">{label}</AppText>
+                        <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{value}</AppText>
                       </View>
-                      <AppText variant="caption" style={{ color: '#92400E', fontStyle: 'italic' }}>"{detailBooking.feedback}"</AppText>
-                    </View>
-                  ) : null}
+                    ))}
+
+                    {detailBooking.feedback ? (
+                      <View style={[styles.feedbackBox, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
+                        <AppText variant="caption" style={{ color: '#D97706', fontWeight: '700', marginBottom: 4 }}>⭐ Đánh giá</AppText>
+                        <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
+                          {[1, 2, 3, 4, 5].map(s => (
+                            <AppText key={s} style={{ color: s <= (detailBooking.rating || 0) ? '#F59E0B' : '#D1D5DB' }}>★</AppText>
+                          ))}
+                        </View>
+                        <AppText variant="caption" style={{ color: '#92400E', fontStyle: 'italic' }}>"{detailBooking.feedback}"</AppText>
+                      </View>
+                    ) : null}
+                  </ScrollView>
                 </View>
 
                 {/* Modal footer actions */}
@@ -703,7 +706,7 @@ export default function HistoryScreen() {
                         />
                         {detailBooking.status === 'completed' && (
                           <Button
-                            title={detailBooking.rating ? 'Sửa đánh giá' : 'Đánh giá'}
+                            title="Đánh giá"
                             onPress={openReview}
                             style={styles.modalActionBtn}
                           />
@@ -767,8 +770,8 @@ export default function HistoryScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
-              <AppText variant="label" color="textSecondary" style={{ marginBottom: spacing.sm }}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <AppText variant="label" color="textSecondary" style={{ marginBottom: spacing.sm, textAlign: 'center' }}>
                 Chất lượng dịch vụ
               </AppText>
               <View style={styles.starRow}>
@@ -803,7 +806,7 @@ export default function HistoryScreen() {
                   <AppText variant="caption" color="error">{reviewError}</AppText>
                 </View>
               ) : null}
-            </View>
+            </ScrollView>
 
             <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -812,7 +815,7 @@ export default function HistoryScreen() {
                   title={reviewLoading ? 'Đang gửi...' : 'Gửi đánh giá'}
                   onPress={submitReview}
                   disabled={reviewLoading || reviewRating === 0}
-                  style={{ flex: 2 }}
+                  style={{ flex: 1 }}
                 />
               </View>
             </View>
@@ -1232,11 +1235,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalBody: {
+    flex: 1,
     padding: spacing.lg,
   },
   modalBodyLoading: {
     padding: 40,
     alignItems: 'center',
+  },
+  modalBodyScroll: {
+    flex: 1,
   },
   modalStatusRow: {
     marginBottom: spacing.md,
@@ -1292,8 +1299,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   star: {
-    fontSize: 36,
+    fontSize: 28,
   },
+
   reviewInput: {
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
