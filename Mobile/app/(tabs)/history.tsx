@@ -136,13 +136,6 @@ export default function HistoryScreen() {
     fetchBookings();
   };
 
-  // Stats
-  const stats = useMemo(() => {
-    const s = { total: bookings.length, pending: 0, confirmed: 0, completed: 0, cancelled: 0 };
-    bookings.forEach(b => { if (s[b.status] !== undefined) s[b.status]++; });
-    return s;
-  }, [bookings]);
-
   // Bookmarks by date
   const bookingsByDate = useMemo(() => {
     const map: Record<string, Booking[]> = {};
@@ -419,21 +412,6 @@ export default function HistoryScreen() {
           keyExtractor={() => 'main'}
           renderItem={() => (
             <View>
-              {/* Stats bar */}
-              <View style={styles.statsRow}>
-                {[
-                  { label: 'Chờ xác nhận', value: stats.pending, color: '#F59E0B', bg: '#FFFBEB' },
-                  { label: 'Đã xác nhận', value: stats.confirmed, color: '#3B82F6', bg: '#EFF6FF' },
-                  { label: 'Hoàn thành', value: stats.completed, color: '#16A34A', bg: '#ECFDF5' },
-                  { label: 'Đã hủy', value: stats.cancelled, color: '#6B7280', bg: '#F9FAFB' },
-                ].map(s => (
-                  <View key={s.label} style={[styles.statCard, { backgroundColor: s.bg, borderColor: s.color + '20' }]}>
-                    <AppText style={[styles.statLabel, { color: s.color }]}>{s.label}</AppText>
-                    <AppText style={[styles.statValue, { color: s.color }]}>{s.value}</AppText>
-                  </View>
-                ))}
-              </View>
-
               {/* View toggle */}
               <View style={[styles.toggleRow, { backgroundColor: colors.surfaceDark }]}>
                 <TouchableOpacity
@@ -649,15 +627,15 @@ export default function HistoryScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDetailBooking(null)}>
           <TouchableOpacity style={[styles.modalContent, { backgroundColor: colors.background }]} activeOpacity={1}>
             {/* Modal header */}
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: '#0F172A' }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
               <View>
-                <AppText variant="h4" color="textInverse">Chi tiết đặt lịch</AppText>
-                <AppText variant="caption" style={{ color: '#94A3B8', marginTop: 2 }}>
+                <AppText variant="h4" color="textPrimary">Chi tiết đặt lịch</AppText>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
                   #{detailBooking?._id.slice(-8).toUpperCase()}
                 </AppText>
               </View>
-              <TouchableOpacity onPress={() => setDetailBooking(null)} style={[styles.modalCloseBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]} activeOpacity={0.7}>
-                <Icon name={Icons.close} size={18} color="#FFF" />
+              <TouchableOpacity onPress={() => setDetailBooking(null)} style={[styles.modalCloseBtn, { backgroundColor: colors.surfaceDark }]} activeOpacity={0.7}>
+                <Icon name={Icons.close} size={18} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
 
@@ -846,15 +824,15 @@ export default function HistoryScreen() {
       <Modal visible={showRebook} transparent animationType="slide" onRequestClose={() => setShowRebook(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { if (!rebookLoading) { setShowRebook(false); setRebookError(''); } }}>
           <TouchableOpacity style={[styles.rebookModal, { backgroundColor: colors.background }]} activeOpacity={1}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: '#0F172A' }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
               <View>
-                <AppText variant="h4" color="textInverse">Đặt lại lịch</AppText>
-                <AppText variant="caption" style={{ color: '#94A3B8', marginTop: 2 }}>
+                <AppText variant="h4" color="textPrimary">Đặt lại lịch</AppText>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
                   {typeof detailBooking?.packageId === 'object' ? (detailBooking.packageId as any).name : ''}
                 </AppText>
               </View>
-              <TouchableOpacity onPress={() => { setShowRebook(false); setRebookError(''); }} style={[styles.modalCloseBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]} activeOpacity={0.7}>
-                <Icon name={Icons.close} size={18} color="#FFF" />
+              <TouchableOpacity onPress={() => { setShowRebook(false); setRebookError(''); }} style={[styles.modalCloseBtn, { backgroundColor: colors.surfaceDark }]} activeOpacity={0.7}>
+                <Icon name={Icons.close} size={18} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
 
@@ -994,29 +972,6 @@ const styles = StyleSheet.create({
   },
   skeletonCard: {
     marginBottom: spacing.sm,
-  },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.screenPadding,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: borderRadius.lg,
-    padding: spacing.sm,
-    borderWidth: 1,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
   },
 
   // View toggle
