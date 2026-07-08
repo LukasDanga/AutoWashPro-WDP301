@@ -175,11 +175,6 @@ export default function HistoryScreen() {
     return days;
   }, [viewYear, viewMonth]);
 
-  const selectedDateBookings = useMemo(() => {
-    if (!selectedDate) return [];
-    return bookingsByDate[localDateKey(selectedDate)] || [];
-  }, [selectedDate, bookingsByDate]);
-
   // Navigation
   const prevMonth = useCallback(() => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
@@ -325,10 +320,7 @@ export default function HistoryScreen() {
 
   const renderBookingItem = useCallback((b: Booking) => {
     const branchName = typeof b.branchId === 'object' ? (b.branchId as any).name : '';
-    const packageName = typeof b.packageId === 'object' ? (b.packageId as any).name : '';
-    const dateObj = parseISO(b.bookingDate);
-    const dayLabel = !isNaN(dateObj.getTime()) ? format(dateObj, 'dd', { locale: vi }) : '';
-    const monthLabel = !isNaN(dateObj.getTime()) ? format(dateObj, 'MMM', { locale: vi }).toUpperCase() : '';
+    const packageName = typeof b.packageId === 'object' ? (b.packageId as any).name : 'Dịch vụ';
     const vehiclePlate = typeof b.vehicleId === 'object' ? (b.vehicleId as any).licensePlate : '';
 
     return (
@@ -341,38 +333,45 @@ export default function HistoryScreen() {
         accessibilityLabel={`Đặt lịch ${packageName}`}
       >
         <Card style={styles.bookingCard}>
-          <View style={styles.bookingRow}>
-            <View style={[styles.dateBlock, { backgroundColor: getStatusBg(b.status, colors) }]}>
-              <AppText style={[styles.dateBlockDay, { color: getStatusFg(b.status, colors) }]}>{dayLabel}</AppText>
-              <AppText style={[styles.dateBlockMonth, { color: getStatusFg(b.status, colors) }]}>{monthLabel}</AppText>
+          {/* Top: icon + package + status */}
+          <View style={styles.visCardTop}>
+            <View style={styles.visPackageRow}>
+              <View style={[styles.visIconCircle, { backgroundColor: getStatusBg(b.status, colors) }]}>
+                <Icon name={Icons.carOutline} size={13} color={getStatusFg(b.status, colors)} />
+              </View>
+              <AppText variant="bodySmall" color="textPrimary" style={styles.visPackageName} numberOfLines={1}>
+                {packageName}
+              </AppText>
             </View>
-            <View style={styles.bookingInfo}>
-              <View style={styles.bookingHeaderRow}>
-                <AppText variant="body" style={styles.bookingTitle} numberOfLines={1}>
-                  {packageName}
-                </AppText>
-                <BookingStatusBadge status={b.status} />
+            <BookingStatusBadge status={b.status} />
+          </View>
+
+          {/* Branch */}
+          <View style={styles.visInfoLine}>
+            <Icon name={Icons.locationOutline} size={11} color={colors.textTertiary} />
+            <AppText variant="caption" color="textSecondary" numberOfLines={1} style={styles.visInfoText}>
+              {branchName}
+            </AppText>
+          </View>
+
+          {/* Time + date */}
+          <View style={styles.visInfoLine}>
+            <Icon name={Icons.timeOutline} size={11} color={colors.textTertiary} />
+            <AppText variant="caption" color="textSecondary" style={styles.visInfoText}>
+              {b.startTime} · {format(parseISO(b.bookingDate), 'dd/MM/yyyy')}
+            </AppText>
+          </View>
+
+          {/* Bottom: plate + price */}
+          <View style={styles.visCardBottom}>
+            {vehiclePlate ? (
+              <View style={styles.visPlateTag}>
+                <AppText style={styles.visPlateText}>{vehiclePlate}</AppText>
               </View>
-              <View style={styles.bookingMetaRow}>
-                <Icon name={Icons.locationOutline} size={12} color={colors.textTertiary} />
-                <AppText variant="caption" color="textTertiary" numberOfLines={1} style={styles.flex1}>
-                  {branchName}
-                </AppText>
-              </View>
-              <View style={styles.bookingMetaRow}>
-                <Icon name={Icons.timeOutline} size={12} color={colors.textSecondary} />
-                <AppText variant="caption" color="textSecondary">{b.startTime}</AppText>
-                <View style={[styles.metaDot, { backgroundColor: colors.divider }]} />
-                <AppText variant="caption" color="textSecondary">{formatCurrency(b.finalPrice)}</AppText>
-                {vehiclePlate ? (
-                  <>
-                    <View style={[styles.metaDot, { backgroundColor: colors.divider }]} />
-                    <AppText variant="caption" color="textSecondary" numberOfLines={1}>{vehiclePlate}</AppText>
-                  </>
-                ) : null}
-              </View>
-            </View>
-            <Icon name={Icons.forward} size={18} color={colors.textTertiary} />
+            ) : <View />}
+            <AppText variant="bodySmall" color="primary" style={styles.visPrice}>
+              {formatCurrency(b.finalPrice)}
+            </AppText>
           </View>
         </Card>
       </PressableScale>
@@ -474,7 +473,7 @@ export default function HistoryScreen() {
                       return (
                         <TouchableOpacity
                           key={idx}
-                          onPress={() => setSelectedDate(day.date)}
+                          onPress={() => router.push(`/history/${localDateKey(day.date)}` as any)}
                           style={[
                             styles.dayCell,
                             {
@@ -510,61 +509,7 @@ export default function HistoryScreen() {
                     })}
                   </View>
 
-                  {/* Selected date panel */}
-                  {selectedDate && (
-                    <View style={[styles.selectedPanel, { borderTopColor: colors.border }]}>
-                      <View style={[styles.selectedPanelHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-                        <View>
-                          <AppText variant="body" color="textPrimary" style={{ fontWeight: '700' }}>
-                            {selectedDate.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } as any)}
-                          </AppText>
-                          <AppText variant="caption" color="textSecondary">
-                            {selectedDateBookings.length > 0 ? `${selectedDateBookings.length} lịch đặt` : 'Không có lịch đặt'}
-                          </AppText>
-                        </View>
-                        <TouchableOpacity onPress={() => setSelectedDate(null)} style={styles.closeBtn} activeOpacity={0.7}>
-                          <Icon name={Icons.close} size={16} color={colors.textTertiary} />
-                        </TouchableOpacity>
-                      </View>
 
-                      {selectedDateBookings.length === 0 ? (
-                        <View style={styles.emptyDay}>
-                          <AppText variant="caption" color="textTertiary">Không có lịch đặt nào trong ngày này.</AppText>
-                        </View>
-                      ) : (
-                        <View style={styles.dayBookingsList}>
-                          {selectedDateBookings.map(b => (
-                            <TouchableOpacity
-                              key={b._id}
-                              onPress={() => { setDetailBooking(b); loadDetail(b._id); }}
-                              style={[styles.dayBookingCard, { backgroundColor: colors.background }]}
-                              activeOpacity={0.7}
-                            >
-                              <View style={styles.dayBookingTop}>
-                                <View style={styles.dayBookingInfo}>
-                                  <AppText variant="body" color="textPrimary" numberOfLines={1}>
-                                    {typeof b.packageId === 'object' ? (b.packageId as any).name : 'Dịch vụ'}
-                                  </AppText>
-                                  <AppText variant="caption" color="textSecondary">
-                                    {typeof b.branchId === 'object' ? (b.branchId as any).name : ''} · {b.startTime}
-                                  </AppText>
-                                </View>
-                                <BookingStatusBadge status={b.status} />
-                              </View>
-                              <View style={styles.dayBookingBottom}>
-                                <AppText variant="caption" color="textTertiary">
-                                  {typeof b.vehicleId === 'object' ? (b.vehicleId as any).licensePlate : ''}
-                                </AppText>
-                                <AppText variant="body" color="primary" style={{ fontWeight: '700' }}>
-                                  {formatCurrency(b.finalPrice)}
-                                </AppText>
-                              </View>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                  )}
                 </View>
               )}
 
@@ -1080,58 +1025,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Selected date panel
-  selectedPanel: {
-    borderTopWidth: 2,
-    maxHeight: 280,
-  },
-  selectedPanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyDay: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  dayBookingsList: {
-    padding: spacing.sm,
-    gap: spacing.sm,
-  },
-  dayBookingCard: {
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  dayBookingTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  dayBookingInfo: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  dayBookingBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
   // List view filters
   filterRow: {
     paddingVertical: spacing.sm,
@@ -1154,55 +1047,67 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     marginBottom: spacing.sm,
+    padding: spacing.md,
   },
-  bookingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  dateBlock: {
-    width: 52,
-    height: 60,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xs,
-  },
-  dateBlockDay: {
-    fontSize: 18,
-    fontWeight: '800',
-    lineHeight: 20,
-  },
-  dateBlockMonth: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  bookingInfo: {
-    flex: 1,
-  },
-  bookingHeaderRow: {
+
+  // -- Compact card --
+  visCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
-    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  bookingTitle: {
-    fontWeight: '600',
-    flex: 1,
-  },
-  bookingMetaRow: {
+  visPackageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
+    gap: spacing.sm,
+    flex: 1,
+    marginRight: spacing.sm,
   },
-  metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
+  visIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  flex1: { flex: 1 },
+  visPackageName: {
+    fontWeight: '700',
+    flex: 1,
+  },
+  visInfoLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 3,
+  },
+  visInfoText: {
+    fontSize: 11,
+  },
+  visCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  visPlateTag: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  visPlateText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 10,
+  },
+  visPrice: {
+    fontWeight: '800',
+    fontSize: 14,
+  },
 
   // Modal base
   modalOverlay: {

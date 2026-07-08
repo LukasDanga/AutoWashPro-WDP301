@@ -57,6 +57,7 @@ function RootLayoutContent() {
         <Stack.Screen name="payment" options={{ headerShown: false }} />
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="checkin" options={{ headerShown: false }} />
+        <Stack.Screen name="history" options={{ headerShown: false }} />
       </Stack>
     </>
   );
