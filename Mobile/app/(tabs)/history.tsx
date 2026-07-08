@@ -598,27 +598,33 @@ export default function HistoryScreen() {
                   </View>
 
                   {detailInfoRows(detailBooking, colors).map(([label, value]) => (
-                    <View key={label} style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+                    <View key={label} style={styles.infoRow}>
                       <AppText variant="caption" color="textSecondary">{label}</AppText>
                       <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{value}</AppText>
                     </View>
                   ))}
 
-                  {detailBooking.feedback ? (
-                    <View style={[styles.feedbackBox, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
-                      <AppText variant="caption" style={{ color: '#D97706', fontWeight: '700', marginBottom: 4 }}>⭐ Đánh giá</AppText>
-                      <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
-                        {[1, 2, 3, 4, 5].map(s => (
-                          <AppText key={s} style={{ color: s <= (detailBooking.rating || 0) ? '#F59E0B' : '#D1D5DB' }}>★</AppText>
-                        ))}
+                  {detailBooking.rating ? (
+                    <View style={[styles.ratingBox]}>
+                      <View style={styles.ratingRow}>
+                        <AppText variant="caption" color="textSecondary" style={{ marginRight: 6, fontWeight: '500' }}>Đánh giá</AppText>
+                        <View style={{ flexDirection: 'row', gap: 1 }}>
+                          {[1, 2, 3, 4, 5].map(s => (
+                            <AppText key={s} style={{ fontSize: 14, color: s <= (detailBooking.rating || 0) ? '#F59E0B' : '#E2E8F0' }}>★</AppText>
+                          ))}
+                        </View>
                       </View>
-                      <AppText variant="caption" style={{ color: '#92400E', fontStyle: 'italic' }}>"{detailBooking.feedback}"</AppText>
+                      {detailBooking.feedback ? (
+                        <AppText variant="caption" color="textTertiary" style={{ fontStyle: 'italic', marginTop: 4, lineHeight: 18 }}>
+                          "{detailBooking.feedback}"
+                        </AppText>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
 
                 {/* Modal footer actions */}
-                <View style={[styles.modalFooter, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+                <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
                   {(detailBooking.status === 'pending' || detailBooking.status === 'confirmed') && (
                     <View style={{ gap: spacing.sm }}>
                       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -627,7 +633,6 @@ export default function HistoryScreen() {
                           variant="outline"
                           onPress={handleCancel}
                           style={styles.modalActionBtn}
-                          textStyle={{ color: colors.error }}
                         />
                         <Button
                           title="QR Check-in"
@@ -645,7 +650,6 @@ export default function HistoryScreen() {
                           variant="outline"
                           onPress={handleRebook}
                           style={styles.modalActionBtn}
-                          textStyle={{ color: colors.success }}
                         />
                         {detailBooking.status === 'completed' && (
                           <Button
@@ -1151,18 +1155,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: spacing.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   infoValue: {
     fontWeight: '600',
     textAlign: 'right',
     maxWidth: '60%',
   },
-  feedbackBox: {
+  ratingBox: {
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.md,
+    backgroundColor: 'transparent',
     borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   modalFooter: {
     padding: spacing.lg,
