@@ -14,6 +14,7 @@ const METHOD_MAP = {
   cash: 'Tiền mặt',
   momo: 'Momo',
   vnpay: 'VNPay',
+  bank: 'Ngân hàng',
 };
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
@@ -134,7 +135,7 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-semibold text-slate-800">
-                          {booking?.branchId?.name || booking?.branchName || 'Thanh toán'}
+                          {booking?.packageId?.name || booking?.packageName || booking?.branchId?.name || booking?.branchName || 'Thanh toán'}
                         </span>
                         <StatusBadge status={p.status} />
                       </div>
@@ -143,6 +144,11 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                         {booking?.startTime ? ` ${booking.startTime}` : ''}
                         {p.method && ` · ${METHOD_MAP[p.method] || p.method}`}
                       </p>
+                      {p.paymentType === 'deposit' && booking?.finalPrice && (
+                        <p className="text-xs text-amber-600 font-semibold mt-1.5">
+                          Đặt cọc 30% · Còn lại {formatCurrency(Math.max(0, (booking.finalPrice || 0) - (p.amount || 0)))}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-emerald-600">{formatCurrency(p.amount)}</p>
@@ -211,6 +217,10 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                   <div className="mt-4 pt-4 border-t border-slate-200">
                     <p className="text-xs font-semibold text-slate-500 mb-2">THÔNG TIN ĐẶT LỊCH</p>
                     <div className="flex justify-between py-1.5">
+                      <span className="text-xs text-slate-500">Dịch vụ</span>
+                      <span className="text-sm text-slate-700 text-right">{detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Ngày</span>
                       <span className="text-sm text-slate-700">{detailPayment.bookingId.bookingDate ? formatDate(detailPayment.bookingId.bookingDate) : '—'}</span>
                     </div>
@@ -222,10 +232,18 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                       <span className="text-xs text-slate-500">Chi nhánh</span>
                       <span className="text-sm text-slate-700">{detailPayment.bookingId.branchId?.name || detailPayment.bookingId.branchName || '—'}</span>
                     </div>
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-xs text-slate-500">Dịch vụ</span>
-                      <span className="text-sm text-slate-700">{detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}</span>
-                    </div>
+                    {detailPayment.paymentType === 'deposit' && (
+                      <>
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-xs text-amber-600 font-semibold">Đặt cọc</span>
+                          <span className="text-sm font-bold text-amber-600">{formatCurrency(detailPayment.amount)}</span>
+                        </div>
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-xs text-slate-500">Còn lại (thanh toán sau)</span>
+                          <span className="text-sm text-slate-700">{formatCurrency(Math.max(0, (detailPayment.bookingId.finalPrice || 0) - (detailPayment.amount || 0)))}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

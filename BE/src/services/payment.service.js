@@ -327,7 +327,7 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
   await Payment.updateMany({ viewedAt: null, createdAt: { $lte: expiry } }, { viewedAt: expiry });
 
   return Payment.find(query)
-    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status branchId' })
+    .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
     .populate('userId', 'name email phone')
     .sort({ createdAt: -1 });
 };

@@ -53,7 +53,7 @@ export default function MapSection({ onSelectBranch }) {
           hours: (b.openingTime || '07:00') + ' - ' + (b.closingTime || '18:00'),
           cx: b.mapCoordinates?.svgCx || 0,
           cy: b.mapCoordinates?.svgCy || 0,
-        })).filter(b => b.cx && b.cy);
+        }));
         setBranches(list);
         setCities(getCities(list));
       })

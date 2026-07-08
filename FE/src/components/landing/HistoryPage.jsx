@@ -499,6 +499,11 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-bold text-emerald-600">{formatCurrency(b.finalPrice)}</span>
+                              {b.depositAmount > 0 && (
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${b.depositPaid ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                                  {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
+                                </span>
+                              )}
                               {canReview && (
                                 <button onClick={(e) => { e.stopPropagation(); openReview(b); }}
                                   className="text-amber-500 hover:text-amber-600 text-[11px] font-semibold border-none bg-transparent cursor-pointer">
@@ -685,6 +690,11 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-bold text-emerald-600">{formatCurrency(b.finalPrice)}</p>
+                          {b.depositAmount > 0 && (
+                            <span className={`inline-block mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${b.depositPaid ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                              {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">

@@ -137,6 +137,11 @@ async function main() {
 
   // ── 2. BRANCHES ───────────────────────────────────────────────────────────
   console.log('Seeding branches…');
+
+  // HCMC province SVG path starts at m 245.76,700.6
+  const SVG_CX = [247, 253, 250, 244, 241];
+  const SVG_CY = [708, 703, 706, 702, 707];
+
   const branchData = [
     { name: 'AutoWash Pro Quận 1',      addr: '123 Nguyễn Thị Minh Khai, Phường 2, Quận 1, TP.HCM',          phone: '028 3822 1111', email: 'q1@autowashpro.vn',       coords: [106.6920, 10.7769], close: '19:00' },
     { name: 'AutoWash Pro Thủ Đức',     addr: '456 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP.HCM',     phone: '028 3720 2222', email: 'thuduc@autowashpro.vn',    coords: [106.7690, 10.8504], close: '20:00' },
@@ -149,7 +154,9 @@ async function main() {
     _id: branchIds[i], name: b.name, address: b.addr, phone: b.phone,
     email: b.email, openingTime: '07:00', closingTime: b.close,
     status: 'active', managerId: mgrIds[i],
+    city: 'Hồ Chí Minh',
     location: { type: 'Point', coordinates: b.coords },
+    mapCoordinates: { svgCx: SVG_CX[i], svgCy: SVG_CY[i] },
   })));
 
   // ── 3. PACKAGES (4 per branch) ───────────────────────────────────────────

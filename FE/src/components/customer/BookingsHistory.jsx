@@ -644,7 +644,17 @@ export default function BookingsHistory({ apiBase, token }) {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {b.depositAmount > 0 && (
+                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                              background: b.depositPaid ? '#ecfdf5' : '#fffbeb', color: b.depositPaid ? '#059669' : '#d97706',
+                              border: b.depositPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
+                            }}>
+                              {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
+                        </div>
                       </div>
                       <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                     </div>
@@ -698,7 +708,7 @@ export default function BookingsHistory({ apiBase, token }) {
                 ['🏢 Chi nhánh', detailBooking.branchName || detailBooking.branchId?.name || '—'],
                 ['🪪 Biển số', detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || '—'],
                 ['💰 Thành tiền', formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)],
-                ['💳 Thanh toán', detailBooking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'],
+                ['💳 Thanh toán', detailBooking.paymentStatus === 'paid' || detailBooking.paymentStatus === 'deposit_paid' ? 'Đã thanh toán' : 'Chưa thanh toán'],
                 ['📍 Loại đặt', detailBooking.bookingType === 'recurring' ? 'Định kỳ' : detailBooking.bookingType === 'slot_pack_usage' ? 'Gói lượt' : '1 lần'],
               ].map(([label, value]) => (
                 <div key={label} style={{
@@ -709,6 +719,26 @@ export default function BookingsHistory({ apiBase, token }) {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
                 </div>
               ))}
+
+              {detailBooking.depositAmount > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 13, color: '#d97706', fontWeight: 600 }}>🔒 Đặt cọc {Math.round((detailBooking.depositAmount || 0) / ((detailBooking.totalAmount || detailBooking.finalPrice || 1)) * 100)}%</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>{formatCurrency(detailBooking.depositAmount)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 13, color: '#64748b' }}>📋 Còn lại (thanh toán sau)</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>{formatCurrency(Math.max(0, (detailBooking.totalAmount || detailBooking.finalPrice || 0) - (detailBooking.depositAmount || 0)))}</span>
+                  </div>
+                  {detailBooking.depositPaid && (
+                    <div style={{ marginTop: 8, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 700, border: '1px solid #a7f3d0' }}>
+                        ✅ Đã đặt cọc {formatCurrency(detailBooking.depositAmount)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Feedback */}
               {detailBooking.feedback && (
@@ -1178,7 +1208,17 @@ export default function BookingsHistory({ apiBase, token }) {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {b.depositAmount > 0 && (
+                        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                          background: b.depositPaid ? '#ecfdf5' : '#fffbeb', color: b.depositPaid ? '#059669' : '#d97706',
+                          border: b.depositPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
+                        }}>
+                          {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
+                    </div>
                   </div>
                   <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                   {(b.status === 'completed' || b.status === 'cancelled') && (
