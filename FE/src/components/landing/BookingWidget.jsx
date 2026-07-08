@@ -328,7 +328,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         points: pb.tab === 'recurring' ? points * (booking?.totalCreated || 1) : points,
         isPayingWithPack: false,
         bookingCode: code,
-        subServices: pb.selectedSubServices || [],
+        subServices: (pb.selectedSubServices || []).map(n => {
+          const s = pkg?.subServices?.find(x => x.name === n);
+          return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+        }),
         recurringCount: pb.tab === 'recurring' ? booking?.totalCreated || 0 : undefined,
         depositAmount: booking?.depositAmount || 0,
         depositPaid: booking?.depositPaid || false,
@@ -577,7 +580,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         branch: selectedBranch, vehicle, pkg, currentDate, selectedTime,
         total, discount, points, isPayingWithPack,
         bookingCode: booking?.bookingCode || booking?.code || '',
-        subServices: currentSubServices,
+        subServices: (currentSubServices || []).map(n => {
+          const s = pkg?.subServices?.find(x => x.name === n);
+          return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+        }),
         depositAmount: booking?.depositAmount || 0,
         depositPaid: booking?.depositPaid || false,
       });
@@ -638,7 +644,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           points: points * resultData.totalCreated,
           isPayingWithPack: false,
           bookingCode: resultData.recurringGroupId || '',
-          subServices: currentSubServices,
+          subServices: (currentSubServices || []).map(n => {
+            const s = pkg?.subServices?.find(x => x.name === n);
+            return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+          }),
           recurringCount: resultData.totalCreated,
           depositAmount: resultData.depositAmount || 0,
           depositPaid: resultData.depositPaid || false,
@@ -1694,16 +1703,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
                   <div className="flex justify-between py-3">
-                    <span className="text-slate-400 text-xs font-semibold">Gói dịch vụ</span>
-                    <span className="font-bold text-slate-700 text-sm">{lastBooking.pkg?.name}</span>
-                  </div>
-                  {lastBooking.subServices?.length > 0 && (
-                    <div className="flex justify-between py-3 text-right">
-                      <span className="text-slate-400 text-xs font-semibold shrink-0">Dịch vụ phụ</span>
-                      <span className="font-bold text-slate-700 text-sm pl-4">{lastBooking.subServices.join(', ')}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-3">
                     <span className="text-slate-400 text-xs font-semibold">Thời gian hẹn</span>
                     <span className="font-bold text-slate-700 text-sm">
                       {lastBooking.currentDate
@@ -1711,27 +1710,54 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
                     </span>
                   </div>
-                  {lastBooking.depositPaid ? (
-                    <>
-                      <div className="flex justify-between py-2">
-                        <span className="text-slate-400 text-xs font-semibold">Tổng dịch vụ</span>
-                        <span className="font-bold text-slate-700">{formatCurrency(lastBooking.total || 0)}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-amber-600 font-semibold text-xs">Đặt cọc (30%)</span>
-                        <span className="font-bold text-amber-600">{formatCurrency(lastBooking.depositAmount || 0)}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-slate-400 font-semibold text-xs">Còn lại (thanh toán sau)</span>
-                        <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, (lastBooking.total || 0) - (lastBooking.depositAmount || 0)))}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex justify-between items-center py-4">
-                      <span className="font-bold text-sm text-slate-500">Tổng thanh toán</span>
-                      <span className="font-black text-lg text-emerald-600">{formatCurrency(lastBooking.total)}</span>
+
+                  {/* Bill Section */}
+                  <div className="bg-slate-50/60 -mx-6 px-6 py-4 space-y-2.5 mt-2">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIẾT THANH TOÁN</div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600 text-sm">{lastBooking.pkg?.name}</span>
+                      <span className="font-bold text-slate-800 text-sm">{formatCurrency(lastBooking.pkg?.price || 0)}</span>
                     </div>
-                  )}
+
+                    {lastBooking.subServices?.filter(s => s).map((svc, i) => {
+                      const n = typeof svc === 'string' ? svc : svc?.name;
+                      const p = typeof svc === 'object' && svc !== null ? (svc.price || 0) : 0;
+                      return (
+                        <div className="flex justify-between items-center" key={i}>
+                          <span className="text-slate-500 text-xs pl-3">+ {n}</span>
+                          <span className="font-bold text-slate-600 text-xs">{p > 0 ? formatCurrency(p) : 'Miễn phí'}</span>
+                        </div>
+                      );
+                    })}
+
+                    {lastBooking.discount > 0 && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-emerald-600 font-semibold">Giảm giá</span>
+                        <span className="font-bold text-emerald-600">-{formatCurrency(lastBooking.discount)}</span>
+                      </div>
+                    )}
+
+                    <div className="!mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
+                      <span className="font-bold text-sm text-slate-700">Tổng dịch vụ</span>
+                      <span className="font-extrabold text-base text-emerald-600">{formatCurrency(lastBooking.total || 0)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-1">
+                      <div>
+                        <span className="font-semibold text-sm text-amber-600">Đặt cọc (30%)</span>
+                        {lastBooking.depositPaid && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ĐÃ CỌC</span>
+                        )}
+                      </div>
+                      <span className="font-bold text-base text-amber-600">{formatCurrency(lastBooking.depositAmount || 0)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400 font-medium">Còn lại (thanh toán sau)</span>
+                      <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, (lastBooking.total || 0) - (lastBooking.depositAmount || 0)))}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
