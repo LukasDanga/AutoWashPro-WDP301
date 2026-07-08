@@ -652,26 +652,24 @@ export default function HistoryScreen() {
                     <BookingStatusBadge status={detailBooking.status} />
                   </View>
 
-                  <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
-                    {detailInfoRows(detailBooking, colors).map(([label, value]) => (
-                      <View key={label} style={[styles.infoRow, { borderBottomColor: colors.border }]}>
-                        <AppText variant="caption" color="textSecondary">{label}</AppText>
-                        <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{value}</AppText>
-                      </View>
-                    ))}
+                  {detailInfoRows(detailBooking, colors).map(([label, value]) => (
+                    <View key={label} style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+                      <AppText variant="caption" color="textSecondary">{label}</AppText>
+                      <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{value}</AppText>
+                    </View>
+                  ))}
 
-                    {detailBooking.feedback ? (
-                      <View style={[styles.feedbackBox, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
-                        <AppText variant="caption" style={{ color: '#D97706', fontWeight: '700', marginBottom: 4 }}>⭐ Đánh giá</AppText>
-                        <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
-                          {[1, 2, 3, 4, 5].map(s => (
-                            <AppText key={s} style={{ color: s <= (detailBooking.rating || 0) ? '#F59E0B' : '#D1D5DB' }}>★</AppText>
-                          ))}
-                        </View>
-                        <AppText variant="caption" style={{ color: '#92400E', fontStyle: 'italic' }}>"{detailBooking.feedback}"</AppText>
+                  {detailBooking.feedback ? (
+                    <View style={[styles.feedbackBox, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
+                      <AppText variant="caption" style={{ color: '#D97706', fontWeight: '700', marginBottom: 4 }}>⭐ Đánh giá</AppText>
+                      <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <AppText key={s} style={{ color: s <= (detailBooking.rating || 0) ? '#F59E0B' : '#D1D5DB' }}>★</AppText>
+                        ))}
                       </View>
-                    ) : null}
-                  </ScrollView>
+                      <AppText variant="caption" style={{ color: '#92400E', fontStyle: 'italic' }}>"{detailBooking.feedback}"</AppText>
+                    </View>
+                  ) : null}
                 </View>
 
                 {/* Modal footer actions */}
@@ -1235,15 +1233,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalBody: {
-    flex: 1,
     padding: spacing.lg,
   },
   modalBodyLoading: {
     padding: 40,
     alignItems: 'center',
-  },
-  modalBodyScroll: {
-    flex: 1,
   },
   modalStatusRow: {
     marginBottom: spacing.md,
