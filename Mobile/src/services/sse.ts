@@ -178,7 +178,11 @@ class SSEService {
         this.scheduleReconnect();
       }
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
+      if (
+        err?.name === 'AbortError' ||
+        err?.message?.includes('canceled') ||
+        err?.message?.includes('fetch failed')
+      ) {
         this.isConnected = false;
         return;
       }

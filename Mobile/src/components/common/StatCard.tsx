@@ -89,7 +89,7 @@ export const StatCard: React.FC<StatCardProps> = ({
     >
       {icon ? (
         <View style={[styles.iconWrap, { backgroundColor: c.bg }]}>
-          <Icon name={icon} size={compact ? 18 : 22} color={c.iconColor} />
+          <Icon name={icon} size={compact ? 16 : 18} color={c.iconColor} />
         </View>
       ) : null}
       <View style={styles.body}>
@@ -120,19 +120,19 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    padding: 16,
-  },
-  cardCompact: {
+    borderRadius: 14,
     padding: 12,
   },
+  cardCompact: {
+    padding: 10,
+  },
   iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 10,
   },
   body: {
     flex: 1,
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   value: {
-    ...typography.h3,
+    fontSize: 14,
     fontWeight: '700',
   },
   trendRow: {
