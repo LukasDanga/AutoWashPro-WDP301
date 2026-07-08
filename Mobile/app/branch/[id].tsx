@@ -195,6 +195,7 @@ export default function BranchDetailScreen() {
               onPress={handleCall}
               bg={colors.primarySubtle}
               fg={colors.primary}
+              styles={styles}
             />
             <QuickAction
               icon={Icons.mapOutline}
@@ -202,6 +203,7 @@ export default function BranchDetailScreen() {
               onPress={handleDirections}
               bg={colors.infoLight}
               fg={colors.info}
+              styles={styles}
             />
             <QuickAction
               icon={Icons.share}
@@ -209,6 +211,7 @@ export default function BranchDetailScreen() {
               onPress={handleShare}
               bg={colors.successLight}
               fg={colors.success}
+              styles={styles}
             />
           </View>
         </Card>
@@ -367,7 +370,7 @@ interface QuickActionProps {
   fg: string;
 }
 
-const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onPress, bg, fg }) => {
+const QuickAction: React.FC<QuickActionProps & { styles: any }> = ({ icon, label, onPress, bg, fg, styles }) => {
   return (
     <PressableScale
       onPress={onPress}
