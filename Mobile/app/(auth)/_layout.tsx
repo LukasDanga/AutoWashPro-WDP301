@@ -4,7 +4,8 @@
  */
 
 import { Stack } from 'expo-router';
-import { SafeAreaView, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 
 export default function AuthLayout() {

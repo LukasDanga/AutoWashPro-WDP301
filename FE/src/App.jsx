@@ -116,14 +116,8 @@ export default function App() {
       return;
     }
 
-    loadSession(token).then((profile) => {
-      if (profile?.role === 'admin') {
-        navigate('/admin', { replace: true });
-      } else if (profile?.role === 'manager') {
-        navigate('/manager', { replace: true });
-      }
-    });
-  }, [token, loadSession, navigate]);
+    loadSession(token);
+  }, [token, loadSession]);
 
   async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {
