@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthScreen from './components/AuthScreen.jsx';
 import LandingPage from './components/landing/LandingPage.jsx';
@@ -43,7 +43,7 @@ export default function App() {
     });
   }
 
-  async function loadSession(accessToken) {
+  const loadSession = useCallback(async (accessToken) => {
     if (!accessToken) return;
 
     setAuthLoading(true);
@@ -86,7 +86,7 @@ export default function App() {
     } finally {
       setAuthLoading(false);
     }
-  }
+  }, [apiBase]);
 
   function applySession(nextAccessToken, nextRefreshToken) {
     setToken(nextAccessToken);

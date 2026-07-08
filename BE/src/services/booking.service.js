@@ -38,7 +38,7 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
 
 // Khách có từ NO_SHOW_STRIKE_THRESHOLD lần bị hệ thống tự hủy trở lên phải cọc 100% (chống spam/no-show lặp lại)
-const getDepositRate = (user) => ((user?.noShowCount || 0) >= NO_SHOW_STRIKE_THRESHOLD ? STRIKE_DEPOSIT_RATE : DEPOSIT_RATE);
+const getDepositRate = () => DEPOSIT_RATE;
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
