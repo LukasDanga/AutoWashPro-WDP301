@@ -31,6 +31,12 @@ const bookingSchema = new mongoose.Schema(
     bookingType: { type: String, enum: ['single', 'recurring', 'slot_pack_usage'], default: 'single' },
     // UUID nhóm các booking trong 1 lần đặt định kỳ
     recurringGroupId: { type: String, index: true },
+    // Đánh dấu buổi đầu trong nhóm định kỳ (chỉ buổi này chịu cọc toàn nhóm)
+    isRecurringFirst: { type: Boolean, default: false },
+    // Vị trí của booking trong nhóm định kỳ (1..N)
+    recurringPosition: { type: Number, min: 1 },
+    // Tổng số buổi ban đầu của nhóm định kỳ
+    recurringTotal: { type: Number, min: 1 },
     // Priority dựa theo tier khách hàng: diamond=4, gold=3, silver=2, bronze=1
     priority: { type: Number, default: 1, min: 1, max: 4 },
     // Ref đến SlotPack nếu là slot_pack_usage
