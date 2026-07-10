@@ -77,7 +77,11 @@ exports.createPayment = catchAsync(async (req, res) => {
 exports.confirmBookings = catchAsync(async (req, res) => {
   const { ids } = req.body;
   const result = await bookingService.confirmBookings(ids, req.user.role, req.userId);
-  success(res, result, `Đã xác nhận ${result.confirmed} đơn`);
+  const parts = [`Đã xác nhận ${result.confirmed} đơn`];
+  if (result.skippedCount > 0) {
+    parts.push(`${result.skippedCount} đơn bị bỏ qua vì chưa đặt cọc`);
+  }
+  success(res, result, parts.join(' — '));
 });
 
 exports.confirmPayment = catchAsync(async (req, res) => {

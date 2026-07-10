@@ -202,26 +202,44 @@ export default function VouchersIndexScreen() {
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'available' && styles.tabActive]}
+          style={styles.tab}
           onPress={() => setActiveTab('available')}
         >
-          <AppText 
-            variant="body" 
-            color={activeTab === 'available' ? 'primary' : 'textSecondary'}
-          >
-            Ưu đãi
-          </AppText>
+          <View style={[styles.tabInner, activeTab === 'available' && styles.tabInnerActive]}>
+            <Icon
+              name={'gift-outline'}
+              size={18}
+              color={activeTab === 'available' ? colors.primary : colors.textSecondary}
+              style={styles.tabIcon}
+            />
+            <AppText
+              variant="body"
+              color={activeTab === 'available' ? 'primary' : 'textSecondary'}
+              style={styles.tabText}
+            >
+              Ưu đãi
+            </AppText>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'my' && styles.tabActive]}
+          style={styles.tab}
           onPress={() => setActiveTab('my')}
         >
-          <AppText 
-            variant="body" 
-            color={activeTab === 'my' ? 'primary' : 'textSecondary'}
-          >
-            Voucher của tôi
-          </AppText>
+          <View style={[styles.tabInner, activeTab === 'my' && styles.tabInnerActive]}>
+            <Icon
+              name={'pricetag-outline'}
+              size={18}
+              color={activeTab === 'my' ? colors.primary : colors.textSecondary}
+              style={styles.tabIcon}
+            />
+            <AppText
+              variant="body"
+              color={activeTab === 'my' ? 'primary' : 'textSecondary'}
+              style={styles.tabText}
+            >
+              Voucher của tôi
+            </AppText>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -263,10 +281,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabActive: {
-    borderBottomWidth: 2,
+  tabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 0,
     borderBottomColor: '#0286c8',
+  },
+  tabInnerActive: {
+    borderBottomWidth: 2,
+  },
+  tabIcon: {
+    marginRight: 6,
+  },
+  tabText: {
+    fontWeight: '600',
   },
   listContent: {
     padding: 16,

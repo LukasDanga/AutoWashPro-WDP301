@@ -11,6 +11,8 @@ export const getPackages = async (params?: {
   status?: 'active' | 'inactive';
   name?: string;
   branchId?: string;
+  category?: string;
+  limit?: number | 'all';
 }): Promise<Package[]> => {
   const response = await apiClient.get('/packages', { params });
   return response.data;

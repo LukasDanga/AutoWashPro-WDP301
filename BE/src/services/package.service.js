@@ -10,17 +10,24 @@ exports.getAllPackages = async (filters = {}) => {
   const query = { isDeleted: { $ne: true } };
   if (filters.status) query.status = filters.status;
   if (filters.branchId) query.branchId = filters.branchId;
+  if (filters.category) query.category = filters.category;
   if (filters.search) {
     query.name = { $regex: filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
   }
+  // `limit=all` (or 0) means "no pagination" — used by mobile booking flow
+  // which renders a small bounded list and we want the FULL catalog.
+  const wantAll = filters.limit === 'all' || filters.limit === 0 || filters.limit === '0';
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 9));
-  const skip = (page - 1) * limit;
+  const limit = wantAll ? 0 : Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 9));
+  const skip = wantAll ? 0 : (page - 1) * limit;
+  const find = Package.find(query).sort({ price: 1 });
+  if (skip) find.skip(skip);
+  if (limit) find.limit(limit);
   const [data, total] = await Promise.all([
-    Package.find(query).sort({ price: 1 }).skip(skip).limit(limit),
+    find,
     Package.countDocuments(query),
   ]);
-  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { data, pagination: { page, limit: limit || total, total, totalPages: wantAll ? 1 : Math.ceil(total / limit) } };
 };
 
 exports.getPackageById = async (id, userRole, userBranchId) => {

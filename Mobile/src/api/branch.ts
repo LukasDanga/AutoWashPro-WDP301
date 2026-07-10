@@ -34,7 +34,9 @@ export const getBranch = async (id: string): Promise<Branch> => {
 
 // Get packages for a branch
 export const getBranchPackages = async (branchId: string): Promise<Package[]> => {
-  const response = await apiClient.get('/packages', { params: { branchId, status: 'active' } });
+  // `limit: 'all'` so we receive the full branch-scoped catalog. The default
+  // BE limit is 9 which truncates to the cheapest 9 packages only.
+  const response = await apiClient.get('/packages', { params: { branchId, status: 'active', limit: 'all' } });
   return response.data;
 };
 
