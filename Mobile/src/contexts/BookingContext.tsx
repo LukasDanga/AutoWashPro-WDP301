@@ -68,6 +68,10 @@ interface BookingContextValue {
 
   selectedPackage: Package | null;
   setSelectedPackage: (p: Package | null) => void;
+  // Replace the package WITHOUT clearing downstream selections (branch,
+  // date, time). Use this when re-hydrating or auto-swapping to a
+  // branch-scoped variant of the same product.
+  replaceSelectedPackage: (p: Package | null) => void;
 
   selectedBranch: Branch | null;
   setSelectedBranch: (b: Branch | null) => void;
@@ -229,6 +233,12 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
     setSelectedTimeState(null);
   }, []);
 
+  const replaceSelectedPackage = useCallback((p: Package | null) => {
+    // Same as setSelectedPackageState — used by callers that already know
+    // the downstream selections are still valid (e.g. branch-scoped swap).
+    setSelectedPackageState(p);
+  }, []);
+
   const setSelectedBranch = useCallback((b: Branch | null) => {
     setSelectedBranchState(b);
     setSelectedDateState(null);
@@ -278,6 +288,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       setCategory,
       selectedPackage,
       setSelectedPackage,
+      replaceSelectedPackage,
       selectedBranch,
       setSelectedBranch,
       selectedVehicle,
@@ -301,6 +312,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       setCategory,
       selectedPackage,
       setSelectedPackage,
+      replaceSelectedPackage,
       selectedBranch,
       setSelectedBranch,
       selectedVehicle,

@@ -68,7 +68,7 @@ const ToastItem: React.FC<ToastItemProps> = ({
   onDismiss,
 }) => {
   const colors = useColors();
-  const translateY = useRef(new Animated.Value(-100)).current;
+  const translateY = useRef(new Animated.Value(100)).current;
   const opacityVal = useRef(new Animated.Value(0)).current;
   const [exiting, setExiting] = useState(false);
 
@@ -116,7 +116,7 @@ const ToastItem: React.FC<ToastItemProps> = ({
     if (!exiting) return;
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: -100,
+        toValue: 100,
         duration: duration.fast,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
@@ -229,7 +229,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
       <SafeAreaView
         pointerEvents="box-none"
         style={[styles.container, containerStyle]}
-        edges={['top']}
+        edges={['bottom']}
       >
         {toasts.map((t) => (
           <ToastItem key={t.id} {...t} onDismiss={hide} />
@@ -268,12 +268,16 @@ export const Toast = {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 0,
+    // Render at the bottom so we never overlap the top app bar / header
+    // (avatar + greeting + screen title) of any tab. The previous top
+    // position pushed the toast over "Chào buổi tối, Đồng!" on the home
+    // tab, which read like a glitch.
+    bottom: 0,
     left: 0,
     right: 0,
     zIndex: zIndex.toast,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingBottom: 12,
   },
   toast: {
     flexDirection: 'row',
