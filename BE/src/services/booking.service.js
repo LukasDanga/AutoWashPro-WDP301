@@ -38,7 +38,7 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
 
 // Khách có từ NO_SHOW_STRIKE_THRESHOLD lần bị hệ thống tự hủy trở lên phải cọc 100% (chống spam/no-show lặp lại)
-const getDepositRate = () => DEPOSIT_RATE;
+const getDepositRate = (user) => (user && user.noShowCount >= NO_SHOW_STRIKE_THRESHOLD) ? STRIKE_DEPOSIT_RATE : DEPOSIT_RATE;
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -692,6 +692,14 @@ exports.confirmBookings = async (ids, userRole, userId) => {
   const confirmed = results
     .filter((r) => r.status === 'fulfilled' && r.value)
     .map((r) => r.value);
+
+  // Log bookings that were skipped due to concurrent status change (race condition)
+  const raceSkipped = results
+    .filter((r) => r.status === 'fulfilled' && !r.value)
+    .map((_, i) => confirmable[i]?._id);
+  if (raceSkipped.length > 0) {
+    console.warn('[confirmBookings] Race condition: bookings no longer pending at update time:', raceSkipped);
+  }
 
   // Thông báo cho từng khách (non-blocking)
   for (const b of confirmable) {

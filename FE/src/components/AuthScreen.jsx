@@ -11,9 +11,6 @@ import {
 import Label from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-const ADMIN_QUICK_LOGIN = { identifier: 'admin@washpro.vn', password: '123456' };
-const MANAGER_QUICK_LOGIN = { identifier: 'manager1@washpro.vn', password: '123456' };
-
 export default function AuthScreen({ authLoading, onLogin, onRegister, onBack }) {
   const location = useLocation();
   const [authMode, setAuthMode] = useState('login');
@@ -25,6 +22,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
   const [loginPass, setLoginPass] = useState('');
   const [showLoginPass, setShowLoginPass] = useState(false);
   const [regEmail, setRegEmail] = useState('');
+  const [regName, setRegName] = useState('');
   const [regPass, setRegPass] = useState('');
   const [showRegPass, setShowRegPass] = useState(false);
 
@@ -36,25 +34,11 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
     finally { setLoginLoading(false); }
   }
 
-  async function handleQuickAdminLogin() {
-    setLoginLoading(true); setAuthError(''); setStatusMessage('');
-    try { await onLogin(ADMIN_QUICK_LOGIN.identifier, ADMIN_QUICK_LOGIN.password, 'admin'); }
-    catch (error) { setAuthError(error.message || 'Đăng nhập admin thất bại.'); }
-    finally { setLoginLoading(false); }
-  }
-
-  async function handleQuickManagerLogin() {
-    setLoginLoading(true); setAuthError(''); setStatusMessage('');
-    try { await onLogin(MANAGER_QUICK_LOGIN.identifier, MANAGER_QUICK_LOGIN.password, 'manager'); }
-    catch (error) { setAuthError(error.message || 'Đăng nhập manager thất bại.'); }
-    finally { setLoginLoading(false); }
-  }
-
   async function handleRegister(event) {
     event.preventDefault();
     setRegisterLoading(true); setAuthError(''); setStatusMessage('');
     try {
-      await onRegister({ email: regEmail, password: regPass });
+      await onRegister({ name: regName.trim(), email: regEmail, password: regPass });
       setStatusMessage('Đăng ký thành công, đang mở luồng đặt lịch.');
     } catch (error) { setAuthError(error.message || 'Đăng ký thất bại'); }
     finally { setRegisterLoading(false); }
@@ -283,6 +267,25 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
             ) : (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-1.5">
+                  <Label htmlFor="reg-name" className="text-xs font-bold text-slate-600">
+                    Họ và tên
+                  </Label>
+                  <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                    <div className="w-6 h-6 rounded-full bg-slate-200/50 flex items-center justify-center text-slate-500 text-xs font-bold mr-3 select-none">
+                      @
+                    </div>
+                    <input
+                      id="reg-name"
+                      type="text"
+                      placeholder="Nguyễn Văn A"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
                   <Label htmlFor="reg-email" className="text-xs font-bold text-slate-600">
                     Email
                   </Label>
@@ -335,37 +338,6 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                 </button>
               </form>
             )}
-
-            {/* Quick Login Section */}
-            <div className="relative my-5 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-100" />
-              </div>
-              <span className="relative bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Đăng nhập nhanh với
-              </span>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleQuickAdminLogin}
-                disabled={loginLoading}
-                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
-              >
-                <User size={18} className="text-slate-400" />
-                <span>Admin</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleQuickManagerLogin}
-                disabled={loginLoading}
-                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl py-3 px-4 flex items-center justify-center gap-2 border border-slate-100 transition-all duration-300 text-sm disabled:opacity-60"
-              >
-                <Briefcase size={18} className="text-slate-400" />
-                <span>Manager</span>
-              </button>
-            </div>
 
             {/* Footer links */}
             <div className="flex items-center justify-center gap-8 mt-5 text-xs font-bold text-slate-400">

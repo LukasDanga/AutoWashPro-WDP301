@@ -5,6 +5,15 @@ const { validate } = require('../utils/helpers');
 const { authValidators } = require('../utils/validators');
 const authController = require('../controllers/auth.controller');
 const { ROLES } = require('../config/permissions');
+const rateLimit = require('express-rate-limit');
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { success: false, message: 'Too many refresh attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /**
  * @swagger
@@ -75,7 +84,7 @@ router.post('/login', authValidators.login, validate, authController.login);
  *       200:
  *         description: Token refreshed
  */
-router.post('/refresh-token', authController.refreshToken);
+router.post('/refresh-token', refreshLimiter, authController.refreshToken);
 
 /**
  * @swagger
