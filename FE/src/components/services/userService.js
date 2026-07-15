@@ -3,22 +3,30 @@ import { getApiBaseUrl, getStoredToken, readApiError } from '@/lib/authStorage';
 async function apiFetch(path, options = {}) {
   const base = getApiBaseUrl();
   const token = getStoredToken();
-  const res = await fetch(`${base}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
 
-  if (!res.ok) {
-    const errorMsg = await readApiError(res);
-    throw new Error(errorMsg);
+  try {
+    const res = await fetch(`${base}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+
+    if (!res.ok) {
+      const errorMsg = await readApiError(res);
+      throw new Error(errorMsg);
+    }
+
+    const payload = await res.json();
+    return payload?.data ?? payload;
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.');
+    }
+    throw error;
   }
-
-  const payload = await res.json();
-  return payload?.data ?? payload;
 }
 
 export const userService = {

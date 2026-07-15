@@ -22,17 +22,31 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Response interceptor - unwrap data from { success, data }
+// Response interceptor - unwrap data from { success, data } and normalize _id → id
 apiClient.interceptors.response.use(
   (response) => {
     // If response has { success, data }, unwrap it
     if (response.data && typeof response.data === 'object' && 'data' in response.data) {
       response.data = response.data.data;
     }
+    // Normalize _id → id for all response objects (arrays or single objects)
+    if (response.data && typeof response.data === 'object') {
+      response.data = normalizeId(response.data);
+    }
     return response;
   },
   (error) => Promise.reject(error)
 );
+
+function normalizeId(data: any): any {
+  if (Array.isArray(data)) {
+    return data.map(normalizeId);
+  }
+  if (data && typeof data === 'object' && data._id && !data.id) {
+    return { ...data, id: data._id };
+  }
+  return data;
+}
 
 // Token refresh state
 let isRefreshing = false;

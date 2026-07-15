@@ -198,6 +198,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
   async function confirmBooking() {
     if (!selectedTime) { setMessage('Vui lòng chọn khung giờ trước khi xác nhận đặt chỗ.'); return; }
+    if (!selectedVehicle) { setMessage('Vui lòng chọn xe trước khi đặt lịch.'); return; }
     if (!vehicle) { setMessage('Chưa có xe nào được đồng bộ từ BE để đặt lịch.'); return; }
     setBookingLoading(true); setMessage(''); setBookingCode('');
     try {

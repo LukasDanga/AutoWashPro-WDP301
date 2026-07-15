@@ -1,9 +1,11 @@
 require('dotenv').config();
 
 const required = ['MONGODB_URI', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
-required.forEach((key) => {
-  if (!process.env[key]) console.warn(`Warning: ${key} is not set`);
-});
+const missing = required.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`FATAL: Missing required environment variables: ${missing.join(', ')}`);
+  process.exit(1);
+}
 
 const config = {
   PORT: process.env.PORT || 5000,
@@ -21,6 +23,7 @@ const config = {
 
   APP_URL: process.env.APP_URL || 'http://localhost:3000',
   API_URL: process.env.API_URL || 'http://localhost:5000/api',
+  FE_URL: process.env.FE_URL || 'http://localhost:5173',
 
   vnpay: {
     tmnCode: process.env.VNPAY_TMNCODE,

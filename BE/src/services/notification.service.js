@@ -2,6 +2,8 @@ const { Notification, User, Branch } = require('../models');
 const sseService = require('./sse.service');
 
 const create = async (userId, title, message, type, data = {}) => {
+  const user = await User.findById(userId);
+  if (!user) return null;
   const notification = new Notification({ userId, title, message, type, data });
   await notification.save();
   // Push real-time to connected client
@@ -26,7 +28,12 @@ exports.send = async (userId, title, message, type, data) => {
 };
 
 exports.sendToMany = async (userIds, title, message, type, data) => {
-  const notifications = userIds.map((uid) => ({ userId: uid, title, message, type, data }));
+  const existing = await User.find({ _id: { $in: userIds } }).select('_id');
+  const validIds = new Set(existing.map((u) => String(u._id)));
+  const notifications = userIds
+    .filter((uid) => validIds.has(String(uid)))
+    .map((uid) => ({ userId: uid, title, message, type, data }));
+  if (notifications.length === 0) return [];
   return createMany(notifications);
 };
 
