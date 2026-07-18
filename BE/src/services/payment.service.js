@@ -140,6 +140,8 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           { session }
         );
         await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+        await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
+        sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
       }
 
       await session.commitTransaction();
@@ -209,6 +211,8 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     } else {
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
       await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+      await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+      sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
     }
 
     await session.commitTransaction();
@@ -261,6 +265,8 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       } else {
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
         await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+        await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+        sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
       }
     } else {
       payment.status = 'failed';

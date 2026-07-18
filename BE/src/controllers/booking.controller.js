@@ -1,10 +1,13 @@
 const bookingService = require('../services/booking.service');
 const paymentService = require('../services/payment.service');
+const sseService = require('../services/sse.service');
 const { catchAsync, success } = require('../utils/helpers');
 const QRCode = require('qrcode');
 
 exports.createBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.createBooking({ ...req.body, userId: req.userId });
+  sseService.broadcastToAll('slots_updated');
+  sseService.sendToUser(booking.userId?._id || booking.userId || req.userId, 'my_bookings_updated', {});
   success(res, booking, 'Booking created', 201);
 });
 
@@ -15,11 +18,15 @@ exports.checkRecurringConflicts = catchAsync(async (req, res) => {
 
 exports.createRecurringBooking = catchAsync(async (req, res) => {
   const result = await bookingService.createRecurringBooking({ ...req.body, userId: req.userId });
+  sseService.broadcastToAll('slots_updated');
+  sseService.sendToUser(req.userId, 'my_bookings_updated', {});
   success(res, result, `Recurring booking created: ${result.totalCreated} bookings`, 201);
 });
 
 exports.cancelRecurringGroup = catchAsync(async (req, res) => {
   const result = await bookingService.cancelRecurringGroup(req.params.groupId, req.userId, req.user.role);
+  sseService.broadcastToAll('slots_updated');
+  sseService.sendToUser(req.userId, 'my_bookings_updated', {});
   success(res, result, `Cancelled ${result.cancelled} bookings in recurring group`);
 });
 
@@ -40,6 +47,8 @@ exports.getBookingById = catchAsync(async (req, res) => {
 
 exports.updateBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role, req.userId);
+  sseService.broadcastToAll('slots_updated');
+  if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
   success(res, booking, 'Booking updated');
 });
 
@@ -49,6 +58,8 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
     updateData.staffId = req.userId;
   }
   const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId);
+  sseService.broadcastToAll('slots_updated');
+  if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
   success(res, booking, 'Booking status updated');
 });
 
@@ -59,11 +70,14 @@ exports.extendGracePeriod = catchAsync(async (req, res) => {
 
 exports.cancelBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, req.body.cancellationReason);
+  sseService.broadcastToAll('slots_updated');
+  if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
   success(res, booking, 'Booking cancelled');
 });
 
 exports.deleteBooking = catchAsync(async (req, res) => {
   await bookingService.deleteBooking(req.params.id, req.user.role);
+  sseService.broadcastToAll('slots_updated');
   success(res, null, 'Booking deleted');
 });
 

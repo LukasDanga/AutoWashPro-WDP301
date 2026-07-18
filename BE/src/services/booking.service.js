@@ -379,13 +379,19 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
   const skip = (page - 1) * limit;
 
+  let sortObj = { bookingDate: -1, startTime: -1 };
+  if (filters.sort) {
+    if (filters.sort === '-createdAt') sortObj = { createdAt: -1 };
+    else if (filters.sort === 'createdAt') sortObj = { createdAt: 1 };
+  }
+
   const [bookings, total] = await Promise.all([
     Booking.find(query)
       .populate('userId', 'name email phone tier')
       .populate('branchId', 'name address')
       .populate('packageId', 'name price duration')
       .populate('vehicleId', 'licensePlate vehicleType brand color')
-      .sort({ bookingDate: -1, startTime: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(limit),
     Booking.countDocuments(query),
