@@ -117,7 +117,8 @@ export default function App() {
     }
 
     loadSession(token);
-  }, [token, loadSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {
