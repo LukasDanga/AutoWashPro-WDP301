@@ -26,7 +26,7 @@ exports.getPublicVouchersByBranch = catchAsync(async (req, res) => {
 });
 
 exports.getVoucherByCode = catchAsync(async (req, res) => {
-  const voucher = await voucherService.getVoucherByCode(req.params.code);
+  const voucher = await voucherService.getVoucherByCode(req.params.code, req.query.branchId);
   success(res, voucher, 'Voucher retrieved');
 });
 
@@ -74,7 +74,7 @@ exports.getUserVouchers = catchAsync(async (req, res) => {
 });
 
 exports.getAvailableVouchers = catchAsync(async (req, res) => {
-  const result = await voucherService.getAvailableVouchersForUser(req.userId);
+  const result = await voucherService.getAvailableVouchersForUser(req.userId, req.query.branchId);
   success(res, result, 'Available vouchers retrieved');
 });
 

@@ -111,9 +111,13 @@ exports.getVoucherById = async (id, userRole, userId, userBranchId) => {
   return voucher;
 };
 
-exports.getVoucherByCode = async (code) => {
-  const voucher = await Voucher.findOne({ code: code.toUpperCase(), isDeleted: { $ne: true } });
-  if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+exports.getVoucherByCode = async (code, branchId) => {
+  const query = { code: code.toUpperCase(), isDeleted: { $ne: true } };
+  if (branchId) {
+    query.$or = [{ applicableToAllBranches: true }, { applicableBranches: branchId }, { branchId }];
+  }
+  const voucher = await Voucher.findOne(query);
+  if (!voucher) throw Object.assign(new Error('Voucher not found or not applicable'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
   return voucher;
 };
 
@@ -454,11 +458,15 @@ exports.getUserVouchers = async (userId) => {
  *  - public:        ai cũng dùng được (applicableTiers rỗng)
  *  - redeemable:    đổi điểm (isTemplate + requiredPoints > 0)
  */
-exports.getAvailableVouchersForUser = async (userId) => {
+exports.getAvailableVouchersForUser = async (userId, branchId) => {
   const user = await User.findById(userId);
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
   const now = new Date();
+
+  const branchFilter = branchId
+    ? { $or: [{ applicableToAllBranches: true }, { applicableBranches: branchId }, { branchId }] }
+    : {};
 
   // Lấy tất cả voucher active, còn hạn, còn hàng, không phải template
   const allVouchers = await Voucher.find({
@@ -467,6 +475,7 @@ exports.getAvailableVouchersForUser = async (userId) => {
     isTemplate: false,
     startDate: { $lte: now },
     endDate:   { $gte: now },
+    ...branchFilter,
     $and: [
       { $or: [{ remaining: { $gt: 0 } }, { quantity: 0 }] },
       { $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }, { assignedTo: userId }] },

@@ -47,7 +47,7 @@ function VoucherCard({ voucher, onSelect, selected, disabled, userPoints, orderA
   );
 }
 
-export default function VoucherPicker({ apiBase, token, selected, onSelect, orderAmount = 0, compact = false }) {
+export default function VoucherPicker({ apiBase, token, selected, onSelect, orderAmount = 0, compact = false, branchId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,13 +60,14 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
     if (!token) return;
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = branchId ? `?branchId=${branchId}` : '';
+      const res = await fetch(`${apiBase}/vouchers/available${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Không tải được voucher');
       setData(json.data);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [apiBase, token]);
+  }, [apiBase, token, branchId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -74,7 +75,8 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
     const code = manualCode.trim().toUpperCase();
     if (!code) { setManualMsg('Nhập mã coupon để áp dụng.'); return; }
     try {
-      const res = await fetch(`${apiBase}/vouchers/code/${code}`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = branchId ? `?branchId=${branchId}` : '';
+      const res = await fetch(`${apiBase}/vouchers/code/${code}${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Mã không hợp lệ');
       onSelect(json.data);

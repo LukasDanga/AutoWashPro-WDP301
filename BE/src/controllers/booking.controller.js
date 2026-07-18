@@ -8,6 +8,11 @@ exports.createBooking = catchAsync(async (req, res) => {
   success(res, booking, 'Booking created', 201);
 });
 
+exports.checkRecurringConflicts = catchAsync(async (req, res) => {
+  const result = await bookingService.checkRecurringConflicts({ ...req.body, userId: req.userId });
+  success(res, result, 'Conflict check completed');
+});
+
 exports.createRecurringBooking = catchAsync(async (req, res) => {
   const result = await bookingService.createRecurringBooking({ ...req.body, userId: req.userId });
   success(res, result, `Recurring booking created: ${result.totalCreated} bookings`, 201);
@@ -69,8 +74,8 @@ exports.getAvailableSlots = catchAsync(async (req, res) => {
 });
 
 exports.createPayment = catchAsync(async (req, res) => {
-  const { bookingId, method, paymentType } = req.body;
-  const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, method, paymentType || 'full');
+  const { bookingId, method, paymentType, amount } = req.body;
+  const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, method, paymentType || 'full', amount);
   success(res, payment, 'Payment created', 201);
 });
 

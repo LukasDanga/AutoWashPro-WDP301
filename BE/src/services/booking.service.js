@@ -18,12 +18,8 @@ const VALID_TRANSITIONS = {
   cancelled: [],
 };
 
-// Tỉ lệ đặt cọc trước cho đơn lẻ + định kỳ (gói lượt đã trả trước toàn bộ)
+// Tỉ lệ đặt cọc — luôn 30% (đã bỏ logic strike penalty)
 const DEPOSIT_RATE = 0.3;
-
-// Khách bị hệ thống tự hủy (no-show) từ ngưỡng này trở lên phải cọc 100% cho lần đặt tiếp theo
-const NO_SHOW_STRIKE_THRESHOLD = 3;
-const STRIKE_DEPOSIT_RATE = 1;
 
 // Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút.
 // Grace mặc định chỉ 5 phút (xem autoCancel.job.js) nên offset cũng phải nhỏ hơn nó,
@@ -37,8 +33,7 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
 
-// Khách có từ NO_SHOW_STRIKE_THRESHOLD lần bị hệ thống tự hủy trở lên phải cọc 100% (chống spam/no-show lặp lại)
-const getDepositRate = (user) => (user && user.noShowCount >= NO_SHOW_STRIKE_THRESHOLD) ? STRIKE_DEPOSIT_RATE : DEPOSIT_RATE;
+const getDepositRate = () => DEPOSIT_RATE;
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -259,7 +254,6 @@ exports.createBooking = async (data) => {
     }
 
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
-    // Khách có lịch sử no-show (>= NO_SHOW_STRIKE_THRESHOLD lần) phải cọc 100% để hạn chế đặt-rồi-không-đến.
     const depositAmount = bookingType === 'slot_pack_usage'
       ? 0
       : Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
@@ -1303,6 +1297,130 @@ exports.createRecurringBooking = async (data) => {
   ).catch(() => {});
 
   return { created, failed, recurringGroupId, totalCreated: created.length, totalFailed: failed.length };
+};
+
+/**
+ * Kiểm tra xung đột lịch trước khi tạo recurring booking.
+ * Nhận params giống createRecurringBooking, trả về mảng { date, conflict, reason }.
+ */
+exports.checkRecurringConflicts = async (data) => {
+  const {
+    userId, branchId, packageId, vehicleId,
+    weekdays, startTime, weeks,
+    selectedSubServices,
+  } = data;
+
+  const [pkg, branch, vehicle, user] = await Promise.all([
+    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
+    Branch.findById(branchId),
+    Vehicle.findById(vehicleId),
+    User.findById(userId),
+  ]);
+  if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+  if (!branch) throw Object.assign(new Error('Branch not found'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+  if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+  if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
+    throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+  }
+  if (String(vehicle.userId) !== String(userId)) {
+    throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+
+  let extraDuration = 0;
+  if (selectedSubServices && Array.isArray(selectedSubServices) && pkg.subServices) {
+    for (const name of selectedSubServices) {
+      const sub = pkg.subServices.find(s => s.name === name);
+      if (sub) extraDuration += sub.duration || 0;
+    }
+  }
+  const totalDuration = pkg.duration + extraDuration;
+  const endTime = computeEndTime(startTime, totalDuration);
+  const endMinutes = parseTime(endTime);
+  const closeMinutes = parseTime(branch.closingTime || '20:00');
+  if (endMinutes > closeMinutes) {
+    throw Object.assign(new Error('Booking end time exceeds branch closing time'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const targetDates = [];
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < 7; d++) {
+      const candidate = new Date(today);
+      candidate.setDate(today.getDate() + w * 7 + d);
+      if (weekdays.includes(candidate.getDay())) {
+        if (candidate >= today) {
+          targetDates.push(new Date(candidate));
+        }
+      }
+    }
+  }
+
+  const results = [];
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  for (const bookingDate of targetDates) {
+    const bookingStr = bookingDate.toISOString().split('T')[0];
+    let reason = null;
+    let conflict = false;
+
+    if (bookingStr === todayStr) {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const startMinutes = parseTime(startTime);
+      if (startMinutes !== null && startMinutes <= currentMinutes + 30) {
+        results.push({ date: bookingStr, conflict: true, reason: 'Thời gian đặt lịch phải cách hiện tại ít nhất 30 phút' });
+        continue;
+      }
+    }
+
+    const { gte, lte } = getDayBounds(bookingStr);
+    const conflicting = await Booking.find({
+      branchId,
+      bookingDate: { $gte: gte, $lte: lte },
+      status: { $in: ACTIVE_SLOT_STATUSES },
+    });
+
+    const ns = parseTime(startTime);
+    const ne = parseTime(endTime);
+    const capacity = branch.capacity || 2;
+    const overlappingCount = conflicting.filter((b) => {
+      const bs = parseTime(b.startTime);
+      const be = parseTime(b.endTime);
+      return bs !== null && be !== null && isSlotOverlap(ns, ne, bs, be);
+    }).length;
+
+    if (overlappingCount >= capacity) conflict = true;
+    if (capacity > 1 && overlappingCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') conflict = true;
+
+    if (conflict) {
+      const slots = buildSlots(totalDuration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+      let hasAlternative = false;
+      for (const slot of slots) {
+        const sns = parseTime(slot.startTime);
+        const sne = parseTime(slot.endTime);
+        if (bookingStr === todayStr) {
+          const now = new Date();
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          if (sns <= currentMinutes + 30) continue;
+        }
+        const slotOverlapCount = conflicting.filter((b) => {
+          const bs = parseTime(b.startTime);
+          const be = parseTime(b.endTime);
+          return bs !== null && be !== null && isSlotOverlap(sns, sne, bs, be);
+        }).length;
+        let isConflicting = false;
+        if (slotOverlapCount >= capacity) isConflicting = true;
+        if (capacity > 1 && slotOverlapCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') isConflicting = true;
+        if (!isConflicting) { hasAlternative = true; break; }
+      }
+      reason = hasAlternative ? 'Slot bị trùng — có giờ thay thế' : 'Slot không còn trống — không có giờ thay thế';
+    }
+
+    results.push({ date: bookingStr, conflict, reason });
+  }
+
+  return results;
 };
 
 /**

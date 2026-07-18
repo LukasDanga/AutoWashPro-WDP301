@@ -48,7 +48,7 @@ const pollSepayTransaction = async (transactionId, amount) => {
   return false;
 };
 
-exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full') => {
+exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full', overrideAmount) => {
   if (!VALID_METHODS.includes(method)) {
     throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
   }
@@ -77,9 +77,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   let amount;
   let isDeposit = false;
   if (paymentType === 'deposit') {
-    if (deposit <= 0) throw Object.assign(new Error('Đơn này không yêu cầu đặt cọc'), { statusCode: 400, code: 'NO_DEPOSIT_REQUIRED' });
+    if (deposit <= 0 && !overrideAmount) throw Object.assign(new Error('Đơn này không yêu cầu đặt cọc'), { statusCode: 400, code: 'NO_DEPOSIT_REQUIRED' });
     if (booking.depositPaid) throw Object.assign(new Error('Đã đặt cọc trước đó'), { statusCode: 409, code: 'DEPOSIT_ALREADY_PAID' });
-    amount = deposit;
+    amount = overrideAmount || deposit;
     isDeposit = true;
   } else {
     amount = booking.depositPaid ? Math.max(0, fullPrice - deposit) : fullPrice;
