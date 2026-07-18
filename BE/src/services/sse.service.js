@@ -31,4 +31,13 @@ function broadcastToManagers(branchId, event, data) {
   emitter.emit('manager-event', { branchId: String(branchId), event, data });
 }
 
-module.exports = { addClient, removeClient, sendToUser, broadcastToManagers, emitter };
+function broadcastToAll(event, data) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data || {})}\n\n`;
+  for (const set of clients.values()) {
+    for (const res of set) {
+      try { res.write(payload); } catch { /* client disconnected */ }
+    }
+  }
+}
+
+module.exports = { addClient, removeClient, sendToUser, broadcastToManagers, broadcastToAll, emitter };

@@ -9,15 +9,27 @@ const sseService = require('../services/sse.service');
 async function authenticateSSE(req, res, next) {
   try {
     const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
-    if (!token) return res.status(401).end();
+    if (!token || token === 'null' || token === 'undefined') {
+      // Allow guest connections for public broadcasts
+      req.userId = 'guest_' + Math.random().toString(36).substr(2, 9);
+      req.user = null;
+      return next();
+    }
     const decoded = jwt.verify(token, config.JWT_SECRET);
     const user = await User.findById(decoded.id);
-    if (!user || user.status === 'suspended') return res.status(401).end();
+    if (!user || user.status === 'suspended') {
+      req.userId = 'guest_' + Math.random().toString(36).substr(2, 9);
+      req.user = null;
+      return next();
+    }
     req.user = user;
     req.userId = user._id;
     next();
   } catch {
-    res.status(401).end();
+    // If token is invalid, fallback to guest instead of 401
+    req.userId = 'guest_' + Math.random().toString(36).substr(2, 9);
+    req.user = null;
+    next();
   }
 }
 
@@ -49,7 +61,7 @@ router.get('/', authenticateSSE, (req, res) => {
 
   // Manager: forward branch-specific booking events
   let managerListener;
-  if (user.role === 'manager' && user.branchId) {
+  if (user && user.role === 'manager' && user.branchId) {
     const branchId = String(user.branchId);
     managerListener = ({ branchId: evtBranch, event, data }) => {
       if (evtBranch !== branchId) return;
@@ -62,7 +74,7 @@ router.get('/', authenticateSSE, (req, res) => {
 
   // Admin: forward all booking events (all branches)
   let adminListener;
-  if (user.role === 'admin') {
+  if (user && user.role === 'admin') {
     adminListener = ({ event, data }) => {
       try {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
