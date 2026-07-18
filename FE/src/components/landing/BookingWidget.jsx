@@ -104,6 +104,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   // Process pending booking after login
   const [processingPending, setProcessingPending] = useState(false);
 
+  // Recurring conflict check
+  const [conflictCheck, setConflictCheck] = useState({ status: 'idle', results: [], totalConflicts: 0 });
+
   // Load branches (public)
   useEffect(() => {
     async function loadBranches() {
@@ -360,14 +363,18 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setDepositLoading(true);
     setError('');
     try {
+      const bodyObj = {
+        bookingId: pendingDeposit._id,
+        method: depositMethod,
+        paymentType: 'deposit',
+      };
+      if (lastBooking?.recurringCount && pendingDeposit.depositAmount > 0) {
+        bodyObj.amount = pendingDeposit.depositAmount;
+      }
       const res = await fetch(`${apiBase}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          bookingId: pendingDeposit._id,
-          method: depositMethod,
-          paymentType: 'deposit',
-        }),
+        body: JSON.stringify(bodyObj),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi thanh toán cọc');
@@ -589,7 +596,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       });
 
       // Check if deposit payment is required
-      if (booking?.depositAmount > 0 && !booking?.depositPaid && !isPayingWithPack) {
+      if (booking?.depositAmount > 0 && !booking?.depositPaid) {
         setPendingDeposit(booking);
         setDepositQrStep('select');
         setDepositPayment(null);
@@ -637,9 +644,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const resultData = data.data || data;
       setResult(resultData);
       if (resultData.totalCreated > 0) {
+        const totalPrice = (totalBase - discount) * resultData.totalCreated;
+        const firstBooking = resultData.created?.[0];
+        const perDeposit = firstBooking?.depositAmount || resultData.depositAmount || 0;
+        const totalDeposit = perDeposit * resultData.totalCreated;
+        const totalRemaining = Math.max(0, totalPrice - totalDeposit);
         setLastBooking({
           branch: selectedBranch, vehicle, pkg, currentDate: null, selectedTime,
-          total: (totalBase - discount) * resultData.totalCreated,
+          total: totalPrice,
           discount: discount * resultData.totalCreated,
           points: points * resultData.totalCreated,
           isPayingWithPack: false,
@@ -649,11 +661,23 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
           }),
           recurringCount: resultData.totalCreated,
-          depositAmount: resultData.depositAmount || 0,
-          depositPaid: resultData.depositPaid || false,
+          depositAmount: totalDeposit,
+          depositPaid: false,
+          totalRemaining,
         });
         setBookingCode(resultData.recurringGroupId || '');
-        setShowSuccessModal(true);
+        if (totalDeposit > 0 && firstBooking?._id) {
+          setPendingDeposit({
+            _id: firstBooking._id,
+            finalPrice: totalPrice,
+            depositAmount: totalDeposit,
+            depositPaid: false,
+          });
+          setDepositQrStep('select');
+          setDepositPayment(null);
+        } else {
+          setShowSuccessModal(true);
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -661,6 +685,36 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       setBookingLoading(false);
     }
   }
+
+  const checkRecurringConflicts = async () => {
+    if (!token || !selectedBranch || !pkg || !vehicle?._id) return;
+    setConflictCheck({ status: 'checking', results: [], totalConflicts: 0 });
+    setError('');
+    try {
+      const body = {
+        branchId: selectedBranch._id || selectedBranch.id,
+        packageId: pkg._id || pkg.id,
+        vehicleId: vehicle._id || vehicle.id,
+        weekdays: selectedDays,
+        startTime: selectedTime,
+        weeks,
+        selectedSubServices: currentSubServices,
+      };
+      const res = await fetch(`${apiBase}/bookings/recurring/check-conflicts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi kiểm tra lịch');
+      const results = data.data || data || [];
+      const totalConflicts = Array.isArray(results) ? results.filter(r => r.conflict).length : 0;
+      setConflictCheck({ status: 'done', results: Array.isArray(results) ? results : [], totalConflicts });
+    } catch (err) {
+      setError(err.message);
+      setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
+    }
+  };
 
   const reset = () => {
     setStep(initialBranchId ? 2 : 1);
@@ -677,6 +731,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setError('');
     setBookingCode('');
     setResult(null);
+    setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
     setGuestVehicle({ licensePlate: '', brand: '', model: '', type: 'sedan' });
     setVehicleError('');
     setSpCanAdvance(false);
@@ -1461,7 +1516,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             </div>
                           )}
                           {!isPayingWithPack && (
-                            <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={setAppliedVoucher} orderAmount={totalBase} compact />
+                            <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={setAppliedVoucher} orderAmount={totalBase} compact branchId={selectedBranch?._id || selectedBranch?.id} />
                           )}
                         </div>
                       )}
@@ -1502,15 +1557,65 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             }
                           </span>
                         </div>
-                        {tab === 'regular' && total > 0 && (
+                        {total > 0 && (
                           <div className="flex justify-between items-center pt-2">
                             <span className="text-sm font-semibold text-amber-600">Đặt cọc (30%)</span>
-                            <span className="text-lg font-bold text-amber-600">{formatCurrency(Math.round(total * 0.3 / 1000) * 1000)}</span>
+                            <span className="text-lg font-bold text-amber-600">{formatCurrency(tab === 'recurring' ? Math.round((totalBase - discount) * previewDates.length * 0.3 / 1000) * 1000 : Math.round(total * 0.3 / 1000) * 1000)}</span>
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
+
+                  {tab === 'recurring' && isLoggedIn && !result && (
+                    <div className="pt-4">
+                      {conflictCheck.status === 'idle' && (
+                        <button
+                          type="button"
+                          onClick={checkRecurringConflicts}
+                          disabled={!selectedTime || previewDates.length === 0}
+                          className="w-full py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-600 font-bold text-sm hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50/50 transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
+                        >
+                          <Calendar className="w-4 h-4" />
+                          Kiểm tra lịch trống ({previewDates.length} buổi)
+                        </button>
+                      )}
+                      {conflictCheck.status === 'checking' && (
+                        <div className="flex items-center justify-center gap-2 py-3 text-slate-500 text-sm font-semibold">
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Đang kiểm tra lịch trống...</span>
+                        </div>
+                      )}
+                      {conflictCheck.status === 'done' && conflictCheck.totalConflicts === 0 && (
+                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center gap-2 text-sm text-emerald-700 font-semibold">
+                          <CheckCircle2 className="w-5 h-5 shrink-0" />
+                          <span>Tất cả {previewDates.length} buổi đều trống lịch ✓</span>
+                        </div>
+                      )}
+                      {conflictCheck.status === 'done' && conflictCheck.totalConflicts > 0 && (
+                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-amber-700 font-semibold">
+                            <AlertCircle className="w-5 h-5 shrink-0" />
+                            <span>Có {conflictCheck.totalConflicts}/{previewDates.length} buổi bị trùng lịch</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {conflictCheck.results.filter(r => r.conflict).map(r => (
+                              <span key={r.date} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-medium" title={r.reason || ''}>
+                                <AlertCircle className="w-3 h-3" />
+                                {new Date(r.date + 'T00:00:00').toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })}
+                              </span>
+                            ))}
+                          </div>
+                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('thay thế')) && (
+                            <p className="text-xs text-amber-600">Một số ngày có giờ thay thế — hệ thống sẽ tự động đổi giờ nếu tạo.</p>
+                          )}
+                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('không có giờ thay thế')) && (
+                            <p className="text-xs text-rose-600">Một số ngày không còn slot trống — những ngày này sẽ bị bỏ qua.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {result && tab === 'recurring' && (
                     <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 space-y-1">

@@ -35,6 +35,17 @@ const { ROLES } = require('../config/permissions');
  */
 router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.create, validate, bookingController.createBooking);
 
+// POST /api/bookings/recurring/check-conflicts — Kiểm tra trùng lịch trước khi tạo
+router.post('/recurring/check-conflicts', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+  body('branchId').isMongoId().withMessage('Invalid branch ID'),
+  body('packageId').isMongoId().withMessage('Invalid package ID'),
+  body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
+  body('weekdays').isArray({ min: 1 }).withMessage('weekdays must be a non-empty array'),
+  body('weekdays.*').isInt({ min: 0, max: 6 }).withMessage('Each weekday must be 0-6'),
+  body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
+  body('weeks').isInt({ min: 1, max: 12 }).withMessage('weeks must be between 1 and 12'),
+], validate, bookingController.checkRecurringConflicts);
+
 // POST /api/bookings/recurring — Tạo định kỳ
 router.post('/recurring', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   body('branchId').isMongoId().withMessage('Invalid branch ID'),
