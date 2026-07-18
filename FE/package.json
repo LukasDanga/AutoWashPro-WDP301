@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mertercelik/react-prize-wheel": "^1.1.0",
     "@phosphor-icons/react": "^2.1.7",
     "@radix-ui/react-separator": "^1.1.2",
     "@radix-ui/react-slot": "^1.1.2",
@@ -19,7 +20,7 @@
     "framer-motion": "^12.40.0",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.17.0",
+    "lucide-react": "^1.25.0",
     "maplibre-gl": "^5.24.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -27,6 +28,7 @@
     "react-qr-code": "^2.2.0",
     "react-router-dom": "^6.30.4",
     "recharts": "^3.9.0",
+    "swiper": "^14.0.5",
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
