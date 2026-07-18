@@ -36,71 +36,75 @@ export default function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-[80vh] md:min-h-screen flex items-center overflow-hidden">
+    <section className="relative min-h-[90vh] md:min-h-screen flex items-center justify-center overflow-hidden">
       <VideoBackground />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-black/80 z-0" />
 
-      <div className="relative z-10 w-full max-w-[1200px] mx-auto px-5 md:px-12 pt-16 md:pt-20">
-        <div className="max-w-2xl mx-auto text-center">
+      <div className="relative z-10 w-full max-w-[1200px] mx-auto px-5 md:px-12 pt-20 mt-10">
+        <div className="max-w-3xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="mb-5 md:mb-6">
-              <span className="text-emerald-400 font-semibold text-xs md:text-sm tracking-widest uppercase">
+            <div className="mb-4">
+              <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white backdrop-blur-md text-xs font-semibold tracking-[0.2em] uppercase shadow-lg">
                 Hệ thống đặt lịch thông minh
               </span>
             </div>
 
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter leading-none text-white mb-2 md:mb-3 drop-shadow-lg">
-              AutoWash Pro
+            <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-bold tracking-tight leading-[1.1] text-white mb-6 drop-shadow-2xl">
+              Chăm sóc xế yêu<br className="hidden md:block"/> một cách <span className="text-emerald-400">chuyên nghiệp</span>
             </h1>
 
-            <p className="text-white/60 md:text-white/70 text-sm md:text-lg max-w-lg mx-auto leading-relaxed mb-6 md:mb-8 drop-shadow px-2">
-              Đặt lịch rửa xe trực tuyến nhanh chóng tại các chi nhánh trên toàn quốc. Trải nghiệm dịch vụ chăm sóc xe chuyên nghiệp nhất.
+            <p className="text-white/80 md:text-white/90 text-base md:text-xl max-w-2xl mx-auto leading-relaxed mb-10 drop-shadow-md">
+              Hệ thống đặt lịch rửa xe trực tuyến nhanh chóng. Trải nghiệm dịch vụ vệ sinh và chăm sóc xe hơi đẳng cấp nhất tại AutoWash Pro.
             </p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-2.5 md:gap-3 mb-8 md:mb-10"
+            transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
           >
-            <motion.button
-              onClick={() => navigate('/map')}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto px-6 md:px-7 py-2.5 md:py-3 rounded-xl bg-emerald-500 text-white font-semibold text-sm
-                shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)]
-                hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)]
-                hover:bg-emerald-400 transition-all duration-300"
-            >
-              Bắt đầu ngay
-            </motion.button>
-            <motion.button
+            <button
               onClick={() => navigate('/booking')}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto px-6 md:px-7 py-2.5 md:py-3 rounded-xl border border-white/30 bg-white/10 text-white font-medium text-sm
-                hover:bg-white/20 transition-all duration-300 backdrop-blur-sm"
+              className="group relative w-full sm:w-auto px-8 py-3.5 rounded-full bg-emerald-500 text-white font-bold text-sm md:text-base overflow-hidden shadow-[0_0_40px_-10px_rgba(16,185,129,0.8)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.9)] transition-all duration-300 hover:-translate-y-0.5"
+            >
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                Bắt đầu đặt lịch ngay
+                <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="group w-full sm:w-auto px-8 py-3.5 rounded-full border border-white/30 bg-white/5 text-white font-semibold text-sm md:text-base hover:bg-white/10 transition-all duration-300 backdrop-blur-md hover:-translate-y-0.5 flex items-center justify-center gap-2"
             >
               Cuộn để khám phá
-            </motion.button>
+              <svg className="w-4 h-4 group-hover:translate-y-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 5v14M5 12l7 7 7-7" />
+              </svg>
+            </button>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex items-center justify-center gap-5 md:gap-10"
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="flex items-center justify-center gap-8 md:gap-16 pt-8 border-t border-white/10 max-w-2xl mx-auto"
           >
             {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-lg md:text-2xl font-bold text-white tracking-tight drop-shadow">
+              <div key={stat.label} className="text-center group cursor-default">
+                <div className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70 group-hover:scale-105 transition-transform duration-300 drop-shadow-md">
                   {stat.num}
                 </div>
-                <div className="text-[11px] md:text-xs text-white/50 mt-0.5 uppercase tracking-wider">{stat.label}</div>
+                <div className="text-[10px] md:text-[11px] text-white/50 mt-1.5 font-bold uppercase tracking-[0.15em]">{stat.label}</div>
               </div>
             ))}
           </motion.div>

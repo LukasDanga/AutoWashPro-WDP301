@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Gift } from 'lucide-react';
 
 export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   const location = useLocation();
@@ -9,6 +10,7 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
   const profileRef = useRef(null);
   const [visible, setVisible] = useState(true);
   const [prevScroll, setPrevScroll] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -22,6 +24,7 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
   useEffect(() => {
     const handleScroll = () => {
       const current = window.scrollY;
+      setIsScrolled(current >= 50);
       if (current < 50) {
         setVisible(true);
       } else if (current > prevScroll) {
@@ -48,6 +51,8 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
     return location.pathname === to;
   }
 
+  const isTransparent = location.pathname === '/' && !isScrolled;
+
   return (
     <AnimatePresence>
       <motion.nav
@@ -55,7 +60,11 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
         animate={{ y: visible ? 0 : -80, opacity: visible ? 1 : 0 }}
         exit={{ y: -80, opacity: 0 }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="fixed top-0 left-0 right-0 z-[5000] bg-white border-b border-slate-200"
+        className={`fixed top-0 left-0 right-0 z-[5000] transition-colors duration-300 ${
+          isTransparent 
+            ? 'bg-gradient-to-b from-black/50 to-transparent border-transparent' 
+            : 'bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm'
+        }`}
       >
         <div className="max-w-[1400px] mx-auto px-6 md:px-12">
           <div className="flex items-center justify-between h-16">
@@ -66,8 +75,8 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
                   <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <span className="text-base font-bold text-slate-900">
-                Auto<span className="text-emerald-600">Wash</span>Pro
+              <span className={`text-base font-bold ${isTransparent ? 'text-white' : 'text-slate-900'}`}>
+                Auto<span className="text-emerald-500">Wash</span>Pro
               </span>
             </Link>
 
@@ -77,15 +86,16 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`relative px-4 py-2 text-sm font-medium transition-colors ${
+                  className={`relative px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                     isActive(item.to)
-                      ? 'text-emerald-600'
-                      : 'text-slate-600 hover:text-emerald-600'
+                      ? (isTransparent ? 'text-white font-bold' : 'text-emerald-600')
+                      : (isTransparent ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-emerald-600')
                   }`}
                 >
+                  {item.to === '/gifts' && <Gift size={16} className={isActive(item.to) ? (isTransparent ? 'text-white' : 'text-emerald-600') : (isTransparent ? 'text-white/80' : 'text-emerald-500')} />}
                   {item.label}
                   {isActive(item.to) && (
-                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-emerald-600 rounded-full" />
+                    <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${isTransparent ? 'bg-white' : 'bg-emerald-600'}`} />
                   )}
                 </Link>
               ))}
@@ -96,13 +106,18 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
               {user ? (
                 <div ref={profileRef} className="relative">
                   <button onClick={() => setProfileOpen(!profileOpen)}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                    className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border rounded-lg transition-colors ${
+                      isTransparent 
+                        ? 'text-white border-white/30 hover:bg-white/10' 
+                        : 'text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
                   >
-                    <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 10-16 0" />
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
                     </svg>
-                    {user.name || user.email}
-                    <svg className={`w-3 h-3 text-slate-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <span className="hidden sm:inline">{user.name}</span>
+                    <svg className="w-4 h-4 ml-1 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M6 9l6 6 6-6" />
                     </svg>
                   </button>
@@ -161,8 +176,13 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
                   </AnimatePresence>
                 </div>
               ) : (
-                <button onClick={onOpenAuth}
-                  className="px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"
+                <button
+                  onClick={() => { setIsOpen(false); onOpenAuth(); }}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                    isTransparent 
+                      ? 'bg-white text-emerald-600 hover:bg-white/90' 
+                      : 'bg-emerald-600 text-white hover:bg-emerald-500'
+                  }`}
                 >
                   Đăng nhập
                 </button>
