@@ -373,8 +373,7 @@ function PrintReceiptModal({ booking, onClose }) {
   const discount  = booking.discountAmount || 0;
   const finalAmt  = booking.finalPrice || 0;
   const payLabel  = booking.paymentMethod === 'cash' ? 'Tiền mặt'
-                  : booking.paymentMethod === 'momo'  ? 'Ví MoMo'
-                  : booking.paymentMethod === 'card'  ? 'Thẻ ngân hàng'
+                  : booking.paymentMethod === 'bank'  ? 'Chuyển khoản'
                   : (booking.paymentMethod || 'Tiền mặt');
   const checkIn   = timeFmt(booking.checkInTime)  || booking.startTime || '—';
   const checkOut  = timeFmt(booking.checkOutTime) || booking.endTime   || '';
@@ -901,7 +900,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   <span>Thanh toán</span>
                   {booking.paymentMethod && (
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 capitalize">
-                      {booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'momo' ? 'MoMo' : booking.paymentMethod}
+                      {booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'bank' ? 'Chuyển khoản' : booking.paymentMethod}
                     </span>
                   )}
                 </div>

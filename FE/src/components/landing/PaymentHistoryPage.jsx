@@ -12,9 +12,7 @@ const PAYMENT_STATUS_MAP = {
 
 const METHOD_MAP = {
   cash: 'Tiền mặt',
-  momo: 'Momo',
-  vnpay: 'VNPay',
-  bank: 'Ngân hàng',
+  bank: 'Chuyển khoản',
 };
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }

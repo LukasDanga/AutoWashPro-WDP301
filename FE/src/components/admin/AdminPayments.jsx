@@ -64,9 +64,8 @@ const STATUS_MAP = {
 };
 
 const METHOD_MAP = {
-  cash:  { label: 'Tiền mặt',  cls: 'bg-blue-50 text-blue-700' },
-  momo:  { label: 'MoMo',      cls: 'bg-pink-50 text-pink-700' },
-  vnpay: { label: 'VNPay',     cls: 'bg-indigo-50 text-indigo-700' },
+  cash: { label: 'Tiền mặt', cls: 'bg-emerald-50 text-emerald-700' },
+  bank: { label: 'Chuyển khoản', cls: 'bg-blue-50 text-blue-700' },
 };
 
 const STATUS_TABS = [
@@ -77,11 +76,10 @@ const STATUS_TABS = [
   { key: 'refunded', label: 'Đã hoàn tiền' },
 ];
 
-const METHOD_TABS = [
-  { key: '', label: 'Tất cả phương thức' },
+const METHOD_OPTIONS = [
+  { key: 'all', label: 'Tất cả' },
   { key: 'cash', label: 'Tiền mặt' },
-  { key: 'momo', label: 'MoMo' },
-  { key: 'vnpay', label: 'VNPay' },
+  { key: 'bank', label: 'Chuyển khoản' },
 ];
 
 function Modal({ title, onClose, children }) {

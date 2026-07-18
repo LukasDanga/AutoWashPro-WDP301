@@ -14,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -252,15 +253,16 @@ onPress={() => router.push('/profile/edit' as any)}
       <View style={styles.statsWrap}>
         <Card style={styles.statsCard}>
           <View style={styles.statsRow}>
-            <PressableScale
-              style={styles.statItem}
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => router.push('/(tabs)/history' as any)}
+              style={styles.statItem}
             >
               <Text style={styles.statValue}>{bookingCount ?? '—'}</Text>
               <AppText variant="caption" color="textSecondary">
                 Đơn đặt
               </AppText>
-            </PressableScale>
+            </TouchableOpacity>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{user?.loyaltyPoints || 0}</Text>

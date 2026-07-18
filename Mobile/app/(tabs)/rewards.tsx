@@ -1,19 +1,19 @@
 /**
- * AutoWashPro Rewards Screen
- * Loyalty points & vouchers — gradient hero card with tier badge,
- * tabbed voucher list with stub perforation look, semantic colors.
- *
- * UX guidelines: accessibility, no emoji icons, scale feedback,
- *                semantic color tokens (no hardcoded hex).
+ * AutoWashPro Rewards Screen — Premium UI Refactor
+ * All business logic preserved. Layout, spacing, typography, and
+ * visual hierarchy improved to production quality.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
   RefreshControl,
   Text,
+  Animated,
+  Pressable,
+  LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,20 +38,664 @@ import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
 import type { Voucher, UserVoucher, UserTier } from '../../src/types';
 
+// ─── Constants ─────────────────────────────────────────────────────────────────
 type TabKey = 'available' | 'my';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'available', label: 'Mã giảm giá', icon: Icons.giftOutline },
-  { key: 'my', label: 'Của tôi', icon: Icons.bookmarkOutline },
+  { key: 'my',        label: 'Của tôi',      icon: Icons.bookmarkOutline },
 ];
 
+const TIERS: UserTier[] = ['bronze', 'silver', 'gold', 'diamond'];
+
+const TIER_LABELS: Record<UserTier, string> = {
+  bronze:  'Bronze',
+  silver:  'Silver',
+  gold:    'Gold',
+  diamond: 'Diamond',
+};
+
 const TIER_GRADIENTS: Record<UserTier, [string, string, string]> = {
-  bronze: ['#92400E', '#B45309', '#D97706'],
-  silver: ['#475569', '#64748B', '#94A3B8'],
-  gold: ['#B45309', '#D97706', '#FBBF24'],
+  bronze:  ['#92400E', '#B45309', '#D97706'],
+  silver:  ['#475569', '#64748B', '#94A3B8'],
+  gold:    ['#B45309', '#D97706', '#FBBF24'],
   diamond: ['#1E40AF', '#3B82F6', '#A5B4FC'],
 };
 
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function nextTier(t: UserTier): string {
+  if (t === 'bronze') return 'Silver';
+  if (t === 'silver') return 'Gold';
+  if (t === 'gold')   return 'Diamond';
+  return '';
+}
+
+function computePointsToNext(tier: UserTier, points: number) {
+  const thresholds: Record<UserTier, number> = { bronze: 500, silver: 2000, gold: 5000, diamond: 5000 };
+  const prev: Record<UserTier, number>       = { bronze: 0,   silver: 500,  gold: 2000,  diamond: 5000 };
+  if (tier === 'diamond') return null;
+  const next     = thresholds[tier];
+  const from     = prev[tier];
+  const progress = Math.min(1, Math.max(0, (points - from) / (next - from)));
+  const remaining = Math.max(0, next - points);
+  return { progress, remaining, target: next };
+}
+
+function formatDate(dateStr?: string) {
+  if (!dateStr) return 'Không giới hạn';
+  const d = new Date(dateStr);
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+}
+
+// ─── CouponTab Segmented Control ───────────────────────────────────────────────
+const CouponTabs: React.FC<{ value: TabKey; onChange: (v: TabKey) => void }> = ({ value, onChange }) => {
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [tabWidth, setTabWidth] = useState(0);
+  const activeIndex = TABS.findIndex((t) => t.key === value);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width / TABS.length;
+    setTabWidth(w);
+    slideAnim.setValue(activeIndex * w);
+  };
+
+  const handlePress = (key: TabKey) => {
+    const idx = TABS.findIndex((t) => t.key === key);
+    Animated.spring(slideAnim, { toValue: idx * tabWidth, tension: 80, friction: 12, useNativeDriver: true }).start();
+    onChange(key);
+  };
+
+  return (
+    <View style={ctab.wrapper} onLayout={onLayout}>
+      {tabWidth > 0 && (
+        <Animated.View style={[ctab.pill, { width: tabWidth, transform: [{ translateX: slideAnim }] }]} />
+      )}
+      {TABS.map((tab) => {
+        const isActive = value === tab.key;
+        return (
+          <Pressable
+            key={tab.key}
+            style={ctab.tab}
+            onPress={() => handlePress(tab.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+          >
+            <Icon name={tab.icon} size={18} color={isActive ? '#2563EB' : '#94A3B8'} />
+            <Text style={[ctab.label, isActive && ctab.labelActive]}>{tab.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+};
+
+const ctab = StyleSheet.create({
+  wrapper: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 24,
+    height: 48,
+    position: 'relative',
+    overflow: 'hidden',
+    marginHorizontal: 20,
+    marginBottom: 8,
+  },
+  pill: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#2563EB',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    zIndex: 1,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  labelActive: {
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+});
+
+// ─── Tier Selector ─────────────────────────────────────────────────────────────
+const TierSelector: React.FC<{ currentTier: UserTier }> = ({ currentTier }) => {
+  const colors = useColors();
+  return (
+    <View style={[ts.container, { backgroundColor: colors.surface }]}>
+      {TIERS.map((tier, idx) => {
+        const isActive   = tier === currentTier;
+        const isAchieved = TIERS.indexOf(tier) <= TIERS.indexOf(currentTier);
+        return (
+          <View
+            key={tier}
+            style={[
+              ts.item,
+              isActive && { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
+            ]}
+          >
+            <View style={{ opacity: isAchieved ? 1 : 0.35 }}>
+              <TierBadge tier={tier} />
+            </View>
+            <Text style={[ts.label, isActive && { color: colors.primary, fontWeight: '700' }]}>
+              {TIER_LABELS[tier]}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+const ts = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 8,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  item: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    gap: 4,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+});
+
+// ─── Progress Bar ──────────────────────────────────────────────────────────────
+const ProgressBar: React.FC<{ progress: number }> = ({ progress }) => {
+  const widthAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(widthAnim, { toValue: progress, duration: 800, useNativeDriver: false }).start();
+  }, [progress]);
+
+  return (
+    <View style={pb.track}>
+      <Animated.View
+        style={[pb.fill, { width: widthAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}
+      />
+    </View>
+  );
+};
+
+const pb = StyleSheet.create({
+  track: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 12,
+  },
+  fill: {
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 999,
+  },
+});
+
+// ─── Reward Hero Card ──────────────────────────────────────────────────────────
+const RewardHeroCard: React.FC<{
+  tier: UserTier;
+  points: number;
+  pointsToNext: ReturnType<typeof computePointsToNext>;
+  onRedeem: () => void;
+}> = ({ tier, points, pointsToNext, onRedeem }) => {
+  const colors = useColors();
+  return (
+    <LinearGradient
+      colors={TIER_GRADIENTS[tier]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={hero.card}
+    >
+      {/* Decorative blobs */}
+      <View style={hero.blob1} />
+      <View style={hero.blob2} />
+
+      {/* Top row: label + badge */}
+      <View style={hero.topRow}>
+        <Text style={hero.cardLabel}>Điểm tích lũy</Text>
+        <TierBadge tier={tier} />
+      </View>
+
+      {/* Points */}
+      <View style={hero.pointsRow}>
+        <Icon name={Icons.star} size={28} color="#FFFFFF" style={{ marginTop: 2 }} />
+        <Text style={hero.pointsValue}>{points.toLocaleString('vi-VN')}</Text>
+        <Text style={hero.pointsUnit}>điểm</Text>
+      </View>
+
+      {/* Progress */}
+      {pointsToNext && (
+        <>
+          <ProgressBar progress={pointsToNext.progress} />
+          <Text style={hero.hint}>
+            Còn {pointsToNext.remaining.toLocaleString('vi-VN')} điểm để lên hạng {nextTier(tier)}
+          </Text>
+        </>
+      )}
+      {!pointsToNext && (
+        <Text style={hero.hint}>Bạn đang ở hạng cao nhất — tận hưởng đặc quyền Diamond ✦</Text>
+      )}
+
+      {/* Redeem CTA */}
+      <PressableScale
+        style={hero.redeemBtn}
+        onPress={onRedeem}
+        accessibilityLabel="Đổi điểm lấy voucher"
+      >
+        <Icon name={Icons.refreshOutline} size={18} color={colors.primary} />
+        <Text style={[hero.redeemText, { color: colors.primary }]}>Đổi điểm lấy voucher</Text>
+        <Icon name={Icons.forward} size={16} color={colors.primary} />
+      </PressableScale>
+    </LinearGradient>
+  );
+};
+
+const hero = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 24,
+    padding: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  blob1: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    top: -70,
+    right: -60,
+  },
+  blob2: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    bottom: -50,
+    left: -30,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  pointsRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginTop: 4,
+  },
+  pointsValue: {
+    fontSize: 44,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 50,
+    letterSpacing: -1,
+  },
+  pointsUnit: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 4,
+  },
+  hint: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  redeemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 13,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 20,
+    gap: 8,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  redeemText: {
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'center',
+  },
+});
+
+// ─── Section Header ────────────────────────────────────────────────────────────
+const SectionHeader: React.FC<{ title: string; subtitle?: string; action?: React.ReactNode }> = ({
+  title, subtitle, action,
+}) => (
+  <View style={sh.row}>
+    <View style={sh.textCol}>
+      <Text style={sh.title}>{title}</Text>
+      {subtitle && <Text style={sh.subtitle}>{subtitle}</Text>}
+    </View>
+    {action}
+  </View>
+);
+
+const sh = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 12,
+  },
+  textCol: { flex: 1 },
+  title: { fontSize: 18, fontWeight: '700', color: '#0F172A', letterSpacing: 0.1 },
+  subtitle: { fontSize: 13, color: '#94A3B8', marginTop: 2 },
+});
+
+// ─── Voucher Card ──────────────────────────────────────────────────────────────
+const VoucherCard: React.FC<{
+  voucher: Voucher;
+  tier: UserTier;
+  isRedeemable?: boolean;
+  onPress: () => void;
+}> = ({ voucher, tier, isRedeemable, onPress }) => {
+  const colors = useColors();
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Voucher ${voucher.title || voucher.code}`}
+    >
+      <View style={vc.card}>
+        {/* Left: discount preview */}
+        <LinearGradient
+          colors={TIER_GRADIENTS[tier]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={vc.discountSection}
+        >
+          <View style={vc.discountBlob} />
+          <Text style={vc.discountValue}>
+            {voucher.discountType === 'percent'
+              ? `${voucher.discountValue}%`
+              : formatCurrency(voucher.discountValue)}
+          </Text>
+          <Text style={vc.discountLabel}>GIẢM</Text>
+          {/* Perforation notches */}
+          <View style={[vc.notchTop, { backgroundColor: colors.background }]} />
+          <View style={[vc.notchBottom, { backgroundColor: colors.background }]} />
+        </LinearGradient>
+
+        {/* Dashed divider */}
+        <View style={vc.divider} />
+
+        {/* Right: details */}
+        <View style={vc.infoSection}>
+          <Text style={vc.voucherName} numberOfLines={1}>
+            {voucher.title || voucher.code}
+          </Text>
+          <Text style={vc.description} numberOfLines={2}>
+            {voucher.description || `Mã: ${voucher.code}`}
+          </Text>
+
+          {/* Meta row */}
+          {(voucher.minOrderValue && voucher.minOrderValue > 0) || voucher.maxDiscount ? (
+            <View style={vc.metaRow}>
+              {voucher.minOrderValue && voucher.minOrderValue > 0 ? (
+                <View style={vc.metaItem}>
+                  <Icon name={Icons.cartOutline} size={12} color="#94A3B8" />
+                  <Text style={vc.metaText}>Tối thiểu {formatCurrency(voucher.minOrderValue)}</Text>
+                </View>
+              ) : null}
+              {voucher.maxDiscount ? (
+                <View style={vc.metaItem}>
+                  <Icon name={Icons.arrowUp} size={12} color="#94A3B8" />
+                  <Text style={vc.metaText}>Tối đa {formatCurrency(voucher.maxDiscount)}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Footer */}
+          <View style={vc.footer}>
+            <View style={vc.expiryRow}>
+              <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
+              <Text style={vc.expiry}>HSD: {formatDate(voucher.expiresAt)}</Text>
+            </View>
+            {isRedeemable && voucher.requiredPoints ? (
+              <Badge label={`${voucher.requiredPoints} điểm`} variant="warning" size="small" />
+            ) : null}
+          </View>
+        </View>
+      </View>
+    </PressableScale>
+  );
+};
+
+const MyVoucherCard: React.FC<{
+  voucher: UserVoucher;
+  onPress: () => void;
+}> = ({ voucher, onPress }) => {
+  const colors = useColors();
+  const isUsed = !!voucher.used;
+
+  return (
+    <PressableScale onPress={onPress} accessibilityRole="button">
+      <View style={[vc.card, isUsed && vc.cardUsed]}>
+        {/* Left: discount preview */}
+        <View
+          style={[
+            vc.discountSection,
+            { backgroundColor: isUsed ? '#CBD5E1' : colors.primary },
+          ]}
+        >
+          <Text style={vc.discountValue}>
+            {voucher.discountType === 'percent'
+              ? `${voucher.discountValue}%`
+              : formatCurrency(voucher.discountValue)}
+          </Text>
+          <Text style={vc.discountLabel}>{isUsed ? 'ĐÃ DÙNG' : 'GIẢM'}</Text>
+          <View style={[vc.notchTop, { backgroundColor: colors.background }]} />
+          <View style={[vc.notchBottom, { backgroundColor: colors.background }]} />
+        </View>
+
+        <View style={vc.divider} />
+
+        {/* Right: details */}
+        <View style={vc.infoSection}>
+          <View style={vc.myVoucherHeader}>
+            <Text style={vc.voucherName} numberOfLines={1}>{voucher.title || voucher.code}</Text>
+            <Badge label={isUsed ? 'Đã dùng' : 'Còn hạn'} variant={isUsed ? 'default' : 'success'} size="small" />
+          </View>
+          <Text style={vc.description} numberOfLines={1}>Mã: {voucher.code}</Text>
+          {voucher.usedAt ? (
+            <Text style={vc.usedAt}>Đã dùng: {formatDate(voucher.usedAt)}</Text>
+          ) : null}
+          <View style={vc.expiryRow}>
+            <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
+            <Text style={vc.expiry}>HSD: {formatDate(voucher.expiresAt)}</Text>
+          </View>
+        </View>
+      </View>
+    </PressableScale>
+  );
+};
+
+const vc = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    minHeight: 110,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardUsed: { opacity: 0.65 },
+  discountSection: {
+    width: 92,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+    paddingVertical: 16,
+  },
+  discountBlob: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    top: -28,
+    right: -28,
+  },
+  discountValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  discountLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
+  notchTop: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    top: -9,
+    right: -1,
+  },
+  notchBottom: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    bottom: -9,
+    right: -1,
+  },
+  divider: {
+    width: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+  infoSection: {
+    flex: 1,
+    padding: 14,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  myVoucherHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  voucherName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    flex: 1,
+  },
+  description: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 19,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  expiryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  expiry: {
+    fontSize: 13,
+    color: '#F59E0B',
+    fontWeight: '500',
+  },
+  usedAt: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+});
+
+// ─── Main Screen ────────────────────────────────────────────────────────────────
 export default function RewardsScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
@@ -63,15 +707,12 @@ export default function RewardsScreen() {
     public: Voucher[];
     redeemable: Voucher[];
   } | null>(null);
-  const [myVouchers, setMyVouchers] = useState<UserVoucher[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [myVouchers, setMyVouchers]   = useState<UserVoucher[]>([]);
+  const [isLoading, setIsLoading]     = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsLoading(false);
-      return;
-    }
+    if (!isAuthenticated) { setIsLoading(false); return; }
     try {
       const [availableRes, myRes] = await Promise.all([
         voucherApi.getAvailableVouchers(),
@@ -87,155 +728,14 @@ export default function RewardsScreen() {
     }
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
     fetchData();
   }, [fetchData]);
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'Không giới hạn';
-    const date = new Date(dateStr);
-    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
-  };
-
-  const renderVoucherCard = (voucher: Voucher, isRedeemable?: boolean) => (
-    <PressableScale
-      key={voucher._id}
-      onPress={() => router.push({
-        pathname: '/voucher/[id]' as any,
-        params: { id: voucher._id },
-      })}
-      accessibilityRole="button"
-      accessibilityLabel={`Voucher ${voucher.title || voucher.code}`}
-    >
-      <View style={[styles.voucherCard, { backgroundColor: colors.surface }]}>
-        <LinearGradient
-          colors={TIER_GRADIENTS[user?.tier || 'bronze'] as any}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.voucherDiscount}
-        >
-          <View style={styles.discountBlob} />
-          <Text style={styles.voucherDiscountText}>
-            {voucher.discountType === 'percent'
-              ? `${voucher.discountValue}%`
-              : formatCurrency(voucher.discountValue)}
-          </Text>
-          <Text style={styles.voucherDiscountLabel}>GIẢM</Text>
-          <View style={styles.perfTop} />
-          <View style={styles.perfBottom} />
-        </LinearGradient>
-        <View style={styles.voucherInfo}>
-          <AppText variant="body" style={styles.voucherName} numberOfLines={1}>
-            {voucher.title || voucher.code}
-          </AppText>
-          <AppText variant="caption" color="textSecondary" numberOfLines={2}>
-            {voucher.description || `Mã: ${voucher.code}`}
-          </AppText>
-          <View style={styles.voucherMeta}>
-            {voucher.minOrderValue && voucher.minOrderValue > 0 ? (
-              <View style={styles.metaItem}>
-                <Icon name={Icons.cartOutline} size={11} color={colors.textTertiary} />
-                <AppText variant="caption" color="textTertiary">
-                  Tối thiểu {formatCurrency(voucher.minOrderValue)}
-                </AppText>
-              </View>
-            ) : null}
-            {voucher.maxDiscount ? (
-              <View style={styles.metaItem}>
-                <Icon name={Icons.arrowUp} size={11} color={colors.textTertiary} />
-                <AppText variant="caption" color="textTertiary">
-                  Tối đa {formatCurrency(voucher.maxDiscount)}
-                </AppText>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.voucherFooter}>
-            <View style={styles.expiryContainer}>
-              <Icon name={Icons.timeOutline} size={12} color={colors.warning} />
-              <AppText variant="caption" color="warning">
-                HSD: {formatDate(voucher.expiresAt)}
-              </AppText>
-            </View>
-            {isRedeemable && voucher.requiredPoints ? (
-              <Badge
-                label={`${voucher.requiredPoints} điểm`}
-                variant="warning"
-                size="small"
-              />
-            ) : null}
-          </View>
-        </View>
-      </View>
-    </PressableScale>
-  );
-
-  const renderMyVoucherCard = (voucher: UserVoucher) => {
-    const isUsed = !!voucher.used;
-    return (
-      <PressableScale
-        key={voucher._id}
-        onPress={() => router.push({
-          pathname: '/voucher/[id]' as any,
-          params: { id: voucher._id },
-        })}
-        accessibilityRole="button"
-      >
-        <View style={[styles.voucherCard, { backgroundColor: colors.surface }, isUsed && styles.voucherCardUsed]}>
-          <View
-            style={[
-              styles.voucherDiscount,
-              {
-                backgroundColor: isUsed ? colors.textTertiary : colors.primary,
-              },
-            ]}
-          >
-            <Text style={styles.voucherDiscountText}>
-              {voucher.discountType === 'percent'
-                ? `${voucher.discountValue}%`
-                : formatCurrency(voucher.discountValue)}
-            </Text>
-            <Text style={styles.voucherDiscountLabel}>
-              {isUsed ? 'ĐÃ DÙNG' : 'GIẢM'}
-            </Text>
-            <View style={[styles.perfTop, { backgroundColor: colors.background }]} />
-            <View style={[styles.perfBottom, { backgroundColor: colors.background }]} />
-          </View>
-          <View style={styles.voucherInfo}>
-            <View style={styles.voucherHeader}>
-              <AppText variant="body" style={styles.voucherName} numberOfLines={1}>
-                {voucher.title || voucher.code}
-              </AppText>
-              <Badge
-                label={isUsed ? 'Đã dùng' : 'Còn hạn'}
-                variant={isUsed ? 'default' : 'success'}
-                size="small"
-              />
-            </View>
-            <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-              Mã: {voucher.code}
-            </AppText>
-            {voucher.usedAt ? (
-              <AppText variant="caption" color="textTertiary">
-                Đã dùng: {formatDate(voucher.usedAt)}
-              </AppText>
-            ) : null}
-            <View style={styles.expiryContainer}>
-              <Icon name={Icons.timeOutline} size={12} color={colors.warning} />
-              <AppText variant="caption" color="warning">
-                HSD: {formatDate(voucher.expiresAt)}
-              </AppText>
-            </View>
-          </View>
-        </View>
-      </PressableScale>
-    );
-  };
-
+  // ── Not authenticated ─────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
       <ScreenContainer background="subtle">
@@ -250,6 +750,7 @@ export default function RewardsScreen() {
     );
   }
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <ScreenContainer background="subtle">
@@ -267,24 +768,23 @@ export default function RewardsScreen() {
     );
   }
 
-  const allAvailableVouchers = [
+  // ── Data ──────────────────────────────────────────────────────────────────
+  const allAvailable = [
     ...(availableVouchers?.public || []),
     ...(availableVouchers?.tierExclusive || []),
     ...(availableVouchers?.redeemable || []),
   ];
-
-  const tier: UserTier = user?.tier || 'bronze';
-  const pointsToNext = computePointsToNext(tier, user?.loyaltyPoints || 0);
+  const tier         = (user?.tier || 'bronze') as UserTier;
+  const points       = user?.loyaltyPoints || 0;
+  const pointsToNext = computePointsToNext(tier, points);
 
   return (
     <ScreenContainer background="subtle">
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <View>
-          <AppText variant="h2">Ưu đãi</AppText>
-          <AppText variant="caption" color="textSecondary">
-            Tích điểm, đổi quà và nhiều ưu đãi hấp dẫn
-          </AppText>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Ưu đãi</Text>
+          <Text style={styles.headerSubtitle}>Tích điểm, đổi quà và nhiều ưu đãi hấp dẫn</Text>
         </View>
         <PressableScale
           onPress={() => router.push('/voucher/my' as any)}
@@ -307,219 +807,107 @@ export default function RewardsScreen() {
           />
         }
       >
-        {/* Points hero card */}
-        <LinearGradient
-          colors={TIER_GRADIENTS[tier] as any}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.pointsCard}
-        >
-          <View style={styles.pointsBlob} />
-          <View style={styles.pointsBlob2} />
-          <View style={styles.pointsContent}>
-            <View>
-              <AppText style={styles.pointsLabel}>Điểm tích lũy</AppText>
-              <View style={styles.pointsRow}>
-                <Icon name={Icons.star} size={28} color="#FFFFFF" />
-                <Text style={styles.pointsValue}>{user?.loyaltyPoints || 0}</Text>
-                <Text style={styles.pointsUnit}>điểm</Text>
-              </View>
-              {pointsToNext ? (
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${pointsToNext.progress * 100}%`,
-                        backgroundColor: 'rgba(255,255,255,0.95)',
-                      },
-                    ]}
-                  />
-                </View>
-              ) : null}
-              {pointsToNext ? (
-                <AppText style={styles.pointsHint}>
-                  Còn {pointsToNext.remaining} điểm để lên hạng {nextTier(tier)}
-                </AppText>
-              ) : (
-                <AppText style={styles.pointsHint}>
-                  Bạn đang ở hạng cao nhất — tận hưởng đặc quyền Diamond
-                </AppText>
-              )}
-            </View>
-            <View style={styles.tierContainer}>
-              <TierBadge tier={tier} />
-            </View>
-          </View>
+        {/* ── Hero Card ── */}
+        <RewardHeroCard
+          tier={tier}
+          points={points}
+          pointsToNext={pointsToNext}
+          onRedeem={() => setActiveTab('available')}
+        />
 
-          <PressableScale
-            style={styles.redeemButton}
-            onPress={() => setActiveTab('available')}
-            accessibilityLabel="Đổi điểm lấy voucher"
-          >
-            <Icon name={Icons.refreshOutline} size={16} color={colors.primary} />
-            <AppText variant="bodySmall" style={styles.redeemText}>
-              Đổi điểm
-            </AppText>
-            <Icon name={Icons.forward} size={16} color={colors.primary} />
-          </PressableScale>
-        </LinearGradient>
+        {/* ── Tier Selector ── */}
+        <SectionHeader title="Hạng thành viên" subtitle="Tích điểm để nâng hạng đặc quyền" />
+        <TierSelector currentTier={tier} />
 
-        {/* Tier explainer */}
-        <View style={[styles.tierGrid, { backgroundColor: colors.surface }]}>
-          {(['bronze', 'silver', 'gold', 'diamond'] as UserTier[]).map((t) => (
-            <TierItem
-              key={t}
-              tier={t}
-              active={t === tier}
-              achieved={
-                ['bronze', 'silver', 'gold', 'diamond'].indexOf(t) <=
-                ['bronze', 'silver', 'gold', 'diamond'].indexOf(tier)
-              }
-            />
-          ))}
-        </View>
+        {/* ── Coupon Section ── */}
+        <SectionHeader
+          title="Voucher & Ưu đãi"
+          subtitle={activeTab === 'available' ? `${allAvailable.length} voucher khả dụng` : `${myVouchers.length} voucher của bạn`}
+          action={
+            <PressableScale
+              onPress={() => router.push('/voucher/my' as any)}
+              style={styles.viewAllBtn}
+            >
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>Xem tất cả</Text>
+              <Icon name={Icons.forward} size={14} color={colors.primary} />
+            </PressableScale>
+          }
+        />
 
-        {/* Tabs */}
-        <View style={[styles.tabContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          {TABS.map((tab) => {
-            const active = activeTab === tab.key;
-            return (
-              <PressableScale
-                key={tab.key}
-                onPress={() => setActiveTab(tab.key)}
-                style={[styles.tab, active && { borderBottomColor: colors.primary }]}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-              >
-                <Icon
-                  name={tab.icon}
-                  size={18}
-                  color={active ? colors.primary : colors.textTertiary}
+        {/* ── Tab Switcher ── */}
+        <CouponTabs value={activeTab} onChange={setActiveTab} />
+
+        {/* ── Voucher List ── */}
+        <View style={styles.voucherList}>
+          {activeTab === 'available' ? (
+            allAvailable.length > 0 ? (
+              allAvailable.map((voucher) => (
+                <VoucherCard
+                  key={voucher._id}
+                  voucher={voucher}
+                  tier={tier}
+                  isRedeemable={!!availableVouchers?.redeemable?.some((v) => v._id === voucher._id)}
+                  onPress={() => router.push({ pathname: '/voucher/[id]' as any, params: { id: voucher._id } })}
                 />
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: active ? colors.primary : colors.textTertiary },
-                    active && { fontWeight: '700' },
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </PressableScale>
-            );
-          })}
-        </View>
-
-        {/* Voucher list */}
-        {activeTab === 'available' ? (
-          allAvailableVouchers.length > 0 ? (
-            allAvailableVouchers.map((voucher) =>
-              renderVoucherCard(
-                voucher,
-                !!availableVouchers?.redeemable?.some((v) => v._id === voucher._id),
-              ),
+              ))
+            ) : (
+              <View style={styles.emptyWrapper}>
+                <EmptyState
+                  iconName={Icons.voucherOutline}
+                  title="Không có voucher"
+                  message="Hiện tại không có voucher nào khả dụng"
+                />
+              </View>
             )
+          ) : myVouchers.length > 0 ? (
+            myVouchers.map((voucher) => (
+              <MyVoucherCard
+                key={voucher._id}
+                voucher={voucher}
+                onPress={() => router.push({ pathname: '/voucher/[id]' as any, params: { id: voucher._id } })}
+              />
+            ))
           ) : (
-            <EmptyState
-              iconName={Icons.voucherOutline}
-              title="Không có voucher"
-              message="Hiện tại không có voucher nào khả dụng"
-            />
-          )
-        ) : myVouchers.length > 0 ? (
-          myVouchers.map(renderMyVoucherCard)
-        ) : (
-          <EmptyState
-            iconName={Icons.voucherOutline}
-            title="Chưa có voucher"
-            message="Bạn chưa có voucher nào"
-            actionLabel="Khám phá ưu đãi"
-            onAction={() => setActiveTab('available')}
-          />
-        )}
+            <View style={styles.emptyWrapper}>
+              <EmptyState
+                iconName={Icons.voucherOutline}
+                title="Chưa có voucher"
+                message="Bạn chưa có voucher nào. Hãy đổi điểm để nhận voucher!"
+                actionLabel="Khám phá ưu đãi"
+                onAction={() => setActiveTab('available')}
+              />
+            </View>
+          )}
+        </View>
       </ScrollView>
     </ScreenContainer>
   );
 }
 
-interface TierItemProps {
-  tier: UserTier;
-  active: boolean;
-  achieved: boolean;
-}
-
-const TierItem: React.FC<TierItemProps> = ({ tier, active, achieved }) => {
-  const colors = useColors();
-  const labels: Record<UserTier, string> = {
-    bronze: 'Bronze',
-    silver: 'Silver',
-    gold: 'Gold',
-    diamond: 'Diamond',
-  };
-  return (
-    <View
-      style={[
-        styles.tierItem,
-        active && {
-          backgroundColor: colors.primarySubtle,
-          borderColor: colors.primary,
-        },
-      ]}
-    >
-      <View style={{ opacity: achieved ? 1 : 0.4 }}>
-        <TierBadge tier={tier} />
-      </View>
-      <AppText
-        variant="caption"
-        style={{
-          marginTop: 4,
-          fontWeight: active ? '700' : '500',
-          color: active ? colors.primary : colors.textPrimary,
-        }}
-      >
-        {labels[tier]}
-      </AppText>
-    </View>
-  );
-};
-
-function nextTier(t: UserTier): string {
-  if (t === 'bronze') return 'Silver';
-  if (t === 'silver') return 'Gold';
-  if (t === 'gold') return 'Diamond';
-  return '';
-}
-
-function computePointsToNext(tier: UserTier, points: number) {
-  const thresholds: Record<UserTier, number> = {
-    bronze: 500,
-    silver: 2000,
-    gold: 5000,
-    diamond: 5000,
-  };
-  const prev: Record<UserTier, number> = {
-    bronze: 0,
-    silver: 500,
-    gold: 2000,
-    diamond: 5000,
-  };
-  if (tier === 'diamond') return null;
-  const next = thresholds[tier];
-  const from = prev[tier];
-  const progress = Math.min(1, Math.max(0, (points - from) / (next - from)));
-  const remaining = Math.max(0, next - points);
-  return { progress, remaining, target: next };
-}
-
+// ─── Screen-level Styles ───────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+  },
+  headerText: { flex: 1 },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 2,
+    fontWeight: '400',
   },
   historyBtn: {
     width: 44,
@@ -529,234 +917,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    paddingTop: 20,
+    paddingBottom: 48,
   },
-  pointsCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    overflow: 'hidden',
-    ...shadows.md,
+  voucherList: {
+    paddingTop: 8,
   },
-  pointsBlob: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    top: -60,
-    right: -60,
-  },
-  pointsBlob2: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    bottom: -40,
-    left: -30,
-  },
-  pointsContent: {
+  viewAllBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
-  pointsLabel: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  pointsRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.xs,
-    marginTop: 4,
-  },
-  pointsValue: {
-    ...typography.h1,
-    color: '#FFFFFF',
-    fontSize: 36,
-    lineHeight: 38,
-    fontWeight: '800',
-  },
-  pointsUnit: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
+  viewAllText: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 3,
-    marginTop: spacing.sm,
-    overflow: 'hidden',
+  emptyWrapper: {
+    marginHorizontal: 20,
+    marginTop: 8,
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  pointsHint: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
-    marginTop: spacing.xs,
-  },
-  tierContainer: {
-    alignItems: 'flex-end',
-  },
-  redeemButton: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    alignSelf: 'flex-start',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  redeemText: {
-    fontWeight: '600',
-  },
-  tierGrid: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    padding: spacing.sm,
-    borderRadius: borderRadius.lg,
-    gap: spacing.xs,
-  },
-  tierItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    flexDirection: 'row',
-    gap: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabText: {
-    ...typography.body,
-  },
-  skeletonHeader: {
-    padding: spacing.md,
-  },
-  skeletonList: {
-    padding: spacing.md,
-  },
-  skeletonCard: {
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-  },
-  voucherCard: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    minHeight: 110,
-  },
-  voucherCardUsed: {
-    opacity: 0.7,
-  },
-  voucherDiscount: {
-    width: 96,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  discountBlob: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    top: -30,
-    right: -30,
-  },
-  voucherDiscountText: {
-    ...typography.h3,
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  voucherDiscountLabel: {
-    ...typography.caption,
-    color: '#FFFFFF',
-    opacity: 0.95,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  perfTop: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    top: -8,
-    right: 40,
-  },
-  perfBottom: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    bottom: -8,
-    right: 40,
-  },
-  voucherInfo: {
-    flex: 1,
-    padding: spacing.md,
-    justifyContent: 'center',
-  },
-  voucherHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-    gap: spacing.xs,
-  },
-  voucherName: {
-    fontWeight: '600',
-    flex: 1,
-  },
-  voucherMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginVertical: 6,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  voucherFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  expiryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
+  skeletonHeader: { padding: 20 },
+  skeletonList:   { paddingHorizontal: 20 },
+  skeletonCard:   { marginBottom: 12, borderRadius: 16 },
 });
