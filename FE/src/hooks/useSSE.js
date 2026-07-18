@@ -7,7 +7,7 @@ export default function useSSE(token, eventName, onEvent) {
   savedCallback.current = onEvent;
 
   useEffect(() => {
-    if (!token || !eventName) return;
+    if (!eventName) return;
 
     const base = API_BASE.replace(/\/api$/, '');
     let es;
@@ -16,7 +16,8 @@ export default function useSSE(token, eventName, onEvent) {
     const MAX_RETRIES = 3;
 
     function connect() {
-      es = new EventSource(`${base}/api/sse?token=${encodeURIComponent(token)}`);
+      const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '?token=null';
+      es = new EventSource(`${base}/api/sse${tokenParam}`);
 
       es.addEventListener(eventName, () => {
         savedCallback.current?.();
