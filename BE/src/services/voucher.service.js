@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Voucher, Package, VoucherUsage, User, PointHistory } = require('../models');
+const sseService = require('./sse.service');
 
 const generateCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -46,6 +47,7 @@ exports.createVoucher = async (data) => {
 
   const voucher = new Voucher(payload);
   await voucher.save();
+  sseService.broadcastToAll('vouchers_updated', { action: 'create' });
   return voucher;
 };
 
@@ -134,6 +136,7 @@ exports.updateVoucher = async (id, updates, userRole, userId, userBranchId) => {
     delete updates.applicableToAllBranches;
   }
   const updated = await Voucher.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  sseService.broadcastToAll('vouchers_updated', { action: 'update' });
   return updated;
 };
 
@@ -148,6 +151,7 @@ exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
     }
   }
   await Voucher.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
+  sseService.broadcastToAll('vouchers_updated', { action: 'delete' });
   return voucher;
 };
 
@@ -628,11 +632,15 @@ exports.getPublicVouchersByBranch = async (branchId) => {
     isDeleted: { $ne: true },
     startDate: { $lte: now },
     endDate: { $gte: now },
-    $or: [
+  };
+  
+  if (branchId) {
+    query.$or = [
       { applicableToAllBranches: true },
       { applicableBranches: branchId },
       { branchId },
-    ],
-  };
+    ];
+  }
+  
   return Voucher.find(query).sort({ createdAt: -1 }).limit(20);
 };

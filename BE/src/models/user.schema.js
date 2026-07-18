@@ -22,6 +22,8 @@ const userSchema = new mongoose.Schema(
     pointsExpiresAt: { type: Date },
     // Số lần bị hệ thống tự hủy do no-show (chưa đến quá giờ). Giảm dần khi hoàn thành booking thành công.
     noShowCount: { type: Number, default: 0, min: 0 },
+    // Lượt quay vòng quay may mắn
+    spinCount: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );
