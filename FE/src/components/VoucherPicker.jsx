@@ -1,48 +1,159 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { confirmDialog } from '@/lib/confirm';
+import useSSE from '@/hooks/useSSE';
 
 const TIER_META = {
-  bronze:  { icon: '🥉', label: 'Bronze',  color: '#cd7f32', bg: 'rgba(205,127,50,0.12)' },
-  silver:  { icon: '🥈', label: 'Silver',  color: '#adb5bd', bg: 'rgba(173,181,189,0.12)' },
-  gold:    { icon: '🥇', label: 'Gold',    color: '#f2b84b', bg: 'rgba(242,184,75,0.12)' },
-  diamond: { icon: '💎', label: 'Diamond', color: '#3de0ff', bg: 'rgba(61,224,255,0.12)' },
+  bronze:  { icon: '🥉', label: 'Bronze',  color: '#cd7f32', bg: 'rgba(205,127,50,0.10)',  ring: 'rgba(205,127,50,0.25)' },
+  silver:  { icon: '🥈', label: 'Silver',  color: '#6b7280', bg: 'rgba(107,114,128,0.10)', ring: 'rgba(107,114,128,0.25)' },
+  gold:    { icon: '🥇', label: 'Gold',    color: '#d97706', bg: 'rgba(217,119,6,0.10)',   ring: 'rgba(217,119,6,0.25)' },
+  diamond: { icon: '💎', label: 'Diamond', color: '#0ea5e9', bg: 'rgba(14,165,233,0.10)',  ring: 'rgba(14,165,233,0.25)' },
 };
 
 function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
 
-function VoucherCard({ voucher, onSelect, selected, disabled, userPoints, orderAmount }) {
-  const needsPoints  = voucher.requiredPoints > 0;
-  const canAfford    = !needsPoints || (userPoints || 0) >= voucher.requiredPoints;
-  const meetsMinOrder = !orderAmount || orderAmount >= voucher.minOrder;
-  const isDisabled   = disabled || (needsPoints && !canAfford) || !meetsMinOrder;
-  const isSelected   = selected?.code === voucher.code;
-  const discountText = voucher.type === 'percentage'
-    ? `-${voucher.value}%${voucher.maxDiscount ? ` (tối đa ${formatCurrency(voucher.maxDiscount)})` : ''}`
-    : `-${formatCurrency(voucher.value)}`;
+function DiscountBadge({ voucher, orderAmount }) {
+  const savingsAmount = (() => {
+    if (!orderAmount || !voucher) return 0;
+    if (voucher.type === 'percentage') {
+      const d = Math.floor(orderAmount * voucher.value / 100);
+      return voucher.maxDiscount > 0 ? Math.min(d, voucher.maxDiscount) : d;
+    }
+    return Math.min(voucher.value || 0, orderAmount);
+  })();
+
+  if (voucher.type === 'percentage') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+        <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#10b981', lineHeight: 1 }}>
+          -{voucher.value}%
+        </span>
+        {voucher.maxDiscount > 0 && (
+          <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>
+            tối đa {formatCurrency(voucher.maxDiscount)}
+          </span>
+        )}
+        {savingsAmount > 0 && orderAmount > 0 && (
+          <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 700 }}>
+            ≈ -{formatCurrency(savingsAmount)}
+          </span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+      <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981', lineHeight: 1 }}>
+        -{formatCurrency(voucher.value)}
+      </span>
+    </div>
+  );
+}
+
+function VoucherCard({ voucher, onSelect, selected, userPoints, orderAmount }) {
+  const needsPoints   = voucher.requiredPoints > 0;
+  const canAfford     = !needsPoints || (userPoints || 0) >= voucher.requiredPoints;
+  const meetsMinOrder = !orderAmount || !voucher.minOrder || orderAmount >= voucher.minOrder;
+  const isDisabled    = (needsPoints && !canAfford) || !meetsMinOrder;
+  const isSelected    = selected?.code === voucher.code;
 
   return (
-    <button type="button"
+    <button
+      type="button"
       onClick={() => !isDisabled && onSelect(isSelected ? null : voucher)}
       disabled={isDisabled}
-      className={`vc-card ${isSelected ? 'vc-card-selected' : ''} ${isDisabled ? 'vc-card-disabled' : ''} ${needsPoints ? 'vc-card-points' : ''}`}
       style={{
-        borderColor: isSelected ? '#10b981' : (isDisabled ? 'rgba(148,163,184,0.2)' : 'rgba(16,185,129,0.15)'),
+        display: 'flex',
+        alignItems: 'stretch',
+        width: '100%',
+        borderRadius: 14,
+        border: isSelected ? '2px solid #10b981' : isDisabled ? '1.5px solid #e2e8f0' : '1.5px solid #e2e8f0',
         background: isSelected ? 'rgba(16,185,129,0.04)' : '#fff',
-      }}>
-      <div className="vc-card-top">
-        <div className="vc-card-code">{voucher.code}</div>
-        <div className="vc-card-discount" style={{ color: '#10b981' }}>{discountText}</div>
+        cursor: isDisabled ? 'not-allowed' : 'pointer',
+        opacity: isDisabled ? 0.55 : 1,
+        transition: 'all 0.18s',
+        overflow: 'hidden',
+        boxShadow: isSelected ? '0 0 0 3px rgba(16,185,129,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
+        textAlign: 'left',
+        position: 'relative',
+      }}
+    >
+      {/* Left accent stripe */}
+      <div style={{
+        width: 5,
+        flexShrink: 0,
+        background: isSelected
+          ? 'linear-gradient(180deg, #10b981, #0d9488)'
+          : isDisabled
+            ? '#e2e8f0'
+            : 'linear-gradient(180deg, #d1fae5, #a7f3d0)',
+      }} />
+
+      {/* Main content */}
+      <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.06em',
+                padding: '2px 7px', borderRadius: 6,
+                background: isSelected ? 'rgba(16,185,129,0.12)' : '#f1f5f9',
+                color: isSelected ? '#059669' : '#475569',
+                fontFamily: 'monospace',
+              }}>
+                {voucher.code}
+              </span>
+              {needsPoints && (
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#d97706', padding: '1px 5px', borderRadius: 4, background: 'rgba(217,119,6,0.08)' }}>
+                  ⭐ {voucher.requiredPoints.toLocaleString('vi-VN')} điểm
+                </span>
+              )}
+              {isSelected && (
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', padding: '1px 6px', borderRadius: 4, background: '#10b981' }}>
+                  ✓ Đang dùng
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b', marginTop: 4, lineHeight: 1.35 }}>
+              {voucher.name}
+            </div>
+            {voucher.description && (
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 2, lineHeight: 1.4 }}>
+                {voucher.description}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+              {voucher.minOrder > 0 && (
+                <span style={{
+                  fontSize: '0.65rem', fontWeight: 600,
+                  padding: '2px 6px', borderRadius: 4,
+                  background: meetsMinOrder ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                  color: meetsMinOrder ? '#059669' : '#dc2626',
+                }}>
+                  {meetsMinOrder ? '✓' : '✗'} Đơn tối thiểu {formatCurrency(voucher.minOrder)}
+                </span>
+              )}
+              {needsPoints && !canAfford && (
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.08)', color: '#dc2626' }}>
+                  ✗ Thiếu {(voucher.requiredPoints - userPoints).toLocaleString('vi-VN')} điểm
+                </span>
+              )}
+              {needsPoints && canAfford && (
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: 'rgba(16,185,129,0.08)', color: '#059669' }}>
+                  ✓ Đủ điểm đổi
+                </span>
+              )}
+              {(voucher.remaining || 0) > 0 && (
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: '#f8fafc', color: '#64748b' }}>
+                  Còn {voucher.remaining} lượt
+                </span>
+              )}
+            </div>
+          </div>
+          <DiscountBadge voucher={voucher} orderAmount={orderAmount} />
+        </div>
       </div>
-      <div className="vc-card-name">{voucher.name}</div>
-      {voucher.description && <div className="vc-card-desc">{voucher.description}</div>}
-      <div className="vc-card-meta">
-        {voucher.minOrder > 0 && <span className={meetsMinOrder ? 'vc-points-ok' : 'vc-points-nok'}>{meetsMinOrder ? '✓' : '✗'} Đơn tối thiểu: {formatCurrency(voucher.minOrder)}</span>}
-        {needsPoints && <span className={canAfford ? 'vc-points-ok' : 'vc-points-nok'}>{canAfford ? '✓' : '✗'} {voucher.requiredPoints} điểm{!canAfford && ` (còn thiếu ${voucher.requiredPoints - (userPoints || 0)}đ)`}</span>}
-        {voucher.remaining > 0 && <span>Còn {voucher.remaining} lượt</span>}
-      </div>
-      {isSelected && <div className="vc-selected-badge" style={{ background: '#10b981', color: '#fff' }}>✓ Đang chọn</div>}
     </button>
   );
 }
@@ -71,6 +182,16 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
 
   useEffect(() => { load(); }, [load]);
 
+  // SSE Realtime Updates
+  useSSE(token, 'vouchers_updated', load);
+
+  // Fallback Auto-reload every 60s
+  useEffect(() => {
+    const interval = setInterval(() => { load(); }, 60000);
+    return () => clearInterval(interval);
+  }, [load]);
+
+
   async function applyManual() {
     const code = manualCode.trim().toUpperCase();
     if (!code) { setManualMsg('Nhập mã coupon để áp dụng.'); return; }
@@ -81,6 +202,7 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
       if (!res.ok) throw new Error(json.message || 'Mã không hợp lệ');
       onSelect(json.data);
       setManualMsg('✓ Đã áp dụng mã coupon!');
+      setManualCode('');
     } catch (e) { onSelect(null); setManualMsg(e.message); }
   }
 
@@ -107,134 +229,274 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
     } else { onSelect(voucher); }
   }
 
-  const previewDiscount = () => {
+  const savings = (() => {
     if (!selected || !orderAmount) return 0;
     if (selected.type === 'percentage') {
       const d = Math.floor(orderAmount * selected.value / 100);
       return selected.maxDiscount > 0 ? Math.min(d, selected.maxDiscount) : d;
     }
     return Math.min(selected.value, orderAmount);
-  };
+  })();
 
-  const savings = previewDiscount();
   const userPoints = data?.user?.loyaltyPoints || 0;
-  const userTier = data?.user?.tier || 'bronze';
-  const tierMeta = TIER_META[userTier] || TIER_META.bronze;
-  const tierCount = (data?.tier_exclusive || []).length;
-  const pubCount = (data?.public || []).length;
-  const ptsCount = (data?.redeemable || []).length;
+  const userTier   = data?.user?.tier || 'bronze';
+  const tierMeta   = TIER_META[userTier] || TIER_META.bronze;
+  const tierCount  = (data?.tier_exclusive || []).length;
+  const pubCount   = (data?.public || []).length;
+  const ptsCount   = (data?.redeemable || []).length;
+
+  // Tab definitions
+  const tabs = [
+    { id: 'public', icon: '🏷️', label: 'Công khai', count: pubCount },
+    ...(tierCount > 0 ? [{ id: 'tier', icon: tierMeta.icon, label: `Hạng ${tierMeta.label}`, count: tierCount }] : []),
+    { id: 'points', icon: '⭐', label: 'Đổi điểm', count: ptsCount },
+  ];
 
   return (
-    <div className="vc-wrapper" style={{ borderRadius: '12px', border: '1px solid rgba(16,185,129,0.15)', overflow: 'hidden' }}>
-      <div className="vc-header" onClick={() => setOpen(p => !p)} role="button" tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && setOpen(p => !p)}
-        style={{ padding: '12px', cursor: 'pointer', background: 'rgba(16,185,129,0.04)' }}>
-        <div className="vc-header-left" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="vc-header-icon">🏷</span>
-          <div>
-            <strong style={{ fontSize: '0.85rem', color: '#10b981' }}>VOUCHER & ƯU ĐÃI</strong>
+    <div style={{ borderRadius: 16, border: '1.5px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
+
+      {/* ── Header / Toggle ── */}
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', padding: '12px 14px',
+          background: open ? 'rgba(16,185,129,0.04)' : '#fff',
+          border: 'none', cursor: 'pointer',
+          borderBottom: open ? '1px solid #e2e8f0' : 'none',
+          transition: 'background 0.15s',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'linear-gradient(135deg, #d1fae5, #a7f3d0)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.1rem', flexShrink: 0,
+          }}>🏷️</div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981', letterSpacing: '0.03em' }}>
+              VOUCHER & ƯU ĐÃI
+            </div>
             {selected ? (
-              <div className="vc-selected-summary" style={{ fontSize: '0.8rem' }}>
-                Đang dùng: <strong style={{ color: '#10b981' }}>{selected.code}</strong>
-                {savings > 0 && <span> — Tiết kiệm {formatCurrency(savings)}</span>}
+              <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontWeight: 700, color: '#10b981', fontFamily: 'monospace' }}>{selected.code}</span>
+                {savings > 0 && <span style={{ color: '#10b981', fontWeight: 600 }}>— tiết kiệm {formatCurrency(savings)}</span>}
               </div>
             ) : (
-              <div className="vc-hint" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Chọn voucher để tiết kiệm thêm</div>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 1 }}>Chọn voucher để tiết kiệm thêm</div>
             )}
           </div>
         </div>
-        <div className="vc-header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="vc-tier-pill" style={{ borderColor: tierMeta.color, color: tierMeta.color, background: tierMeta.bg, padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* Tier pill */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '3px 9px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 700,
+            background: tierMeta.bg, color: tierMeta.color,
+            border: `1px solid ${tierMeta.ring}`,
+          }}>
             {tierMeta.icon} {tierMeta.label}
           </div>
-          <div className="vc-points-pill" style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', background: 'rgba(16,185,129,0.08)', color: '#10b981' }}>
-            ⭐ {userPoints.toLocaleString('vi-VN')} điểm
+          {/* Points pill */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 3,
+            padding: '3px 9px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 700,
+            background: 'rgba(16,185,129,0.08)', color: '#10b981',
+            border: '1px solid rgba(16,185,129,0.2)',
+          }}>
+            ⭐ {userPoints.toLocaleString('vi-VN')}
           </div>
-          <span className="vc-toggle">{open ? '▲' : '▼'}</span>
+          {/* Arrow */}
+          <svg style={{ width: 16, height: 16, color: '#94a3b8', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0)' }}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         </div>
-      </div>
+      </button>
 
       {open && (
-        <div className="vc-body" style={{ padding: '12px' }}>
-          <div className="vc-manual-row" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <input className="vc-manual-input" value={manualCode}
-              onChange={e => setManualCode(e.target.value.toUpperCase())}
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* ── Manual code input ── */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={manualCode}
+              onChange={e => { setManualCode(e.target.value.toUpperCase()); setManualMsg(''); }}
               onKeyDown={e => e.key === 'Enter' && applyManual()}
-              placeholder="NHẬP MÃ COUPON THỦ CÔNG..."
-              style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.2)', fontSize: '0.8rem', outline: 'none' }}
+              placeholder="NHẬP MÃ COUPON..."
+              style={{
+                flex: 1, padding: '9px 13px', borderRadius: 10,
+                border: '1.5px solid #e2e8f0', fontSize: '0.8rem', fontWeight: 600,
+                fontFamily: 'monospace', letterSpacing: '0.05em', outline: 'none',
+                background: '#f8fafc', color: '#1e293b',
+                transition: 'border-color 0.15s',
+              }}
+              onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.background = '#fff'; }}
+              onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
             />
-            <button className="vc-manual-btn" type="button" onClick={applyManual}
-              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#10b981', color: '#fff', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>
+            <button type="button" onClick={applyManual} style={{
+              padding: '9px 16px', borderRadius: 10, border: 'none',
+              background: '#10b981', color: '#fff', fontSize: '0.8rem', fontWeight: 700,
+              cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
+            }}
+              onMouseOver={e => e.target.style.background = '#059669'}
+              onMouseOut={e => e.target.style.background = '#10b981'}
+            >
               Áp dụng
             </button>
             {selected && (
-              <button className="vc-clear-btn" type="button" onClick={() => { onSelect(null); setManualMsg(''); }}
-                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.3)', background: '#fff', fontSize: '0.8rem', cursor: 'pointer' }}>
-                ✕ Xóa
+              <button type="button" onClick={() => { onSelect(null); setManualMsg(''); setManualCode(''); }} style={{
+                padding: '9px 12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                background: '#fff', fontSize: '0.8rem', cursor: 'pointer', color: '#64748b',
+                transition: 'all 0.15s',
+              }}>
+                ✕
               </button>
             )}
           </div>
-          {manualMsg && <div className={manualMsg.startsWith('✓') ? 'vc-msg ok' : 'vc-msg err'} style={{ padding: '8px 12px', borderRadius: '8px', marginBottom: '12px', fontSize: '0.8rem', background: manualMsg.startsWith('✓') ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)', color: manualMsg.startsWith('✓') ? '#10b981' : '#ef4444' }}>{manualMsg}</div>}
 
-          {loading && <div className="vc-loading" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>Đang tải voucher...</div>}
-          {error && <div className="vc-msg err" style={{ padding: '8px 12px', borderRadius: '8px', marginBottom: '12px', fontSize: '0.8rem', background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>{error} <button type="button" onClick={load}>Thử lại</button></div>}
-
-          {data && (
-            <>
-              <div className="vc-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                {[
-                  { id: 'public', label: `🎫 Công khai${pubCount > 0 ? ` (${pubCount})` : ''}` },
-                  ...(tierCount > 0 ? [{ id: 'tier', label: `${tierMeta.icon} Hạng ${tierMeta.label}${tierCount > 0 ? ` (${tierCount})` : ''}` }] : []),
-                  { id: 'points', label: `⭐ Đổi điểm${ptsCount > 0 ? ` (${ptsCount})` : ''}` },
-                ].map(tab => (
-                  <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
-                    style={{
-                      padding: '6px 12px', borderRadius: '8px', border: 'none', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                      background: activeTab === tab.id ? 'rgba(16,185,129,0.08)' : 'transparent',
-                      color: activeTab === tab.id ? '#10b981' : '#64748b',
-                    }}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {activeTab === 'public' && (
-                <div className="vc-list">
-                  {pubCount === 0 ? <div className="vc-empty" style={{ color: '#94a3b8', padding: '20px', textAlign: 'center' }}>Không có voucher công khai nào.</div>
-                  : data.public.map(v => <VoucherCard key={v._id} voucher={v} onSelect={handleSelectVoucher} selected={selected} userPoints={userPoints} orderAmount={orderAmount} />)}
-                </div>
-              )}
-
-              {activeTab === 'tier' && (
-                <div className="vc-list">
-                  {tierCount === 0 ? <div className="vc-empty" style={{ color: '#94a3b8', padding: '20px', textAlign: 'center' }}>Không có voucher đặc quyền cho hạng <strong>{tierMeta.label}</strong>.</div>
-                  : <>
-                      <div className="vc-tier-banner" style={{ borderColor: tierMeta.color, background: tierMeta.bg, padding: '8px 12px', borderRadius: '8px', marginBottom: '8px', fontSize: '0.8rem' }}>
-                        {tierMeta.icon} Ưu đãi đặc quyền dành cho <strong>{tierMeta.label}</strong>
-                      </div>
-                      {data.tier_exclusive.map(v => <VoucherCard key={v._id} voucher={v} onSelect={handleSelectVoucher} selected={selected} userPoints={userPoints} orderAmount={orderAmount} />)}
-                    </>}
-                </div>
-              )}
-
-              {activeTab === 'points' && (
-                <div className="vc-list">
-                  <div className="vc-points-header" style={{ padding: '8px 12px', borderRadius: '8px', marginBottom: '8px', background: 'rgba(16,185,129,0.04)', fontSize: '0.8rem' }}>
-                    <span>Số điểm hiện có: <strong style={{ color: '#10b981' }}>{userPoints.toLocaleString('vi-VN')} điểm</strong></span>
-                    <small style={{ display: 'block', color: '#94a3b8', marginTop: '4px' }}>Chọn để đổi điểm lấy mã giảm giá</small>
-                  </div>
-                  {ptsCount === 0 ? <div className="vc-empty" style={{ color: '#94a3b8', padding: '20px', textAlign: 'center' }}>Không có mẫu đổi điểm nào.</div>
-                  : data.redeemable.map(v => <VoucherCard key={v._id} voucher={v} onSelect={handleSelectVoucher} selected={selected} userPoints={userPoints} orderAmount={orderAmount} />)}
-                </div>
-              )}
-            </>
+          {manualMsg && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 10, fontSize: '0.78rem', fontWeight: 600,
+              background: manualMsg.startsWith('✓') ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+              color: manualMsg.startsWith('✓') ? '#10b981' : '#dc2626',
+              border: `1px solid ${manualMsg.startsWith('✓') ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
+            }}>{manualMsg}</div>
           )}
 
+          {/* ── Tabs ── */}
+          <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 12, padding: 4 }}>
+            {tabs.map(tab => (
+              <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} style={{
+                flex: 1, padding: '7px 8px', borderRadius: 9, border: 'none', fontSize: '0.75rem',
+                fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                background: activeTab === tab.id ? '#fff' : 'transparent',
+                color: activeTab === tab.id ? '#10b981' : '#64748b',
+                boxShadow: activeTab === tab.id ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s',
+              }}>
+                <span>{tab.icon}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+                {tab.count > 0 && (
+                  <span style={{
+                    minWidth: 18, height: 18, borderRadius: 9, fontSize: '0.65rem', fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+                    background: activeTab === tab.id ? '#10b981' : '#cbd5e1',
+                    color: activeTab === tab.id ? '#fff' : '#475569',
+                  }}>{tab.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Loading / Error ── */}
+          {loading && (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <svg style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 12a9 9 0 11-6.219-8.56" />
+              </svg>
+              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+              Đang tải voucher...
+            </div>
+          )}
+          {error && (
+            <div style={{ padding: '10px 12px', borderRadius: 10, fontSize: '0.78rem', background: 'rgba(239,68,68,0.07)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '1rem' }}>⚠️</span>
+              <span style={{ flex: 1 }}>{error}</span>
+              <button type="button" onClick={load} style={{ fontSize: '0.72rem', fontWeight: 700, color: '#dc2626', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>Thử lại</button>
+            </div>
+          )}
+
+          {/* ── Tab Content ── */}
+          {data && !loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+              {/* Public tab */}
+              {activeTab === 'public' && (
+                pubCount === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '0.82rem' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: 6 }}>🎫</div>
+                    Không có voucher công khai nào hiện tại
+                  </div>
+                ) : data.public.map(v => (
+                  <VoucherCard key={v._id} voucher={v} onSelect={handleSelectVoucher} selected={selected} userPoints={userPoints} orderAmount={orderAmount} />
+                ))
+              )}
+
+              {/* Tier exclusive tab */}
+              {activeTab === 'tier' && (
+                tierCount === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '0.82rem' }}>
+                    Không có voucher đặc quyền cho hạng <strong>{tierMeta.label}</strong>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10,
+                      background: tierMeta.bg, border: `1px solid ${tierMeta.ring}`, fontSize: '0.78rem', fontWeight: 600, color: tierMeta.color,
+                    }}>
+                      {tierMeta.icon} Ưu đãi đặc quyền dành riêng cho thành viên hạng <strong>{tierMeta.label}</strong>
+                    </div>
+                    {data.tier_exclusive.map(v => (
+                      <VoucherCard key={v._id} voucher={v} onSelect={handleSelectVoucher} selected={selected} userPoints={userPoints} orderAmount={orderAmount} />
+                    ))}
+                  </>
+                )
+              )}
+
+              {/* Points redemption tab */}
+              {activeTab === 'points' && (
+                <>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', borderRadius: 12, background: 'rgba(16,185,129,0.05)',
+                    border: '1px solid rgba(16,185,129,0.15)',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a' }}>Số điểm của bạn</div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2 }}>Chọn mẫu để đổi điểm lấy mã giảm</div>
+                    </div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>
+                      ⭐ {userPoints.toLocaleString('vi-VN')}
+                    </div>
+                  </div>
+                  {ptsCount === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '0.82rem' }}>
+                      <div style={{ fontSize: '2rem', marginBottom: 6 }}>⭐</div>
+                      Không có mẫu đổi điểm nào
+                    </div>
+                  ) : data.redeemable.map(v => (
+                    <VoucherCard key={v._id} voucher={v} onSelect={handleSelectVoucher} selected={selected} userPoints={userPoints} orderAmount={orderAmount} />
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Savings Preview Bar ── */}
           {selected && savings > 0 && (
-            <div className="vc-preview-bar" style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(16,185,129,0.04)', fontSize: '0.8rem' }}>
-              <span>🎉 Đang tiết kiệm:</span>
-              <strong style={{ color: '#10b981' }}>{formatCurrency(savings)}</strong>
-              {orderAmount > 0 && <span className="vc-final" style={{ marginLeft: '8px' }}>→ Còn {formatCurrency(Math.max(0, orderAmount - savings))}</span>}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px', borderRadius: 12, marginTop: 4,
+              background: 'linear-gradient(135deg, rgba(16,185,129,0.06), rgba(13,148,136,0.06))',
+              border: '1px solid rgba(16,185,129,0.2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.1rem' }}>🎉</span>
+                <div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a' }}>Đang tiết kiệm</div>
+                  {orderAmount > 0 && (
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 1 }}>
+                      {formatCurrency(orderAmount)} → <strong style={{ color: '#10b981' }}>{formatCurrency(Math.max(0, orderAmount - savings))}</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#10b981' }}>
+                -{formatCurrency(savings)}
+              </div>
             </div>
           )}
         </div>
