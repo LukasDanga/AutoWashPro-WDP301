@@ -1,361 +1,263 @@
-/**
- * AutoWashPro Login Screen
- * Modern auth screen with gradient hero + focused form
- * Following UX guidelines:
- *   - accessibility, form-labels
- *   - input-labels (visible labels, not placeholder-only)
- *   - inline-validation (validate on submit, clear errors on edit)
- *   - error-placement (below field)
- *   - error-clarity (cause + recovery)
- *   - autocomplete / textContentType for autofill
- */
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
-  StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Link, useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
-import {
-  Button,
-  Input,
-  PressableScale,
-  Icon,
-  Icons,
-} from '../../src/components/common';
-import { ScreenContainer } from '../../src/components/common/ScreenContainer';
-import { Header } from '../../src/components/common/Header';
-import { useColors } from '../../src/theme/ThemeContext';
-import { typography } from '../../src/theme/typography';
-import { spacing, borderRadius } from '../../src/theme/spacing';
+import { AlertDialog } from '../../src/components/common';
+
+const C = {
+  brand:      '#2563EB',
+  bg:         '#FFFFFF',
+  bgInput:    '#F8FAFC',
+  border:     '#E2E8F0',
+  textPrimary:'#0F172A',
+  textBody:   '#475569',
+  textMuted:  '#94A3B8',
+  textLabel:  '#334155',
+  error:      '#EF4444',
+  errorBg:    '#FEF2F2',
+  divider:    '#F1F5F9',
+};
 
 export default function LoginScreen() {
-  const colors = useColors();
+  const router = useRouter();
   const { login, isLoading } = useAuth();
 
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
 
+  const emailRef    = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+
+  const updateField = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => prev[field] ? { ...prev, [field]: '' } : prev);
+  }, []);
+
   const validateForm = (): boolean => {
-    const newErrors: { identifier?: string; password?: string } = {};
-
-    if (!identifier.trim()) {
-      newErrors.identifier = 'Vui lòng nhập email hoặc số điện thoại';
-    } else if (identifier.includes('@') && !identifier.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      newErrors.identifier = 'Email không đúng định dạng';
-    }
-
-    if (!password) {
-      newErrors.password = 'Vui lòng nhập mật khẩu';
-    } else if (password.length < 6) {
-      newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
-    }
-
-    setErrors(newErrors);
-    setServerError(null);
-    return Object.keys(newErrors).length === 0;
+    const e: Record<string, string> = {};
+    if (!formData.email.trim())
+      e.email = 'Vui lòng nhập email hoặc số điện thoại';
+    else if (formData.email.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
+      e.email = 'Email không hợp lệ';
+    if (!formData.password)
+      e.password = 'Vui lòng nhập mật khẩu';
+    else if (formData.password.length < 6)
+      e.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleLogin = async () => {
     if (!validateForm()) return;
-
     try {
-      await login(identifier.trim(), password);
+      await login(formData.email.trim(), formData.password);
     } catch (error: any) {
-      const errorMessage = parseLoginError(error);
-      setServerError(errorMessage);
+      AlertDialog.error('Đăng nhập thất bại', parseLoginError(error));
     }
   };
 
   const parseLoginError = (error: any): string => {
-    if (!error.response) {
-      return 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet và thử lại.';
-    }
-
-    const status = error.response?.status;
-    const data = error.response?.data;
-
+    if (!error.response) return 'Không thể kết nối. Vui lòng kiểm tra internet và thử lại.';
+    const { status, data } = error.response;
     switch (status) {
-      case 400:
-        return data?.message || 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.';
+      case 400: return data?.message || 'Dữ liệu không hợp lệ.';
       case 401:
-        if (data?.code === 'ACCOUNT_LOCKED') {
-          return 'Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ qua mục Trợ giúp.';
-        }
-        if (data?.code === 'ACCOUNT_INACTIVE') {
-          return 'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để kích hoạt.';
-        }
-        if (data?.code === 'WRONG_PASSWORD') {
-          return 'Mật khẩu không đúng. Vui lòng thử lại hoặc đặt lại mật khẩu.';
-        }
-        if (data?.code === 'USER_NOT_FOUND') {
-          return 'Tài khoản không tồn tại. Vui lòng đăng ký tài khoản mới.';
-        }
-        return 'Email hoặc mật khẩu không đúng.';
-      case 403:
-        return data?.message || 'Bạn không có quyền truy cập.';
-      case 429:
-        return 'Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.';
-      case 500:
-      case 502:
-      case 503:
-        return 'Máy chủ đang bận. Vui lòng thử lại sau ít phút.';
-      default:
-        return data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
+        if (data?.code === 'ACCOUNT_LOCKED') return 'Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ.';
+        if (data?.code === 'ACCOUNT_INACTIVE') return 'Tài khoản chưa kích hoạt. Vui lòng kiểm tra email.';
+        return 'Email hoặc mật khẩu không chính xác.';
+      case 429: return 'Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.';
+      case 500: case 502: case 503: return 'Máy chủ đang bận. Vui lòng thử lại sau ít phút.';
+      default: return data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
     }
   };
 
   return (
-    <ScreenContainer background="gradient" scroll keyboardAvoiding>
-      <Header variant="large" showBack title="AutoWashPro" subtitle="Rửa xe thông minh, tiện lợi" />
-
-      {/* Logo in hero */}
-      <View style={styles.logoWrap}>
-        <LinearGradient
-          colors={['#FFFFFF', '#E3F2FD']}
-          style={styles.logoContainer}
+    <SafeAreaView style={s.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         >
-          <Text style={[styles.logoText, { color: colors.primary }]}>AWP</Text>
-        </LinearGradient>
-      </View>
-
-      {/* Content section */}
-      <View style={[styles.contentContainer, { backgroundColor: colors.background }]}>
-        <Text style={[styles.welcomeText, { color: colors.textPrimary }]}>Chào mừng bạn!</Text>
-        <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>Đăng nhập để tiếp tục</Text>
-
-        {serverError ? (
-          <View
-            style={[styles.serverErrorWrap, { backgroundColor: colors.errorLight }]}
-            accessibilityRole="alert"
-            accessibilityLiveRegion="polite"
-          >
-            <Icon name={Icons.error} size={18} color={colors.error} />
-            <Text style={[styles.serverErrorText, { color: colors.error }]}>{serverError}</Text>
+          {/* Top bar */}
+          <View style={s.topbar}>
+            {router.canGoBack() && (
+              <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+                <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
+              </TouchableOpacity>
+            )}
           </View>
-        ) : null}
 
-        <Input
-          label="Email hoặc Số điện thoại"
-          placeholder="Nhập email hoặc số điện thoại"
-          value={identifier}
-          onChangeText={(text) => {
-            setIdentifier(text);
-            if (errors.identifier) {
-              setErrors({ ...errors, identifier: undefined });
-            }
-            if (serverError) setServerError(null);
-          }}
-          error={errors.identifier}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          textContentType="username"
-          containerStyle={styles.inputContainer}
-          leftIcon={
-            <Icon name={Icons.mailOutline} size={20} color={colors.textSecondary} />
-          }
-        />
+          {/* Heading */}
+          <View style={s.heading}>
+            <Text style={s.title}>Chào mừng trở lại</Text>
+            <Text style={s.subtitle}>
+              Đăng nhập để tiếp tục quản lý dịch vụ chăm sóc xế yêu của bạn
+            </Text>
+          </View>
 
-        <Input
-          label="Mật khẩu"
-          placeholder="Nhập mật khẩu"
-          value={password}
-          onChangeText={(text) => {
-            setPassword(text);
-            if (errors.password) {
-              setErrors({ ...errors, password: undefined });
-            }
-            if (serverError) setServerError(null);
-          }}
-          error={errors.password}
-          secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          autoComplete="password"
-          textContentType="password"
-          containerStyle={styles.inputContainer}
-          leftIcon={
-            <Icon name={Icons.lockOutline} size={20} color={colors.textSecondary} />
-          }
-          rightIcon={
-            <Icon
-              name={showPassword ? Icons.eyeOffOutline : Icons.eyeOutline}
-              size={20}
-              color={colors.textSecondary}
+          {/* Form */}
+          <StableField label="Email hoặc Số điện thoại" error={errors.email}>
+            <TextInput
+              ref={emailRef}
+              style={s.textInput}
+              placeholder="Nhập email hoặc số điện thoại"
+              placeholderTextColor={C.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={formData.email}
+              onChangeText={v => updateField('email', v)}
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
             />
-          }
-          onRightIconPress={() => setShowPassword(!showPassword)}
-        />
+          </StableField>
 
-        <Link href="/(auth)/forgot-password" asChild>
-          <PressableScale
-            style={styles.forgotPasswordContainer}
-            accessibilityRole="link"
-            accessibilityLabel="Quên mật khẩu"
-          >
-            <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>Quên mật khẩu?</Text>
-          </PressableScale>
-        </Link>
+          <StableField label="Mật khẩu" error={errors.password}>
+            <View style={s.rowInput}>
+              <TextInput
+                ref={passwordRef}
+                style={[s.textInput, s.textInputFlex]}
+                placeholder="Nhập mật khẩu của bạn"
+                placeholderTextColor={C.textMuted}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                value={formData.password}
+                onChangeText={v => updateField('password', v)}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(p => !p)}
+                style={s.eyeBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </StableField>
 
-        <Button
-          title="Đăng nhập"
-          onPress={handleLogin}
-          loading={isLoading}
-          fullWidth
-          size="large"
-          style={styles.loginButton}
-        />
-
-        {/* Divider */}
-        <View style={styles.dividerRow}>
-          <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
-          <Text style={[styles.dividerText, { color: colors.textTertiary }]}>Hoặc</Text>
-          <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
-        </View>
-
-        {/* Social login buttons (placeholder) */}
-        <Button
-          title="Tiếp tục với Google"
-          variant="outline"
-          icon={
-            <Icon name={Icons.chatOutline} size={18} color={colors.textPrimary} />
-          }
-          onPress={() => {}}
-          fullWidth
-          style={styles.socialButton}
-        />
-        <Button
-          title="Tiếp tục với Facebook"
-          variant="outline"
-          icon={
-            <Icon name={Icons.chatOutline} size={18} color={colors.textPrimary} />
-          }
-          onPress={() => {}}
-          fullWidth
-          style={styles.socialButton}
-        />
-
-        {/* Register Link */}
-        <View style={styles.registerContainer}>
-          <Text style={[styles.registerText, { color: colors.textSecondary }]}>Chưa có tài khoản? </Text>
-          <Link href="/(auth)/register" asChild>
-            <PressableScale accessibilityRole="link" accessibilityLabel="Đăng ký ngay">
-              <Text style={[styles.registerLink, { color: colors.primary }]}>Đăng ký ngay</Text>
-            </PressableScale>
+          <Link href="/(auth)/forgot-password" asChild>
+            <TouchableOpacity style={s.forgot} activeOpacity={0.7}>
+              <Text style={s.forgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
           </Link>
-        </View>
-      </View>
-    </ScreenContainer>
+
+          {/* Actions */}
+          <View style={s.actions}>
+            <TouchableOpacity
+              style={[s.cta, isLoading && s.ctaDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
+              activeOpacity={0.85}
+            >
+              {isLoading
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={s.ctaText}>Đăng nhập</Text>
+              }
+            </TouchableOpacity>
+
+            <Text style={s.footerNote}>
+              Chưa có tài khoản?{' '}
+              <Link href="/(auth)/register" asChild>
+                <Text style={s.footerLink}>Đăng ký ngay</Text>
+              </Link>
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  logoWrap: {
-    alignItems: 'center',
-    marginTop: -spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  contentContainer: {
-    flex: 1,
-    padding: spacing.lg,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    marginTop: -spacing.lg,
-  },
-  welcomeText: {
-    ...typography.h2,
-    marginBottom: spacing.xs,
-    fontWeight: '800',
-  },
-  subtitleText: {
-    ...typography.body,
-    marginBottom: spacing.lg,
-  },
-  inputContainer: {
-    marginBottom: spacing.sm,
-  },
-  forgotPasswordContainer: {
-    alignSelf: 'flex-end',
-    marginVertical: spacing.sm,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  forgotPasswordText: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-  },
-  loginButton: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-  },
-  dividerRow: {
+// Wrapper tĩnh — KHÔNG có state để tránh re-render gây nhảy focus
+function StableField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <View style={s.fieldWrap}>
+      <Text style={s.fieldLabel}>{label}</Text>
+      <View style={[s.inputBox, !!error && s.inputBoxError]}>
+        {children}
+      </View>
+      {error ? <Text style={s.errMsg}>{error}</Text> : null}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  root:    { flex: 1, backgroundColor: C.bg },
+  scroll:  { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 40 },
+
+  topbar:  { height: 56, marginTop: 4, justifyContent: 'center' },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+
+  heading:  { marginTop: 32, marginBottom: 40 },
+  title:    { fontSize: 32, fontWeight: '800', color: C.textPrimary, letterSpacing: -0.5, marginBottom: 12 },
+  subtitle: { fontSize: 15, color: C.textBody, lineHeight: 24 },
+
+  fieldWrap:    { marginBottom: 20 },
+  fieldLabel:   { fontSize: 13, fontWeight: '600', color: C.textLabel, marginBottom: 8, letterSpacing: 0.1 },
+  inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.md,
+    height: 56,
+    backgroundColor: C.bgInput,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    paddingHorizontal: 16,
   },
-  dividerLine: {
+  inputBoxError: { borderColor: C.error, backgroundColor: C.errorBg },
+  textInput: {
     flex: 1,
-    height: StyleSheet.hairlineWidth,
-  },
-  dividerText: {
-    ...typography.caption,
-    marginHorizontal: spacing.md,
+    height: 56,
+    fontSize: 16,
     fontWeight: '500',
+    color: C.textPrimary,
+    paddingVertical: 0,
   },
-  socialButton: {
-    marginBottom: spacing.sm,
-  },
-  serverErrorWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  serverErrorText: {
-    flex: 1,
-    ...typography.caption,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  registerContainer: {
-    flexDirection: 'row',
+  textInputFlex: { flex: 1 },
+  rowInput: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  eyeBtn:   { marginLeft: 10, padding: 4 },
+  errMsg:   { marginTop: 6, marginLeft: 4, fontSize: 12, fontWeight: '500', color: C.error, lineHeight: 16 },
+
+  forgot:     { alignSelf: 'flex-start', marginTop: -4, marginBottom: 8, paddingVertical: 8 },
+  forgotText: { color: C.brand, fontWeight: '600', fontSize: 14 },
+
+  actions:     { marginTop: 32 },
+  cta: {
+    height: 56,
+    backgroundColor: C.brand,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.lg,
+    shadowColor: C.brand,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
   },
-  registerText: {
-    ...typography.body,
-  },
-  registerLink: {
-    ...typography.body,
-    fontWeight: '700',
-  },
+  ctaDisabled: { opacity: 0.7, shadowOpacity: 0, elevation: 0 },
+  ctaText:     { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
+  footerNote:  { marginTop: 20, textAlign: 'center', fontSize: 14, fontWeight: '500', color: C.textBody },
+  footerLink:  { color: C.brand, fontWeight: '700' },
 });

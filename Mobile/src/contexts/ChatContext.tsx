@@ -1,9 +1,9 @@
 /**
  * AutoWashPro Chat Context
- * Chat session and message state management
+ * Chat session and message state management with streaming support
  */
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import { chatbotApi, type ChatMessage } from '../api/chatbot';
 
 const generateSessionId = () =>
@@ -14,6 +14,7 @@ interface ChatContextType {
   isLoading: boolean;
   sessionId: string;
   sendMessage: (text: string) => Promise<void>;
+  addBotMessage: (text: string) => void;
   clearChat: () => void;
   error: string | null;
 }
@@ -28,9 +29,13 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [sessionId] = useState<string>(() => generateSessionId());
   const [error, setError] = useState<string | null>(null);
 
+  // Ref to track streaming message index so we can update it in-place
+  const streamingIndexRef = useRef<number>(-1);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return;
 
+    // 1. Add user message
     const userMsg: ChatMessage = { role: 'user', text: text.trim() };
     setMessages((prev) => {
       const next = [...prev, userMsg];
@@ -39,18 +44,52 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setError(null);
     setIsLoading(true);
 
+    // 2. Add empty bot placeholder for streaming
+    setMessages((prev) => {
+      streamingIndexRef.current = prev.length; // index of the placeholder
+      return [...prev, { role: 'model', text: '' }];
+    });
+
     try {
-      const result = await chatbotApi.sendMessage(text.trim(), sessionId);
-      const modelMsg: ChatMessage = { role: 'model', text: result.reply };
-      setMessages((prev) => [...prev, modelMsg]);
+      await chatbotApi.sendMessageStream(text.trim(), sessionId, (event) => {
+        if (event.type === 'token') {
+          // Append token to the streaming placeholder
+          setMessages((prev) => {
+            const idx = streamingIndexRef.current;
+            if (idx < 0 || idx >= prev.length) return prev;
+            const updated = [...prev];
+            updated[idx] = { role: 'model', text: updated[idx].text + event.token };
+            return updated;
+          });
+        } else if (event.type === 'error') {
+          setError(event.message);
+          // Remove empty placeholder on error
+          setMessages((prev) => {
+            const idx = streamingIndexRef.current;
+            if (idx < 0) return prev;
+            return prev.filter((_, i) => i !== idx);
+          });
+        }
+      });
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.';
+      const msg = err?.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.';
       setError(msg);
-      setMessages((prev) => prev.slice(0, -1));
+      // Remove empty placeholder on error, remove user msg too
+      setMessages((prev) => {
+        const idx = streamingIndexRef.current;
+        return prev.filter((_, i) => i !== idx && i !== idx - 1);
+      });
     } finally {
+      streamingIndexRef.current = -1;
       setIsLoading(false);
     }
   }, [isLoading, sessionId]);
+
+  /** Inject a bot message directly without calling the API (for welcome message) */
+  const addBotMessage = useCallback((text: string) => {
+    const modelMsg: ChatMessage = { role: 'model', text };
+    setMessages((prev) => [...prev, modelMsg]);
+  }, []);
 
   const clearChat = useCallback(async () => {
     setMessages([]);
@@ -63,7 +102,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [sessionId]);
 
   return (
-    <ChatContext.Provider value={{ messages, isLoading, sessionId, sendMessage, clearChat, error }}>
+    <ChatContext.Provider value={{ messages, isLoading, sessionId, sendMessage, addBotMessage, clearChat, error }}>
       {children}
     </ChatContext.Provider>
   );

@@ -7,21 +7,45 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-const VALID_METHODS = ['cash', 'momo', 'vnpay', 'bank'];
-
-const simulateMomoPayment = (amount, transactionId) => `https://momo.vn/pay?amount=${amount}&txn=${transactionId}`;
-const simulateVNPayPayment = (amount, transactionId) => `https://vnpay.vn/pay?amount=${amount}&txn=${transactionId}`;
+const VALID_METHODS = ['cash', 'bank'];
 
 const generateQrDataUrl = async (transactionId, amount, method) => {
   let content;
-  if (method === 'momo') {
-    content = `2|99|${transactionId}|${(amount * 1000).toFixed(0)}|momo_qr|transfer`;
-  } else if (method === 'vnpay') {
-    content = `${transactionId}|VNA|${amount.toFixed(0)}|VNPAYQR`;
-  } else {
+  if (method === 'bank') {
+    const bankId = process.env.SEPAY_BANK_ID;
+    const acc = process.env.SEPAY_BANK_ACCOUNT;
+    if (bankId && acc) {
+      return `https://qr.sepay.vn/img?bank=${bankId}&acc=${acc}&amount=${amount}&des=${transactionId}`;
+    }
     content = `AUTOWASH\nMã GD: ${transactionId}\nSố tiền: ${amount.toLocaleString('vi-VN')}đ`;
+    return QRCode.toDataURL(content, { width: 300, margin: 1 });
   }
-  return QRCode.toDataURL(content, { width: 300, margin: 1 });
+  return QRCode.toDataURL('Invalid format', { width: 300, margin: 1 });
+};
+
+// Hàm poll SePay transactions
+const pollSepayTransaction = async (transactionId, amount) => {
+  try {
+    const apiKey = process.env.SEPAY_API_KEY;
+    if (!apiKey) return false;
+    // Tự động poll API của SePay để kiểm tra giao dịch (cho môi trường local/không có webhook)
+    const res = await fetch('https://my.sepay.vn/userapi/transactions/list', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data && data.transactions && Array.isArray(data.transactions)) {
+      // Tìm giao dịch có chứa mã transactionId và số tiền >= yêu cầu
+      const match = data.transactions.find(tx => 
+        tx.transaction_content?.includes(transactionId) && 
+        Number(tx.amount_in) >= amount
+      );
+      return !!match;
+    }
+  } catch (err) {
+    console.error('Error polling sepay:', err.message);
+  }
+  return false;
 };
 
 exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full', overrideAmount) => {
@@ -134,15 +158,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     return payment;
   }
 
-  // Momo/VNPay/Bank: tạo QR code (deposit) hoặc payment URL (remaining/full)
-  if (isDeposit) {
+  // Bank: tạo QR code (deposit hoặc full)
+  if (method === 'bank') {
     payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method);
-  } else if (method === 'bank') {
-    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method);
-  } else {
-    payment.paymentUrl = method === 'momo'
-      ? simulateMomoPayment(amount, payment.transactionId)
-      : simulateVNPayPayment(amount, payment.transactionId);
   }
   await payment.save();
   return payment;
@@ -271,13 +289,26 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 };
 
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
-  const payment = await Payment.findOne({ bookingId })
+  let payment = await Payment.findOne({ bookingId })
     .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
     .populate('userId', 'name email phone');
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
+
+  // Tự động kiểm tra trên SePay nếu chưa thanh toán (để hỗ trợ local testing giống Flutter polling)
+  if (payment.status !== 'paid' && payment.method === 'bank') {
+    const isPaid = await pollSepayTransaction(payment.transactionId, payment.amount);
+    if (isPaid) {
+      await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
+      // Load lại payment sau khi update
+      payment = await Payment.findOne({ bookingId })
+        .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
+        .populate('userId', 'name email phone');
+    }
+  }
+
   return payment;
 };
 

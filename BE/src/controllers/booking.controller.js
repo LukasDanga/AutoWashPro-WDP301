@@ -126,12 +126,6 @@ exports.refundPayment = catchAsync(async (req, res) => {
   success(res, payment, 'Payment refunded');
 });
 
-// Callback from MoMo/VNPay gateway (no auth — gateway calls this)
-exports.confirmPaymentCallback = catchAsync(async (req, res) => {
-  const { transactionId, gatewayTransactionId, success } = req.body;
-  const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId, success);
-  success(res, payment, success ? 'Payment confirmed' : 'Payment failed');
-});
 
 exports.getFeedbacks = catchAsync(async (req, res) => {
   const feedbacks = await bookingService.getFeedbacks(req.user, req.query);
@@ -167,4 +161,42 @@ exports.getBookingQR = catchAsync(async (req, res) => {
   const payload = JSON.stringify({ bookingId: String(booking._id), branchId: String(booking.branchId?._id || booking.branchId) });
   const dataUrl = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 2, width: 300 });
   success(res, { qrDataUrl: dataUrl, bookingId: booking._id }, 'QR generated');
+});
+
+exports.sepayWebhook = catchAsync(async (req, res) => {
+  const apiKey = req.headers.authorization;
+  if (process.env.SEPAY_API_KEY && apiKey !== `Apikey ${process.env.SEPAY_API_KEY}`) {
+    return res.status(401).json({ success: false, message: 'Invalid API Key' });
+  }
+
+  const { content, referenceCode, transferType } = req.body;
+  
+  // Chỉ xử lý giao dịch nhận tiền
+  if (transferType !== 'in') {
+    return res.json({ success: true, message: 'Ignored outbound transaction' });
+  }
+
+  // Tìm mã giao dịch trong nội dung (ví dụ: TXN123456ABC)
+  // content có thể là "WASHPRO TXN123456ABC"
+  const match = content ? content.match(/TXN\d+[A-Z0-9]+/) : null;
+  if (!match) {
+    return res.json({ success: true, message: 'No transaction ID found in content' });
+  }
+
+  const transactionId = match[0];
+  
+  try {
+    const payment = await paymentService.confirmPaymentCallback(transactionId, referenceCode || 'SEPAY', true);
+    success(res, payment, 'SePay webhook processed successfully');
+  } catch (err) {
+    // Trả về 200 để SePay không gửi lại webhook nếu giao dịch đã được xử lý hoặc không hợp lệ
+    console.error('SePay Webhook error:', err.message);
+    res.json({ success: true, message: err.message });
+  }
+});
+
+exports.simulatePayment = catchAsync(async (req, res) => {
+  const { transactionId, gatewayTransactionId } = req.body;
+  const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId || 'SIMULATED', true);
+  success(res, payment, 'Payment simulated successfully');
 });

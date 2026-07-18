@@ -94,7 +94,11 @@ router.get('/unviewed-count', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER
  */
 router.patch('/:id/viewed', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.markPaymentViewed);
 
-// Callback from MoMo/VNPay gateway (no auth required — called by payment gateway)
-router.post('/callback', paymentValidators.callback, validate, bookingController.confirmPaymentCallback);
+
+// Webhook từ SePay (giao dịch chuyển khoản ngân hàng)
+router.post('/sepay/webhook', bookingController.sepayWebhook);
+
+// Giả lập thanh toán (dành cho nút test ở localhost)
+router.post('/simulate', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.simulatePayment);
 
 module.exports = router;

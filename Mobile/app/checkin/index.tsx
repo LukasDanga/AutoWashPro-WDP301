@@ -1,16 +1,19 @@
 /**
- * AutoWashPro QR Check-in Screen
- * View booking QR code for staff scanning
- * Following UX guidelines: accessibility, no-emoji-icons, scale-feedback
+ * AutoWashPro QR Check-in Screen — Polished UI Refactor
+ * All business logic preserved. Only layout, spacing, typography,
+ * segmented control, and visual polish improved.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TextInput,
+  Animated,
+  Pressable,
+  LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -38,17 +41,124 @@ import type { Booking } from '../../src/types';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Mode = 'view' | 'scan' | 'manual';
 
 const STATUS_MAP: Record<string, { variant: any; label: string }> = {
-  pending: { variant: 'warning', label: 'Chờ xác nhận' },
-  confirmed: { variant: 'info', label: 'Đã xác nhận' },
+  pending:    { variant: 'warning', label: 'Chờ xác nhận' },
+  confirmed:  { variant: 'info',    label: 'Đã xác nhận' },
   checked_in: { variant: 'primary', label: 'Đã check-in' },
-  in_progress: { variant: 'info', label: 'Đang rửa' },
-  completed: { variant: 'success', label: 'Hoàn thành' },
-  cancelled: { variant: 'error', label: 'Đã hủy' },
+  in_progress:{ variant: 'info',    label: 'Đang rửa' },
+  completed:  { variant: 'success', label: 'Hoàn thành' },
+  cancelled:  { variant: 'error',   label: 'Đã hủy' },
 };
 
+const TABS: { key: Mode; label: string; icon: string; iconActive: string }[] = [
+  { key: 'view',   label: 'Xem QR',  icon: Icons.qrCodeOutline, iconActive: Icons.qrCode },
+  { key: 'scan',   label: 'Quét QR', icon: Icons.cameraOutline, iconActive: Icons.camera },
+  { key: 'manual', label: 'Nhập mã', icon: Icons.createOutline, iconActive: Icons.create },
+];
+
+// ─── SegmentedControl ─────────────────────────────────────────────────────────
+const SegmentedControl: React.FC<{
+  value: Mode;
+  onChange: (v: Mode) => void;
+}> = ({ value, onChange }) => {
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [tabWidth, setTabWidth] = useState(0);
+  const activeIndex = TABS.findIndex((t) => t.key === value);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width / TABS.length;
+    setTabWidth(w);
+    slideAnim.setValue(activeIndex * w);
+  };
+
+  const handlePress = (key: Mode) => {
+    const idx = TABS.findIndex((t) => t.key === key);
+    Animated.spring(slideAnim, {
+      toValue: idx * tabWidth,
+      tension: 80,
+      friction: 12,
+      useNativeDriver: true,
+    }).start();
+    onChange(key);
+  };
+
+  return (
+    <View style={seg.track} onLayout={onLayout}>
+      {/* Sliding pill */}
+      {tabWidth > 0 && (
+        <Animated.View
+          style={[
+            seg.pill,
+            { width: tabWidth, transform: [{ translateX: slideAnim }] },
+          ]}
+        />
+      )}
+
+      {/* Tabs */}
+      {TABS.map((tab) => {
+        const isActive = value === tab.key;
+        return (
+          <Pressable
+            key={tab.key}
+            style={seg.tab}
+            onPress={() => handlePress(tab.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+          >
+            <Icon
+              name={isActive ? tab.iconActive : tab.icon}
+              size={18}
+              color={isActive ? '#FFFFFF' : '#64748B'}
+            />
+            <Text style={[seg.label, isActive && seg.labelActive]}>
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+};
+
+const seg = StyleSheet.create({
+  track: {
+    flexDirection: 'row',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 28,
+    height: 48,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  pill: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    borderRadius: 22,
+    backgroundColor: '#2563EB',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    zIndex: 1,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  labelActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CheckInScreen() {
   const { id, mode: paramMode } = useLocalSearchParams<{ id?: string; mode?: string }>();
   const { user } = useAuth();
@@ -89,10 +199,7 @@ export default function CheckInScreen() {
   const handleCheckIn = useCallback(async () => {
     if (!booking) return;
     if (booking.status !== 'confirmed' && booking.status !== 'pending') {
-      AlertDialog.warning(
-        'Không thể check-in',
-        'Booking này không ở trạng thái có thể check-in.',
-      );
+      AlertDialog.warning('Không thể check-in', 'Booking này không ở trạng thái có thể check-in.');
       return;
     }
 
@@ -103,17 +210,12 @@ export default function CheckInScreen() {
         setCheckingIn(true);
         try {
           const apiClient = (await import('../../src/api/client')).apiClient;
-          await apiClient.patch(`/bookings/${booking._id}/status`, {
-            status: 'checked_in',
-          });
+          await apiClient.patch(`/bookings/${booking._id}/status`, { status: 'checked_in' });
           setCheckInSuccess(true);
           toast.success('Check-in thành công', 'Vui lòng đưa mã QR cho nhân viên');
           await fetchBookingQR(booking._id);
         } catch (err: any) {
-          AlertDialog.error(
-            'Lỗi',
-            err?.response?.data?.message || 'Không thể check-in. Vui lòng thử lại.',
-          );
+          AlertDialog.error('Lỗi', err?.response?.data?.message || 'Không thể check-in. Vui lòng thử lại.');
         } finally {
           setCheckingIn(false);
         }
@@ -130,50 +232,30 @@ export default function CheckInScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={styles.header}>
         <PressableScale
           style={styles.backButton}
           onPress={() => router.back()}
           accessibilityLabel="Quay lại"
         >
-          <Icon name={Icons.back} size={20} color={colors.textInverse} />
+          <Icon name={Icons.back} size={20} color="#FFFFFF" />
         </PressableScale>
-        <Text style={styles.headerTitle}>Check-in QR</Text>
-        <View style={{ width: 36 }} />
+        <Text style={styles.headerTitle}>QR Check-in</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      {/* Mode Selector */}
-      <View style={styles.modeSelector}>
-        {[
-          { key: 'view', label: 'Xem QR', icon: Icons.qrCodeOutline },
-          { key: 'scan', label: 'Quét QR', icon: Icons.cameraOutline },
-          { key: 'manual', label: 'Nhập mã', icon: Icons.createOutline },
-        ].map((m) => (
-          <PressableScale
-            key={m.key}
-            style={[styles.modeButton, mode === m.key && styles.modeButtonActive]}
-            onPress={() => setMode(m.key as Mode)}
-            accessibilityLabel={`Chế độ ${m.label}`}
-          >
-            <Icon
-              name={m.icon}
-              size={20}
-              color={mode === m.key ? colors.primary : colors.textSecondary}
-            />
-            <Text style={[styles.modeLabel, mode === m.key && styles.modeLabelActive]}>
-              {m.label}
-            </Text>
-          </PressableScale>
-        ))}
+      {/* ── Segmented Control ── */}
+      <View style={styles.segmentedWrapper}>
+        <SegmentedControl value={mode} onChange={setMode} />
       </View>
 
+      {/* ── Content ── */}
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── View Mode: Show QR ── */}
         {mode === 'view' && (
           <View>
             {booking ? (
@@ -193,7 +275,6 @@ export default function CheckInScreen() {
           </View>
         )}
 
-        {/* ── Scan Mode ── */}
         {mode === 'scan' && (
           <ScanModeContent onScanned={(data) => {
             try {
@@ -210,7 +291,6 @@ export default function CheckInScreen() {
           }} />
         )}
 
-        {/* ── Manual Mode ── */}
         {mode === 'manual' && (
           <ManualEntryContent
             onFound={(bookingId) => {
@@ -224,47 +304,32 @@ export default function CheckInScreen() {
   );
 }
 
+// ─── BookingInfoCard ──────────────────────────────────────────────────────────
 const BookingInfoCard: React.FC<{ booking: Booking }> = ({ booking }) => {
-  const branchName = typeof booking.branchId === 'object' ? booking.branchId.name : '—';
-  const pkgName = typeof booking.packageId === 'object' ? booking.packageId.name : '—';
+  const branchName   = typeof booking.branchId === 'object' ? booking.branchId.name : '—';
+  const pkgName      = typeof booking.packageId === 'object' ? booking.packageId.name : '—';
   const vehiclePlate = typeof booking.vehicleId === 'object' ? booking.vehicleId.licensePlate : '—';
-
-  const statusInfo = STATUS_MAP[booking.status] || { variant: 'default', label: booking.status };
+  const statusInfo   = STATUS_MAP[booking.status] || { variant: 'default', label: booking.status };
 
   return (
     <Card style={styles.infoCard} padding="lg">
       <View style={styles.infoHeader}>
         <Text style={styles.infoTitle}>Thông tin lịch hẹn</Text>
-        <Badge
-          label={statusInfo.label}
-          variant={statusInfo.variant}
-          size="small"
-          showIcon
-        />
+        <Badge label={statusInfo.label} variant={statusInfo.variant} size="small" showIcon />
       </View>
       <View style={styles.infoGrid}>
         <InfoRow icon={Icons.locationOutline} label="Chi nhánh" value={branchName} />
-        <InfoRow icon={Icons.sparkle} label="Dịch vụ" value={pkgName} />
-        <InfoRow icon={Icons.carOutline} label="Biển số" value={vehiclePlate} />
-        <InfoRow
-          icon={Icons.calendarOutline}
-          label="Ngày"
-          value={format(new Date(booking.bookingDate), 'dd/MM/yyyy', { locale: vi })}
-        />
-        <InfoRow icon={Icons.timeOutline} label="Giờ" value={booking.startTime} />
-        <InfoRow
-          icon={Icons.cardOutline}
-          label="Thanh toán"
-          value={booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
-        />
+        <InfoRow icon={Icons.sparkle}         label="Dịch vụ"  value={pkgName} />
+        <InfoRow icon={Icons.carOutline}       label="Biển số"  value={vehiclePlate} />
+        <InfoRow icon={Icons.calendarOutline}  label="Ngày"     value={format(new Date(booking.bookingDate), 'dd/MM/yyyy', { locale: vi })} />
+        <InfoRow icon={Icons.timeOutline}      label="Giờ"      value={booking.startTime} />
+        <InfoRow icon={Icons.cardOutline}      label="Thanh toán" value={booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'} />
       </View>
     </Card>
   );
 };
 
-const InfoRow: React.FC<{ icon: string; label: string; value: string }> = ({
-  icon, label, value,
-}) => (
+const InfoRow: React.FC<{ icon: string; label: string; value: string }> = ({ icon, label, value }) => (
   <View style={styles.infoRow}>
     <View style={styles.infoIconContainer}>
       <Icon name={icon} size={16} color={staticColors.primary} />
@@ -274,14 +339,10 @@ const InfoRow: React.FC<{ icon: string; label: string; value: string }> = ({
   </View>
 );
 
-const QRDisplayCard: React.FC<{ qrDataUrl: string | null; booking: Booking }> = ({
-  qrDataUrl,
-  booking,
-}) => (
+// ─── QRDisplayCard ────────────────────────────────────────────────────────────
+const QRDisplayCard: React.FC<{ qrDataUrl: string | null; booking: Booking }> = ({ qrDataUrl, booking }) => (
   <Card style={styles.qrCard} padding="lg">
-    <AppText variant="h3" style={styles.qrTitle}>
-      Mã QR Check-in
-    </AppText>
+    <AppText variant="h3" style={styles.qrTitle}>Mã QR Check-in</AppText>
     <AppText variant="bodySmall" color="textSecondary" style={styles.qrSubtitle}>
       Quét mã này tại quầy để check-in nhanh
     </AppText>
@@ -291,7 +352,7 @@ const QRDisplayCard: React.FC<{ qrDataUrl: string | null; booking: Booking }> = 
           <QRCode
             value={JSON.stringify({
               bookingId: booking._id,
-              branchId: typeof booking.branchId === 'object' ? booking.branchId._id : booking.branchId
+              branchId: typeof booking.branchId === 'object' ? booking.branchId._id : booking.branchId,
             })}
             size={220}
             backgroundColor="white"
@@ -311,13 +372,14 @@ const QRDisplayCard: React.FC<{ qrDataUrl: string | null; booking: Booking }> = 
   </Card>
 );
 
+// ─── CheckInAction ────────────────────────────────────────────────────────────
 const CheckInAction: React.FC<{
   booking: Booking;
   checkingIn: boolean;
   checkInSuccess: boolean;
   onCheckIn: () => void;
 }> = ({ booking, checkingIn, checkInSuccess, onCheckIn }) => {
-  const canCheckIn = (booking.status === 'confirmed' || booking.status === 'pending');
+  const canCheckIn = booking.status === 'confirmed' || booking.status === 'pending';
 
   if (checkInSuccess || booking.status === 'checked_in' || booking.status === 'in_progress') {
     return (
@@ -352,21 +414,27 @@ const CheckInAction: React.FC<{
   );
 };
 
+// ─── NoBookingCard ────────────────────────────────────────────────────────────
 const NoBookingCard: React.FC<{ onSelectMode: () => void }> = ({ onSelectMode }) => (
   <Card style={styles.noBookingCard} padding="xl">
-    <Icon name={Icons.qrCodeOutline} size={48} color={staticColors.textTertiary} />
+    {/* QR icon in light-blue circle */}
+    <View style={styles.noBookingIconBg}>
+      <Icon name={Icons.qrCodeOutline} size={40} color="#2563EB" />
+    </View>
+
     <Text style={styles.noBookingTitle}>Chưa chọn lịch hẹn</Text>
     <Text style={styles.noBookingText}>
       Bạn có thể quét mã QR hoặc nhập mã booking để check-in.
     </Text>
     <Button
-      title="Chọn cách nhập thông tin"
+      title="Nhập mã Booking"
       onPress={onSelectMode}
       style={styles.selectButton}
     />
   </Card>
 );
 
+// ─── ScanModeContent ──────────────────────────────────────────────────────────
 const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onScanned }) => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
@@ -411,9 +479,7 @@ const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onSc
             style={styles.camera}
             facing="back"
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            barcodeScannerSettings={{
-              barcodeTypes: ['qr'],
-            }}
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
           >
             <View style={styles.cameraOverlay}>
               <View style={styles.scanFrame}>
@@ -428,10 +494,7 @@ const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onSc
             </View>
           </CameraView>
           {scanned && (
-            <PressableScale
-              style={styles.rescanButton}
-              onPress={() => setScanned(false)}
-            >
+            <PressableScale style={styles.rescanButton} onPress={() => setScanned(false)}>
               <Icon name={Icons.refreshOutline} size={16} color={staticColors.primary} />
               <Text style={styles.rescanText}>Quét lại</Text>
             </PressableScale>
@@ -439,9 +502,7 @@ const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onSc
         </View>
       )}
 
-      <Text style={[styles.scanNote, { marginTop: spacing.md }]}>
-        Hoặc nhập mã booking thủ công:
-      </Text>
+      <Text style={styles.scanNote}>Hoặc nhập mã booking thủ công:</Text>
       <TextInput
         style={styles.codeInput}
         placeholder="Nhập mã booking (ObjectId 24 ký tự)"
@@ -464,16 +525,15 @@ const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onSc
         disabled={manualCode.trim().length !== 24}
         style={styles.scanButton}
       />
-      <Text style={styles.scanNote}>
+      <Text style={styles.scanNoteBottom}>
         Mã booking là chuỗi ObjectId 24 ký tự (hex), có thể tìm trong lịch sử đặt lịch.
       </Text>
     </Card>
   );
 };
 
-const ManualEntryContent: React.FC<{ onFound: (bookingId: string) => void }> = ({
-  onFound,
-}) => {
+// ─── ManualEntryContent ───────────────────────────────────────────────────────
+const ManualEntryContent: React.FC<{ onFound: (bookingId: string) => void }> = ({ onFound }) => {
   const [code, setCode] = useState('');
   const [searching, setSearching] = useState(false);
 
@@ -485,10 +545,7 @@ const ManualEntryContent: React.FC<{ onFound: (bookingId: string) => void }> = (
       await apiClient.get(`/bookings/${code.trim()}`);
       onFound(code.trim());
     } catch (err: any) {
-      AlertDialog.error(
-        'Không tìm thấy',
-        err?.response?.data?.message || 'Không tìm thấy booking với mã này.',
-      );
+      AlertDialog.error('Không tìm thấy', err?.response?.data?.message || 'Không tìm thấy booking với mã này.');
     } finally {
       setSearching(false);
     }
@@ -527,20 +584,26 @@ const ManualEntryContent: React.FC<{ onFound: (bookingId: string) => void }> = (
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
   },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#2563EB',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    paddingTop: spacing.lg,
-    ...shadows.md,
+    paddingHorizontal: 16,
+    height: 64,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
   backButton: {
     width: 44,
@@ -551,60 +614,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h4,
-    color: '#FFFFFF',
-  },
-  modeSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: '#F8FAFC',
-    gap: spacing.xs,
-    minHeight: 44,
-  },
-  modeButtonActive: {
-    backgroundColor: '#3B82F6',
-  },
-  modeLabel: {
-    ...typography.caption,
-    color: '#475569',
-    fontWeight: '500',
-  },
-  modeLabelActive: {
-    color: '#2563EB',
+    fontSize: 18,
     fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
+  headerSpacer: {
+    width: 44,
+  },
+
+  // ── Segmented control wrapper ────────────────────────────────────────────────
+  segmentedWrapper: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+
+  // ── Scroll content ───────────────────────────────────────────────────────────
   content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    padding: 16,
+    paddingBottom: 48,
   },
+
+  // ── Booking info card ────────────────────────────────────────────────────────
   infoCard: {
-    marginBottom: spacing.md,
+    marginBottom: 16,
+    borderRadius: 20,
   },
   infoHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   infoTitle: {
-    ...typography.h4,
+    fontSize: 17,
+    fontWeight: '600',
     color: '#0F172A',
   },
   infoGrid: {
-    gap: spacing.sm,
+    gap: 10,
   },
   infoRow: {
     flexDirection: 'row',
@@ -612,45 +668,54 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   infoIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#3B82F6',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: 12,
   },
   infoRowLabel: {
-    ...typography.bodySmall,
-    color: '#475569',
-    width: 90,
+    fontSize: 14,
+    color: '#64748B',
+    width: 92,
+    fontWeight: '400',
   },
   infoRowValue: {
-    ...typography.bodySmall,
+    fontSize: 14,
     color: '#0F172A',
     fontWeight: '600',
     flex: 1,
   },
+
+  // ── QR card ─────────────────────────────────────────────────────────────────
   qrCard: {
-    marginBottom: spacing.md,
+    marginBottom: 16,
     alignItems: 'center',
+    borderRadius: 20,
   },
   qrTitle: {
-    marginBottom: spacing.xs,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   qrSubtitle: {
-    marginBottom: spacing.lg,
+    marginBottom: 24,
     textAlign: 'center',
   },
   qrContainer: {
-    padding: spacing.md,
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
     alignItems: 'center',
-    ...shadows.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   qrWrapper: {
-    padding: spacing.sm,
+    padding: 8,
   },
   qrPlaceholder: {
     width: 220,
@@ -658,168 +723,149 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: borderRadius.lg,
-    gap: spacing.sm,
+    borderRadius: 12,
+    gap: 12,
   },
   qrPlaceholderText: {
-    ...typography.bodySmall,
+    fontSize: 14,
     color: '#94A3B8',
   },
   qrHint: {
-    ...typography.caption,
+    fontSize: 12,
     color: '#94A3B8',
     textAlign: 'center',
-    marginTop: spacing.md,
+    marginTop: 16,
+    lineHeight: 18,
   },
+
+  // ── Check-in action ──────────────────────────────────────────────────────────
   actionContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: 24,
   },
   checkInButton: {
     backgroundColor: '#16A34A',
+    height: 52,
+    borderRadius: 26,
   },
   cannotCheckInText: {
-    ...typography.caption,
+    fontSize: 12,
     color: '#94A3B8',
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: 8,
   },
+
+  // ── Success card ─────────────────────────────────────────────────────────────
   successCard: {
     alignItems: 'center',
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#F0FDF4',
     borderWidth: 1,
-    borderColor: '#16A34A',
-    marginBottom: spacing.md,
+    borderColor: '#86EFAC',
+    marginBottom: 16,
+    borderRadius: 20,
   },
   successIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   successTitle: {
-    ...typography.h3,
-    color: '#16A34A',
-    marginBottom: spacing.xs,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#15803D',
+    marginBottom: 8,
   },
   successSubtitle: {
-    ...typography.body,
+    fontSize: 15,
     color: '#475569',
     textAlign: 'center',
+    lineHeight: 22,
   },
+
+  // ── No booking card ──────────────────────────────────────────────────────────
   noBookingCard: {
     alignItems: 'center',
+    borderRadius: 20,
+    paddingVertical: 32,
+  },
+  noBookingIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   noBookingTitle: {
-    ...typography.h3,
+    fontSize: 22,
+    fontWeight: '600',
     color: '#0F172A',
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   noBookingText: {
-    ...typography.body,
-    color: '#475569',
+    fontSize: 15,
+    color: '#64748B',
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    lineHeight: 22,
+    marginBottom: 28,
+    paddingHorizontal: 8,
   },
   selectButton: {
     minWidth: 200,
+    height: 52,
+    borderRadius: 26,
   },
+
+  // ── Scan card ────────────────────────────────────────────────────────────────
   scanCard: {
     alignItems: 'center',
+    borderRadius: 20,
   },
   scanTitle: {
-    ...typography.h3,
+    fontSize: 20,
+    fontWeight: '600',
     color: '#0F172A',
-    marginBottom: spacing.xs,
+    marginBottom: 6,
   },
   scanSubtitle: {
-    ...typography.bodySmall,
-    color: '#475569',
+    fontSize: 14,
+    color: '#64748B',
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: 20,
+    lineHeight: 20,
   },
   cameraPlaceholder: {
     width: '100%',
     height: 200,
     backgroundColor: '#F8FAFC',
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
     borderWidth: 2,
     borderColor: '#E2E8F0',
     borderStyle: 'dashed',
-    gap: spacing.sm,
+    gap: 12,
   },
   cameraPlaceholderText: {
-    ...typography.body,
+    fontSize: 15,
     color: '#475569',
   },
   cameraPlaceholderSubtext: {
-    ...typography.caption,
+    fontSize: 13,
     color: '#94A3B8',
     textAlign: 'center',
-  },
-  codeInput: {
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    ...typography.body,
-    color: '#0F172A',
-    marginBottom: spacing.md,
-    letterSpacing: 0.5,
-    minHeight: 48,
-  },
-  scanButton: {
-    width: '100%',
-  },
-  scanNote: {
-    ...typography.caption,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
-  manualCard: {
-    alignItems: 'center',
-  },
-  manualTitle: {
-    ...typography.h3,
-    color: '#0F172A',
-    marginBottom: spacing.xs,
-  },
-  manualSubtitle: {
-    ...typography.bodySmall,
-    color: '#475569',
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  manualButton: {
-    width: '100%',
-  },
-  manualNoteContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: spacing.md,
-    gap: spacing.xs,
-  },
-  manualNote: {
-    ...typography.caption,
-    color: '#94A3B8',
-    textAlign: 'left',
-    flex: 1,
   },
   cameraContainer: {
     width: '100%',
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: spacing.sm,
+    marginBottom: 8,
   },
   camera: {
     width: '100%',
@@ -841,55 +887,101 @@ const styles = StyleSheet.create({
     height: 24,
     borderColor: '#2563EB',
   },
-  cornerTL: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderTopLeftRadius: 8,
-  },
-  cornerTR: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderTopRightRadius: 8,
-  },
-  cornerBL: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomLeftRadius: 8,
-  },
-  cornerBR: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderBottomRightRadius: 8,
-  },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 8 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 8 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 8 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 8 },
   scanHint: {
-    ...typography.bodySmall,
+    fontSize: 13,
     color: '#FFFFFF',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginTop: 12,
     overflow: 'hidden',
   },
   rescanButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    gap: spacing.xs,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 6,
   },
   rescanText: {
-    ...typography.bodySmall,
+    fontSize: 14,
     color: '#2563EB',
     fontWeight: '600',
+  },
+  codeInput: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#0F172A',
+    marginBottom: 16,
+    letterSpacing: 0.5,
+    minHeight: 52,
+  },
+  scanButton: {
+    width: '100%',
+    height: 52,
+    borderRadius: 26,
+  },
+  scanNote: {
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  scanNoteBottom: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 18,
+  },
+
+  // ── Manual entry card ────────────────────────────────────────────────────────
+  manualCard: {
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  manualTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  manualSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  manualButton: {
+    width: '100%',
+    height: 52,
+    borderRadius: 26,
+  },
+  manualNoteContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 16,
+    gap: 8,
+  },
+  manualNote: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'left',
+    flex: 1,
+    lineHeight: 18,
   },
 });

@@ -242,7 +242,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const res = await fetch(`${apiBase}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingId: pendingDeposit._id, method: 'momo', paymentType: 'deposit' }),
+        body: JSON.stringify({ bookingId: pendingDeposit._id, method: 'bank', paymentType: 'deposit' }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.message || 'Thanh toán cọc thất bại');
