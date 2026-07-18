@@ -130,6 +130,16 @@ export default function BookingDetailScreen() {
     }
   };
 
+  const handlePayDeposit = () => {
+    if (!booking) return;
+    router.push(`/payment/select?bookingId=${booking._id}&type=deposit` as any);
+  };
+
+  const handlePayRemaining = () => {
+    if (!booking) return;
+    router.push(`/payment/select?bookingId=${booking._id}&type=remaining` as any);
+  };
+
   if (isLoading) return <Loading fullScreen message="Đang tải..." />;
 
   if (!booking) {
@@ -160,6 +170,20 @@ export default function BookingDetailScreen() {
   const canRebook = booking.status === 'completed';
   const canFeedback = booking.status === 'completed' && !booking.rating;
   const canShowQR = ['confirmed', 'checked_in'].includes(booking.status);
+
+  // Logic payment actions — match BE booking.service.js.
+  // Cọc (deposit): booking có depositAmount > 0 và chưa depositPaid.
+  const hasDeposit =
+    (booking.depositAmount ?? 0) > 0 && !booking.depositPaid;
+  // Trạng thái cho phép thanh toán cọc: pending, confirmed.
+  const canPayDeposit =
+    hasDeposit && ['pending', 'confirmed'].includes(booking.status);
+  // Thanh toán phần còn lại: đã cọc, dịch vụ đã hoàn thành (completed) hoặc
+  // đang thực hiện. Manager thường đòi khách trả nốt sau khi xe sẵn sàng.
+  const canPayRemaining =
+    booking.depositPaid === true &&
+    booking.paymentStatus !== 'paid' &&
+    ['checked_in', 'in_progress', 'completed'].includes(booking.status);
 
   return (
     <ScreenContainer edges={['top']} background="subtle">
@@ -301,7 +325,11 @@ export default function BookingDetailScreen() {
           <AppText variant="h4" style={{ marginBottom: spacing.sm }}>
             Chi tiết thanh toán
           </AppText>
-          <RowBetween label="Tổng tiền" value={formatCurrency(booking.finalPrice ?? booking.totalPrice)} bold />
+          <RowBetween
+            label="Tổng tiền"
+            value={formatCurrency(booking.finalPrice ?? booking.totalPrice ?? 0)}
+            bold
+          />
           {booking.discountAmount && booking.discountAmount > 0 ? (
             <RowBetween
               label="Giảm giá"
@@ -312,7 +340,32 @@ export default function BookingDetailScreen() {
           {booking.voucherCode ? (
             <RowBetween label="Voucher" value={booking.voucherCode} />
           ) : null}
-          {booking.deposit ? (
+          {(booking.depositAmount ?? 0) > 0 ? (
+            <>
+              <RowBetween
+                label={`Cọc (30%)`}
+                value={
+                  booking.depositPaid
+                    ? `${formatCurrency(booking.depositAmount ?? 0)} (đã cọc)`
+                    : `${formatCurrency(booking.depositAmount ?? 0)} (chưa cọc)`
+                }
+                valueColor={booking.depositPaid ? colors.success : colors.warning}
+              />
+              {booking.depositPaid ? (
+                <RowBetween
+                  label="Còn lại"
+                  value={formatCurrency(
+                    Math.max(
+                      0,
+                      (booking.finalPrice ?? 0) - (booking.depositAmount ?? 0),
+                    ),
+                  )}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {/* Legacy alias — tránh làm mất data booking cũ có field `deposit`. */}
+          {booking.deposit && !booking.depositAmount ? (
             <RowBetween label="Đã cọc" value={formatCurrency(booking.deposit)} />
           ) : null}
         </Card>
@@ -428,48 +481,102 @@ export default function BookingDetailScreen() {
             { borderTopColor: colors.border },
           ]}
         >
-          {canRebook && canCancel ? (
-            <>
+          {(() => {
+            // Thứ tự ưu tiên nút: payment > cancel/rebook.
+            // Tránh hiển thị cùng lúc "Đặt cọc" + "Hủy" trên cùng hàng vì quá chật.
+            const primaryPaymentAction = canPayDeposit ? (
               <Button
-                title="Đặt lại"
-                variant="outline"
+                title={`Đặt cọc ${formatCurrency(booking.depositAmount ?? 0)}`}
                 size="medium"
-                icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
-                onPress={handleRebook}
-                loading={isRebooking}
+                icon={<Icon name={Icons.walletOutline} size={18} color={colors.textInverse} />}
+                onPress={handlePayDeposit}
                 style={styles.actionFlex}
               />
+            ) : canPayRemaining ? (
               <Button
-                title="Hủy đặt lịch"
-                variant="danger"
+                title="Thanh toán phần còn lại"
                 size="medium"
-                onPress={handleCancel}
-                loading={isCancelling}
+                icon={<Icon name={Icons.walletOutline} size={18} color={colors.textInverse} />}
+                onPress={handlePayRemaining}
                 style={styles.actionFlex}
               />
-            </>
-          ) : canCancel ? (
-            <View style={styles.singleActionWrap}>
-              <Button
-                title="Hủy đặt lịch"
-                variant="danger"
-                size="medium"
-                onPress={handleCancel}
-                loading={isCancelling}
-                fullWidth
-              />
-            </View>
-          ) : canRebook ? (
-            <Button
-              title="Đặt lại"
-              variant="outline"
-              size="medium"
-              icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
-              onPress={handleRebook}
-              loading={isRebooking}
-              style={styles.actionFlex}
-            />
-          ) : null}
+            ) : null;
+
+            if (canRebook && canCancel) {
+              return (
+                <>
+                  <Button
+                    title="Đặt lại"
+                    variant="outline"
+                    size="medium"
+                    icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
+                    onPress={handleRebook}
+                    loading={isRebooking}
+                    style={styles.actionFlex}
+                  />
+                  {primaryPaymentAction}
+                  <Button
+                    title="Hủy đặt lịch"
+                    variant="danger"
+                    size="medium"
+                    onPress={handleCancel}
+                    loading={isCancelling}
+                    style={styles.actionFlex}
+                  />
+                </>
+              );
+            }
+            if (canCancel) {
+              return (
+                <>
+                  {primaryPaymentAction ? (
+                    <View style={{ flexDirection: 'row', gap: spacing.sm, flex: 1 }}>
+                      {primaryPaymentAction}
+                      <Button
+                        title="Hủy đặt lịch"
+                        variant="danger"
+                        size="medium"
+                        onPress={handleCancel}
+                        loading={isCancelling}
+                        style={styles.actionFlex}
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.singleActionWrap}>
+                      <Button
+                        title="Hủy đặt lịch"
+                        variant="danger"
+                        size="medium"
+                        onPress={handleCancel}
+                        loading={isCancelling}
+                        fullWidth
+                      />
+                    </View>
+                  )}
+                </>
+              );
+            }
+            if (canRebook) {
+              return (
+                <>
+                  {primaryPaymentAction}
+                  <Button
+                    title="Đặt lại"
+                    variant="outline"
+                    size="medium"
+                    icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
+                    onPress={handleRebook}
+                    loading={isRebooking}
+                    style={styles.actionFlex}
+                  />
+                </>
+              );
+            }
+            if (primaryPaymentAction) {
+              return <View style={styles.singleActionWrap}>{primaryPaymentAction}</View>;
+            }
+            return null;
+          })()}
         </View>
       </SafeAreaView>
 

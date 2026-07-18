@@ -25,8 +25,20 @@ export interface PaymentsListResponse {
 }
 
 // Create payment
-export const createPayment = async (data: CreatePaymentRequest): Promise<Payment> => {
-  const response = await apiClient.post('/payments', data);
+// BE controller (booking.controller.js#createPayment) destructures
+// { bookingId, method, paymentType } from req.body — so we map the public
+// `paymentMethod` field to `method` here, and default `paymentType` to 'full'
+// (paid the entire booking in one shot). For deposit flow, pass
+// `type: 'deposit'` from the caller (e.g. /payment/select?type=deposit).
+export const createPayment = async (
+  data: CreatePaymentRequest & { type?: PaymentType },
+): Promise<Payment> => {
+  const { bookingId, paymentMethod, type } = data;
+  const response = await apiClient.post('/payments', {
+    bookingId,
+    method: paymentMethod,
+    ...(type ? { paymentType: type } : {}),
+  });
   return response.data;
 };
 

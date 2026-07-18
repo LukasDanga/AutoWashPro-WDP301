@@ -57,7 +57,7 @@ export default function VoucherDetailScreen() {
   const fetchVoucher = async () => {
     try {
       setIsLoading(true);
-      const data = await voucherApi.getVoucherByCode(id || '');
+      const data = await voucherApi.getVoucher(id || '');
       setVoucher(data);
     } catch (error) {
       console.error('Error fetching voucher:', error);

@@ -29,6 +29,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Text as RNText,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -93,7 +94,7 @@ const CATEGORY_OPTIONS: { value: PackageCategory; label: string; subtitle: strin
 export default function BookingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const colors = useColors();
   const toast = useToast();
 
@@ -108,6 +109,7 @@ export default function BookingScreen() {
     setCategory,
     selectedPackage,
     setSelectedPackage,
+    replaceSelectedPackage,
     selectedBranch,
     setSelectedBranch,
     selectedVehicle,
@@ -128,6 +130,25 @@ export default function BookingScreen() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
   const [dateSlots, setDateSlots] = useState<Record<string, AvailableSlot[]>>({});
+  const [dateSlotsErrors, setDateSlotsErrors] = useState<Record<string, string>>({});
+
+  // Slots the current user already has an active booking for, keyed by
+  // `${bookingDate}|${startTime}`. We compute this from `/bookings/my` so
+  // we can override the BE's `vipOnly` flag on those slots — the BE marks
+  // a slot `vipOnly` whenever there is 1 free seat left in the slot
+  // (capacity − 1 bookings), but if the *current user* is the one holding
+  // one of those bookings, that seat is "theirs", so the remaining seat
+  // is still implicitly reserved for VIPs — and the user already has
+  // theirs, so showing them "VIP only" is misleading.
+  //
+  // Key format intentionally matches `bookingDate` from the Booking type
+  // (ISO date string) + `startTime` (HH:mm).
+  const [userBookedSlotKeys, setUserBookedSlotKeys] = useState<Set<string>>(new Set());
+
+  // Tracks the last (branchId) for which we have already attempted the
+  // branch-scoped `/packages?branchId=…` fetch. Used by the swap effect
+  // below to know when it is safe to decide there is *no* swap candidate.
+  const [branchPackagesAttempted, setBranchPackagesAttempted] = useState<string | null>(null);
 
   const [voucherCode, setVoucherCode] = useState('');
   const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
@@ -137,6 +158,23 @@ export default function BookingScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const dateOptions = useMemo(() => generateDateOptions(), []);
+
+  // Active = booking still occupies a slot in the capacity table (BE
+  // rejects same-slot new bookings against these statuses). Anything
+  // else (cancelled / completed / no_show) frees the slot.
+  const ACTIVE_BOOKING_STATUSES: ReadonlyArray<string> = [
+    'pending',
+    'confirmed',
+    'checked_in',
+    'in_progress',
+  ];
+
+  // Tier gating — BE reserves `vipOnly` slots (capacity − 1 already booked)
+  // for `gold` / `diamond` members and rejects everyone else with
+  // `SLOT_VIP_ONLY` at booking time. We surface this restriction right
+  // here on the slot grid so users don't pick something only to see a
+  // toast saying their booking was rejected at submit.
+  const isVip = user?.tier === 'gold' || user?.tier === 'diamond';
 
   // Reset the draft if the user is no longer authenticated.
   useEffect(() => {
@@ -150,7 +188,11 @@ export default function BookingScreen() {
       try {
         const [branchesRes, packagesRes] = await Promise.all([
           branchApi.getPublicBranches(),
-          packageApi.getPackages({ status: 'active' }),
+          // Pass `limit: 'all'` so the mobile booking flow receives the FULL
+          // active catalog, not just the first 9 sorted by price. Without
+          // this, the category-filtered view at step 2 can end up empty
+          // because the chosen category's packages were all > 9th by price.
+          packageApi.getPackages({ status: 'active', limit: 'all' }),
         ]);
         if (cancelled) return;
         setBranches(branchesRes);
@@ -181,21 +223,21 @@ export default function BookingScreen() {
   useEffect(() => {
     if (!isHydrated || isLoading) return;
     (async () => {
-      if (params.branchId && (!selectedBranch || selectedBranch._id !== params.branchId)) {
-        try {
-          const b = await branchApi.getBranch(params.branchId as string);
-          setSelectedBranch(b);
-          if (step === 'category') setStep('package');
-        } catch {
-          /* swallow */
-        }
-      }
+      // Set package first; setSelectedPackage clears selectedBranch, so we
+      // have to set package before branch when both params are present.
       if (params.packageId && (!selectedPackage || selectedPackage._id !== params.packageId)) {
         try {
           const p = await packageApi.getPackage(params.packageId as string);
           setSelectedPackage(p);
           if (p.category && !category) setCategory(p.category);
-          if (step === 'category') setStep('package');
+        } catch {
+          /* swallow */
+        }
+      }
+      if (params.branchId && (!selectedBranch || selectedBranch._id !== params.branchId)) {
+        try {
+          const b = await branchApi.getBranch(params.branchId as string);
+          setSelectedBranch(b);
         } catch {
           /* swallow */
         }
@@ -203,6 +245,9 @@ export default function BookingScreen() {
       if (params.vehicleId && (!selectedVehicle || selectedVehicle._id !== params.vehicleId)) {
         const v = vehicles.find((x) => x._id === (params.vehicleId as string));
         if (v) setSelectedVehicle(v);
+      }
+      if ((params.branchId || params.packageId) && step === 'category') {
+        setStep('package');
       }
     })();
     // intentional: prefill should run once per params change
@@ -250,13 +295,23 @@ export default function BookingScreen() {
       try {
         const list = await branchApi.getBranchPackages(selectedBranch._id);
         if (cancelled) return;
-        if (!Array.isArray(list) || list.length === 0) return;
-        setPackages((prev) => {
-          const merged = [...prev, ...list];
-          return dedupePackages(merged, selectedBranch._id);
-        });
+        if (Array.isArray(list) && list.length > 0) {
+          setPackages((prev) => {
+            const merged = [...prev, ...list];
+            return dedupePackages(merged, selectedBranch._id);
+          });
+        }
       } catch {
         /* fall back to already-loaded catalog */
+      } finally {
+        if (!cancelled) {
+          // Mark this branch as fully processed (either merged or empty) so
+          // the swap effect can finalize its decision without deferring
+          // forever when the branch truly has no extra rows.
+          setBranchPackagesAttempted((prev) =>
+            prev === selectedBranch._id ? prev : selectedBranch._id,
+          );
+        }
       }
     })();
     return () => {
@@ -272,13 +327,31 @@ export default function BookingScreen() {
   //   1. If we find a row whose composite key matches the currently selected
   //      package BUT its `branchId` matches the selected branch, swap to it
   //      (different `_id` for the same product, branch-scoped variant).
-  //   2. If no such compatible row exists, clear the selection so the user
-  //      picks again from the branch-filtered list.
+  //   2. If no such compatible row exists, the branch the user picked does
+  //      not offer this product. Pop a confirmation dialog and offer to take
+  //      them back to step 2 (re-pick package) or step 3 (re-pick branch).
+  //      We do NOT silently clear the package — that's a frustrating dead
+  //      end that leaves the user wondering what just happened.
   useEffect(() => {
     if (!selectedBranch?._id || !selectedPackage) return;
     const current = selectedPackage;
     const isCompatible = filteredPackages.some((p) => p._id === current._id);
-    if (isCompatible) return;
+    if (isCompatible) {
+      console.log('[booking/swap-effect] current package still compatible, no-op');
+      return;
+    }
+    console.log('[booking/swap-effect] current package not compatible, looking for swap candidate');
+
+    // Wait for the branch-scoped package fetch to complete (success or empty)
+    // before deciding there is *no* swap candidate. Without this guard we
+    // race the `getBranchPackages` fetch and would clear a valid selection
+    // just because the row for the new branch hadn't been merged yet — or
+    // forever defer when the branch truly has no extra rows.
+    if (branchPackagesAttempted !== selectedBranch._id) {
+      console.log('[booking/swap-effect] branch-scoped packages not yet attempted, defer');
+      return;
+    }
+
     // Try swapping to the branch-scoped variant with the same business key.
     const swapCandidate = packages.find((p) => {
       if (p._id === current._id) return false;
@@ -293,40 +366,135 @@ export default function BookingScreen() {
       return bid === selectedBranch._id || !bid;
     });
     if (swapCandidate) {
-      setSelectedPackage(swapCandidate as any);
+      console.log('[booking/swap-effect] swap to', swapCandidate._id, '(branch-scoped variant)');
+      // IMPORTANT: use replaceSelectedPackage (NOT setSelectedPackage) so we
+      // don't wipe the user's branch selection as a side effect.
+      replaceSelectedPackage(swapCandidate as any);
       setVoucher(null);
-    } else {
-      setSelectedPackage(null);
-      setVoucher(null);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranch?._id, packages]);
 
-  // Fetch slots for all visible dates whenever branch + package are set.
-  // Guarded with the same compatibility check so we never ask the BE for
-  // slots for a package that doesn't belong to the current branch.
+    // No compatible variant for this branch. Instead of silently clearing
+    // the package (which is confusing — the user just picked it!), send
+    // them back to step 2 with an explanation. The branch they just chose
+    // either has no packages of the selected category, or no packages at
+    // all. Either way they need to make a different selection.
+    console.log('[booking/swap-effect] no swap candidate, sending user back to step 2');
+    Alert.alert(
+      'Chi nhánh không phù hợp',
+      'Chi nhánh bạn vừa chọn không có gói dịch vụ này. Vui lòng chọn chi nhánh khác hoặc đổi gói dịch vụ.',
+      [
+        {
+          text: 'Chọn lại dịch vụ',
+          onPress: () => {
+            // Clear only the branch — keep category + package so the user
+            // can immediately see the (working) list of packages and can
+            // pick a branch-aware one if available, or change category.
+            setSelectedBranch(null);
+            setVoucher(null);
+            setStep('package');
+          },
+        },
+        {
+          text: 'Chọn chi nhánh khác',
+          onPress: () => {
+            setSelectedBranch(null);
+            setVoucher(null);
+            setStep('branch');
+          },
+        },
+      ],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch?._id, packages, filteredPackages, branchPackagesAttempted]);
+
+  // Fetch slots for all visible dates whenever the user enters the datetime
+  // step with a branch + package selected.
   //
-  // `attemptedDatesRef` makes the effect fire-at-most-once-per-date. Without
-  // it, every failure (e.g. PACKAGE_BRANCH_MISMATCH) would re-trigger the
-  // effect because `selectedPackage` and `filteredPackages` change, and the
-  // spinner would loop forever.
-  const attemptedDatesRef = useRef<Set<string>>(new Set());
+  // Session tracking: each (branchId, packageId) pair is one "session". The
+  // session is invalidated whenever the pair changes, so going back and
+  // changing branch or package re-fetches everything.
+  const [slotsSessionKey, setSlotsSessionKey] = useState<string | null>(null);
   useEffect(() => {
-    if (step !== 'datetime') return;
-    if (!selectedBranch?._id || !selectedPackage?._id) return;
-    const compatible = filteredPackages.some((p) => p._id === selectedPackage._id);
-    if (!compatible) return;
+    console.log('[booking/slots-effect] step=', step, 'branchId=', selectedBranch?._id, 'packageId=', selectedPackage?._id, 'sessionKey=', slotsSessionKey);
+    if (step !== 'datetime') {
+      // Don't keep a session alive outside the datetime step so we refetch
+      // every time the user comes back here with the same selections.
+      if (slotsSessionKey !== null) setSlotsSessionKey(null);
+      return;
+    }
+    if (!selectedBranch?._id || !selectedPackage?._id) {
+      console.log('[booking/slots-effect] missing branch or package, skip');
+      return;
+    }
+
+    const sessionKey = `${selectedBranch._id}|${selectedPackage._id}`;
+    if (slotsSessionKey === sessionKey) {
+      console.log('[booking/slots-effect] session already kicked off, skip');
+      return; // already kicked off
+    }
+
+    console.log('[booking/slots-effect] kicking off new session', sessionKey);
+    // New session: mark it and kick off fetches for every visible date.
+    setSlotsSessionKey(sessionKey);
+    // Reset any previously loaded slots so the user sees skeletons instead
+    // of stale data while we wait for the first response.
+    setDateSlots({});
+    setDateSlotsErrors({});
+    setUserBookedSlotKeys(new Set());
     dateOptions.forEach((date) => {
-      const key = `${selectedBranch._id}|${selectedPackage._id}|${date.value}`;
-      if (attemptedDatesRef.current.has(key)) return;
-      attemptedDatesRef.current.add(key);
+      console.log('[booking/slots-effect] fetch slot for', date.value);
       fetchSlots(selectedBranch._id, date.value, selectedPackage._id);
     });
+    // Also fetch this user's bookings for the visible date range so we
+    // can label "Bạn đã đặt" on slots they already hold — otherwise the
+    // BE's `vipOnly` flag would mark their own slot as VIP-only and
+    // confuse them.
+    fetchUserBookings(selectedBranch._id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, selectedBranch?._id, selectedPackage?._id, filteredPackages]);
+  }, [step, selectedBranch?._id, selectedPackage?._id]);
+
+  const fetchUserBookings = useCallback(
+    async (branchId: string) => {
+      if (!user?._id) return;
+      try {
+        const firstDate = dateOptions[0]?.value;
+        const lastDate = dateOptions[dateOptions.length - 1]?.value;
+        if (!firstDate || !lastDate) return;
+        const { data: bookings } = await bookingApi.getMyBookings({
+          dateFrom: firstDate,
+          dateTo: lastDate,
+          limit: 100,
+        });
+        // Filter by branch (BE may return bookings from other branches
+        // when filters don't include branchId) and by active status only.
+        const keys = new Set<string>();
+        for (const b of bookings) {
+          if (!b) continue;
+          if (ACTIVE_BOOKING_STATUSES.indexOf(b.status) === -1) continue;
+          const bBranchId =
+            typeof b.branchId === 'string' ? b.branchId : b.branchId?._id;
+          if (bBranchId !== branchId) continue;
+          const dateStr =
+            typeof b.bookingDate === 'string'
+              ? b.bookingDate.split('T')[0]
+              : new Date(b.bookingDate).toISOString().split('T')[0];
+          if (!dateStr || !b.startTime) continue;
+          keys.add(`${dateStr}|${b.startTime}`);
+        }
+        console.log('[booking/fetchUserBookings] user has', keys.size, 'active bookings in range');
+        setUserBookedSlotKeys(keys);
+      } catch (err: any) {
+        // Non-fatal: the slot grid still works without this hint.
+        console.warn('[booking/fetchUserBookings] failed', err?.message || String(err));
+      }
+    },
+    [user?._id, dateOptions, ACTIVE_BOOKING_STATUSES],
+  );
 
   const fetchSlots = useCallback(
     async (branchId: string, date: string, packageId: string) => {
+      console.log('[booking/fetchSlots] start', { branchId, date, packageId });
       setIsLoadingSlots(true);
       try {
         const response = await bookingApi.getAvailableSlots({
@@ -334,13 +502,22 @@ export default function BookingScreen() {
           date,
           packageId,
         });
+        console.log('[booking/fetchSlots] ok', date, response?.length, 'slots');
         setDateSlots((prev) => ({ ...prev, [date]: response }));
+        setDateSlotsErrors((prev) => {
+          if (!(date in prev)) return prev;
+          const next = { ...prev };
+          delete next[date];
+          return next;
+        });
       } catch (error: any) {
         const data = error?.response?.data;
-        console.error('Error fetching slots:', data || error);
-        setDateSlots((prev) => ({ ...prev, [date]: [] }));
-        // Surface a one-time hint to the user instead of an infinite spinner.
         const code = data?.code;
+        const message = code || error?.message || 'unknown';
+        console.error('[booking/fetchSlots] error', date, data || error?.message);
+        setDateSlots((prev) => ({ ...prev, [date]: [] }));
+        setDateSlotsErrors((prev) => ({ ...prev, [date]: message }));
+        // Surface a one-time hint to the user instead of an infinite spinner.
         if (code === 'PACKAGE_BRANCH_MISMATCH') {
           toast.warning(
             'Gói dịch vụ không khả dụng tại chi nhánh này',
@@ -389,17 +566,23 @@ export default function BookingScreen() {
         startTime: selectedTime,
         voucherCode: voucher?.code || undefined,
       });
+      // Chuyển sang màn thanh toán cọc. BE mặc định áp cọc 30% cho mọi đơn
+      // (trừ slot_pack_usage). Nếu booking vừa tạo không có depositAmount,
+      // payment/select sẽ hiển thị cảnh báo "Không yêu cầu cọc" và disable
+      // nút thanh toán — user vẫn có thể bấm "Xem chi tiết" từ trang kết quả.
+      const depositAmt = (response as any)?.depositAmount ?? 0;
       toast.show({
         variant: 'success',
         message: 'Đặt lịch thành công!',
-        description: 'Đơn của bạn đã được ghi nhận. Nhấn để xem chi tiết.',
-        duration: 4500,
-        action: {
-          label: 'Xem',
-          onPress: () => router.replace(`/booking/${response._id}` as any),
-        },
+        description: depositAmt > 0
+          ? `Vui lòng đặt cọc ${formatCurrency(depositAmt)} để giữ chỗ.`
+          : 'Đơn của bạn đã được ghi nhận.',
+        duration: 3000,
       });
-      resetAll();
+      // Dùng replace để user không back về form đặt lịch cũ.
+      router.replace(
+        `/payment/select?bookingId=${response._id}&type=deposit` as any,
+      );
     } catch (error: any) {
       toast.error(
         'Đặt lịch thất bại',
@@ -615,7 +798,37 @@ export default function BookingScreen() {
                 message="Hiện tại không có chi nhánh nào hoạt động"
               />
             ) : (
-              branches.map((branch) => (
+              (() => {
+                // Compute the set of branches that actually offer at least
+                // one package of the currently selected category. Without
+                // this filter the user can pick a branch only to be told
+                // (later) that it has no compatible package.
+                const branchesWithPackage = (() => {
+                  if (!category) return null; // no category yet → show all
+                  const set = new Set<string>();
+                  for (const p of packages) {
+                    if (p.category !== category) continue;
+                    const bid =
+                      typeof p.branchId === 'object' && p.branchId !== null
+                        ? (p.branchId as any)._id
+                        : p.branchId;
+                    if (typeof bid === 'string' && bid) set.add(bid);
+                  }
+                  return set;
+                })();
+                const visibleBranches = branchesWithPackage
+                  ? branches.filter((b) => branchesWithPackage.has(b._id))
+                  : branches;
+                if (visibleBranches.length === 0) {
+                  return (
+                    <EmptyState
+                      iconName={Icons.locationOutline}
+                      title="Chưa có chi nhánh phù hợp"
+                      message="Hiện chưa có chi nhánh nào có gói dịch vụ này. Vui lòng chọn loại dịch vụ khác."
+                    />
+                  );
+                }
+                return visibleBranches.map((branch) => (
                 <SelectableCard
                   key={branch._id}
                   selected={selectedBranch?._id === branch._id}
@@ -636,7 +849,8 @@ export default function BookingScreen() {
                     </View>
                   }
                 />
-              ))
+                ));
+              })()
             )}
           </StepLayout>
         )}
@@ -706,6 +920,46 @@ export default function BookingScreen() {
             subtitle="Chọn khung giờ thuận tiện"
             icon={Icons.calendarOutline}
           >
+            {isLoadingSlots && Object.keys(dateSlots).length === 0 ? (
+              <Card style={{ backgroundColor: colors.infoLight, marginBottom: spacing.sm }}>
+                <View style={styles.inlineRow}>
+                  <ActivityIndicator size="small" color={colors.info} />
+                  <AppText variant="bodySmall" color="textPrimary" style={styles.inlineRowText}>
+                    Đang tải khung giờ trống, vui lòng đợi một chút…
+                  </AppText>
+                </View>
+              </Card>
+            ) : null}
+            {!isLoadingSlots &&
+            Object.keys(dateSlots).length > 0 &&
+            Object.values(dateSlots).every((s) => Array.isArray(s) && s.length === 0) &&
+            selectedBranch &&
+            selectedPackage ? (
+              <Card style={{ backgroundColor: colors.warningLight, marginBottom: spacing.sm }}>
+                <View style={styles.inlineRow}>
+                  <Icon name={Icons.warning} size={20} color={colors.warning} />
+                  <AppText variant="bodySmall" color="textPrimary" style={styles.inlineRowText}>
+                    Chưa tải được khung giờ. Có thể gói dịch vụ chưa được kích hoạt tại chi nhánh này.
+                  </AppText>
+                </View>
+                <Button
+                  title="Thử lại"
+                  variant="outline"
+                  size="small"
+                  icon={<Icon name={Icons.refreshOutline} size={16} color={colors.primary} />}
+                  onPress={() => {
+                    if (!selectedBranch || !selectedPackage) return;
+                    console.log('[booking/retry] manual retry for all dates');
+                    setSlotsSessionKey(null);
+                    setDateSlots({});
+                    dateOptions.forEach((date) => {
+                      fetchSlots(selectedBranch._id, date.value, selectedPackage._id);
+                    });
+                  }}
+                  style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}
+                />
+              </Card>
+            ) : null}
             <AppText variant="label" style={styles.sectionLabel}>
               Ngày
             </AppText>
@@ -716,10 +970,12 @@ export default function BookingScreen() {
             >
               {dateOptions.map((date) => {
                 const slotData = dateSlots[date.value];
-                const isLoadingDate = slotData === undefined;
+                const slotError = dateSlotsErrors[date.value];
+                const isLoadingDate = slotData === undefined && !slotError;
                 const hasAvailableSlots = slotData?.some((s) => s.available) ?? false;
                 const isFullyBooked =
                   slotData !== undefined && !hasAvailableSlots && (slotData?.length ?? 0) > 0;
+                const isFailed = !!slotError;
                 const isSelected = selectedDate === date.value;
 
                 return (
@@ -729,12 +985,29 @@ export default function BookingScreen() {
                       if (isFullyBooked) return;
                       setSelectedDateTime(date.value, null);
                       if (selectedBranch && selectedPackage) {
+                        // Force a refetch on tap so the user can recover from a
+                        // previous failure (PACKAGE_BRANCH_MISMATCH, network
+                        // blip, etc.) without leaving the screen. We bypass
+                        // the slotsSessionKey dedupe by clearing that date's
+                        // cached result first.
+                        setDateSlots((prev) => {
+                          if (!(date.value in prev)) return prev;
+                          const next = { ...prev };
+                          delete next[date.value];
+                          return next;
+                        });
+                        setDateSlotsErrors((prev) => {
+                          if (!(date.value in prev)) return prev;
+                          const next = { ...prev };
+                          delete next[date.value];
+                          return next;
+                        });
                         fetchSlots(selectedBranch._id, date.value, selectedPackage._id);
                       }
                     }}
                     disabled={isFullyBooked}
                     accessibilityLabel={`Ngày ${date.label}${isSelected ? ', đang chọn' : ''}${
-                      isFullyBooked ? ', đã đầy' : ''
+                      isFullyBooked ? ', đã đầy' : isFailed ? ', lỗi tải, chạm để thử lại' : ''
                     }`}
                   >
                     <View
@@ -770,7 +1043,11 @@ export default function BookingScreen() {
                           >
                             {date.label}
                           </RNText>
-                          {isFullyBooked ? (
+                          {isFailed ? (
+                            <RNText style={[styles.dateFullText, { color: colors.error }]}>
+                              Lỗi
+                            </RNText>
+                          ) : isFullyBooked ? (
                             <RNText style={[styles.dateFullText, { color: colors.error }]}>
                               Đầy
                             </RNText>
@@ -788,6 +1065,17 @@ export default function BookingScreen() {
                 <AppText variant="label" style={styles.sectionLabel}>
                   Khung giờ
                 </AppText>
+                {!isVip &&
+                (dateSlots[selectedDate] || []).some((s) => s.vipOnly && s.available) ? (
+                  <Card style={{ backgroundColor: colors.warningLight, marginBottom: spacing.sm }}>
+                    <View style={styles.inlineRow}>
+                      <Icon name={Icons.warning} size={18} color={colors.warning} />
+                      <AppText variant="caption" color="textPrimary" style={styles.inlineRowText}>
+                        Một số khung giờ chỉ dành cho thành viên VIP (Gold/Diamond).
+                      </AppText>
+                    </View>
+                  </Card>
+                ) : null}
                 {dateSlots[selectedDate] === undefined ? (
                   <View style={styles.timeGrid}>
                     {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -817,14 +1105,47 @@ export default function BookingScreen() {
                   <View style={styles.timeGrid}>
                     {(dateSlots[selectedDate] || []).map((slot, idx) => {
                       const isSelected = selectedTime === slot.startTime;
+                      // State precedence (most specific → least):
+                      //   1. userHasThisSlot — user already booked this slot.
+                      //      Visually muted (same look as "Kín lịch") so it
+                      //      doesn't look selectable, but with a primary-
+                      //      coloured "Bạn đã đặt" badge so the user can
+                      //      tell it's their own slot, not a stranger's.
+                      //   2. unavailable (capacity reached) → disabled.
+                      //   3. vipOnly    (capacity - 1 already booked) → only
+                      //      gold/diamond can book.
+                      //   4. free       → anyone can pick.
+                      const userHasThisSlot = userBookedSlotKeys.has(
+                        `${selectedDate}|${slot.startTime}`,
+                      );
+                      const isUnavailable = !slot.available && !userHasThisSlot;
+                      const isVipOnly =
+                        !!slot.vipOnly && !isUnavailable && !userHasThisSlot && !isVip;
+                      const isLocked = userHasThisSlot || isUnavailable || isVipOnly;
+                      // `canBook` keeps a user-owned slot clickable here so
+                      // the user can re-select the same time (e.g. to change
+                      // the vehicle) — but the visual treatment below makes
+                      // it obvious the slot is taken. If you'd rather have
+                      // the user pick a *new* slot to add a vehicle, flip
+                      // this to `slot.available && !isVipOnly && !userHasThisSlot`.
+                      const canBook = slot.available && !isVipOnly;
                       return (
                         <PressableScale
                           key={`${slot.startTime}-${idx}`}
-                          onPress={() => slot.available && setSelectedDateTime(selectedDate, slot.startTime)}
-                          disabled={!slot.available}
-                          accessibilityLabel={`${slot.startTime}${slot.available ? '' : ', đã đầy'}${
-                            isSelected ? ', đang chọn' : ''
-                          }`}
+                          onPress={() => canBook && setSelectedDateTime(selectedDate, slot.startTime)}
+                          disabled={!canBook}
+                          accessibilityLabel={
+                            `${slot.startTime}` +
+                            (userHasThisSlot
+                              ? ', bạn đã đặt khung giờ này'
+                              : isUnavailable
+                              ? ', đã đầy'
+                              : isVipOnly
+                              ? ', chỉ dành cho thành viên VIP'
+                              : '') +
+                            (isSelected ? ', đang chọn' : '')
+                          }
+                          accessibilityState={{ disabled: !canBook, selected: isSelected }}
                         >
                           <View
                             style={[
@@ -833,7 +1154,7 @@ export default function BookingScreen() {
                                 backgroundColor: isSelected ? colors.primary : colors.surface,
                                 borderColor: isSelected ? colors.primary : colors.border,
                               },
-                              !slot.available && styles.timeCardMuted,
+                              isLocked && styles.timeCardMuted,
                             ]}
                           >
                             <RNText
@@ -843,13 +1164,22 @@ export default function BookingScreen() {
                                   color: isSelected ? colors.textInverse : colors.textPrimary,
                                   fontWeight: isSelected ? '700' : '500',
                                 },
+                                isLocked && styles.timeTextDisabled,
                               ]}
                             >
                               {slot.startTime}
                             </RNText>
-                            {!slot.available ? (
+                            {userHasThisSlot ? (
+                              <RNText style={[styles.timeSlotFull, { color: colors.primary }]}>
+                                Bạn đã đặt
+                              </RNText>
+                            ) : isUnavailable ? (
                               <RNText style={[styles.timeSlotFull, { color: colors.error }]}>
-                                Kín
+                                Kín lịch
+                              </RNText>
+                            ) : isVipOnly ? (
+                              <RNText style={[styles.timeSlotFull, { color: colors.warning }]}>
+                                VIP
                               </RNText>
                             ) : null}
                           </View>
@@ -970,6 +1300,37 @@ export default function BookingScreen() {
                   {formatCurrency(finalPrice)}
                 </AppText>
               </View>
+              {/* Cọc 30% — match BE DEPOSIT_RATE. Booking slot_pack_usage
+                  đi flow riêng (dùng gói slot), không qua form đặt lịch này. */}
+              {(() => {
+                const deposit = Math.round((finalPrice * 0.3) / 1000) * 1000;
+                const remaining = Math.max(0, finalPrice - deposit);
+                return (
+                  <>
+                    <View style={[styles.priceDivider, { backgroundColor: colors.divider }]} />
+                    <View style={styles.priceRow}>
+                      <AppText variant="body" color="textSecondary">
+                        Cọc trước (30%)
+                      </AppText>
+                      <AppText
+                        variant="body"
+                        style={{ fontWeight: '700' }}
+                        color={colors.primary}
+                      >
+                        {formatCurrency(deposit)}
+                      </AppText>
+                    </View>
+                    <View style={styles.priceRow}>
+                      <AppText variant="body" color="textSecondary">
+                        Còn lại khi hoàn thành
+                      </AppText>
+                      <AppText variant="body" color="textPrimary">
+                        {formatCurrency(remaining)}
+                      </AppText>
+                    </View>
+                  </>
+                );
+              })()}
             </Card>
 
             <Card style={[styles.infoBanner, { backgroundColor: colors.infoLight }]}>
@@ -979,8 +1340,8 @@ export default function BookingScreen() {
                   Sau khi đặt lịch
                 </AppText>
                 <AppText variant="caption" color="textSecondary">
-                  Bạn sẽ nhận được mã QR check-in tại trang chi tiết. Có thể thanh toán khi đến
-                  hoặc qua MoMo / VNPay.
+                  Bạn sẽ được chuyển sang trang thanh toán cọc. Có thể chọn MoMo,
+                  VNPay hoặc thanh toán tiền mặt khi đến chi nhánh.
                 </AppText>
               </View>
             </Card>
@@ -1405,7 +1766,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
   },
-  timeCardMuted: { opacity: 0.4 },
+  timeCardMuted: {
+    opacity: 0.45,
+    backgroundColor: 'transparent',
+    borderStyle: 'dashed',
+  },
+  timeTextDisabled: {
+    textDecorationLine: 'line-through',
+    textDecorationStyle: 'solid',
+  },
   timeText: {
     fontSize: 14,
   },

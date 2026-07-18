@@ -38,7 +38,7 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
 
 // Khách có từ NO_SHOW_STRIKE_THRESHOLD lần bị hệ thống tự hủy trở lên phải cọc 100% (chống spam/no-show lặp lại)
-const getDepositRate = () => DEPOSIT_RATE;
+const getDepositRate = (user) => (user && user.noShowCount >= NO_SHOW_STRIKE_THRESHOLD) ? STRIKE_DEPOSIT_RATE : DEPOSIT_RATE;
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -183,11 +183,17 @@ exports.createBooking = async (data) => {
     }
 
     const { gte, lte } = getDayBounds(bookingStr);
+    // When checking capacity / VIP for a *new* booking at a given startTime,
+    // we should not count the user's *existing* bookings at the same slot —
+    // those seats are already theirs. We only count *other* people's bookings.
+    // Without this exclusion, a bronze/silver user who already holds one seat
+    // in a capacity-2 slot is incorrectly told the slot is "VIP only" when
+    // they try to add another booking (e.g. a second vehicle) at the same time.
     const conflicting = await Booking.find({
-      _id: { $ne: null },
       branchId,
       bookingDate: { $gte: gte, $lte: lte },
       status: { $in: ACTIVE_SLOT_STATUSES },
+      userId: { $ne: userId },
     }).session(session);
 
     const newStart = parseTime(startTime);
@@ -524,6 +530,22 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     throw Object.assign(new Error(`Cannot transition from '${currentBooking.status}' to '${status}'`), { statusCode: 400, code: 'INVALID_TRANSITION' });
   }
 
+  // Chốt chặn cọc: nếu chuyển sang 'confirmed' mà booking yêu cầu cọc
+  // (depositAmount > 0) mà chưa cọc thì từ chối. Áp dụng cho single booking.
+  // Recurring: chỉ buổi đầu (`isRecurringFirst`) mới có depositAmount > 0; các
+  // buổi sau trong nhóm đã được cọc gộp ở buổi đầu nên cho confirm bình thường.
+  if (status === 'confirmed') {
+    const requiresDeposit = (currentBooking.depositAmount || 0) > 0;
+    const isPaid = currentBooking.depositPaid ||
+      ['deposit_paid', 'paid'].includes(currentBooking.paymentStatus);
+    if (requiresDeposit && !isPaid) {
+      throw Object.assign(
+        new Error('Chưa đặt cọc — không thể xác nhận lịch hẹn'),
+        { statusCode: 400, code: 'DEPOSIT_REQUIRED' },
+      );
+    }
+  }
+
   const update = { status };
   if (status === 'confirmed') update.confirmedAt = new Date();
   if (status === 'checked_in') {
@@ -630,12 +652,35 @@ exports.confirmBookings = async (ids, userRole, userId) => {
     .populate('userId', 'name');
 
   if (pending.length === 0) {
-    return { confirmed: 0, total: 0, bookings: [] };
+    return { confirmed: 0, total: 0, bookings: [], skipped: [] };
+  }
+
+  // Gate: chỉ confirm những booking đã cọc (hoặc không yêu cầu cọc).
+  // - slot_pack_usage: depositAmount = 0 → cho confirm luôn.
+  // - depositAmount > 0 mà depositPaid = false (paymentStatus = 'unpaid') → bỏ qua,
+  //   trả về `skipped` để manager biết phải đòi khách cọc trước.
+  // - Recurring: chỉ check booking đầu (`isRecurringFirst`); các buổi sau
+  //   depositAmount = 0 nhưng vẫn thuộc nhóm đã cọc rồi.
+  const PAID_STATUSES = ['deposit_paid', 'paid'];
+  const confirmable = [];
+  const skipped = [];
+  for (const b of pending) {
+    const requiresDeposit = (b.depositAmount || 0) > 0;
+    const isPaid = b.depositPaid || PAID_STATUSES.includes(b.paymentStatus);
+    if (!requiresDeposit || isPaid) {
+      confirmable.push(b);
+    } else {
+      skipped.push({
+        bookingId: b._id,
+        reason: 'Chưa đặt cọc — không thể xác nhận',
+        depositAmount: b.depositAmount,
+      });
+    }
   }
 
   const now = new Date();
   const results = await Promise.allSettled(
-    pending.map((b) =>
+    confirmable.map((b) =>
       Booking.findOneAndUpdate(
         { _id: b._id, status: 'pending' },
         { status: 'confirmed', confirmedAt: now },
@@ -648,8 +693,16 @@ exports.confirmBookings = async (ids, userRole, userId) => {
     .filter((r) => r.status === 'fulfilled' && r.value)
     .map((r) => r.value);
 
+  // Log bookings that were skipped due to concurrent status change (race condition)
+  const raceSkipped = results
+    .filter((r) => r.status === 'fulfilled' && !r.value)
+    .map((_, i) => confirmable[i]?._id);
+  if (raceSkipped.length > 0) {
+    console.warn('[confirmBookings] Race condition: bookings no longer pending at update time:', raceSkipped);
+  }
+
   // Thông báo cho từng khách (non-blocking)
-  for (const b of pending) {
+  for (const b of confirmable) {
     notificationService.send(
       b.userId?._id || b.userId,
       'Lịch hẹn đã được xác nhận',
@@ -659,7 +712,13 @@ exports.confirmBookings = async (ids, userRole, userId) => {
     ).catch(() => {});
   }
 
-  return { confirmed: confirmed.length, total: pending.length, bookings: confirmed };
+  return {
+    confirmed: confirmed.length,
+    total: pending.length,
+    bookings: confirmed,
+    skipped,
+    skippedCount: skipped.length,
+  };
 };
 
 exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
@@ -1062,9 +1121,6 @@ exports.createRecurringBooking = async (data) => {
     computedFinalPrice = vResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
   }
 
-  // --- Đặt cọc cho mỗi buổi định kỳ (100% nếu khách đang bị strike no-show) ---
-  const depositAmount = Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
-
   // --- Build danh sách các ngày cần tạo booking ---
   const recurringGroupId = crypto.randomUUID();
   const today = new Date();
@@ -1076,7 +1132,6 @@ exports.createRecurringBooking = async (data) => {
       const candidate = new Date(today);
       candidate.setDate(today.getDate() + w * 7 + d);
       if (weekdays.includes(candidate.getDay())) {
-        // Bỏ qua ngày trong quá khứ
         if (candidate >= today) {
           targetDates.push(new Date(candidate));
         }
@@ -1088,11 +1143,18 @@ exports.createRecurringBooking = async (data) => {
     throw Object.assign(new Error('No valid dates to book for the selected weekdays and weeks'), { statusCode: 400, code: 'NO_DATES' });
   }
 
+  // --- Đặt cọc cho cả nhóm định kỳ ---
+  // Gộp cọc vào buổi ĐẦU TIÊN; các buổi còn lại = 0. Manager đối soát booking đầu.
+  const groupTotalFinalPrice = computedFinalPrice * targetDates.length;
+  const groupDepositAmount = Math.round((groupTotalFinalPrice * getDepositRate(user)) / 1000) * 1000;
+
   // --- Tạo booking lần lượt, bỏ qua ngày conflict ---
   const created = [];
   const failed  = [];
 
-  for (const bookingDate of targetDates) {
+  for (let bookingIdx = 0; bookingIdx < targetDates.length; bookingIdx++) {
+    const bookingDate = targetDates[bookingIdx];
+    const isFirstInGroup = bookingIdx === 0;
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
@@ -1189,10 +1251,15 @@ exports.createRecurringBooking = async (data) => {
         bookingType: 'recurring',
         recurringGroupId,
         priority,
+        // Buổi đầu chịu toàn bộ cọc của cả nhóm; các buổi sau = 0.
+        // Manager đối soát booking đầu là đủ biết đã thu cọc.
+        isRecurringFirst: isFirstInGroup,
+        recurringPosition: bookingIdx + 1,
+        recurringTotal: targetDates.length,
         voucherCode: voucherCode ? voucherCode.trim().toUpperCase() : undefined,
         discountAmount: computedDiscountAmount,
         finalPrice: computedFinalPrice,
-        depositAmount,
+        depositAmount: isFirstInGroup ? groupDepositAmount : 0,
         selectedSubServices: validSubServices,
       });
       await booking.save({ session });

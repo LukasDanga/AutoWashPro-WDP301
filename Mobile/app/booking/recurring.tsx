@@ -76,8 +76,17 @@ const WEEK_PRESETS = [4, 8, 12]; // backend allows up to 12
 
 export default function RecurringBookingScreen() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const toast = useToast();
+
+  // 'gold' | 'diamond' get full VIP treatment; everyone else sees VIP-only slots as locked.
+  const userTier = (user as any)?.tier as
+    | 'bronze'
+    | 'silver'
+    | 'gold'
+    | 'diamond'
+    | undefined;
+  const isVip = userTier === 'gold' || userTier === 'diamond';
 
   const [step, setStep] = useState<Step>('branch');
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -106,6 +115,12 @@ export default function RecurringBookingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // User's existing active bookings on the chosen branch — used to disable
+  // slots the user already owns so they can't double-book themselves.
+  const [userBookedSlotKeys, setUserBookedSlotKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+
   const filteredPackages = useMemo(
     () =>
       packages.filter(
@@ -118,21 +133,81 @@ export default function RecurringBookingScreen() {
     fetchInitialData();
   }, []);
 
-  // Fetch slots when entering recurrence step
+  // Fetch slots when entering recurrence step or when the chosen weekday changes.
   useEffect(() => {
     if (step !== 'recurrence') return;
     if (!selectedBranch?._id || !selectedPackage?._id) return;
+    if (selectedWeekdays.length === 0) return;
     fetchSlotsForFirstWeekday();
-  }, [step, selectedBranch?._id, selectedPackage?._id]);
+    fetchUserBookedSlotsForWeekdays();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, selectedBranch?._id, selectedPackage?._id, selectedWeekdays.join(',')]);
+
+  // Pull the user's existing active bookings for this branch so we can disable
+  // any slot they already own (similar to the single-booking flow). Cached by
+  // (branch, weekdays) so toggling a weekday refreshes the relevant dates.
+  const fetchUserBookedSlotsForWeekdays = useCallback(async () => {
+    if (!isAuthenticated || !selectedBranch?._id || selectedWeekdays.length === 0) {
+      setUserBookedSlotKeys(new Set());
+      return;
+    }
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const lastCandidate = new Date(today);
+      lastCandidate.setDate(lastCandidate.getDate() + weeks * 7);
+
+      const candidateDates: string[] = [];
+      const cursor = new Date(today);
+      while (cursor <= lastCandidate) {
+        if (selectedWeekdays.includes(cursor.getDay())) {
+          candidateDates.push(cursor.toISOString().split('T')[0]);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const keys = new Set<string>();
+      // Fetch each weekday in date range, 1 query per date — but limit to
+      // active statuses only. We don't filter by status (BE only supports
+      // exact match) so we filter client-side after fetch.
+      const activeStatuses = new Set(['pending', 'confirmed', 'checked_in', 'in_progress']);
+      const results = await Promise.allSettled(
+        candidateDates.map((d) =>
+          bookingApi.getMyBookings({
+            dateFrom: d,
+            dateTo: d,
+            branchId: selectedBranch._id,
+            limit: 100,
+          }),
+        ),
+      );
+      results.forEach((r, idx) => {
+        if (r.status !== 'fulfilled') return;
+        for (const b of r.value.data) {
+          if (b.startTime && activeStatuses.has(b.status)) {
+            keys.add(`${candidateDates[idx]}|${b.startTime}`);
+          }
+        }
+      });
+      setUserBookedSlotKeys(keys);
+    } catch (err) {
+      console.warn('[recurring] failed to fetch user bookings', err);
+      setUserBookedSlotKeys(new Set());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, selectedBranch?._id, selectedWeekdays.join(','), weeks]);
 
   const fetchInitialData = async () => {
     try {
       const [branchesRes, packagesRes] = await Promise.all([
         branchApi.getPublicBranches(),
-        packageApi.getPackages({ status: 'active' }),
+        // `limit: 'all'` so the recurring flow shows every active package the
+        // user could pick from — without it, BE defaults to 9 sorted by price
+        // and we end up with an empty category-filtered list (see booking/
+        // index.tsx for the same rationale).
+        packageApi.getPackages({ status: 'active', limit: 'all' }),
       ]);
       setBranches(branchesRes);
-      setPackages(packagesRes);
+      setPackages(packagesRes || []);
       if (isAuthenticated) {
         const vehiclesRes = await vehicleApi.getVehicles();
         setVehicles(vehiclesRes);
@@ -226,7 +301,20 @@ export default function RecurringBookingScreen() {
 
   const handleCustomWeeksChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, '').slice(0, 2);
-    setCustomWeeks(cleaned);
+    if (cleaned === '') {
+      setCustomWeeks('');
+      return;
+    }
+    const n = parseInt(cleaned, 10);
+    if (Number.isNaN(n)) return;
+    // Clamp visually so the field always matches what we'll submit.
+    if (n < 1) {
+      setCustomWeeks('1');
+    } else if (n > 12) {
+      setCustomWeeks('12');
+    } else {
+      setCustomWeeks(String(n));
+    }
   };
 
   // Returns the effective weeks value (always clamped to 1..12).
@@ -268,13 +356,32 @@ export default function RecurringBookingScreen() {
         },
       );
 
-      AlertDialog.show({
-        title: 'Đặt lịch định kỳ thành công!',
+      toast.show({
+        variant: 'success',
         message: `Đã tạo ${result.totalCreated} lịch hẹn${
           result.totalFailed > 0
             ? `, ${result.totalFailed} ngày bị bỏ qua do trùng slot`
             : ''
         }.`,
+      });
+
+      // Cọc gộp cho cả nhóm định kỳ: BE gắn toàn bộ deposit vào buổi đầu
+      // (isRecurringFirst). Nếu buổi đầu tạo thất bại (trùng slot), thử
+      // buổi kế tiếp trong nhóm đã tạo thành công để lấy depositAmount.
+      const depositBooking = result.created.find(
+        (b: any) => (b.depositAmount ?? 0) > 0,
+      ) as any;
+      const depositAmt = depositBooking?.depositAmount ?? 0;
+      const depositBookingId = depositBooking?._id ?? result.created[0]?._id;
+
+      AlertDialog.show({
+        title: 'Đặt lịch định kỳ thành công!',
+        message:
+          `Đã tạo ${result.totalCreated} lịch hẹn` +
+          (result.totalFailed > 0 ? `, ${result.totalFailed} ngày bị bỏ qua do trùng slot` : '') +
+          (depositAmt > 0
+            ? `\n\nCọc gộp cho cả nhóm: ${formatCurrency(depositAmt)}.\nĐặt cọc ngay để giữ chỗ cho tất cả các buổi.`
+            : '\n\nĐơn không yêu cầu đặt cọc.'),
         variant: 'success',
         actions: [
           {
@@ -282,17 +389,24 @@ export default function RecurringBookingScreen() {
             onPress: () => router.replace('/(tabs)/history'),
           },
           {
-            text: 'Xem chi tiết',
-            onPress: () =>
-              result.created[0]?._id
-                ? router.replace(`/booking/${result.created[0]._id}`)
-                : router.replace('/(tabs)/history'),
+            text: depositAmt > 0 ? 'Đặt cọc ngay' : 'Xem chi tiết',
+            onPress: () => {
+              if (!depositBookingId) {
+                router.replace('/(tabs)/history');
+                return;
+              }
+              const target = depositAmt > 0
+                ? `/payment/select?bookingId=${depositBookingId}&type=deposit`
+                : `/booking/${depositBookingId}`;
+              router.replace(target as any);
+            },
           },
         ],
       });
     } catch (error: any) {
       const apiMessage =
         error?.response?.data?.message || error?.message || 'Không thể tạo lịch định kỳ';
+      toast.show({ variant: 'error', message: apiMessage });
       AlertDialog.error('Lỗi', apiMessage);
     } finally {
       setIsSubmitting(false);
@@ -342,8 +456,13 @@ export default function RecurringBookingScreen() {
         <TouchableOpacity
           key={branch._id}
           onPress={() => {
+            if (selectedBranch?._id === branch._id) return;
             setSelectedBranch(branch);
             setSelectedPackage(null);
+            // Time slots are branch-specific; clear so the user re-picks them
+            // at the recurrence step instead of silently keeping the old slot.
+            setSelectedTime('');
+            setDaySlots([]);
           }}
         >
           <Card
@@ -382,10 +501,28 @@ export default function RecurringBookingScreen() {
       <AppText variant="h3" style={styles.stepTitle}>
         Chọn gói dịch vụ
       </AppText>
-      {filteredPackages.map(pkg => (
+      {filteredPackages.length === 0 ? (
+        <EmptyState
+          icon={<Text style={styles.optionEmoji}>✨</Text>}
+          title="Chưa có gói dịch vụ"
+          message={
+            selectedBranch
+              ? `Chi nhánh "${selectedBranch.name}" chưa có gói nào. Bạn có thể chọn chi nhánh khác hoặc quay lại bước trước.`
+              : 'Hiện không có gói dịch vụ nào khả dụng.'
+          }
+        />
+      ) : (
+        filteredPackages.map(pkg => (
         <TouchableOpacity
           key={pkg._id}
-          onPress={() => setSelectedPackage(pkg)}
+          onPress={() => {
+            if (selectedPackage?._id === pkg._id) return;
+            setSelectedPackage(pkg);
+            // Slot duration depends on the package; clear the picked time so
+            // it doesn't survive into the recurrence step.
+            setSelectedTime('');
+            setDaySlots([]);
+          }}
         >
           <Card
             style={[
@@ -419,7 +556,8 @@ export default function RecurringBookingScreen() {
             </View>
           </Card>
         </TouchableOpacity>
-      ))}
+      ))
+      )}
     </View>
   );
 
@@ -540,36 +678,68 @@ export default function RecurringBookingScreen() {
       ) : (
         <View style={styles.timeGrid}>
           {daySlots.map((slot, idx) => {
-            const available = slot.available;
-            const active = selectedTime === slot.startTime;
+            // Determine the FIRST upcoming date matching one of the chosen
+            // weekdays — same logic as fetchSlotsForFirstWeekday so the keys
+            // line up with userBookedSlotKeys.
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let candidate = new Date(today);
+            candidate.setDate(today.getDate() + 1);
+            for (let i = 0; i < 7; i++) {
+              if (selectedWeekdays.includes(candidate.getDay())) break;
+              candidate.setDate(candidate.getDate() + 1);
+            }
+            const slotDateStr = candidate.toISOString().split('T')[0];
+            const userHasThisSlot = userBookedSlotKeys.has(
+              `${slotDateStr}|${slot.startTime}`,
+            );
+            const isUnavailable = !slot.available && !userHasThisSlot;
+            const isVipOnly =
+              !!slot.vipOnly && !isUnavailable && !userHasThisSlot && !isVip;
+            const isLocked = userHasThisSlot || isUnavailable || isVipOnly;
+            const canBook = slot.available && !isVipOnly;
             return (
               <TouchableOpacity
                 key={`${slot.startTime}-${idx}`}
                 style={[
                   styles.timeCard,
-                  !available && styles.timeCardDisabled,
-                  active && styles.timeCardSelected,
+                  isLocked && styles.timeCardDisabled,
+                  selectedTime === slot.startTime && styles.timeCardSelected,
                 ]}
-                disabled={!available}
-                onPress={() => available && setSelectedTime(slot.startTime)}
+                disabled={!canBook}
+                onPress={() => canBook && setSelectedTime(slot.startTime)}
               >
                 <Text
                   style={[
                     styles.timeText,
-                    !available && styles.timeTextDisabled,
-                    active && styles.timeTextSelected,
+                    isLocked && styles.timeTextDisabled,
+                    selectedTime === slot.startTime && styles.timeTextSelected,
                   ]}
                 >
                   {slot.startTime}
                 </Text>
-                {!available && (
+                {userHasThisSlot ? (
+                  <Text style={[styles.timeSlotFull, { color: colors.primary }]}>
+                    Bạn đã đặt
+                  </Text>
+                ) : isUnavailable ? (
                   <Text style={styles.timeSlotFull}>Kín</Text>
-                )}
+                ) : isVipOnly ? (
+                  <Text style={[styles.timeSlotFull, { color: colors.warning }]}>
+                    VIP
+                  </Text>
+                ) : null}
               </TouchableOpacity>
             );
           })}
         </View>
       )}
+
+      <AppText variant="caption" color="textTertiary" style={styles.helperText}>
+        Khoảng giờ hiển thị chỉ cho 1 ngày mẫu. Backend sẽ tự đổi sang giờ
+        trống gần nhất (±2h) cho các ngày sau bị trùng, hoặc bỏ qua nếu cả
+        ngày đã kín — bạn sẽ thấy số buổi tạo được / bị bỏ qua sau khi đặt.
+      </AppText>
 
       {/* Weeks picker */}
       <AppText variant="label" style={styles.sectionLabel}>
@@ -645,6 +815,10 @@ export default function RecurringBookingScreen() {
     const totalSessions = selectedWeekdays.length * effectiveWeeks;
     const pricePerSession = selectedPackage?.price || 0;
     const totalEstimate = totalSessions * pricePerSession;
+    // Cọc 30% × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
+    // Quy ước: gộp 1 lần thanh toán thay vì tách theo từng buổi.
+    const depositRate = userTier === 'gold' || userTier === 'diamond' ? 0.3 : 0.3;
+    const depositAmount = Math.round((totalEstimate * depositRate) / 1000) * 1000;
     const weekdayLabels = selectedWeekdays
       .map(d => WEEKDAY_OPTIONS.find(o => o.value === d)?.long)
       .filter(Boolean)
@@ -699,13 +873,26 @@ export default function RecurringBookingScreen() {
             </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Ước tính</Text>
+            <Text style={styles.summaryLabel}>Tổng cộng</Text>
             <Text style={styles.summaryPrice}>
               {formatCurrency(totalEstimate)}
             </Text>
           </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Cọc trước (30%)</Text>
+            <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
+              {formatCurrency(depositAmount)}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Còn lại khi hoàn thành</Text>
+            <Text style={styles.summaryValue}>
+              {formatCurrency(Math.max(0, totalEstimate - depositAmount))}
+            </Text>
+          </View>
           <AppText variant="caption" color="textTertiary" style={styles.summaryFootnote}>
-            * Đặt cọc 30% cho mỗi buổi. Tổng tiền có thể thay đổi nếu một số ngày bị trùng slot và bị backend bỏ qua.
+            * Cọc gộp 1 lần cho cả nhóm ({totalSessions} buổi). Phần còn lại thanh toán sau buổi cuối.
+            Tổng tiền có thể giảm nếu một số ngày bị trùng slot và bị backend bỏ qua.
           </AppText>
         </Card>
 

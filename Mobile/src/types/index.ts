@@ -133,6 +133,13 @@ export interface Booking {
   subServices?: SubService[];
   voucherCode?: string;
   discountAmount?: number;
+  // Số tiền cọc cần thu (30% × finalPrice). BE tự tính; FE hiển thị.
+  depositAmount?: number;
+  // Đã cọc hay chưa — guard để biết có cần chặn "Đặt lại" hay không.
+  depositPaid?: boolean;
+  // Phương thức thanh toán đã dùng (cash/momo/vnpay).
+  paymentMethod?: PaymentMethod;
+  // Legacy alias — tránh phá callers cũ (chỉ một số màn dùng).
   deposit?: number;
   finalPrice: number;
   totalPrice?: number; // alias kept for legacy callers
@@ -142,6 +149,10 @@ export interface Booking {
   reply?: string;
   isRecurring?: boolean;
   recurringGroupId?: string;
+  isRecurringFirst?: boolean;
+  recurringPosition?: number;
+  recurringTotal?: number;
+  bookingType?: 'single' | 'recurring' | 'slot_pack_usage';
   createdAt: string;
   updatedAt: string;
 }
@@ -202,6 +213,10 @@ export interface Payment {
   type: PaymentType;
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   transactionId?: string;
+  // Base64 data URL của QR code (cash/bank) — FE render bằng <Image>.
+  qrCode?: string;
+  // Gateway redirect URL (MoMo/VNPay) — FE dùng WebView/Linking.
+  paymentUrl?: string;
   paidAt?: string;
   refundedAt?: string;
   createdAt: string;

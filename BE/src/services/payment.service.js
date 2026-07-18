@@ -79,11 +79,12 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
   const targetUserId = booking.userId;
 
-  let payment = await Payment.findOneAndUpdate(
-    { bookingId, status: { $nin: ['paid', 'refunded'] } },
-    { bookingId, userId: targetUserId, amount, method, paymentType, transactionId: generateTransactionId(), status: 'pending' },
-    { new: true, upsert: true, runValidators: true }
-  );
+  // Check for existing pending payment first (prevents upsert race on concurrent requests)
+  let payment = await Payment.findOne({ bookingId, status: 'pending' });
+  if (!payment) {
+    payment = new Payment({ bookingId, userId: targetUserId, amount, method, paymentType, transactionId: generateTransactionId(), status: 'pending' });
+    await payment.save();
+  }
 
   if (booking.voucherCode) {
     const VoucherUsage = mongoose.model('VoucherUsage');

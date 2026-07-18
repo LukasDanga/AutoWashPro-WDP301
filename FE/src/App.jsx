@@ -117,7 +117,8 @@ export default function App() {
     }
 
     loadSession(token);
-  }, [token, loadSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {
@@ -153,6 +154,7 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        name: data.name,
         email: data.email,
         password: data.password,
       }),
