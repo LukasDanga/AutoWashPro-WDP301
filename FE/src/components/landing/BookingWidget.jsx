@@ -646,8 +646,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       if (resultData.totalCreated > 0) {
         const totalPrice = (totalBase - discount) * resultData.totalCreated;
         const firstBooking = resultData.created?.[0];
-        const perDeposit = firstBooking?.depositAmount || resultData.depositAmount || 0;
-        const totalDeposit = perDeposit * resultData.totalCreated;
+        const totalDeposit = firstBooking?.depositAmount || resultData.depositAmount || 0;
         const totalRemaining = Math.max(0, totalPrice - totalDeposit);
         setLastBooking({
           branch: selectedBranch, vehicle, pkg, currentDate: null, selectedTime,

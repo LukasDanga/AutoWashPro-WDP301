@@ -18,12 +18,8 @@ const VALID_TRANSITIONS = {
   cancelled: [],
 };
 
-// Tỉ lệ đặt cọc trước cho đơn lẻ + định kỳ (gói lượt đã trả trước toàn bộ)
+// Tỉ lệ đặt cọc — luôn 30% (đã bỏ logic strike penalty)
 const DEPOSIT_RATE = 0.3;
-
-// Khách bị hệ thống tự hủy (no-show) từ ngưỡng này trở lên phải cọc 100% cho lần đặt tiếp theo
-const NO_SHOW_STRIKE_THRESHOLD = 3;
-const STRIKE_DEPOSIT_RATE = 1;
 
 // Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút.
 // Grace mặc định chỉ 5 phút (xem autoCancel.job.js) nên offset cũng phải nhỏ hơn nó,
@@ -37,8 +33,7 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
 
-// Khách có từ NO_SHOW_STRIKE_THRESHOLD lần bị hệ thống tự hủy trở lên phải cọc 100% (chống spam/no-show lặp lại)
-const getDepositRate = (user) => (user && user.noShowCount >= NO_SHOW_STRIKE_THRESHOLD) ? STRIKE_DEPOSIT_RATE : DEPOSIT_RATE;
+const getDepositRate = () => DEPOSIT_RATE;
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -259,7 +254,6 @@ exports.createBooking = async (data) => {
     }
 
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
-    // Khách có lịch sử no-show (>= NO_SHOW_STRIKE_THRESHOLD lần) phải cọc 100% để hạn chế đặt-rồi-không-đến.
     const depositAmount = bookingType === 'slot_pack_usage'
       ? 0
       : Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
