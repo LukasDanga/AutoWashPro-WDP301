@@ -3,11 +3,10 @@ const mongoose = require('mongoose');
 const giftSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   description: { type: String, trim: true },
-  price: { type: Number, required: true, min: 0 },
-  isCustomPrice: { type: Boolean, default: false },
-  emoji: { type: String },
-  bgColor: { type: String },
-  imageUrl: { type: String },
+  type: { type: String, enum: ['percentage', 'fixed', 'none'], default: 'none' },
+  value: { type: Number, default: 0, min: 0 },
+  probability: { type: Number, required: true, min: 0, max: 100, default: 10 },
+  color: { type: String, default: '#10b981' },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   sortOrder: { type: Number, default: 0 },
 }, { timestamps: true });
