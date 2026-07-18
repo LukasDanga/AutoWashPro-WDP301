@@ -3,7 +3,7 @@ import Navbar from './Navbar';
 import HeroSection from './HeroSection';
 import HowItWorksSection from './HowItWorksSection';
 import TestimonialsSection from './TestimonialsSection';
-import MapSection from './MapSection';
+import BranchCarouselSection from './BranchCarouselSection';
 import CTASection from './CTASection';
 import Footer from './Footer';
 
@@ -16,7 +16,7 @@ export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiB
       <HeroSection />
       <HowItWorksSection />
       <TestimonialsSection />
-      <MapSection onSelectBranch={(branch) => navigate(`/booking?branchId=${branch.id}`)} />
+      <BranchCarouselSection onSelectBranch={(branch) => navigate(`/booking?branchId=${branch.id}`)} />
       <CTASection />
       <Footer />
     </div>
