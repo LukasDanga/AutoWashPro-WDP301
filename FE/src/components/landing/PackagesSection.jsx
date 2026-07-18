@@ -170,7 +170,7 @@ export default function PackagesSection() {
                       </div>
                       <div>
                         <h4 className="font-bold text-slate-800 text-sm md:text-base">Đặt cọc online 30%</h4>
-                        <p className="text-xs md:text-sm text-slate-400">Thanh toán đặt cọc qua cổng VNPay/MoMo để đảm bảo slot, không phải xếp hàng chờ đợi.</p>
+                        <p className="text-xs md:text-sm text-slate-400">Thanh toán đặt cọc qua chuyển khoản để đảm bảo slot, không phải xếp hàng chờ đợi.</p>
                       </div>
                     </div>
                   </div>

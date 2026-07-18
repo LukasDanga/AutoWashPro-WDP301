@@ -80,6 +80,9 @@ export const Icons = {
   mailOutline: 'mail-outline',
   call: 'call',
   callOutline: 'call-outline',
+  mic: 'mic',
+  micOutline: 'mic-outline',
+  addCircleOutline: 'add-circle-outline',
 
   // Location
   location: 'location',
@@ -241,6 +244,11 @@ export const Icons = {
   flaskOutline: 'flask-outline',
   barcode: 'barcode',
   barcodeOutline: 'barcode-outline',
+
+  // Brand logos
+  logoApple: 'logo-apple',
+  logoFacebook: 'logo-facebook',
+  logoGoogle: 'logo-google',
 } as const;
 
 export type IconName = keyof typeof Icons;

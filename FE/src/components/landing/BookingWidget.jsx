@@ -98,7 +98,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [depositPayment, setDepositPayment] = useState(null);
   const [depositQrStep, setDepositQrStep] = useState('select'); // 'select' | 'qr' | 'success'
   const [depositLoading, setDepositLoading] = useState(false);
-  const [depositMethod, setDepositMethod] = useState('momo');
+  const [depositMethod, setDepositMethod] = useState('bank');
   const [depositPollCount, setDepositPollCount] = useState(0);
 
   // Process pending booking after login
@@ -417,9 +417,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   async function simulatePaymentConfirm() {
     if (!depositPayment) return;
     try {
-      const res = await fetch(`${apiBase}/payments/callback`, {
+      const res = await fetch(`${apiBase}/payments/simulate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           transactionId: depositPayment.transactionId,
           gatewayTransactionId: `SIM${Date.now()}`,
@@ -1805,31 +1808,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 <>
                   {/* QR Code View */}
                   <div className="pt-8 pb-4 text-center px-6">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                      depositPayment.method === 'momo' ? 'bg-pink-500' :
-                      depositPayment.method === 'vnpay' ? 'bg-blue-600' :
-                      'bg-emerald-50 border-2 border-emerald-100'
-                    }`}>
-                      {depositPayment.method === 'momo' ? (
-                        <span className="text-white text-xl font-black">M</span>
-                      ) : depositPayment.method === 'vnpay' ? (
-                        <span className="text-white text-xl font-black">V</span>
-                      ) : (
-                        <svg className="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
-                        </svg>
-                      )}
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 bg-emerald-50 border-2 border-emerald-100">
+                      <svg className="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                      </svg>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800">
-                      {depositPayment.method === 'momo' ? 'Quét mã MoMo' :
-                       depositPayment.method === 'vnpay' ? 'Quét mã VNPay' :
-                       'Chuyển khoản ngân hàng'}
-                    </h3>
-                    <p className="text-slate-400 text-xs mt-1">
-                      {depositPayment.method === 'momo' ? 'Dùng app MoMo quét mã QR' :
-                       depositPayment.method === 'vnpay' ? 'Dùng app VNPay quét mã QR' :
-                       'Quét mã QR bằng app ngân hàng bất kỳ'}
-                    </p>
+                    <h3 className="text-xl font-bold text-slate-800">Chuyển khoản ngân hàng</h3>
+                    <p className="text-slate-400 text-xs mt-1">Quét mã QR bằng app ngân hàng bất kỳ</p>
                   </div>
 
                   <div className="px-8 pb-2 flex justify-center">
@@ -1842,7 +1827,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <div className="bg-slate-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-slate-400 mb-1">Số tiền cần chuyển</div>
                       <div className="text-2xl font-black text-emerald-600">{formatCurrency(depositPayment.amount || pendingDeposit.depositAmount || 0)}</div>
-                      <div className="text-[11px] text-slate-400 mt-1">Đặt cọc 30% · Còn lại {formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)</div>
+                      <div className="text-[11px] text-slate-400 mt-1">Đặt cọc {Math.round(( (depositPayment.amount || pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1) ) * 100)}% · Còn lại {formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)</div>
                     </div>
                     <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
                       <span className="text-xs text-slate-400 font-semibold">Mã giao dịch</span>
@@ -1899,8 +1884,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         </div>
                         <div className="flex justify-between items-end">
                           <div>
-                            <span className="text-amber-600 font-semibold text-sm">Đặt cọc (30%)</span>
-                            <div className="text-[11px] text-slate-400 mt-0.5">30% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
+                            <span className="text-amber-600 font-semibold text-sm">Đặt cọc ({Math.round(((pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}%)</span>
+                            <div className="text-[11px] text-slate-400 mt-0.5">{Math.round(((pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
                           </div>
                           <span className="font-black text-xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
                         </div>
@@ -1916,7 +1901,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Số tiền cần thanh toán</span>
                       <div className="bg-amber-50 border-2 border-amber-100 rounded-2xl px-5 py-4 flex items-center justify-between">
                         <div>
-                          <span className="font-bold text-amber-700 text-sm block">Đặt cọc 30%</span>
+                          <span className="font-bold text-amber-700 text-sm block">Đặt cọc {Math.round(((pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}%</span>
                           <span className="text-xs text-amber-500/70">Còn lại {formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (pendingDeposit.depositAmount || 0)))} (thanh toán sau)</span>
                         </div>
                         <span className="font-black text-2xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
@@ -1925,10 +1910,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                     <div>
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Chọn phương thức</span>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 gap-2">
                         {[
-                          { value: 'momo', label: 'MoMo', color: '#ff2d78', icon: 'M' },
-                          { value: 'vnpay', label: 'VNPay', color: '#0066ff', icon: 'V' },
                           { value: 'bank', label: 'Ngân hàng', color: '#10b981', icon: '' },
                         ].map(m => (
                           <button

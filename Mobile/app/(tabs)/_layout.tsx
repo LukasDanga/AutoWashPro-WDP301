@@ -86,18 +86,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="checkin"
         options={{
-          title: 'Lịch sử',
+          title: 'QR Check-in',
           tabBarIcon: ({ color, focused }) => (
             <Icon
-              name={focused ? Icons.list : Icons.listOutline}
+              name={focused ? Icons.qrCode : Icons.qrCodeOutline}
               size={focused ? 26 : 24}
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'Lịch sử đặt lịch',
-          tabBarLabel: 'Lịch sử',
+          tabBarAccessibilityLabel: 'QR Check-in',
+          tabBarLabel: 'Check-in',
         }}
       />
       <Tabs.Screen
@@ -128,6 +128,14 @@ export default function TabLayout() {
           ),
           tabBarAccessibilityLabel: 'Tài khoản cá nhân',
           tabBarLabel: 'Tài khoản',
+        }}
+      />
+      {/* History screen kept accessible via deep-link but hidden from tab bar */}
+      <Tabs.Screen
+        name="history"
+        options={{
+          href: null,
+          title: 'Lịch sử',
         }}
       />
     </Tabs>
