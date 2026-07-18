@@ -45,7 +45,7 @@ export const ADMIN_MENU_ITEMS = [
   },
   {
     id: 'rewards',
-    label: 'Quản lý điểm thưởng',
+    label: 'Khuyến mãi & Quà tặng',
     to: '/admin/rewards',
     icon: Gift,
   },
@@ -105,7 +105,7 @@ export const ADMIN_PAGE_META = {
     description: 'Xem và phản hồi phản hồi từ khách hàng sau mỗi lượt rửa.',
   },
   rewards: {
-    title: 'Quản lý điểm thưởng',
+    title: 'Khuyến mãi & Quà tặng',
     description: 'Cấu hình chương trình tích điểm và đổi quà.',
   },
   activity: {

@@ -431,6 +431,201 @@ function VoucherUsageReportTab() {
   );
 }
 
+function WheelManagementTab() {
+  const [gifts, setGifts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingGift, setEditingGift] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const fetchGifts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api('/gifts');
+      if (res.ok) {
+        const p = await res.json();
+        setGifts(p?.data || []);
+      }
+    } catch (e) {
+      showToast('Lỗi khi tải dữ liệu vòng quay', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchGifts(); }, [fetchGifts]);
+
+  const handleDelete = async (id) => {
+    if (!(await confirmDialog({ title: 'Xóa phần quà', message: 'Bạn có chắc chắn muốn xóa?', confirmLabel: 'Xóa', danger: true }))) return;
+    try {
+      const res = await api(`/gifts/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Xóa thành công!');
+        fetchGifts();
+      }
+    } catch (e) {
+      showToast('Xóa thất bại', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-bold text-slate-800">Quản lý Ô Vòng Quay</h3>
+        <button onClick={() => { setEditingGift(null); setModalOpen(true); }}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm">
+          <Plus size={14} weight="bold" /> Thêm ô thưởng
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Spinner /></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {gifts.map(g => (
+            <div key={g._id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-2 h-full" style={{ backgroundColor: g.color || '#ccc' }}></div>
+              <h4 className="font-bold text-slate-800 text-lg pr-4">{g.name}</h4>
+              <p className="text-sm text-slate-500 mb-4">{g.description || 'Không có mô tả'}</p>
+              
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-slate-50 rounded px-3 py-2">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Loại</p>
+                  <p className="text-sm font-medium text-slate-700">{g.type === 'percentage' ? 'Giảm %' : g.type === 'fixed' ? 'Giảm Tiền' : 'Quà tặng / Không có'}</p>
+                </div>
+                <div className="bg-slate-50 rounded px-3 py-2">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Giá trị</p>
+                  <p className="text-sm font-medium text-slate-700">{g.type === 'percentage' ? `${g.value}%` : formatCurrency(g.value)}</p>
+                </div>
+                <div className="bg-slate-50 rounded px-3 py-2">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Tỷ lệ trúng</p>
+                  <p className="text-sm font-medium text-amber-600">{g.probability}%</p>
+                </div>
+                <div className="bg-slate-50 rounded px-3 py-2">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Trạng thái</p>
+                  <p className={`text-sm font-medium ${g.status === 'active' ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {g.status === 'active' ? 'Đang bật' : 'Đã tắt'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-auto">
+                <button onClick={() => { setEditingGift(g); setModalOpen(true); }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                  <PencilSimple size={16} />
+                </button>
+                <button onClick={() => handleDelete(g._id)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                  <Trash size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modalOpen && (
+        <WheelGiftModal 
+          initial={editingGift} 
+          onClose={() => setModalOpen(false)}
+          onSave={async (form) => {
+            setSaving(true);
+            try {
+              let res;
+              if (editingGift) {
+                res = await api(`/gifts/${editingGift._id}`, { method: 'PUT', body: JSON.stringify(form) });
+              } else {
+                res = await api('/gifts', { method: 'POST', body: JSON.stringify(form) });
+              }
+              if (res.ok) {
+                showToast(editingGift ? 'Cập nhật thành công' : 'Thêm thành công');
+                setModalOpen(false);
+                fetchGifts();
+              } else {
+                const err = await res.json();
+                showToast(err.message || 'Có lỗi xảy ra', 'error');
+              }
+            } catch (e) {
+              showToast('Lỗi mạng', 'error');
+            } finally {
+              setSaving(false);
+            }
+          }}
+          saving={saving}
+        />
+      )}
+    </div>
+  );
+}
+
+function WheelGiftModal({ initial, onSave, onClose, saving }) {
+  const [form, setForm] = useState(initial || {
+    name: '', description: '', type: 'none', value: 0, probability: 10, color: '#10b981', status: 'active', sortOrder: 0
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-slate-800">{initial ? 'Sửa ô thưởng' : 'Thêm ô thưởng mới'}</h2>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"><X size={16} /></button>
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4 px-6 py-5">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Tên hiển thị trên vòng quay <span className="text-red-500">*</span></label>
+            <input className={inp} required value={form.name} onChange={e => set('name', e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Mô tả (ẩn)</label>
+            <input className={inp} value={form.description} onChange={e => set('description', e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Loại Voucher Trúng</label>
+              <select className={inp} value={form.type} onChange={e => set('type', e.target.value)}>
+                <option value="none">Không có (Chỉ tặng hiện vật/may mắn)</option>
+                <option value="percentage">Giảm theo %</option>
+                <option value="fixed">Giảm tiền mặt (đ)</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Giá trị giảm (nếu có)</label>
+              <input type="number" min="0" className={inp} value={form.value} onChange={e => set('value', Number(e.target.value))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Tỷ lệ trúng (%) <span className="text-red-500">*</span></label>
+              <input type="number" min="0" max="100" required className={inp} value={form.probability} onChange={e => set('probability', Number(e.target.value))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Màu sắc ô</label>
+              <input type="color" className="w-full h-[38px] rounded cursor-pointer border border-slate-200" value={form.color} onChange={e => set('color', e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Trạng thái</label>
+              <select className={inp} value={form.status} onChange={e => set('status', e.target.value)}>
+                <option value="active">Bật</option>
+                <option value="inactive">Tắt</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-2">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">Hủy</button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors">
+              {saving ? 'Đang lưu…' : 'Lưu'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function DashboardOverview({ vouchers }) {
   const now = new Date();
   const total = vouchers.length;
@@ -581,6 +776,7 @@ export default function AdminRewards() {
         {[
           { key: 'dashboard', label: 'Tổng quan', icon: Coin },
           { key: 'list',      label: 'Danh sách Voucher', icon: Tag },
+          { key: 'wheel',     label: 'Quản lý Vòng Quay', icon: Gift },
           { key: 'report',    label: 'Báo cáo sử dụng', icon: ClockCounterClockwise },
         ].map(tab => {
           const Icon = tab.icon;
