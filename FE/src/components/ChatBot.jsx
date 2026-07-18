@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageSquare, X, Send, Bot, User, Sparkles } from 'lucide-react';
 import { sendChatMessage } from '../lib/chatbotService.js';
 
 const WELCOME = 'Xin chào! Tôi là trợ lý AI của AutoWashPro 🚗\nTôi có thể tư vấn dịch vụ và giúp bạn đặt lịch rửa xe. Bạn cần hỗ trợ gì?';
@@ -14,8 +16,10 @@ export default function ChatBot() {
 
   useEffect(() => {
     if (open) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      inputRef.current?.focus();
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        inputRef.current?.focus();
+      }, 100);
     }
   }, [messages, open]);
 
@@ -23,7 +27,7 @@ export default function ChatBot() {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   }, []);
 
   async function handleSend() {
@@ -51,157 +55,141 @@ export default function ChatBot() {
   }
 
   return (
-    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-      {open && (
-        <div style={{
-          width: 360,
-          height: 520,
-          background: '#fff',
-          borderRadius: 18,
-          boxShadow: '0 12px 48px rgba(0,0,0,0.18)',
-          display: 'flex',
-          flexDirection: 'column',
-          marginBottom: 12,
-          overflow: 'hidden',
-          border: '1px solid #e5e7eb',
-        }}>
-          {/* Header */}
-          <div style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚗</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>AutoWashPro AI</div>
-              <div style={{ color: '#bfdbfe', fontSize: 11 }}>Trợ lý đặt lịch thông minh</div>
-            </div>
-            <button
-              onClick={() => setOpen(false)}
-              style={{ background: 'none', border: 'none', color: '#93c5fd', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 2, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >✕</button>
-          </div>
-
-          {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, background: '#f9fafb' }}>
-            {messages.map((msg, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-end' }}>
-                {msg.role === 'bot' && (
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>🤖</div>
-                )}
-                <div style={{
-                  maxWidth: '78%',
-                  padding: '9px 13px',
-                  borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  background: msg.role === 'user' ? '#1d4ed8' : '#fff',
-                  color: msg.role === 'user' ? '#fff' : '#1f2937',
-                  fontSize: 13.5,
-                  lineHeight: 1.55,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-                }}>
-                  {msg.text}
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="w-[360px] sm:w-[400px] h-[600px] max-h-[80vh] bg-white rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-slate-100"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-500 p-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
+                  <Bot className="text-white w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm tracking-wide flex items-center gap-1.5">
+                    AutoWashPro AI <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                  </h3>
+                  <p className="text-emerald-50 text-xs font-medium opacity-90">Trợ lý đặt lịch thông minh</p>
                 </div>
               </div>
-            ))}
+              <button
+                onClick={() => setOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+              >
+                <X size={18} strokeWidth={2.5} />
+              </button>
+            </div>
 
-            {loading && (
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🤖</div>
-                <div style={{ background: '#fff', borderRadius: '16px 16px 16px 4px', padding: '10px 14px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
-                  <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                    {[0, 1, 2].map(n => (
-                      <div key={n} style={{
-                        width: 7, height: 7, borderRadius: '50%', background: '#9ca3af',
-                        animation: `chatDot 1.2s ${n * 0.2}s ease-in-out infinite`,
-                      }} />
-                    ))}
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-slate-50/50">
+              {messages.map((msg, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={i}
+                  className={`flex gap-3 items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {msg.role === 'bot' && (
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mb-1 border border-emerald-200">
+                      <Bot className="w-4 h-4 text-emerald-600" />
+                    </div>
+                  )}
+                  
+                  <div className={`max-w-[75%] px-4 py-2.5 text-[14px] leading-relaxed shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-emerald-600 text-white rounded-2xl rounded-tr-sm' 
+                      : 'bg-white text-slate-700 rounded-2xl rounded-tl-sm border border-slate-100'
+                  }`}>
+                    <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+                  </div>
+                </motion.div>
+              ))}
+
+              {loading && (
+                <div className="flex gap-3 items-end">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mb-1 border border-emerald-200">
+                    <Bot className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="bg-white px-4 py-3.5 rounded-2xl rounded-tl-sm border border-slate-100 shadow-sm">
+                    <div className="flex gap-1.5 items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
                   </div>
                 </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input Area */}
+            <div className="p-3 bg-white border-t border-slate-100 shrink-0">
+              <div className="relative flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1.5 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
+                <textarea
+                  ref={(el) => { inputRef.current = el; textareaRef.current = el; }}
+                  value={input}
+                  onChange={e => { setInput(e.target.value); autoResize(); }}
+                  onKeyDown={handleKey}
+                  placeholder="Hỏi AutoWashPro AI..."
+                  rows={1}
+                  className="flex-1 max-h-[120px] bg-transparent resize-none outline-none py-2 px-3 text-sm text-slate-700 placeholder-slate-400"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || loading}
+                  className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center mb-0.5 mr-0.5 transition-all ${
+                    !input.trim() || loading 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                      : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-md hover:-translate-y-0.5 active:scale-95'
+                  }`}
+                >
+                  <Send size={16} className={input.trim() && !loading ? 'ml-0.5' : ''} />
+                </button>
               </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* Input */}
-          <div style={{ borderTop: '1px solid #e5e7eb', padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-end', background: '#fff', flexShrink: 0 }}>
-            <textarea
-              ref={(el) => { inputRef.current = el; textareaRef.current = el; }}
-              value={input}
-              onChange={e => { setInput(e.target.value); autoResize(); }}
-              onKeyDown={handleKey}
-              placeholder="Nhập câu hỏi... (Enter để gửi)"
-              rows={1}
-              style={{
-                flex: 1,
-                resize: 'none',
-                border: '1.5px solid #d1d5db',
-                borderRadius: 12,
-                padding: '8px 12px',
-                fontSize: 13.5,
-                fontFamily: 'inherit',
-                outline: 'none',
-                lineHeight: 1.45,
-                maxHeight: 100,
-                overflowY: 'auto',
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={e => (e.target.style.borderColor = '#1d4ed8')}
-              onBlur={e => (e.target.style.borderColor = '#d1d5db')}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || loading}
-              title="Gửi"
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: '50%',
-                background: !input.trim() || loading ? '#e5e7eb' : '#1d4ed8',
-                border: 'none',
-                color: !input.trim() || loading ? '#9ca3af' : '#fff',
-                cursor: !input.trim() || loading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 16,
-                flexShrink: 0,
-                transition: 'background 0.2s',
-              }}
-            >➤</button>
-          </div>
-        </div>
-      )}
-
-      {/* FAB */}
-      <button
+      {/* Floating Action Button */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         onClick={() => setOpen(p => !p)}
-        title={open ? 'Đóng chat' : 'Chat với AI'}
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          background: open ? '#374151' : '#1d4ed8',
-          border: 'none',
-          color: '#fff',
-          fontSize: open ? 22 : 26,
-          cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(29,78,216,0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'background 0.2s, transform 0.15s',
-          transform: open ? 'rotate(0deg)' : 'rotate(0deg)',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.08)')}
-        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+        className={`w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg transition-colors duration-300 ${
+          open ? 'bg-slate-800 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
+        }`}
       >
-        {open ? '✕' : '💬'}
-      </button>
-
-      <style>{`
-        @keyframes chatDot {
-          0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-          30% { transform: translateY(-5px); opacity: 1; }
-        }
-      `}</style>
+        <AnimatePresence mode="wait">
+          {open ? (
+            <motion.div
+              key="close"
+              initial={{ rotate: -90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: 90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <X size={24} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="chat"
+              initial={{ rotate: 90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: -90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <MessageSquare size={24} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.button>
     </div>
   );
 }
