@@ -6,7 +6,7 @@ export default function GiftStorePage({ onOpenAuth, user, onLogout, onGoToProfil
   return (
     <div className="bg-white min-h-screen">
       <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
-      <GiftStoreSection />
+      <GiftStoreSection user={user} onOpenAuth={onOpenAuth} />
       <Footer />
     </div>
   );
