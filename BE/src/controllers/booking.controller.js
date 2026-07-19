@@ -115,13 +115,13 @@ exports.getPaymentByBooking = catchAsync(async (req, res) => {
 });
 
 exports.getAllPayments = catchAsync(async (req, res) => {
-  const payments = await paymentService.getAllPayments(req.query, req.user.role, req.userId);
-  success(res, payments, 'Payments retrieved');
+  const result = await paymentService.getAllPayments(req.query, req.user.role, req.userId);
+  success(res, result.data, 'Payments retrieved', 200, result.pagination);
 });
 
 exports.getMyPayments = catchAsync(async (req, res) => {
-  const payments = await paymentService.getAllPayments({}, 'customer', req.userId);
-  success(res, payments, 'My payments retrieved');
+  const result = await paymentService.getMyPaymentHistory(req.userId, req.query);
+  success(res, result.data, 'My payments retrieved', 200, result.pagination);
 });
 
 exports.markPaymentViewed = catchAsync(async (req, res) => {
@@ -169,7 +169,7 @@ exports.rebookBooking = catchAsync(async (req, res) => {
 });
 
 exports.getBookingQR = catchAsync(async (req, res) => {
-  const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId);
+  const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId, req.user.branchId);
   if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404 });
   // QR payload: JSON with bookingId + branchId for cross-validation
   const payload = JSON.stringify({ bookingId: String(booking._id), branchId: String(booking.branchId?._id || booking.branchId) });

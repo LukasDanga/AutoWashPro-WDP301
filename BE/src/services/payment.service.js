@@ -364,10 +364,128 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
   const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000);
   await Payment.updateMany({ viewedAt: null, createdAt: { $lte: expiry } }, { viewedAt: expiry });
 
-  return Payment.find(query)
-    .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
-    .populate('userId', 'name email phone')
-    .sort({ createdAt: -1 });
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 50));
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Payment.find(query)
+      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
+      .populate('userId', 'name email phone tier')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Payment.countDocuments(query),
+  ]);
+
+  let stats = null;
+  if (filters.withStats === 'true' || filters.withStats === true) {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0,0,0,0);
+    
+    // Revenue stats grouped by month
+    const rawStats = await Payment.aggregate([
+      { $match: { status: 'paid', createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+          totalAmount: { $sum: "$amount" }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } }
+    ]);
+    
+    stats = rawStats.map(s => ({
+      label: `Th${s._id.month}/${s._id.year.toString().slice(-2)}`,
+      totalAmount: s.totalAmount
+    }));
+  }
+
+  return {
+    data: (filters.withStats === 'true' || filters.withStats === true) ? { payments: data, stats } : data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+    }
+  };
+};
+
+exports.getMyPaymentHistory = async (userId, filters = {}) => {
+  const query = { userId };
+  
+  if (filters.status && filters.status !== 'all') {
+    query.status = filters.status;
+  }
+  
+  if (filters.paymentType && filters.paymentType !== 'all') {
+    query.paymentType = filters.paymentType;
+  }
+  
+  if (filters.month) { // e.g. "2026-07"
+    const start = new Date(`${filters.month}-01T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+    query.createdAt = { $gte: start, $lt: end };
+  }
+
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 50)); // Default 50
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Payment.find(query)
+      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId finalPrice' })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Payment.countDocuments(query),
+  ]);
+  
+  // If we also want stats (e.g. chart data for the last 6 months)
+  let stats = null;
+  if (filters.withStats) {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0,0,0,0);
+    
+    const rawStats = await Payment.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId), status: 'paid', createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" }
+          },
+          totalAmount: { $sum: "$amount" }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } }
+    ]);
+    
+    // Format stats for charting
+    stats = rawStats.map(s => ({
+      label: `Th${s._id.month}/${s._id.year.toString().slice(-2)}`,
+      totalAmount: s.totalAmount
+    }));
+  }
+
+  return {
+    data: filters.withStats ? { payments: data, stats } : data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    }
+  };
 };
 
 exports.refundPayment = async (bookingId) => {
