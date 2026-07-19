@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, Buildings } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
+import useSSE from '@/hooks/useSSE';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -107,6 +108,7 @@ export default function AdminReviews() {
   const [branchFilter, setBranchFilter] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
   const [page, setPage] = useState(1);
+  const token = getStoredToken();
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -128,6 +130,7 @@ export default function AdminReviews() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useSSE(token, 'feedback_new', load);
 
   function handleReplied(updated) {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));

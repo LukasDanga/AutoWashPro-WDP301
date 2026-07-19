@@ -35,49 +35,37 @@ export default function AdminLayout({ user, onLogout }) {
   const [badges, setBadges] = useState({});
 
   // Đếm số mục "mới / cần xử lý" toàn hệ thống: đơn chờ xác nhận + đánh giá chưa phản hồi + thanh toán chưa xem
-  useEffect(() => {
-    let alive = true;
-    async function loadCounts() {
-      try {
-        const [bRes, fRes, pRes] = await Promise.all([
-          api('/bookings?status=pending&limit=1'),
-          api('/bookings/feedbacks?replied=false&limit=1'),
-          api('/payments/unviewed-count'),
-        ]);
-        const bData = await bRes.json().catch(() => ({}));
-        const fData = await fRes.json().catch(() => ({}));
-        const pData = await pRes.json().catch(() => ({}));
-        const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
-        const unrepliedReviews = fData?.data?.total ?? 0;
-        const unviewedPayments = pData?.data?.count ?? 0;
-        if (alive) setBadges({ bookings: pendingBookings, reviews: unrepliedReviews, payments: unviewedPayments });
-      } catch { /* silent */ }
-    }
-    loadCounts();
-    const t = setInterval(loadCounts, 60000);
-    return () => { alive = false; clearInterval(t); };
-  }, [location.pathname]);
-
-  // Cập nhật real-time badge thanh toán khi có payment mới
   const token = getStoredToken();
-  useSSE(token, 'payment_new', useCallback(() => {
-    api('/payments/unviewed-count')
-      .then(r => r.json())
-      .then(d => { const c = d?.data?.count ?? 0; setBadges(prev => ({ ...prev, payments: c })); })
-      .catch(() => {});
-  }, []));
+  const loadCounts = useCallback(async () => {
+    try {
+      const [bRes, fRes, pRes] = await Promise.all([
+        api('/bookings?status=pending&limit=1'),
+        api('/bookings/feedbacks?replied=false&limit=1'),
+        api('/payments/unviewed-count'),
+      ]);
+      const bData = await bRes.json().catch(() => ({}));
+      const fData = await fRes.json().catch(() => ({}));
+      const pData = await pRes.json().catch(() => ({}));
+      const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
+      const unrepliedReviews = fData?.data?.total ?? 0;
+      const unviewedPayments = pData?.data?.count ?? 0;
+      setBadges({ bookings: pendingBookings, reviews: unrepliedReviews, payments: unviewedPayments });
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    loadCounts();
+  }, [location.pathname, loadCounts]);
+
+  useSSE(token, 'slots_updated', loadCounts);
+  useSSE(token, 'payment_new', loadCounts);
+  useSSE(token, 'feedback_new', loadCounts);
 
   // Khi admin xem detail thanh toán từ AdminPayments → cập nhật sidebar badge
-  const refreshPaymentCount = useCallback(() => {
-    api('/payments/unviewed-count')
-      .then(r => r.json())
-      .then(d => { const c = d?.data?.count ?? 0; setBadges(prev => ({ ...prev, payments: c })); })
-      .catch(() => {});
-  }, []);
   useEffect(() => {
-    window.addEventListener('payment-viewed', refreshPaymentCount);
-    return () => window.removeEventListener('payment-viewed', refreshPaymentCount);
-  }, [refreshPaymentCount]);
+    window.addEventListener('payment-viewed', loadCounts);
+    return () => window.removeEventListener('payment-viewed', loadCounts);
+  }, [loadCounts]);
 
   async function handleLogout() {
     await onLogout?.();

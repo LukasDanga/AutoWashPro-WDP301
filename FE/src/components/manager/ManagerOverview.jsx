@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   CalendarCheck,
   CheckCircle,
@@ -12,6 +12,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import useSSE from '@/hooks/useSSE';
 
 function api(path) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -57,9 +58,9 @@ const WEEKDAY_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 export default function ManagerOverview() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const token = getStoredToken();
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async () => {
     try {
       const bRes = await api('/bookings?limit=200');
       if (bRes.ok) {
@@ -69,9 +70,11 @@ export default function ManagerOverview() {
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
+  useSSE(token, 'slots_updated', load);
+  useSSE(token, 'payment_new', load);
 
   const now = new Date();
   const todayStr = now.toDateString();

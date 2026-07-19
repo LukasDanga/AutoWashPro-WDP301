@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Drop } from '@phosphor-icons/react';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { MANAGER_BRAND, MANAGER_MENU_ITEMS, MANAGER_PAGE_META } from '@/config/managerMenu';
 import { clearSession, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import NotificationBell from '@/components/ui/NotificationBell';
+import useSSE from '@/hooks/useSSE';
 
 function api(path) {
   return fetch(`${getApiBaseUrl()}${path}`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
@@ -14,7 +15,7 @@ function resolvePageMeta(pathname) {
   if (pathname === '/manager' || pathname === '/manager/') return MANAGER_PAGE_META.overview;
   if (pathname.startsWith('/manager/bookings')) return MANAGER_PAGE_META.bookings;
   if (pathname.startsWith('/manager/schedule')) return MANAGER_PAGE_META.schedule;
-if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
+  if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
   if (pathname.startsWith('/manager/vouchers')) return MANAGER_PAGE_META.vouchers;
   if (pathname.startsWith('/manager/refund-requests')) return MANAGER_PAGE_META['refund-requests'];
   if (pathname.startsWith('/manager/customers')) return MANAGER_PAGE_META.customers;
@@ -31,46 +32,50 @@ export default function ManagerLayout({ user, onLogout }) {
   const navigate = useNavigate();
   const meta = resolvePageMeta(location.pathname);
   const [badges, setBadges] = useState({});
+  const token = getStoredToken();
 
-  // Đếm số mục "mới / cần xử lý": đơn chờ xác nhận + đánh giá chưa phản hồi
+  const loadCounts = useCallback(async () => {
+    try {
+      const bId = user?.branchId;
+      const [bRes, fRes, cRes, spRes] = await Promise.all([
+        api('/bookings?status=pending&limit=1'),
+        api('/bookings/feedbacks?replied=false&limit=1'),
+        api('/bookings/customers?limit=100'),
+        bId ? api(`/slot-packs?branchId=${bId}&limit=100`) : Promise.resolve(null),
+      ]);
+      const bData = await bRes.json().catch(() => ({}));
+      const fData = await fRes.json().catch(() => ({}));
+      const cData = await cRes.json().catch(() => ({}));
+      const spData = spRes ? await spRes.json().catch(() => ({})) : {};
+      const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
+      const unrepliedFeedbacks = fData?.data?.total ?? 0;
+      const customerList = cData?.data?.customers ?? cData?.data ?? [];
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const newCustomers = (Array.isArray(customerList) ? customerList : [])
+        .filter((c) => c.user?.createdAt && new Date(c.user.createdAt).getTime() > weekAgo).length;
+      const slotPackList = Array.isArray(spData?.data) ? spData.data : [];
+      const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const newSlotPacks = slotPackList
+        .filter((p) => p.createdAt && new Date(p.createdAt).getTime() > dayAgo).length;
+      setBadges({
+        bookings: pendingBookings,
+        schedule: pendingBookings,
+        feedbacks: unrepliedFeedbacks,
+        customers: newCustomers,
+        'slot-packs': newSlotPacks,
+      });
+    } catch { /* silent */ }
+  }, [user?.branchId]);
+
   useEffect(() => {
-    let alive = true;
-    async function loadCounts() {
-      try {
-        const bId = user?.branchId;
-        const [bRes, fRes, cRes, spRes] = await Promise.all([
-          api('/bookings?status=pending&limit=1'),
-          api('/bookings/feedbacks?replied=false&limit=1'),
-          api('/bookings/customers?limit=100'),
-          bId ? api(`/slot-packs?branchId=${bId}&limit=100`) : Promise.resolve(null),
-        ]);
-        const bData = await bRes.json().catch(() => ({}));
-        const fData = await fRes.json().catch(() => ({}));
-        const cData = await cRes.json().catch(() => ({}));
-        const spData = spRes ? await spRes.json().catch(() => ({})) : {};
-        const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
-        const unrepliedFeedbacks = fData?.data?.total ?? 0;
-        const customerList = cData?.data?.customers ?? cData?.data ?? [];
-        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const newCustomers = (Array.isArray(customerList) ? customerList : [])
-          .filter((c) => c.user?.createdAt && new Date(c.user.createdAt).getTime() > weekAgo).length;
-        const slotPackList = Array.isArray(spData?.data) ? spData.data : [];
-        const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-        const newSlotPacks = slotPackList
-          .filter((p) => p.createdAt && new Date(p.createdAt).getTime() > dayAgo).length;
-        if (alive) setBadges({
-          bookings: pendingBookings,
-          schedule: pendingBookings,
-          feedbacks: unrepliedFeedbacks,
-          customers: newCustomers,
-          'slot-packs': newSlotPacks,
-        });
-      } catch { /* silent */ }
-    }
     loadCounts();
-    const t = setInterval(loadCounts, 60000);
-    return () => { alive = false; clearInterval(t); };
-  }, [location.pathname, user?.branchId]);
+  }, [location.pathname, loadCounts]);
+
+  useSSE(token, 'slots_updated', loadCounts);
+  useSSE(token, 'payment_new', loadCounts);
+  useSSE(token, 'feedback_new', loadCounts);
+  useSSE(token, 'vouchers_updated', loadCounts);
+
 
   async function handleLogout() {
     await onLogout?.();
