@@ -49,7 +49,6 @@ const VEHICLE_TYPES = [
   { value: 'suv', label: 'SUV' },
   { value: 'pickup', label: 'Pickup' },
   { value: 'van', label: 'Van' },
-  { value: 'motorcycle', label: 'Xe máy' },
 ];
 
 export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab }) {

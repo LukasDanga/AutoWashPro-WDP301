@@ -363,7 +363,6 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                       <option value="suv">SUV</option>
                       <option value="pickup">Xe bán tải</option>
                       <option value="van">Xe tải</option>
-                      <option value="motorcycle">Xe máy</option>
                     </select>
                   </div>
                   <div>
@@ -427,7 +426,6 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                       <option value="suv">SUV</option>
                       <option value="pickup">Xe bán tải</option>
                       <option value="van">Xe tải</option>
-                      <option value="motorcycle">Xe máy</option>
                     </select>
                   </div>
                   <div>

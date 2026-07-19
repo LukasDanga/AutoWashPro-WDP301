@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { showToast } from '@/lib/toast';
 import {
-  User, PencilSimple, Check, X, Car, Motorcycle,
+  User,   PencilSimple, Check, X, Car,
   Phone, Envelope, CalendarBlank, MapPin, Crown,
   ShieldCheck, Certificate, Sparkle, Plus, Trash, Star,
 } from '@phosphor-icons/react';
 
-const VEHICLE_TYPE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', motorcycle: 'Xe máy' };
-const VEHICLE_TYPE_ICONS = { sedan: Car, suv: Car, pickup: Car, van: Car, motorcycle: Motorcycle };
+const VEHICLE_TYPE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van' };
+const VEHICLE_TYPE_ICONS = { sedan: Car, suv: Car, pickup: Car, van: Car };
 
 function GenericSpinner({ size = 20 }) {
   return (

@@ -24,7 +24,7 @@ const CATEGORIES = [
   { value: 'internal', label: 'Vệ sinh nội thất' },
   { value: 'full', label: 'Toàn bộ' },
 ];
-const VEHICLE_TYPES = ['sedan', 'suv', 'pickup', 'van', 'motorcycle'];
+const VEHICLE_TYPES = ['sedan', 'suv', 'pickup', 'van'];
 const inp = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400';
 const PAGE_SIZE = 9;
 

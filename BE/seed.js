@@ -70,7 +70,7 @@ const br2Id = oid(); // Thủ Đức
 const p1_1 = oid(); // Rửa cơ bản       100k  30m
 const p1_2 = oid(); // Rửa + Nano        250k  50m
 const p1_3 = oid(); // Vệ sinh toàn diện 380k  90m
-const p1_4 = oid(); // Rửa xe máy         50k  20m
+const p1_4 = oid(); // Đánh bóng nhanh    180k  40m
 
 // Packages — branch 2
 const p2_1 = oid(); // Rửa tiêu chuẩn   120k  30m
@@ -81,11 +81,11 @@ const p2_4 = oid(); // Đánh bóng         550k 150m
 // Vehicles
 const v1a = oid(); // c1 — Camry
 const v2a = oid(); // c2 — CR-V
-const v2b = oid(); // c2 — Wave
+const v2b = oid(); // c2 — Vios
 const v3a = oid(); // c3 — Ranger
 const v3b = oid(); // c3 — CX-5
 const v4a = oid(); // c4 — Mercedes
-const v5a = oid(); // c5 — Exciter
+const v5a = oid(); // c5 — i10
 
 // SlotPacks
 const sp1 = oid(); // c2 br2 active
@@ -308,12 +308,13 @@ async function main() {
       ],
     },
     {
-      _id: p1_4, name: 'Rửa xe máy',
-      description: 'Rửa xe máy sạch bóng, lau khô và kiểm tra sên xe.',
-      price: 50000, duration: 20, branchId: br1Id, status: 'active',
-      category: 'external', vehicleTypes: ['motorcycle'],
+      _id: p1_4, name: 'Đánh bóng nhanh',
+      description: 'Đánh bóng ngoại thất nhanh, phục hồi độ bóng sơn xe.',
+      price: 180000, duration: 40, branchId: br1Id, status: 'active',
+      category: 'external', vehicleTypes: ['sedan','suv','pickup','van'],
       subServices: [
-        { name: 'Tra dầu nhớt sên', price: 30000, duration: 5, isOptional: true },
+        { name: 'Phủ wax bảo vệ', price: 80000, duration: 15, isOptional: true },
+        { name: 'Đánh bóng đèn pha', price: 60000, duration: 10, isOptional: true },
       ],
     },
     {
@@ -364,11 +365,11 @@ async function main() {
   await Vehicle.insertMany([
     { _id: v1a, userId: c1Id, licensePlate: '51A-12345', vehicleType: 'sedan',      brand: 'Toyota',   model: 'Camry 2.0',   color: 'Trắng',      year: 2021, isDefault: true },
     { _id: v2a, userId: c2Id, licensePlate: '59B-67890', vehicleType: 'suv',        brand: 'Honda',    model: 'CR-V 1.5T',   color: 'Đen',        year: 2022, isDefault: true },
-    { _id: v2b, userId: c2Id, licensePlate: '59B-11199', vehicleType: 'motorcycle', brand: 'Honda',    model: 'Wave Alpha',  color: 'Xanh',       year: 2020, isDefault: false },
+    { _id: v2b, userId: c2Id, licensePlate: '59B-11199', vehicleType: 'sedan',      brand: 'Toyota',   model: 'Vios 1.5G',   color: 'Bạc',        year: 2021, isDefault: false },
     { _id: v3a, userId: c3Id, licensePlate: '51C-11111', vehicleType: 'pickup',     brand: 'Ford',     model: 'Ranger XLS',  color: 'Bạc',        year: 2023, isDefault: true },
     { _id: v3b, userId: c3Id, licensePlate: '51C-22222', vehicleType: 'suv',        brand: 'Mazda',    model: 'CX-5 2.0',    color: 'Đỏ',         year: 2022, isDefault: false },
     { _id: v4a, userId: c4Id, licensePlate: '51D-22222', vehicleType: 'sedan',      brand: 'Mercedes', model: 'C200 AMG',    color: 'Trắng ngọc', year: 2024, isDefault: true },
-    { _id: v5a, userId: c5Id, licensePlate: '79E-33333', vehicleType: 'motorcycle', brand: 'Yamaha',   model: 'Exciter 155', color: 'Vàng đen',   year: 2023, isDefault: true },
+    { _id: v5a, userId: c5Id, licensePlate: '79E-33333', vehicleType: 'sedan',      brand: 'Hyundai',  model: 'Grand i10',   color: 'Xanh dương', year: 2023, isDefault: true },
   ]);
 
   // ── 5. VOUCHERS ────────────────────────────────────────────────────────────
@@ -535,13 +536,13 @@ async function main() {
       status: 'pending', bookingType: 'single', priority: 1,
       finalPrice: 100000, paymentStatus: 'unpaid',
     },
-    // 13:00–13:20 motorcycle pending
+    // 13:00–13:40 đánh bóng nhanh pending
     {
       _id: bk_today_pending_c5,
       userId: c5Id, branchId: br1Id, packageId: p1_4, vehicleId: v5a,
-      bookingDate: todayDate, startTime: '13:00', endTime: '13:20',
+      bookingDate: todayDate, startTime: '13:00', endTime: '13:40',
       status: 'pending', bookingType: 'single', priority: 1,
-      finalPrice: 50000, paymentStatus: 'unpaid',
+      finalPrice: 180000, paymentStatus: 'unpaid',
     },
     // 14:00–14:50 slot_pack_usage pending
     {
@@ -790,8 +791,8 @@ async function main() {
     { userId: c4Id, points: 2000,  type: 'earned',   description: 'Tích điểm Diamond x2.0',                createdAt: daysAgo(50) },
     { userId: c4Id, points: 3000,  type: 'earned',   description: 'Tích điểm Diamond x2.0',                createdAt: daysAgo(30) },
     { userId: c4Id, points: -500,  type: 'redeemed', description: 'Đổi voucher VIP Diamond',               createdAt: daysAgo(15) },
-    { userId: c5Id, points: 30,    type: 'earned',   description: 'Tích điểm từ đặt lịch rửa xe máy',     createdAt: daysAgo(5) },
-    { userId: c5Id, points: 50,    type: 'earned',   description: 'Tích điểm từ đặt lịch rửa xe máy',     createdAt: daysAgo(2) },
+    { userId: c5Id, points: 30,    type: 'earned',   description: 'Tích điểm từ đặt lịch rửa xe',     createdAt: daysAgo(5) },
+    { userId: c5Id, points: 50,    type: 'earned',   description: 'Tích điểm từ đặt lịch rửa xe',     createdAt: daysAgo(2) },
   ]);
 
   // ── 10. NOTIFICATIONS ──────────────────────────────────────────────────────
@@ -814,7 +815,7 @@ async function main() {
     { userId: c4Id, title: 'Voucher mới cho bạn',    message: 'Bạn có voucher DIAMOND20 giảm 20% — hãy sử dụng trước 31/12/2027!', type: 'voucher', isRead: true, createdAt: daysAgo(2) },
     { userId: c4Id, title: 'Lịch bị hủy',            message: 'Lịch VIP Cao Cấp ngày hôm qua đã bị hủy theo yêu cầu của bạn.', type: 'booking_cancelled', isRead: true, createdAt: daysAgo(1) },
 
-    { userId: c5Id, title: 'Đặt lịch thành công',    message: 'Lịch rửa xe máy Exciter hôm nay 13:00 tại AutoWash Pro Quận 1 đã xác nhận.', type: 'booking_confirmed', isRead: false, createdAt: new Date() },
+    { userId: c5Id, title: 'Đặt lịch thành công',    message: 'Lịch đánh bóng xe hôm nay 13:00 tại AutoWash Pro Quận 1 đã xác nhận.', type: 'booking_confirmed', isRead: false, createdAt: new Date() },
 
     // Managers
     { userId: mgr1Id, title: 'Có 6 lịch hôm nay',   message: '6 lịch đặt hôm nay đang chờ xử lý tại chi nhánh Quận 1.', type: 'booking_created', isRead: false, createdAt: new Date() },
@@ -895,7 +896,7 @@ async function main() {
   console.log('    59B-67890  (Trần Thị Bích — CR-V)');
   console.log('    51C-11111  (Lê Văn Cường  — Ranger)');
   console.log('    51D-22222  (Phạm Thị Dung — Mercedes)');
-  console.log('    79E-33333  (Hoàng Văn Em  — Exciter)');
+  console.log('    79E-33333  (Hoàng Văn Em  — Grand i10)');
   console.log('══════════════════════════════════════════════════════════════');
   console.log('');
   console.log('  Đã tạo:');

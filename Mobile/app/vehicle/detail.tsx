@@ -89,7 +89,6 @@ export default function VehicleDetailScreen() {
       case 'suv': return '🚙';
       case 'pickup': return '🛻';
       case 'van': return '🚐';
-      case 'motorcycle': return '🏍️';
       default: return '🚗';
     }
   };
@@ -100,7 +99,6 @@ export default function VehicleDetailScreen() {
       case 'suv': return 'SUV';
       case 'pickup': return 'Pickup';
       case 'van': return 'Van';
-      case 'motorcycle': return 'Xe máy';
       default: return type;
     }
   };

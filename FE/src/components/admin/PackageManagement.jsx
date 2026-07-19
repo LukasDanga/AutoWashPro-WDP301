@@ -101,7 +101,6 @@ const VEHICLE_OPTIONS = [
   { value: 'suv', label: 'SUV' },
   { value: 'pickup', label: 'Pickup' },
   { value: 'van', label: 'Van' },
-  { value: 'motorcycle', label: 'Xe máy' },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -286,7 +285,7 @@ function ConfirmDelete({ pkg, onConfirm, onCancel, deleting }) {
   );
 }
 
-const VEHICLE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', motorcycle: 'Xe máy' };
+const VEHICLE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van' };
 
 export default function PackageManagement() {
   const [packages, setPackages] = useState([]);

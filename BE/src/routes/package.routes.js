@@ -102,7 +102,7 @@ router.get('/:id', authenticate, packageController.getPackageById);
  *                 type: array
  *                 items:
  *                   type: string
- *                   enum: [sedan, suv, pickup, van, motorcycle]
+ *                   enum: [sedan, suv, pickup, van]
  *               subServices:
  *                 type: array
  *                 items:
@@ -175,7 +175,7 @@ router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), packageVal
  *                 type: array
  *                 items:
  *                   type: string
- *                   enum: [sedan, suv, pickup, van, motorcycle]
+ *                   enum: [sedan, suv, pickup, van]
  *               subServices:
  *                 type: array
  *                 items:

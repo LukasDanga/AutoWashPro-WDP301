@@ -10,7 +10,7 @@ const packageSchema = new mongoose.Schema(
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     category: { type: String, enum: ['external', 'internal', 'full'], default: 'full' },
-    vehicleTypes: [{ type: String, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }],
+    vehicleTypes: [{ type: String, enum: ['sedan', 'suv', 'pickup', 'van'] }],
     subServices: [
       {
         name: { type: String, required: true },

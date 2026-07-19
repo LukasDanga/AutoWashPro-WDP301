@@ -415,7 +415,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
   };
 
   const VEHICLE_LABELS = {
-    sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', motorcycle: 'Xe máy',
+    sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van',
   };
 
   return (
@@ -730,7 +730,7 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-600">Loại xe áp dụng</label>
         <div className="flex flex-wrap gap-2">
-          {[{ v: 'sedan', l: 'Sedan' }, { v: 'suv', l: 'SUV' }, { v: 'pickup', l: 'Pickup' }, { v: 'van', l: 'Van' }, { v: 'motorcycle', l: 'Xe máy' }].map((o) => (
+          {[{ v: 'sedan', l: 'Sedan' }, { v: 'suv', l: 'SUV' }, { v: 'pickup', l: 'Pickup' }, { v: 'van', l: 'Van' }].map((o) => (
             <button key={o.v} type="button" onClick={() => toggleVehicle(o.v)}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.vehicleTypes.includes(o.v) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>{o.l}</button>
           ))}
