@@ -12,13 +12,15 @@ export const getMyVouchers = async (): Promise<UserVoucher[]> => {
   return response.data;
 };
 
-// Get available vouchers for user
-export const getAvailableVouchers = async (): Promise<{
+// Get available vouchers for user (optionally filtered by branch)
+export const getAvailableVouchers = async (params?: {
+  branchId?: string;
+}): Promise<{
   tierExclusive: Voucher[];
   public: Voucher[];
   redeemable: Voucher[];
 }> => {
-  const response = await apiClient.get('/vouchers/available');
+  const response = await apiClient.get('/vouchers/available', { params });
   return response.data;
 };
 

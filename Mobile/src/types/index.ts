@@ -201,7 +201,7 @@ export interface AvailableSlot {
 }
 
 // ============ Payment Types ============
-export type PaymentMethod = 'cash' | 'momo' | 'vnpay';
+export type PaymentMethod = 'cash' | 'momo' | 'vnpay' | 'bank';
 export type PaymentType = 'deposit' | 'remaining' | 'full';
 
 export interface Payment {
