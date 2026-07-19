@@ -471,8 +471,60 @@ exports.getAvailableVouchersForUser = async (userId, branchId, filters = {}) => 
     ? { $or: [{ applicableToAllBranches: true }, { applicableBranches: branchId }, { branchId }] }
     : {};
 
+  // BACKWARD COMPATIBILITY MODE for VoucherPicker.jsx (no type filter passed)
+  if (!filters.type) {
+    const allVouchers = await Voucher.find({
+      status: 'active',
+      isDeleted: { $ne: true },
+      isTemplate: false,
+      startDate: { $lte: now },
+      endDate:   { $gte: now },
+      ...branchFilter,
+      $and: [
+        { $or: [{ remaining: { $gt: 0 } }, { quantity: 0 }] },
+        { $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }, { assignedTo: userId }] },
+      ],
+    }).lean();
+
+    const templates = await Voucher.find({
+      status: 'active',
+      isDeleted: { $ne: true },
+      isTemplate: true,
+      requiredPoints: { $gt: 0 },
+      remaining: { $gt: 0 },
+      endDate: { $gte: now },
+    }).lean();
+
+    const tierExclusive = [];
+    const publicVouchers = [];
+
+    for (const v of allVouchers) {
+      if (v.maxUsagePerUser > 0) {
+        const usageCount = await VoucherUsage.countDocuments({ voucherId: v._id, userId });
+        if (usageCount >= v.maxUsagePerUser) continue;
+      }
+      if (v.applicableTiers && v.applicableTiers.length > 0) {
+        if (v.applicableTiers.includes(user.tier)) tierExclusive.push(v);
+      } else {
+        publicVouchers.push(v);
+      }
+    }
+
+    return {
+      user: {
+        tier: user.tier,
+        loyaltyPoints: user.loyaltyPoints,
+        lifetimePoints: user.lifetimePoints,
+      },
+      tier_exclusive: tierExclusive,
+      public: publicVouchers,
+      redeemable: templates,
+    };
+  }
+
+  // PAGINATED MODE for GiftStoreSection (type filter passed)
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 100)); // Default 100 to not break old FE if not passed
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 100));
 
   let query = {
     status: 'active',
@@ -482,8 +534,7 @@ exports.getAvailableVouchersForUser = async (userId, branchId, filters = {}) => 
     ...branchFilter,
   };
 
-  const type = filters.type || 'all'; // all, mine, redeemable
-
+  const type = filters.type; // 'all', 'mine', 'redeemable'
   if (type === 'redeemable') {
     query.isTemplate = true;
     query.requiredPoints = { $gt: 0 };
@@ -516,9 +567,7 @@ exports.getAvailableVouchersForUser = async (userId, branchId, filters = {}) => 
     }
   }
 
-  // Sort by createdAt desc
   filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
   const total = filtered.length;
   const skip = (page - 1) * limit;
   const paginatedData = filtered.slice(skip, skip + limit);
