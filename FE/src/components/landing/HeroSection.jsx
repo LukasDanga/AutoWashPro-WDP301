@@ -36,11 +36,11 @@ export default function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-[90vh] md:min-h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       <VideoBackground />
       <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-black/80 z-0" />
 
-      <div className="relative z-10 w-full max-w-[1200px] mx-auto px-5 md:px-12 pt-20 mt-10">
+      <div className="relative z-10 w-full max-w-[1200px] mx-auto px-5 md:px-12 py-20">
         <div className="max-w-3xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -97,14 +97,14 @@ export default function HeroSection() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="flex items-center justify-center gap-8 md:gap-16 pt-8 border-t border-white/10 max-w-2xl mx-auto"
+            className="grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 pt-8 pb-4 border-t border-white/10 max-w-2xl mx-auto w-full"
           >
             {stats.map((stat) => (
-              <div key={stat.label} className="text-center group cursor-default">
-                <div className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70 group-hover:scale-105 transition-transform duration-300 drop-shadow-md">
+              <div key={stat.label} className="text-center group cursor-default flex flex-col items-center">
+                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70 group-hover:scale-105 transition-transform duration-300 drop-shadow-md">
                   {stat.num}
                 </div>
-                <div className="text-[10px] md:text-[11px] text-white/50 mt-1.5 font-bold uppercase tracking-[0.15em]">{stat.label}</div>
+                <div className="text-[9px] sm:text-[10px] md:text-[11px] text-white/50 mt-1.5 font-bold uppercase tracking-[0.1em] sm:tracking-[0.15em] break-words text-center w-full">{stat.label}</div>
               </div>
             ))}
           </motion.div>
