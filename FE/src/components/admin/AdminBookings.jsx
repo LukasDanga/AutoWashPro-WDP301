@@ -5,6 +5,7 @@ import {
   CheckCircle, XCircle, Clock, Spinner,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
+import useSSE from '@/hooks/useSSE';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -49,8 +50,9 @@ export default function AdminBookings() {
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const token = getStoredToken();
 
-  const load = useCallback(async (pg = 1) => {
+  const load = useCallback(async (pg = page) => {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams({ page: pg, limit: 10 });
@@ -70,7 +72,7 @@ export default function AdminBookings() {
       setPage(pg);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [search, status, branchId, dateFrom, dateTo]);
+  }, [search, status, branchId, dateFrom, dateTo, page]);
 
   useEffect(() => {
     api('/branches?limit=100').then((r) => r.json()).then((d) => {
@@ -78,7 +80,10 @@ export default function AdminBookings() {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => { load(1); }, [load]);
+  useEffect(() => { load(1); }, []); // eslint-disable-line
+
+  useSSE(token, 'slots_updated', () => load(page));
+  useSSE(token, 'payment_new', () => load(page));
 
   async function cancelBooking(id) {
     setCancelling(true);

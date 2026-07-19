@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -29,47 +30,41 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
   const [loading, setLoading] = useState(true);
   const [detailPayment, setDetailPayment] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
+  
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    fetch(`${apiBase || API_BASE}/payments/my`, { headers: { Authorization: `Bearer ${token}` } })
+    let url = `${apiBase || API_BASE}/payments/my?withStats=true&page=${page}&limit=10`;
+    if (filterStatus !== 'all') url += `&status=${filterStatus}`;
+    if (filterMonth) url += `&month=${filterMonth}`;
+
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(payload => {
-        const data = payload?.data || payload;
-        const paymentsList = Array.isArray(data) ? data : [];
-        if (paymentsList.length > 0) {
-          setPayments(paymentsList);
-          setLoading(false);
-        } else {
-          // Fallback: fetch bookings with payment info
-          fetch(`${apiBase || API_BASE}/bookings/my?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r2 => r2.json())
-            .then(payload2 => {
-              const data2 = payload2?.data || payload2;
-              const bookings = Array.isArray(data2) ? data2 : (data2?.bookings || []);
-              const mapped = bookings
-                .filter(b => b.finalPrice || b.totalAmount)
-                .map(b => ({
-                  _id: `booking_${b._id}`,
-                  bookingId: b._id || b.id,
-                  amount: b.totalAmount || b.finalPrice || 0,
-                  status: b.paymentStatus === 'paid' ? 'paid' : b.paymentStatus === 'unpaid' ? 'pending' : b.paymentStatus || 'pending',
-                  method: 'cash',
-                  paymentType: 'full',
-                  createdAt: b.createdAt,
-                  paidAt: b.paymentStatus === 'paid' ? (b.updatedAt || b.createdAt) : undefined,
-                  transactionId: null,
-                  bookingData: b,
-                }));
-              setPayments(mapped);
-            })
-            .catch(() => setPayments([]))
-            .finally(() => setLoading(false));
+        const responseData = payload?.data || payload;
+        let paymentsList = [];
+        if (responseData && responseData.payments) {
+           paymentsList = responseData.payments;
+           if (responseData.stats) setStats(responseData.stats);
+        } else if (Array.isArray(responseData)) {
+           paymentsList = responseData;
         }
+
+        if (payload?.pagination) {
+          setTotalPages(payload.pagination.totalPages || 1);
+        }
+
+        setPayments(paymentsList);
       })
-      .catch(() => { showToast('Không thể tải lịch sử thanh toán', 'error'); setPayments([]); setLoading(false); });
-  }, [apiBase, token]);
+      .catch(() => { showToast('Không thể tải lịch sử thanh toán', 'error'); setPayments([]); })
+      .finally(() => setLoading(false));
+  }, [apiBase, token, filterStatus, filterMonth, page]);
 
   async function openDetail(payment) {
     setDetailPayment(null);
@@ -110,16 +105,72 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-10">
+        
+        {/* Filters and Stats Section */}
+        <div className="mb-8 space-y-6">
+          {/* Always show the chart container, even if empty, so user knows it exists */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Chi tiêu 6 tháng gần nhất</h3>
+            <div className="h-48 w-full">
+              {stats && stats.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} />
+                    <YAxis tickFormatter={(val) => `${val / 1000}k`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dx={-10} />
+                    <Tooltip 
+                      formatter={(val) => [formatCurrency(val), 'Chi tiêu']}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}
+                      cursor={{ fill: '#f1f5f9' }}
+                    />
+                    <Bar dataKey="totalAmount" radius={[4, 4, 0, 0]}>
+                      {stats.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index === stats.length - 1 ? '#10b981' : '#94a3b8'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                  <svg className="w-8 h-8 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                  <span className="text-sm">Chưa có dữ liệu chi tiêu</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <select
+                value={filterStatus}
+                onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+                className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="paid">Thành công</option>
+                <option value="pending">Chờ thanh toán</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={(e) => { setFilterMonth(e.target.value); setPage(1); }}
+                className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <div className="text-center py-20 text-slate-400 text-sm">Đang tải...</div>
         ) : payments.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-16 h-16 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
               </svg>
             </div>
-            <p className="text-slate-500 font-medium">Chưa có giao dịch nào</p>
+            <p className="text-slate-500 font-medium">Không tìm thấy giao dịch nào phù hợp</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -162,6 +213,38 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {!loading && totalPages > 0 && (
+          <div className="flex justify-center items-center gap-2 mt-8">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(p => p - 1)}
+              className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${
+                    page === p ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => p + 1)}
+              className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
           </div>
         )}
       </main>

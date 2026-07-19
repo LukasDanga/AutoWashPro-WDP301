@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
+import useSSE from '@/hooks/useSSE';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -130,6 +131,7 @@ export default function ManagerFeedbacks() {
   const [error, setError] = useState('');
   const [starFilter, setStarFilter] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
+  const token = getStoredToken();
 
   const load = useCallback(async (rating = starFilter, pg = 1) => {
     setLoading(true); setError('');
@@ -159,9 +161,10 @@ export default function ManagerFeedbacks() {
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line
+  }, [starFilter]); 
 
   useEffect(() => { load('', 1); }, [load]);
+  useSSE(token, 'feedback_new', () => load(starFilter, 1));
 
   const handleStarFilter = (v) => { setStarFilter(v); setPage(1); load(v, 1); };
   const handlePage = (pg) => { setPage(pg); load(starFilter, pg); };

@@ -185,13 +185,6 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
   // SSE Realtime Updates
   useSSE(token, 'vouchers_updated', load);
 
-  // Fallback Auto-reload every 60s
-  useEffect(() => {
-    const interval = setInterval(() => { load(); }, 60000);
-    return () => clearInterval(interval);
-  }, [load]);
-
-
   async function applyManual() {
     const code = manualCode.trim().toUpperCase();
     if (!code) { setManualMsg('Nhập mã coupon để áp dụng.'); return; }

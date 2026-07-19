@@ -101,6 +101,7 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelConfirmError, setCancelConfirmError] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
 
   // Cancel recurring confirm modal
   const [showCancelRecurringConfirm, setShowCancelRecurringConfirm] = useState(false);
@@ -211,11 +212,16 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   async function handleCancel(b) {
     setCancelTarget(b);
     setCancelConfirmError('');
+    setCancelReason('');
     setShowCancelConfirm(true);
   }
 
   async function confirmCancel() {
     if (!cancelTarget) return;
+    if (!cancelReason.trim()) {
+      setCancelConfirmError('Vui lòng nhập lý do hủy đơn');
+      return;
+    }
     setCancelLoading(true);
     setCancelConfirmError('');
     try {
@@ -223,11 +229,11 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cancellationReason: 'Khách hàng yêu cầu hủy' }),
+        body: JSON.stringify({ cancellationReason: cancelReason.trim() }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
       showToastMsg('Đã hủy đơn thành công');
-      setShowCancelConfirm(false); setCancelTarget(null);
+      setShowCancelConfirm(false); setCancelTarget(null); setCancelReason('');
       doFetch(keyword, statusFilter, dateFrom, dateTo, page);
     } catch (e) { setCancelConfirmError(e.message); }
     finally { setCancelLoading(false); }
@@ -242,7 +248,7 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       });
       if (!res.ok) throw new Error('Không thể tạo mã QR');
       const payload = await res.json();
-      setQrData(payload?.data || payload?.qr || '');
+      setQrData(payload?.data?.qrDataUrl || payload?.qr || '');
     } catch (e) { showToastMsg(e.message, 'error'); setShowQR(false); }
     finally { setQrLoading(false); }
   }
@@ -1146,16 +1152,22 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       {/* ── CANCEL CONFIRM MODAL ── */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
-          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); } }}>
+          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); } }}>
           <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
             <div className="text-4xl mb-4">🗑</div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận hủy đơn</h3>
-            <p className="text-sm text-slate-500 mb-6">Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.</p>
+            <p className="text-sm text-slate-500 mb-4">Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.</p>
+            <div className="text-left mb-6">
+              <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
+              <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn..."
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none" />
+            </div>
             {cancelConfirmError && (
               <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{cancelConfirmError}</div>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); }}
+              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); }}
                 disabled={cancelLoading}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
                 Không, giữ lại

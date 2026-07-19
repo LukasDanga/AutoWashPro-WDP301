@@ -28,6 +28,7 @@ import {
   Table as TableIcon,
   Rows,
 } from '@phosphor-icons/react';
+import useSSE from '@/hooks/useSSE';
 import TierBadge from '@/components/ui/TierBadge';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/lib/toast';
@@ -91,12 +92,25 @@ function StatusBadge({ status }) {
 function StatusMenu({ bookingId, current, onUpdated, notify }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  
+  // Cancel modal states
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState('');
+
   const nexts = NEXT_STATUS[current];
   if (!nexts) return <StatusBadge status={current} />;
 
   const update = async (newStatus) => {
-    setBusy(true);
     setOpen(false);
+    if (newStatus === 'cancelled') {
+      setShowCancelModal(true);
+      setCancelReason('');
+      setCancelError('');
+      return;
+    }
+    
+    setBusy(true);
     try {
       const res = await api(`/bookings/${bookingId}/status`, {
         method: 'PATCH',
@@ -110,28 +124,84 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
     } finally { setBusy(false); }
   };
 
+  const confirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      setCancelError('Vui lòng nhập lý do hủy đơn');
+      return;
+    }
+    setBusy(true);
+    setCancelError('');
+    try {
+      const res = await api(`/bookings/${bookingId}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ cancellationReason: cancelReason.trim() }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const payload = await res.json();
+      onUpdated(payload?.data ?? payload);
+      setShowCancelModal(false);
+      notify('Hủy đơn thành công', 'success');
+    } catch (err) {
+      setCancelError(err.message);
+    } finally { setBusy(false); }
+  };
+
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((p) => !p)}
-        disabled={busy}
-        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors hover:opacity-80 disabled:opacity-50 ${STATUS_MAP[current]?.cls || 'bg-slate-100 text-slate-500'}`}
-      >
-        {busy ? <Spinner size={11} /> : null}
-        <span>{STATUS_MAP[current]?.label || current}</span>
-        <CaretDown size={10} className="opacity-70" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-7 z-20 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-          {nexts.map((s) => (
-            <button key={s} onClick={() => update(s)}
-              className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 transition-colors">
-              <StatusBadge status={s} />
-            </button>
-          ))}
+    <>
+      <div className="relative">
+        <button
+          onClick={() => setOpen((p) => !p)}
+          disabled={busy}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors hover:opacity-80 disabled:opacity-50 ${STATUS_MAP[current]?.cls || 'bg-slate-100 text-slate-500'}`}
+        >
+          {busy ? <Spinner size={11} /> : null}
+          <span>{STATUS_MAP[current]?.label || current}</span>
+          <CaretDown size={10} className="opacity-70" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-7 z-20 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+            {nexts.map((s) => (
+              <button key={s} onClick={() => update(s)}
+                className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 transition-colors">
+                <StatusBadge status={s} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => { if (!busy) setShowCancelModal(false); }}>
+          <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-4xl mb-4">🗑</div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận hủy đơn</h3>
+            <p className="text-sm text-slate-500 mb-4">Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.</p>
+            <div className="text-left mb-6">
+              <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
+              <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn (bắt buộc)..."
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none" />
+            </div>
+            {cancelError && (
+              <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm text-left">{cancelError}</div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setShowCancelModal(false)}
+                disabled={busy}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Không, giữ lại
+              </button>
+              <button onClick={confirmCancel}
+                disabled={busy}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-500 transition-colors disabled:opacity-50">
+                {busy ? 'Đang hủy...' : 'Xác nhận hủy'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1199,7 +1269,7 @@ export default function ManagerBookings() {
 
   const notify = showToast;
 
-  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, pg = 1) => {
+  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, pg = page) => {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams({ page: pg, limit: PAGE_SIZE });
@@ -1218,9 +1288,18 @@ export default function ManagerBookings() {
       setTotalPages(pagination?.totalPages ?? data?.totalPages ?? 1);
     } catch (err) { setError(err.message || 'Không thể tải dữ liệu'); }
     finally { setLoading(false); }
-  }, []); // eslint-disable-line
+  }, [search, statusFilter, typeFilter, todayOnly, page]);
 
   useEffect(() => { fetch_(); }, []); // eslint-disable-line
+
+  const token = getStoredToken();
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const triggerRefresh = useCallback(() => {
+    fetch_();
+    setRefreshSignal(s => s + 1);
+  }, [fetch_]);
+  useSSE(token, 'slots_updated', triggerRefresh);
+  useSSE(token, 'payment_new', triggerRefresh);
 
   const handleSearch = (v) => {
     setSearch(v);
@@ -1246,7 +1325,7 @@ export default function ManagerBookings() {
     setConfirmCancelId(null);
     setCancelReason('');
     try {
-      const res = await api(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason || 'Quản lý hủy' }) });
+      const res = await api(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ cancellationReason: reason || 'Quản lý hủy' }) });
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const updated = p?.data ?? p;

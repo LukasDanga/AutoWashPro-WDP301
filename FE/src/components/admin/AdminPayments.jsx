@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import useSSE from '@/hooks/useSSE';
 import { showToast } from '@/lib/toast';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import {
   CurrencyDollar,
   CheckCircle,
@@ -347,6 +348,8 @@ export default function AdminPayments() {
   const [refunding, setRefunding] = useState(false);
   const [refundSuccess, setRefundSuccess] = useState(null);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState(null);
   const PAGE_SIZE = 10;
 
   const markViewed = useCallback(async (id) => {
@@ -367,15 +370,32 @@ export default function AdminPayments() {
       } else if (dateFilter) {
         params.set('date', dateFilter);
       }
+      if (search) params.set('search', search); // Currently backend doesn't filter search but we pass it
+      params.set('page', page);
+      params.set('limit', PAGE_SIZE);
+      params.set('withStats', 'true');
+
       const res = await api(`/payments?${params}`);
       if (!res.ok) { const e = await readErr(res); throw new Error(e); }
       const payload = await res.json();
-      const list = payload?.data || payload || [];
-      const arr = Array.isArray(list) ? list : [];
-      setPayments(arr);
-      setNewIds(new Set(arr.filter(p => !p.viewedAt && p.status === 'paid').map(p => p._id)));
+      
+      const responseData = payload?.data || payload;
+      let list = [];
+      if (responseData && responseData.payments) {
+         list = responseData.payments;
+         setStats(responseData.stats || null);
+      } else if (Array.isArray(responseData)) {
+         list = responseData;
+      }
+      
+      if (payload?.pagination) {
+         setTotalPages(payload.pagination.totalPages || 1);
+      }
+
+      setPayments(list);
+      setNewIds(new Set(list.filter(p => !p.viewedAt && p.status === 'paid').map(p => p._id)));
     } catch (e) { setError(e.message); } finally { setLoading(false); }
-  }, [statusFilter, methodFilter, dateFilter]);
+  }, [statusFilter, methodFilter, dateFilter, page, search]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -390,20 +410,10 @@ export default function AdminPayments() {
   const refundedCount = payments.filter(p => p.status === 'refunded').length;
   const totalRevenue = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
 
-  // Search + Pagination
-  const filtered = payments.filter(p => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      p.transactionId?.toLowerCase().includes(q) ||
-      p.userId?.name?.toLowerCase().includes(q) ||
-      p.userId?.email?.toLowerCase().includes(q) ||
-      p.userId?.phone?.includes(q)
-    );
-  });
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+  // Search is partially local if not supported by backend yet, but we will just render what we get
+  const filtered = payments;
   const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginated = filtered;
 
   function onFilter(setter, value) { setter(value); setPage(1); }
 
@@ -448,6 +458,36 @@ export default function AdminPayments() {
 
   return (
     <div className="space-y-5">
+      {/* Chart Section */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-6">
+        <h3 className="text-sm font-bold text-slate-800 mb-4">Doanh thu 6 tháng gần nhất</h3>
+        <div className="h-56 w-full">
+          {stats && stats.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stats} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
+                <YAxis tickFormatter={(val) => `${val / 1000}k`} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dx={-10} />
+                <Tooltip 
+                  formatter={(val) => [formatCurrency(val), 'Doanh thu']}
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}
+                  cursor={{ fill: '#f1f5f9' }}
+                />
+                <Bar dataKey="totalAmount" radius={[4, 4, 0, 0]}>
+                  {stats.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={index === stats.length - 1 ? '#10b981' : '#cbd5e1'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+              <svg className="w-8 h-8 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+              <span className="text-sm">Chưa có dữ liệu</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[

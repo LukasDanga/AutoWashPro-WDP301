@@ -722,6 +722,10 @@ exports.confirmBookings = async (ids, userRole, userId) => {
 };
 
 exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
+  if (!cancellationReason || !cancellationReason.trim()) {
+    throw Object.assign(new Error('Vui lòng nhập lý do hủy đơn'), { statusCode: 400, code: 'MISSING_REASON' });
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -1522,11 +1526,16 @@ exports.submitFeedback = async (bookingId, userId, { rating, feedback }) => {
     throw Object.assign(new Error('Cần nhập rating hoặc feedback'), { statusCode: 400 });
   }
 
-  return Booking.findByIdAndUpdate(bookingId, update, { new: true })
+  const updatedBooking = await Booking.findByIdAndUpdate(bookingId, update, { new: true })
     .populate('userId', 'name email phone tier')
     .populate('packageId', 'name price')
     .populate('branchId', 'name')
     .populate('vehicleId', 'licensePlate vehicleType brand');
+
+  // Notify manager (and admin) about the new feedback
+  sseService.broadcastToManagers(booking.branchId, 'feedback_new', { bookingId: updatedBooking._id });
+
+  return updatedBooking;
 };
 
 // ─── Manager reply to feedback ────────────────────────────────────────────────

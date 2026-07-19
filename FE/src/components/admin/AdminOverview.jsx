@@ -24,6 +24,7 @@ import {
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { cn } from '@/lib/utils';
 import TierBadge from '@/components/ui/TierBadge';
+import useSSE from '@/hooks/useSSE';
 
 function fmt(n) {
   return new Intl.NumberFormat('vi-VN').format(n ?? 0);
@@ -181,6 +182,10 @@ export default function AdminOverview() {
   }, [buildQueryString]);
 
   useEffect(() => { load(); }, [load]);
+
+  const token = getStoredToken();
+  useSSE(token, 'slots_updated', load);
+  useSSE(token, 'payment_new', load);
 
   function handleQuickFilter(key) {
     setTimeFilter(key);

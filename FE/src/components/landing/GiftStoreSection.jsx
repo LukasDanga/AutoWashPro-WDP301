@@ -121,7 +121,12 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [vouchers, setVouchers] = useState([]);
   const [wheelSectors, setWheelSectors] = useState([]);
   const [spinCount, setSpinCount] = useState(0);
+  const [userPoints, setUserPoints] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  const [filterType, setFilterType] = useState('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   
   const wheelRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
@@ -131,12 +136,8 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
+    async function loadWheel() {
       try {
-        const token = localStorage.getItem(storageKeys.accessToken);
-        
-        // 1. Fetch Wheel items
         const resGifts = await fetch(`${API_BASE}/gifts/public`);
         if (resGifts.ok) {
           const payload = await resGifts.json();
@@ -149,41 +150,46 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
               color: it.color || (idx % 2 === 0 ? '#10b981' : '#34d399')
             })));
           } else {
-             // fallback
              setWheelSectors([{ id: '1', label: 'Rỗng', color: '#ccc' }]);
           }
         }
+      } catch(e) {}
+    }
+    loadWheel();
+  }, []);
 
-        // 2. If logged in, fetch vouchers & profile
-        if (user && token) {
-          const resProfile = await fetch(`${API_BASE}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
-          if (resProfile.ok) {
-             const prof = await resProfile.json();
-             if (prof.data) setSpinCount(prof.data.spinCount || 0);
-          }
+  useEffect(() => {
+    async function loadVouchers() {
+      if (!user) return;
+      setLoading(true);
+      try {
+        const token = localStorage.getItem(storageKeys.accessToken);
+        const resProfile = await fetch(`${API_BASE}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
+        if (resProfile.ok) {
+           const prof = await resProfile.json();
+           if (prof.data) {
+             setSpinCount(prof.data.spinCount || 0);
+             setUserPoints(prof.data.loyaltyPoints || 0);
+           }
+        }
 
-          const resV = await fetch(`${API_BASE}/vouchers/available`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (resV.ok) {
-             const payload = await resV.json();
-             const data = payload?.data || {};
-             const combined = [
-               ...(Array.isArray(data.tier_exclusive) ? data.tier_exclusive : []),
-               ...(Array.isArray(data.public) ? data.public : []),
-               ...(Array.isArray(data.redeemable) ? data.redeemable : [])
-             ];
-             // unique filter
-             const unique = [];
-             const seen = new Set();
-             for (const item of combined) {
-                if (!seen.has(item._id)) {
-                   seen.add(item._id);
-                   unique.push(item);
-                }
-             }
-             setVouchers(unique);
-          }
+
+        const resV = await fetch(`${API_BASE}/vouchers/available?type=${filterType}&page=${page}&limit=6`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resV.ok) {
+           const payload = await resV.json();
+           const { data, pagination, user: uData } = payload?.data || {};
+           
+           if (data) {
+             setVouchers(data);
+           }
+           if (pagination) {
+             setTotalPages(pagination.totalPages || 1);
+           }
+           if (uData) {
+             setUserPoints(uData.loyaltyPoints || 0);
+           }
         }
       } catch (e) {
         console.error('Failed to load store data:', e);
@@ -191,8 +197,8 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
         setLoading(false);
       }
     }
-    loadData();
-  }, [user]);
+    loadVouchers();
+  }, [user, filterType, page]);
 
   const handleSpinClick = async () => {
     if (!user) return onOpenAuth();
@@ -319,21 +325,69 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                   Đăng Nhập
                 </button>
               </div>
-            ) : loading ? (
-              <div className="text-center text-slate-400 py-16 font-medium">Đang tải ưu đãi...</div>
-            ) : vouchers.length === 0 ? (
+            ) : (
+              <div>
+                <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <Trophy weight="fill" className="text-amber-500 w-6 h-6" />
+                    <span className="text-sm font-bold text-slate-700">Điểm tích lũy: <span className="text-emerald-600 text-lg">{userPoints}</span></span>
+                  </div>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button onClick={() => {setFilterType('all'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'all' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Tất cả</button>
+                    <button onClick={() => {setFilterType('mine'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
+                    <button onClick={() => {setFilterType('redeemable'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeemable' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Đổi điểm</button>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="text-center text-slate-400 py-16 font-medium">Đang tải ưu đãi...</div>
+                ) : vouchers.length === 0 ? (
               <div className="text-center py-20">
                 <p className="text-slate-500 font-medium">Chưa có ưu đãi nào dành cho bạn lúc này.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
                 {vouchers.map((voucher, i) => (
                   <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} />
                 ))}
               </div>
             )}
+            
+            {!loading && totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 mt-8">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${
+                        page === p ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+            )}
           </div>
-        ) : (
+        )}
+      </div>
+    ) : (
           <div className="flex flex-col items-center justify-center py-16 bg-white border border-slate-200 rounded-3xl shadow-sm relative overflow-hidden">
              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.05),transparent_70%)]" />
              
