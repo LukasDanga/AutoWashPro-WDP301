@@ -1428,8 +1428,8 @@ type PackageForDedupe<T> = T & {
   branchId?: DedupeBranchField;
 };
 
-function packageBranchIdOf<T>(p: T & DedupeBranchField): string | null {
-  const bid = p as DedupeBranchField;
+function packageBranchIdOf<T>(p: T & { branchId?: DedupeBranchField }): string | null {
+  const bid = p.branchId;
   if (!bid) return null;
   if (typeof bid === 'string') return bid;
   if (typeof bid === 'object' && '_id' in (bid as object)) {
@@ -1473,9 +1473,9 @@ function dedupePackages<T>(
     // Prefer a row whose branchId equals the selected branch.
     const branchMatch = selectedBranchId
       ? bucket.find(
-          (p): p is T & DedupeBranchField =>
+          (p) =>
             hasPackageMeta(p) &&
-            packageBranchIdOf(p as T & DedupeBranchField) === selectedBranchId,
+            packageBranchIdOf(p) === selectedBranchId,
         )
       : undefined;
     if (branchMatch) {
@@ -1484,8 +1484,8 @@ function dedupePackages<T>(
     }
     // Then prefer a "global" row (no branchId).
     const globalMatch = bucket.find(
-      (p): p is T & DedupeBranchField =>
-        hasPackageMeta(p) && packageBranchIdOf(p as T & DedupeBranchField) == null,
+      (p) =>
+        hasPackageMeta(p) && packageBranchIdOf(p) == null,
     );
     if (globalMatch) {
       result.push(globalMatch);
