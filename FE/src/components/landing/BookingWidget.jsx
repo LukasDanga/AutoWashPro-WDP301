@@ -232,6 +232,44 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }, [initialBranchId, branches]);
 
+    const executeCreateBooking = async (options = {}) => {
+    const isRecurring = options.tab === 'recurring';
+    const endpoint = isRecurring ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+    
+    let vehicleId = selectedVehicle || (userVehicles && userVehicles.length > 0 ? (userVehicles[0]._id || userVehicles[0].id) : '');
+    
+    const body = {
+      branchId: selectedBranch?._id || selectedBranch?.id,
+      packageId: pkg?._id || pkg?.id,
+      vehicleId,
+      bookingDate: isRecurring ? undefined : (currentDate?.iso || currentDate?.toISOString().split('T')[0]),
+      startTime: selectedTime,
+      voucherCode: appliedVoucher?.code || undefined,
+      selectedSubServices: currentSubServices || [],
+      note: '',
+      isDraft: options.isDraft || false
+    };
+
+    if (isRecurring) {
+      body.selectedDays = selectedDays;
+      body.durationWeeks = durationWeeks;
+    }
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.message || errData?.error || 'Create booking failed');
+    }
+    
+    const payload = await res.json();
+    return payload?.data || payload;
+  };
+
   async function processPendingBooking() {
     const pb = pendingBooking;
     if (!pb) return;
@@ -291,70 +329,49 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         vehicleId = selectedVehicle || userVehicles[0]?._id || userVehicles[0]?.id || '';
       }
 
-      // Create booking
-      const body = {
-        branchId: pb.branchId,
-        packageId: pb.packageId,
-        vehicleId,
-        bookingDate: pb.selectedDate || undefined,
-        startTime: pb.selectedTime,
-        voucherCode: pb.appliedVoucher?.code || undefined,
-        selectedSubServices: pb.selectedSubServices || [],
-        note: '',
-      };
+      // Show payment modal first; booking is only created after user picks payment method
+      const estimatedTotal = totalBase || 0;
+      const calculatedDeposit = Math.round((estimatedTotal * 0.3) / 1000) * 1000;
 
-      const endpoint = pb.tab === 'recurring' ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(pb.tab === 'recurring' ? {
-          ...body,
-          weekdays: pb.selectedDays,
-          weeks: pb.weeks,
-          vehicleId: vehicleId || undefined,
-          selectedSubServices: pb.selectedSubServices || [],
-        } : body),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        console.error('Pending booking creation failed:', res.status, JSON.stringify(errData));
-        throw new Error(errData?.message || errData?.error || 'Không thể tạo lịch hẹn');
-      }
-
-      const payload = await res.json();
-      const booking = payload?.data || payload;
-      const code = booking?.bookingCode || booking?.code || '';
-      setBookingCode(code);
-      setLastBooking({
-        branch: selectedBranch || { name: '' },
-        vehicle: { licensePlate: gv?.licensePlate || '', name: gv?.brand || '' },
-        pkg: pkg || { name: '' },
-        currentDate: pb.selectedDate ? bookingDates.find(d => d.id === pb.selectedDate) : null,
-        selectedTime: pb.selectedTime,
-        total: pb.tab === 'recurring' ? (totalBase - discount) * (booking?.totalCreated || 1) : total,
-        discount: pb.tab === 'recurring' ? discount * (booking?.totalCreated || 1) : discount,
-        points: pb.tab === 'recurring' ? points * (booking?.totalCreated || 1) : points,
-        isPayingWithPack: false,
-        bookingCode: code,
-        subServices: (pb.selectedSubServices || []).map(n => {
-          const s = pkg?.subServices?.find(x => x.name === n);
-          return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
-        }),
-        recurringCount: pb.tab === 'recurring' ? booking?.totalCreated || 0 : undefined,
-        depositAmount: booking?.depositAmount || 0,
-        depositPaid: booking?.depositPaid || false,
-      });
-
-      // Check if deposit payment is required
-      if (booking?.depositAmount > 0 && !booking?.depositPaid) {
-        setPendingDeposit(booking);
+      if (calculatedDeposit > 0 && !pb.isPayingWithPack) {
+        setPendingDeposit({
+          isDraft: true,
+          tab: pb.tab || 'regular',
+          finalPrice: estimatedTotal,
+          totalAmount: estimatedTotal,
+          depositAmount: calculatedDeposit,
+          depositPaid: false,
+          _vehicleId: vehicleId,
+          _pendingData: pb,
+        });
         setDepositQrStep('select');
         setDepositPayment(null);
+        onSetPendingBooking(null);
       } else {
+        // No deposit needed - create booking directly
+        const isRec = pb.tab === 'recurring';
+        const ep = isRec ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+        const directBody = isRec
+          ? { branchId: pb.branchId, packageId: pb.packageId, vehicleId, weekdays: pb.selectedDays, startTime: pb.selectedTime, weeks: pb.weeks, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' }
+          : { branchId: pb.branchId, packageId: pb.packageId, vehicleId, bookingDate: pb.selectedDate || undefined, startTime: pb.selectedTime, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' };
+        const r = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(directBody) });
+        if (!r.ok) { const e = await r.json().catch(() => null); throw new Error(e?.message || 'Không thể tạo lịch hẹn'); }
+        const p2 = await r.json();
+        const bk = p2?.data || p2;
+        const code = bk?.bookingCode || bk?.code || '';
+        setBookingCode(code);
+        setLastBooking({
+          branch: selectedBranch || { name: '' },
+          vehicle: { licensePlate: gv?.licensePlate || '', name: gv?.brand || '' },
+          pkg: pkg || { name: '' },
+          currentDate: pb.selectedDate ? bookingDates.find(d => d.id === pb.selectedDate) : null,
+          selectedTime: pb.selectedTime, total: estimatedTotal, discount: 0, points: 0, isPayingWithPack: false, bookingCode: code,
+          subServices: (pb.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
+          recurringCount: isRec ? bk?.totalCreated || 0 : undefined, depositAmount: 0, depositPaid: false,
+        });
         setShowSuccessModal(true);
+        onSetPendingBooking(null);
       }
-      onSetPendingBooking(null);
     } catch (err) {
       console.error('processPendingBooking error:', err);
       setError(err.message || 'Không thể tạo lịch hẹn');
@@ -369,14 +386,47 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setDepositLoading(true);
     setError('');
     try {
-      const bodyObj = {
-        bookingId: pendingDeposit._id,
-        method: depositMethod,
-        paymentType: paymentMode,
-      };
-      if (lastBooking?.recurringCount && pendingDeposit.depositAmount > 0 && paymentMode === 'deposit') {
-        bodyObj.amount = pendingDeposit.depositAmount;
+      let bookingId = pendingDeposit._id;
+      let actualDepositAmount = pendingDeposit.depositAmount;
+
+      if (pendingDeposit.isDraft) {
+        // Create booking first, then pay
+        const pb = pendingDeposit._pendingData;
+        const isRec = pendingDeposit.tab === 'recurring';
+        const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
+        const ep = isRec ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+        const bBody = pb
+          ? (isRec
+            ? { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, weekdays: pb.selectedDays, startTime: pb.selectedTime, weeks: pb.weeks, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' }
+            : { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, bookingDate: pb.selectedDate || undefined, startTime: pb.selectedTime, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' })
+          : (isRec
+            ? { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, weekdays: selectedDays, startTime: selectedTime, weeks, voucherCode: appliedVoucher?.code || undefined, selectedSubServices: currentSubServices, note: '' }
+            : { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, bookingDate: currentDate?.iso, startTime: selectedTime, voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined), selectedSubServices: currentSubServices, slotPackId: selectedSlotPack || undefined, note: '' });
+        const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
+        const bd = await br.json();
+        if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
+        const newBk = bd?.data || bd;
+        bookingId = newBk._id || newBk.id;
+        actualDepositAmount = newBk.depositAmount || actualDepositAmount;
+        const newCode = newBk?.bookingCode || newBk?.code || '';
+        setBookingCode(newCode);
+        setLastBooking({
+          branch: selectedBranch || { name: '' },
+          vehicle: vehicle || { licensePlate: vId },
+          pkg: pkg || { name: '' },
+          currentDate: isRec ? null : currentDate,
+          selectedTime: pb ? pb.selectedTime : selectedTime,
+          total: pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0,
+          discount, points, isPayingWithPack: false, bookingCode: newCode,
+          subServices: (currentSubServices || pb?.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
+          recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
+          depositAmount: actualDepositAmount, depositPaid: false,
+        });
+        setPendingDeposit(prev => ({ ...prev, _id: bookingId, isDraft: false }));
       }
+
+      const bodyObj = { bookingId, method: depositMethod, paymentType: paymentMode };
+      if (actualDepositAmount > 0 && paymentMode === 'deposit') { bodyObj.amount = actualDepositAmount; }
       const res = await fetch(`${apiBase}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -399,32 +449,37 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }
 
   // Poll payment status when QR is shown
+  const checkPaymentStatus = useCallback(async () => {
+    if (depositQrStep !== 'qr' || !depositPayment || !pendingDeposit) return;
+    try {
+      const res = await fetch(`${apiBase}/payments/booking/${pendingDeposit?._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const p = data?.data || data;
+      if (p?.status === 'paid') {
+        setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
+        setDepositQrStep('success');
+        setTimeout(() => {
+          setPendingDeposit(null);
+          setDepositPayment(null);
+          setDepositQrStep('select');
+          setShowSuccessModal(true);
+        }, 1500);
+      }
+      setDepositPollCount(c => c + 1);
+    } catch (e) { /* ignore errors */ }
+  }, [depositQrStep, depositPayment, pendingDeposit, apiBase, token, paymentMode]);
+
+  useSSE(token, 'payment_new', checkPaymentStatus);
+
+  // Fallback check once every 10s just in case SSE drops
   useEffect(() => {
     if (depositQrStep !== 'qr' || !depositPayment) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${apiBase}/payments/booking/${pendingDeposit?._id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const p = data?.data || data;
-        if (p?.status === 'paid') {
-          clearInterval(interval);
-          setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
-          setDepositQrStep('success');
-          setTimeout(() => {
-            setPendingDeposit(null);
-            setDepositPayment(null);
-            setDepositQrStep('select');
-            setShowSuccessModal(true);
-          }, 1500);
-        }
-        setDepositPollCount(c => c + 1);
-      } catch (e) { /* ignore polling errors */ }
-    }, 3000);
+    const interval = setInterval(checkPaymentStatus, 10000);
     return () => clearInterval(interval);
-  }, [depositQrStep, depositPayment, pendingDeposit, apiBase, token]);
+  }, [depositQrStep, depositPayment, checkPaymentStatus]);
 
   // Simulate payment confirmation (for demo)
   async function simulatePaymentConfirm() {
@@ -571,32 +626,21 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     try {
       const branchId = selectedBranch._id || selectedBranch.id;
       const pkgId = pkg._id || pkg.id;
-      const body = {
-        branchId,
-        packageId: pkgId,
-        vehicleId: vehicle._id || vehicle.id || vehicle.licensePlate,
-        bookingDate: currentDate.iso,
-        startTime: selectedTime,
-        voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined),
-        selectedSubServices: currentSubServices,
-        slotPackId: selectedSlotPack || undefined,
-        note: '',
-      };
-      const res = await fetch(`${apiBase}/bookings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || errData?.error || 'Không thể tạo lịch hẹn');
+      const calculatedDeposit = Math.round((total * 0.3) / 1000) * 1000;
+      if (calculatedDeposit > 0 && !isPayingWithPack) {
+        setPendingDeposit({
+          isDraft: true, tab: 'regular', finalPrice: total, totalAmount: total, depositAmount: calculatedDeposit, depositPaid: false
+        });
+        setDepositQrStep('select');
+        setDepositPayment(null);
+        setBookingLoading(false);
+        return;
       }
-      const payload = await res.json();
-      const booking = payload?.data || payload;
+      
+      const booking = await executeCreateBooking({ tab: 'regular' });
       setBookingCode(booking?.bookingCode || booking?.code || '');
       setLastBooking({
-        branch: selectedBranch, vehicle, pkg, currentDate, selectedTime,
-        total, discount, points, isPayingWithPack,
+        branch: selectedBranch, vehicle, pkg, currentDate, selectedTime, total, discount, points, isPayingWithPack,
         bookingCode: booking?.bookingCode || booking?.code || '',
         subServices: (currentSubServices || []).map(n => {
           const s = pkg?.subServices?.find(x => x.name === n);
@@ -605,15 +649,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         depositAmount: booking?.depositAmount || 0,
         depositPaid: booking?.depositPaid || false,
       });
-
-      // Check if deposit payment is required
-      if (booking?.depositAmount > 0 && !booking?.depositPaid) {
-        setPendingDeposit(booking);
-        setDepositQrStep('select');
-        setDepositPayment(null);
-      } else {
-        setShowSuccessModal(true);
-      }
+      setShowSuccessModal(true);
     } catch (err) {
       setError(err.message || 'Không thể tạo lịch hẹn');
     } finally {
@@ -1638,28 +1674,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 <span className="text-emerald-600 text-xs font-bold border border-emerald-200 px-3 py-1.5 rounded-full bg-white shadow-sm">Chọn</span>
                               </div>
 
-                              <AnimatePresence>
-                                {voucherModalOpen && (
-                                  <motion.div 
-                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" 
-                                    onClick={(e) => { if(e.target === e.currentTarget) setVoucherModalOpen(false) }}
-                                  >
-                                    <motion.div 
-                                      initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-                                      className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl"
-                                    >
-                                      <div className="shrink-0 border-b border-slate-100 px-4 py-3 flex justify-between items-center">
-                                        <h3 className="font-bold text-slate-800 text-lg">Chọn Ưu Đãi</h3>
-                                        <button onClick={() => setVoucherModalOpen(false)} className="p-1.5 rounded-lg bg-slate-50 text-slate-500 hover:text-slate-800 transition-colors"><X size={16}/></button>
-                                      </div>
-                                      <div className="flex-1 overflow-y-auto p-4">
-                                        <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={(v) => { setAppliedVoucher(v); setVoucherModalOpen(false); }} orderAmount={totalBase} compact branchId={selectedBranch?._id || selectedBranch?.id} />
-                                      </div>
-                                    </motion.div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
+                              
                             </>
                           )}
                         </div>
@@ -1893,7 +1908,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               animate={{ opacity: 1, scale: 1, y: 0 }} 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", duration: 0.5 }}
-              className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100/80 overflow-hidden max-h-[90vh] flex flex-col"
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100/80 max-h-[90vh] flex flex-col overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
               {/* Header block (Light and simple) */}
@@ -2070,7 +2085,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", duration: 0.5 }}
-              className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100/80 overflow-hidden"
+              className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100/80"
               onClick={e => e.stopPropagation()}
             >
               {depositQrStep === 'qr' && depositPayment?.qrCode ? (
@@ -2131,8 +2146,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <div className="w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center mx-auto mb-4">
                       <CheckCircle2 className="w-10 h-10 text-emerald-500" />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-800">Đặt cọc thành công!</h3>
-                    <p className="text-slate-400 text-sm mt-2">Cảm ơn bạn, lịch hẹn đã được xác nhận.</p>
+                    <h3 className="text-2xl font-black text-slate-800">
+                      {paymentMode === 'full' ? 'Thanh toán thành công!' : 'Đặt cọc thành công!'}
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-2">
+                      {paymentMode === 'full' ? 'Thanh toán 100% hoàn tất, lịch hẹn đã được xác nhận.' : 'Cảm ơn bạn, lịch hẹn đã được xác nhận.'}
+                    </p>
                   </div>
                 </>
               ) : (
@@ -2252,8 +2271,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                   <div className="p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
                     <button type="button" onClick={() => { if (!depositLoading) { setPendingDeposit(null); setError(''); } }} disabled={depositLoading}
-                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98] disabled:opacity-50">
-                      Bỏ qua
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5">
+                      <ArrowLeft className="w-4 h-4" />
+                      Quay lại
                     </button>
                     <button type="button" onClick={payDeposit} disabled={depositLoading}
                       className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
@@ -2268,6 +2288,38 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   </div>
                 </>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {voucherModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setVoucherModalOpen(false); }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="shrink-0 border-b border-slate-100 px-5 py-4 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 text-lg">Chọn Ưu Đãi</h3>
+                <button
+                  onClick={() => setVoucherModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <VoucherPicker
+                  apiBase={apiBase} token={token} selected={appliedVoucher}
+                  onSelect={(v) => { setAppliedVoucher(v); setVoucherModalOpen(false); }}
+                  orderAmount={totalBase} compact branchId={selectedBranch?._id || selectedBranch?.id}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}
