@@ -11,7 +11,7 @@ import {
   Trash,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-
+import useSSE from '@/hooks/useSSE';
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
     headers: {
@@ -77,56 +77,17 @@ export default function NotificationBell() {
     finally { setLoading(false); }
   }, []);
 
-  /* ── SSE real-time connection ── */
-  useEffect(() => {
-    const token = getStoredToken();
-    if (!token) return;
+  const token = getStoredToken();
+  useSSE(token, 'notification', useCallback(() => {
+    setUnread((c) => c + 1);
+    setNotifications((prev) => prev); // dummy trigger if needed, or better fetchList if open
+    fetchCount();
+  }, [fetchCount]));
 
-    let es;
-    let retryTimeout;
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
+  useSSE(token, 'booking_new', fetchCount);
 
-    function connect() {
-      const base = getApiBaseUrl().replace(/\/api$/, '');
-      es = new EventSource(`${base}/api/sse?token=${encodeURIComponent(token)}`);
-
-      es.addEventListener('notification', () => {
-        setUnread((c) => c + 1);
-        setNotifications((prev) => prev);
-        fetchCount();
-        retryCount = 0;
-      });
-
-      es.addEventListener('booking_new', () => {
-        fetchCount();
-      });
-
-      es.onopen = () => {
-        retryCount = 0;
-      };
-
-      es.onerror = () => {
-        es.close();
-        retryCount++;
-        if (retryCount < MAX_RETRIES) {
-          retryTimeout = setTimeout(connect, 5000 * retryCount);
-        }
-      };
-    }
-
-    connect();
-    return () => {
-      es?.close();
-      clearTimeout(retryTimeout);
-    };
-  }, [fetchCount]);
-
-  /* ── poll every 30s as fallback ── */
   useEffect(() => {
     fetchCount();
-    pollRef.current = setInterval(fetchCount, 30000);
-    return () => clearInterval(pollRef.current);
   }, [fetchCount]);
 
   /* ── open dropdown → load list ── */
