@@ -42,7 +42,7 @@ const options = {
             _id: { type: 'string' },
             userId: { type: 'string' },
             licensePlate: { type: 'string' },
-            vehicleType: { type: 'string', enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] },
+            vehicleType: { type: 'string', enum: ['sedan', 'suv', 'pickup', 'van'] },
             brand: { type: 'string' },
             model: { type: 'string' },
             color: { type: 'string' },

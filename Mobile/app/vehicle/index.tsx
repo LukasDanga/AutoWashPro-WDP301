@@ -88,7 +88,6 @@ export default function VehicleScreen() {
       case 'suv': return 'car-sport-outline';
       case 'pickup': return 'car-outline';
       case 'van': return 'bus-outline';
-      case 'motorcycle': return 'bicycle-outline';
       default: return 'car-outline';
     }
   };

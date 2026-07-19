@@ -33,7 +33,6 @@ const VEHICLE_TYPES: { value: VehicleType; label: string; icon: string }[] = [
   { value: 'suv', label: 'SUV', icon: 'car-sport-outline' },
   { value: 'pickup', label: 'Pickup', icon: 'car-outline' },
   { value: 'van', label: 'Van', icon: 'bus-outline' },
-  { value: 'motorcycle', label: 'Xe máy', icon: 'bicycle-outline' },
 ];
 
 export default function VehicleFormScreen() {

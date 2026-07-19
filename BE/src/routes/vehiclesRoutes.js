@@ -24,7 +24,7 @@ router.use(authenticate);
  *             required: [licensePlate, vehicleType, brand, color]
  *             properties:
  *               licensePlate: { type: string, example: "30A-12345" }
- *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }
+ *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van'] }
  *               brand: { type: string, example: "Toyota" }
  *               model: { type: string, example: "Camry" }
  *               color: { type: string, example: "Black" }
@@ -97,7 +97,7 @@ router.get('/:id', vehicleController.getVehicleById);
  *             type: object
  *             properties:
  *               licensePlate: { type: string }
- *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'] }
+ *               vehicleType: { type: string, enum: ['sedan', 'suv', 'pickup', 'van'] }
  *               brand: { type: string }
  *               model: { type: string }
  *               color: { type: string }

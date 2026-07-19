@@ -1,8 +1,9 @@
 /**
  * AutoWashPro Booking Flow
  *
- * 6-step booking flow backed by BookingContext:
- *   category → package → branch → vehicle → datetime → confirm
+ * 5-step booking flow backed by BookingContext (mirrors the web landing page
+ * BookingWidget):
+ *   branch → package → vehicle → datetime → confirm
  *
  * State & persistence:
  *  - Selections + step live in `BookingContext` so the user can deep-link in or
@@ -62,34 +63,25 @@ import { formatCurrency } from '../../src/utils';
 import type {
   Branch,
   Package,
-  PackageCategory,
   Vehicle,
   AvailableSlot,
 } from '../../src/types';
 
 const STEP_META: { key: BookingStep; label: string }[] = [
-  { key: 'category', label: 'Dịch vụ' },
-  { key: 'package', label: 'Gói' },
   { key: 'branch', label: 'Chi nhánh' },
+  { key: 'package', label: 'Gói DV' },
   { key: 'vehicle', label: 'Xe' },
   { key: 'datetime', label: 'Thời gian' },
   { key: 'confirm', label: 'Xác nhận' },
 ];
 
 const STEP_ICONS: Record<BookingStep, string> = {
-  category: Icons.sparkle,
-  package: Icons.sparkle,
   branch: Icons.locationOutline,
+  package: Icons.sparkle,
   vehicle: Icons.carOutline,
   datetime: Icons.calendarOutline,
   confirm: Icons.checkmark,
 };
-
-const CATEGORY_OPTIONS: { value: PackageCategory; label: string; subtitle: string }[] = [
-  { value: 'external', label: 'Rửa ngoài', subtitle: 'Rửa và làm sạch bề mặt xe' },
-  { value: 'internal', label: 'Dọn nội thất', subtitle: 'Hút bụi, lau chùi bên trong xe' },
-  { value: 'full', label: 'Rửa toàn diện', subtitle: 'Rửa ngoài + Dọn nội thất' },
-];
 
 export default function BookingScreen() {
   const router = useRouter();
@@ -105,13 +97,11 @@ export default function BookingScreen() {
     goBack,
     canGoNext,
     stepIndex,
-    category,
-    setCategory,
+    selectedBranch,
+    setSelectedBranch,
     selectedPackage,
     setSelectedPackage,
     replaceSelectedPackage,
-    selectedBranch,
-    setSelectedBranch,
     selectedVehicle,
     setSelectedVehicle,
     selectedDate,
@@ -190,8 +180,8 @@ export default function BookingScreen() {
           branchApi.getPublicBranches(),
           // Pass `limit: 'all'` so the mobile booking flow receives the FULL
           // active catalog, not just the first 9 sorted by price. Without
-          // this, the category-filtered view at step 2 can end up empty
-          // because the chosen category's packages were all > 9th by price.
+          // this, the branch-filtered package view can end up empty because
+          // the branch's packages were all > 9th by price.
           packageApi.getPackages({ status: 'active', limit: 'all' }),
         ]);
         if (cancelled) return;
@@ -223,17 +213,8 @@ export default function BookingScreen() {
   useEffect(() => {
     if (!isHydrated || isLoading) return;
     (async () => {
-      // Set package first; setSelectedPackage clears selectedBranch, so we
-      // have to set package before branch when both params are present.
-      if (params.packageId && (!selectedPackage || selectedPackage._id !== params.packageId)) {
-        try {
-          const p = await packageApi.getPackage(params.packageId as string);
-          setSelectedPackage(p);
-          if (p.category && !category) setCategory(p.category);
-        } catch {
-          /* swallow */
-        }
-      }
+      // Set branch FIRST; setSelectedBranch clears selectedPackage, so we
+      // have to set branch before package when both params are present.
       if (params.branchId && (!selectedBranch || selectedBranch._id !== params.branchId)) {
         try {
           const b = await branchApi.getBranch(params.branchId as string);
@@ -242,11 +223,24 @@ export default function BookingScreen() {
           /* swallow */
         }
       }
+      if (params.packageId && (!selectedPackage || selectedPackage._id !== params.packageId)) {
+        try {
+          const p = await packageApi.getPackage(params.packageId as string);
+          // Use replace so a branch we just set above isn't wiped as a side
+          // effect (setSelectedPackage only clears date/time, but replace is
+          // the explicit "downstream is still valid" setter).
+          replaceSelectedPackage(p);
+        } catch {
+          /* swallow */
+        }
+      }
       if (params.vehicleId && (!selectedVehicle || selectedVehicle._id !== params.vehicleId)) {
         const v = vehicles.find((x) => x._id === (params.vehicleId as string));
         if (v) setSelectedVehicle(v);
       }
-      if ((params.branchId || params.packageId) && step === 'category') {
+      // If a branch was pre-selected, skip the branch step (mirrors the web
+      // widget's `setStep(initialBranchId ? 2 : 1)`).
+      if (params.branchId && step === 'branch') {
         setStep('package');
       }
     })();
@@ -254,13 +248,12 @@ export default function BookingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, isLoading]);
 
-  // Packages shown in step 2 — narrowed by category AND by branch availability.
+  // Packages shown in the package step — narrowed by branch availability.
   //
   // The backend's `getPackages` does not always respect a `branchId` filter,
-  // and can return packages that don't belong to the selected branch. We
-  // therefore narrow the visible list client-side:
-  //   1. by the user-selected category (when present)
-  //   2. by branch compatibility when a branch is selected.
+  // and can return packages that don't belong to the selected branch. Since
+  // the branch is always chosen first now, we narrow the visible list to the
+  // packages that branch actually offers.
   //
   // A package is considered "compatible" when it has no branchId (global
   // package) or its branchId matches the selected branch. This prevents the
@@ -268,7 +261,6 @@ export default function BookingScreen() {
   // PACKAGE_BRANCH_MISMATCH when we ask for slots.
   const filteredPackages = useMemo(() => {
     let list = packages;
-    if (category) list = list.filter((p) => p.category === category);
     if (selectedBranch?._id) {
       list = list.filter((p) => {
         if (!p.branchId) return true; // global package — assume available
@@ -280,7 +272,7 @@ export default function BookingScreen() {
       });
     }
     return dedupePackages(list, selectedBranch?._id ?? null);
-  }, [packages, category, selectedBranch?._id]);
+  }, [packages, selectedBranch?._id]);
 
   // Fetch branch-specific packages once a branch is picked and merge them
   // into the catalog. The global `getPackages` endpoint does not always
@@ -319,19 +311,20 @@ export default function BookingScreen() {
     };
   }, [selectedBranch?._id]);
 
-  // When the user changes branch, drop any selected package that no longer
-  // belongs to it. Otherwise we carry an invalid (branchId, packageId) pair
-  // forward to the slot lookup and BE rejects with PACKAGE_BRANCH_MISMATCH.
+  // Safety net for the deep-link prefill case: if a (branchId, packageId)
+  // pair arrives where the package doesn't actually belong to the branch,
+  // reconcile it before we carry the invalid pair to the slot lookup (which
+  // the BE rejects with PACKAGE_BRANCH_MISMATCH). In the normal UI flow this
+  // can't happen because picking a branch clears the package.
   //
   // We do this in two passes:
   //   1. If we find a row whose composite key matches the currently selected
   //      package BUT its `branchId` matches the selected branch, swap to it
   //      (different `_id` for the same product, branch-scoped variant).
-  //   2. If no such compatible row exists, the branch the user picked does
-  //      not offer this product. Pop a confirmation dialog and offer to take
-  //      them back to step 2 (re-pick package) or step 3 (re-pick branch).
-  //      We do NOT silently clear the package — that's a frustrating dead
-  //      end that leaves the user wondering what just happened.
+  //   2. If no such compatible row exists, the branch does not offer this
+  //      product. Pop a dialog and offer to re-pick the package (keeping the
+  //      branch) or re-pick the branch. We do NOT silently clear the package
+  //      — that's a frustrating dead end that leaves the user confused.
   useEffect(() => {
     if (!selectedBranch?._id || !selectedPackage) return;
     const current = selectedPackage;
@@ -376,21 +369,20 @@ export default function BookingScreen() {
 
     // No compatible variant for this branch. Instead of silently clearing
     // the package (which is confusing — the user just picked it!), send
-    // them back to step 2 with an explanation. The branch they just chose
-    // either has no packages of the selected category, or no packages at
-    // all. Either way they need to make a different selection.
-    console.log('[booking/swap-effect] no swap candidate, sending user back to step 2');
+    // them back to the package step with an explanation. The branch they
+    // chose does not offer this package, so they need to make a different
+    // selection.
+    console.log('[booking/swap-effect] no swap candidate, sending user back to package step');
     Alert.alert(
-      'Chi nhánh không phù hợp',
-      'Chi nhánh bạn vừa chọn không có gói dịch vụ này. Vui lòng chọn chi nhánh khác hoặc đổi gói dịch vụ.',
+      'Gói dịch vụ không khả dụng',
+      'Chi nhánh bạn chọn không có gói dịch vụ này. Vui lòng chọn gói khác hoặc đổi chi nhánh.',
       [
         {
-          text: 'Chọn lại dịch vụ',
+          text: 'Chọn gói khác',
           onPress: () => {
-            // Clear only the branch — keep category + package so the user
-            // can immediately see the (working) list of packages and can
-            // pick a branch-aware one if available, or change category.
-            setSelectedBranch(null);
+            // Keep the branch, drop only the package so the user immediately
+            // sees the (working) list of packages that branch offers.
+            setSelectedPackage(null);
             setVoucher(null);
             setStep('package');
           },
@@ -398,6 +390,7 @@ export default function BookingScreen() {
         {
           text: 'Chọn chi nhánh khác',
           onPress: () => {
+            // Clearing the branch also clears the package (branch-scoped).
             setSelectedBranch(null);
             setVoucher(null);
             setStep('branch');
@@ -665,80 +658,53 @@ export default function BookingScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Step 1: Pick service category */}
-        {step === 'category' && (
+        {/* Step 1: Pick branch */}
+        {step === 'branch' && (
           <StepLayout
-            title="Chọn loại dịch vụ"
-            subtitle="Bước đầu tiên giúp gợi ý gói phù hợp với bạn"
-            icon={Icons.sparkle}
+            title="Chọn chi nhánh gần bạn"
+            subtitle="Chọn chi nhánh thuận tiện nhất với bạn"
+            icon={Icons.locationOutline}
           >
-            {CATEGORY_OPTIONS.map((opt) => {
-              const isSelected = category === opt.value;
-              return (
-                <PressableScale
-                  key={opt.value}
-                  onPress={() => setCategory(opt.value)}
-                  accessibilityRole="button"
-                  accessibilityLabel={opt.label}
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  <Card
-                    style={[
-                      styles.categoryCard,
-                      isSelected && {
-                        borderWidth: 2,
-                        borderColor: colors.primary,
-                        backgroundColor: colors.primarySubtle,
-                      },
-                    ]}
-                  >
-                    <View style={styles.optionRow}>
-                      <View
-                        style={[
-                          styles.optionIcon,
-                          {
-                            backgroundColor: isSelected ? colors.primary : colors.surface,
-                          },
-                        ]}
-                      >
-                        <Icon
-                          name={STEP_ICONS.category}
-                          size={22}
-                          color={isSelected ? colors.textInverse : colors.primary}
-                        />
-                      </View>
-                      <View style={styles.optionInfo}>
-                        <AppText variant="body" style={styles.optionTitle}>
-                          {opt.label}
-                        </AppText>
-                        <AppText variant="caption" color="textSecondary">
-                          {opt.subtitle}
+            {branches.length === 0 ? (
+              <EmptyState
+                iconName={Icons.locationOutline}
+                title="Không có chi nhánh"
+                message="Hiện tại không có chi nhánh nào hoạt động"
+              />
+            ) : (
+              branches.map((branch) => (
+                <SelectableCard
+                  key={branch._id}
+                  selected={selectedBranch?._id === branch._id}
+                  onPress={() => setSelectedBranch(branch)}
+                  icon={Icons.locationOutline}
+                  title={branch.name}
+                  subtitle={
+                    <View>
+                      <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+                        {branch.address}
+                      </AppText>
+                      <View style={styles.cardRowMeta}>
+                        <Icon name={Icons.timeOutline} size={12} color={colors.textTertiary} />
+                        <AppText variant="caption" color="textTertiary">
+                          {branch.openingTime} - {branch.closingTime}
                         </AppText>
                       </View>
-                      {isSelected ? (
-                        <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
-                          <Icon name={Icons.checkmark} size={16} color={colors.textInverse} />
-                        </View>
-                      ) : (
-                        <View
-                          style={[styles.optionCheckEmpty, { borderColor: colors.border }]}
-                        />
-                      )}
                     </View>
-                  </Card>
-                </PressableScale>
-              );
-            })}
+                  }
+                />
+              ))
+            )}
           </StepLayout>
         )}
 
-        {/* Step 2: Pick package (filtered by category) */}
+        {/* Step 2: Pick package (scoped to the selected branch) */}
         {step === 'package' && (
           <StepLayout
             title="Chọn gói dịch vụ"
             subtitle={
-              category
-                ? `Gói ${labelForCategory(category)}`
+              selectedBranch
+                ? `Gói dịch vụ tại ${selectedBranch.name}`
                 : 'Chọn gói phù hợp với xe của bạn'
             }
             icon={Icons.sparkle}
@@ -746,13 +712,9 @@ export default function BookingScreen() {
             {filteredPackages.length === 0 ? (
               <EmptyState
                 iconName={Icons.sparkle}
-                title="Chưa có gói phù hợp"
-                message={
-                  category
-                    ? `Hiện chưa có gói ${labelForCategory(category)} nào. Vui lòng chọn loại khác.`
-                    : 'Vui lòng quay lại chọn loại dịch vụ trước.'
-                }
-                actionLabel="Chọn lại dịch vụ"
+                title="Chưa có gói dịch vụ"
+                message="Chi nhánh này chưa có gói dịch vụ nào. Vui lòng chọn chi nhánh khác."
+                actionLabel="Chọn chi nhánh khác"
                 onAction={() => goBack()}
               />
             ) : (
@@ -784,78 +746,7 @@ export default function BookingScreen() {
           </StepLayout>
         )}
 
-        {/* Step 3: Pick branch */}
-        {step === 'branch' && (
-          <StepLayout
-            title="Chọn chi nhánh"
-            subtitle="Chọn chi nhánh gần bạn nhất"
-            icon={Icons.locationOutline}
-          >
-            {branches.length === 0 ? (
-              <EmptyState
-                iconName={Icons.locationOutline}
-                title="Không có chi nhánh"
-                message="Hiện tại không có chi nhánh nào hoạt động"
-              />
-            ) : (
-              (() => {
-                // Compute the set of branches that actually offer at least
-                // one package of the currently selected category. Without
-                // this filter the user can pick a branch only to be told
-                // (later) that it has no compatible package.
-                const branchesWithPackage = (() => {
-                  if (!category) return null; // no category yet → show all
-                  const set = new Set<string>();
-                  for (const p of packages) {
-                    if (p.category !== category) continue;
-                    const bid =
-                      typeof p.branchId === 'object' && p.branchId !== null
-                        ? (p.branchId as any)._id
-                        : p.branchId;
-                    if (typeof bid === 'string' && bid) set.add(bid);
-                  }
-                  return set;
-                })();
-                const visibleBranches = branchesWithPackage
-                  ? branches.filter((b) => branchesWithPackage.has(b._id))
-                  : branches;
-                if (visibleBranches.length === 0) {
-                  return (
-                    <EmptyState
-                      iconName={Icons.locationOutline}
-                      title="Chưa có chi nhánh phù hợp"
-                      message="Hiện chưa có chi nhánh nào có gói dịch vụ này. Vui lòng chọn loại dịch vụ khác."
-                    />
-                  );
-                }
-                return visibleBranches.map((branch) => (
-                <SelectableCard
-                  key={branch._id}
-                  selected={selectedBranch?._id === branch._id}
-                  onPress={() => setSelectedBranch(branch)}
-                  icon={Icons.locationOutline}
-                  title={branch.name}
-                  subtitle={
-                    <View>
-                      <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                        {branch.address}
-                      </AppText>
-                      <View style={styles.cardRowMeta}>
-                        <Icon name={Icons.timeOutline} size={12} color={colors.textTertiary} />
-                        <AppText variant="caption" color="textTertiary">
-                          {branch.openingTime} - {branch.closingTime}
-                        </AppText>
-                      </View>
-                    </View>
-                  }
-                />
-                ));
-              })()
-            )}
-          </StepLayout>
-        )}
-
-        {/* Step 4: Pick vehicle */}
+        {/* Step 3: Pick vehicle */}
         {step === 'vehicle' && (
           <StepLayout
             title="Chọn phương tiện"
@@ -884,7 +775,7 @@ export default function BookingScreen() {
                   key={vehicle._id}
                   selected={selectedVehicle?._id === vehicle._id}
                   onPress={() => setSelectedVehicle(vehicle)}
-                  icon={vehicle.vehicleType === 'motorcycle' ? Icons.bicycleOutline : Icons.carOutline}
+                  icon={Icons.carOutline}
                   title={vehicle.licensePlate}
                   subtitle={
                     <View>
@@ -913,7 +804,7 @@ export default function BookingScreen() {
           </StepLayout>
         )}
 
-        {/* Step 5: Pick date & time */}
+        {/* Step 4: Pick date & time */}
         {step === 'datetime' && (
           <StepLayout
             title="Chọn ngày và giờ"
@@ -1193,7 +1084,7 @@ export default function BookingScreen() {
           </StepLayout>
         )}
 
-        {/* Step 6: Confirm */}
+        {/* Step 5: Confirm */}
         {step === 'confirm' && (
           <StepLayout
             title="Xác nhận đặt lịch"
@@ -1201,8 +1092,6 @@ export default function BookingScreen() {
             icon={Icons.checkmark}
           >
             <Card style={{ backgroundColor: colors.surface, padding: spacing.md }}>
-              <SummaryRow icon={Icons.sparkle} label="Dịch vụ" value={category ? labelForCategory(category) : ''} />
-              <SummaryDivider />
               <SummaryRow icon={Icons.locationOutline} label="Chi nhánh" value={selectedBranch?.name} />
               <SummaryDivider />
               <SummaryRow icon={Icons.sparkle} label="Gói dịch vụ" value={selectedPackage?.name} />
@@ -1380,12 +1269,6 @@ export default function BookingScreen() {
       </View>
     </ScreenContainer>
   );
-}
-
-function labelForCategory(c: PackageCategory): string {
-  if (c === 'external') return 'Rửa ngoài';
-  if (c === 'internal') return 'Dọn nội thất';
-  return 'Rửa toàn diện';
 }
 
 interface StepLayoutProps {
@@ -1661,9 +1544,6 @@ const styles = StyleSheet.create({
   },
   stepHeaderText: { flex: 1 },
   // Cards
-  categoryCard: {
-    marginBottom: spacing.sm,
-  },
   optionCard: {
     marginBottom: spacing.sm,
   },

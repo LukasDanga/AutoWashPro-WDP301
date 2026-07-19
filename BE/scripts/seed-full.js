@@ -165,7 +165,7 @@ async function main() {
     { name: 'Rửa xe cơ bản',     desc: 'Rửa ngoại thất toàn bộ, lau khô và vệ sinh bánh xe.',             price: 100000, dur: 30, cat: 'external',    vehicles: ['sedan','suv','van','pickup'] },
     { name: 'Rửa xe + Phủ Nano',  desc: 'Rửa ngoại thất chuyên sâu và phủ bảo vệ nano, bảo vệ sơn 3 tháng.', price: 250000, dur: 50, cat: 'external',    vehicles: ['sedan','suv','pickup'] },
     { name: 'Vệ sinh toàn diện',  desc: 'Chăm sóc xe toàn bộ: ngoại thất, nội thất và khoang máy.',          price: 380000, dur: 90, cat: 'full',        vehicles: ['sedan','suv','pickup','van'] },
-    { name: 'Rửa xe máy',         desc: 'Rửa xe máy sạch bóng, lau khô và kiểm tra sên xe.',                 price: 50000,  dur: 20, cat: 'external',    vehicles: ['motorcycle'] },
+    { name: 'Đánh bóng nhanh',    desc: 'Đánh bóng ngoại thất nhanh, phục hồi độ bóng sơn xe.',               price: 180000, dur: 40, cat: 'external',    vehicles: ['sedan','suv','pickup','van'] },
   ];
 
   const packages = [];
@@ -186,13 +186,13 @@ async function main() {
     { userId: custIds[0], plate: '51A-12345', type: 'sedan',      brand: 'Toyota',   model: 'Camry 2.0',   color: 'Trắng',      year: 2021, isDefault: true  },
     { userId: custIds[0], plate: '51A-99999', type: 'suv',        brand: 'Toyota',   model: 'Fortuner',    color: 'Bạc',        year: 2023, isDefault: false },
     { userId: custIds[1], plate: '59B-67890', type: 'suv',        brand: 'Honda',    model: 'CR-V 1.5T',   color: 'Đen',        year: 2022, isDefault: true  },
-    { userId: custIds[1], plate: '59B-11199', type: 'motorcycle', brand: 'Honda',    model: 'Wave Alpha',  color: 'Xanh',       year: 2020, isDefault: false },
+    { userId: custIds[1], plate: '59B-11199', type: 'sedan',      brand: 'Toyota',   model: 'Vios 1.5G',   color: 'Bạc',        year: 2021, isDefault: false },
     { userId: custIds[2], plate: '51C-11111', type: 'pickup',     brand: 'Ford',     model: 'Ranger XLS',  color: 'Bạc',        year: 2023, isDefault: true  },
     { userId: custIds[2], plate: '51C-22222', type: 'suv',        brand: 'Mazda',    model: 'CX-5 2.0',    color: 'Đỏ',         year: 2022, isDefault: false },
     { userId: custIds[3], plate: '51D-22222', type: 'sedan',      brand: 'Mercedes', model: 'C200 AMG',    color: 'Trắng ngọc', year: 2024, isDefault: true  },
     { userId: custIds[3], plate: '51D-33333', type: 'suv',        brand: 'BMW',      model: 'X3 20d',      color: 'Xanh rêu',   year: 2024, isDefault: false },
-    { userId: custIds[4], plate: '79E-33333', type: 'motorcycle', brand: 'Yamaha',   model: 'Exciter 155', color: 'Vàng đen',   year: 2023, isDefault: true  },
-    { userId: custIds[4], plate: '79E-44444', type: 'motorcycle', brand: 'Honda',    model: 'SH 160i',     color: 'Đỏ',         year: 2025, isDefault: false },
+    { userId: custIds[4], plate: '79E-33333', type: 'sedan',      brand: 'Hyundai',  model: 'Grand i10',   color: 'Xanh dương', year: 2023, isDefault: true  },
+    { userId: custIds[4], plate: '79E-44444', type: 'sedan',      brand: 'Kia',      model: 'Morning',     color: 'Đỏ',         year: 2025, isDefault: false },
   ];
 
   await Vehicle.insertMany(vehicleData.map((v, i) => ({
@@ -301,7 +301,7 @@ async function main() {
     { userId: custIds[2], branchId: branchIds[0], packageId: pkgIds[1], vehicleId: vehicleIds[4], bookingDate: todayDate, startTime: '09:00', endTime: '09:50', status: 'in_progress', bookingType: 'single', priority: 3, finalPrice: 250000, paymentStatus: 'unpaid', checkInTime: todayAt(9) },
     { userId: custIds[1], branchId: branchIds[0], packageId: pkgIds[2], vehicleId: vehicleIds[2], bookingDate: todayDate, startTime: '10:00', endTime: '11:30', status: 'checked_in', bookingType: 'single', priority: 2, finalPrice: 330000, paymentStatus: 'unpaid', discountAmount: 50000, voucherCode: 'SUMMER50K', checkInTime: todayAt(10) },
     { userId: custIds[0], branchId: branchIds[0], packageId: pkgIds[0], vehicleId: vehicleIds[0], bookingDate: todayDate, startTime: '11:00', endTime: '11:30', status: 'pending', bookingType: 'single', priority: 1, finalPrice: 100000, paymentStatus: 'unpaid' },
-    { userId: custIds[4], branchId: branchIds[0], packageId: pkgIds[3], vehicleId: vehicleIds[8], bookingDate: todayDate, startTime: '13:00', endTime: '13:20', status: 'pending', bookingType: 'single', priority: 1, finalPrice: 50000, paymentStatus: 'unpaid' },
+    { userId: custIds[4], branchId: branchIds[0], packageId: pkgIds[3], vehicleId: vehicleIds[8], bookingDate: todayDate, startTime: '13:00', endTime: '13:40', status: 'pending', bookingType: 'single', priority: 1, finalPrice: 180000, paymentStatus: 'unpaid' },
     { userId: custIds[3], branchId: branchIds[0], packageId: pkgIds[1], vehicleId: vehicleIds[6], bookingDate: todayDate, startTime: '14:00', endTime: '14:50', status: 'pending', bookingType: 'slot_pack_usage', slotPackId: spIds[3], priority: 4, finalPrice: 0, paymentStatus: 'paid' },
 
     // ── TODAY — Branch 2 ──
@@ -387,8 +387,8 @@ async function main() {
     { userId: custIds[3], points: 2000, type: 'earned',   description: 'Tích điểm Diamond x2.0',        createdAt: daysAgo(50) },
     { userId: custIds[3], points: 3000, type: 'earned',   description: 'Tích điểm Diamond x2.0',        createdAt: daysAgo(30) },
     { userId: custIds[3], points: -500, type: 'redeemed', description: 'Đổi voucher VIP Diamond',       createdAt: daysAgo(15) },
-    { userId: custIds[4], points: 30,   type: 'earned',   description: 'Tích điểm từ rửa xe máy',       createdAt: daysAgo(5) },
-    { userId: custIds[4], points: 50,   type: 'earned',   description: 'Tích điểm từ rửa xe máy',       createdAt: daysAgo(2) },
+    { userId: custIds[4], points: 30,   type: 'earned',   description: 'Tích điểm từ đặt lịch rửa xe',       createdAt: daysAgo(5) },
+    { userId: custIds[4], points: 50,   type: 'earned',   description: 'Tích điểm từ đặt lịch rửa xe',       createdAt: daysAgo(2) },
   ]);
 
   // ── 10. NOTIFICATIONS ────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ async function main() {
     { userId: custIds[1], title: 'Thanh toán MoMo', message: 'Đã nhận 250.000đ qua MoMo.', type: 'payment_confirmed', isRead: false, createdAt: daysAgo(1) },
     { userId: custIds[2], title: 'Phản hồi từ chi nhánh', message: 'AutoWash Thủ Đức vừa trả lời đánh giá của bạn.', type: 'system', isRead: false, createdAt: new Date() },
     { userId: custIds[3], title: 'Voucher mới cho bạn', message: 'Bạn có voucher DIAMOND20 giảm 20%!', type: 'voucher', isRead: true, createdAt: daysAgo(2) },
-    { userId: custIds[4], title: 'Đặt lịch thành công', message: 'Lịch rửa xe máy Exciter lúc 13:00 đã xác nhận.', type: 'booking_confirmed', isRead: false, createdAt: new Date() },
+    { userId: custIds[4], title: 'Đặt lịch thành công', message: 'Lịch đánh bóng xe lúc 13:00 đã xác nhận.', type: 'booking_confirmed', isRead: false, createdAt: new Date() },
     { userId: mgrIds[0], title: 'Có lịch hôm nay', message: 'Nhiều lịch đặt đang chờ xử lý tại Q1.', type: 'booking_created', isRead: false, createdAt: new Date() },
     { userId: mgrIds[1], title: 'Đánh giá mới', message: 'Lê Văn Cường vừa đánh giá 4⭐.', type: 'system', isRead: false, createdAt: new Date() },
   ]);

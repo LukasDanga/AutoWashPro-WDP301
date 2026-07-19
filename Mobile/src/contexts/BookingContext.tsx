@@ -2,19 +2,18 @@
  * AutoWashPro Booking Context
  *
  * Shared form state for the booking flow so each step can mount/unmount
- * without losing user progress. Persists lightweight selections (category,
- * package, branch, vehicle, voucher) to AsyncStorage so a user who backs out
+ * without losing user progress. Persists lightweight selections (branch,
+ * package, vehicle, voucher) to AsyncStorage so a user who backs out
  * accidentally can resume where they left off.
  *
- * Flow (service-first):
- *   category → package → branch → vehicle → datetime → confirm
+ * Flow (branch-first — mirrors the web landing page BookingWidget):
+ *   branch → package → vehicle → datetime → confirm
  *
  * UX notes:
- *  - the "category" step narrows the package list to what the user actually
- *    wants BEFORE they commit, so branch filtering can show only branches
- *    that offer that package (no dead-ends).
- *  - resetting is explicit (resetAll / resetFrom) so deep navigation never
- *    silently drops selections.
+ *  - the branch is picked FIRST so the package list can be scoped to exactly
+ *    what that branch offers (no dead-ends, no PACKAGE_BRANCH_MISMATCH).
+ *  - resetting is explicit (resetAll) so deep navigation never silently
+ *    drops selections.
  */
 import React, {
   createContext,
@@ -26,12 +25,11 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Branch, Package, Vehicle, PackageCategory } from '../types';
+import type { Branch, Package, Vehicle } from '../types';
 
 export type BookingStep =
-  | 'category'
-  | 'package'
   | 'branch'
+  | 'package'
   | 'vehicle'
   | 'datetime'
   | 'confirm';
@@ -45,7 +43,6 @@ export type VoucherState = {
 };
 
 type PersistedDraft = {
-  category?: PackageCategory | null;
   selectedPackage?: Package | null;
   selectedBranch?: Branch | null;
   selectedVehicle?: Vehicle | null;
@@ -63,8 +60,8 @@ interface BookingContextValue {
   resetAll: () => void;
 
   // Selections
-  category: PackageCategory | null;
-  setCategory: (c: PackageCategory | null) => void;
+  selectedBranch: Branch | null;
+  setSelectedBranch: (b: Branch | null) => void;
 
   selectedPackage: Package | null;
   setSelectedPackage: (p: Package | null) => void;
@@ -72,9 +69,6 @@ interface BookingContextValue {
   // date, time). Use this when re-hydrating or auto-swapping to a
   // branch-scoped variant of the same product.
   replaceSelectedPackage: (p: Package | null) => void;
-
-  selectedBranch: Branch | null;
-  setSelectedBranch: (b: Branch | null) => void;
 
   selectedVehicle: Vehicle | null;
   setSelectedVehicle: (v: Vehicle | null) => void;
@@ -95,15 +89,14 @@ interface BookingContextValue {
 }
 
 const STEP_ORDER: BookingStep[] = [
-  'category',
-  'package',
   'branch',
+  'package',
   'vehicle',
   'datetime',
   'confirm',
 ];
 
-const STORAGE_KEY = '@AutoWashPro:bookingDraft:v1';
+const STORAGE_KEY = '@AutoWashPro:bookingDraft:v2';
 
 const BookingContext = createContext<BookingContextValue | undefined>(undefined);
 
@@ -114,14 +107,13 @@ interface BookingProviderProps {
 
 export const BookingProvider: React.FC<BookingProviderProps> = ({
   children,
-  initialStep = 'category',
+  initialStep = 'branch',
 }) => {
   const [step, setStepState] = useState<BookingStep>(initialStep);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  const [category, setCategoryState] = useState<PackageCategory | null>(null);
-  const [selectedPackage, setSelectedPackageState] = useState<Package | null>(null);
   const [selectedBranch, setSelectedBranchState] = useState<Branch | null>(null);
+  const [selectedPackage, setSelectedPackageState] = useState<Package | null>(null);
   const [selectedVehicle, setSelectedVehicleState] = useState<Vehicle | null>(null);
   const [selectedDate, setSelectedDateState] = useState<string | null>(null);
   const [selectedTime, setSelectedTimeState] = useState<string | null>(null);
@@ -138,9 +130,8 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw && !cancelled) {
           const draft = JSON.parse(raw) as PersistedDraft;
-          if (draft.category) setCategoryState(draft.category);
-          if (draft.selectedPackage) setSelectedPackageState(draft.selectedPackage);
           if (draft.selectedBranch) setSelectedBranchState(draft.selectedBranch);
+          if (draft.selectedPackage) setSelectedPackageState(draft.selectedPackage);
           if (draft.selectedVehicle) setSelectedVehicleState(draft.selectedVehicle);
           if (draft.selectedDate) setSelectedDateState(draft.selectedDate);
           if (draft.selectedTime) setSelectedTimeState(draft.selectedTime);
@@ -161,9 +152,8 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
   useEffect(() => {
     if (!isHydrated) return;
     const draft: PersistedDraft = {
-      category,
-      selectedPackage,
       selectedBranch,
+      selectedPackage,
       selectedVehicle,
       selectedDate,
       selectedTime,
@@ -177,9 +167,8 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
     );
   }, [
     isHydrated,
-    category,
-    selectedPackage,
     selectedBranch,
+    selectedPackage,
     selectedVehicle,
     selectedDate,
     selectedTime,
@@ -205,30 +194,29 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
   }, []);
 
   const resetAll = useCallback(() => {
-    setCategoryState(null);
-    setSelectedPackageState(null);
     setSelectedBranchState(null);
+    setSelectedPackageState(null);
     setSelectedVehicleState(null);
     setSelectedDateState(null);
     setSelectedTimeState(null);
     setVoucherState(null);
-    setStepState('category');
+    setStepState('branch');
     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   }, []);
 
-  const setCategory = useCallback((c: PackageCategory | null) => {
-    setCategoryState(c);
-    // Changing category invalidates downstream selections
+  const setSelectedBranch = useCallback((b: Branch | null) => {
+    setSelectedBranchState(b);
+    // Packages are branch-scoped, so changing branch invalidates the
+    // package (and therefore the date/time slots that depend on it).
     setSelectedPackageState(null);
-    setSelectedBranchState(null);
     setSelectedDateState(null);
     setSelectedTimeState(null);
   }, []);
 
   const setSelectedPackage = useCallback((p: Package | null) => {
     setSelectedPackageState(p);
-    // Switching package may change which branches offer it; reset branch to force re-pick
-    setSelectedBranchState(null);
+    // Switching package changes which slots are offered; reset date/time.
+    // Branch is upstream and stays selected.
     setSelectedDateState(null);
     setSelectedTimeState(null);
   }, []);
@@ -237,12 +225,6 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
     // Same as setSelectedPackageState — used by callers that already know
     // the downstream selections are still valid (e.g. branch-scoped swap).
     setSelectedPackageState(p);
-  }, []);
-
-  const setSelectedBranch = useCallback((b: Branch | null) => {
-    setSelectedBranchState(b);
-    setSelectedDateState(null);
-    setSelectedTimeState(null);
   }, []);
 
   const setSelectedVehicle = useCallback((v: Vehicle | null) => {
@@ -258,12 +240,10 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
 
   const canGoNext = useCallback((): boolean => {
     switch (step) {
-      case 'category':
-        return !!category;
-      case 'package':
-        return !!selectedPackage;
       case 'branch':
         return !!selectedBranch;
+      case 'package':
+        return !!selectedPackage;
       case 'vehicle':
         return !!selectedVehicle;
       case 'datetime':
@@ -273,7 +253,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       default:
         return false;
     }
-  }, [step, category, selectedPackage, selectedBranch, selectedVehicle, selectedDate, selectedTime]);
+  }, [step, selectedBranch, selectedPackage, selectedVehicle, selectedDate, selectedTime]);
 
   const stepIndex = STEP_ORDER.indexOf(step);
 
@@ -284,13 +264,11 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       goNext,
       goBack,
       resetAll,
-      category,
-      setCategory,
+      selectedBranch,
+      setSelectedBranch,
       selectedPackage,
       setSelectedPackage,
       replaceSelectedPackage,
-      selectedBranch,
-      setSelectedBranch,
       selectedVehicle,
       setSelectedVehicle,
       selectedDate,
@@ -308,13 +286,11 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       goNext,
       goBack,
       resetAll,
-      category,
-      setCategory,
+      selectedBranch,
+      setSelectedBranch,
       selectedPackage,
       setSelectedPackage,
       replaceSelectedPackage,
-      selectedBranch,
-      setSelectedBranch,
       selectedVehicle,
       setSelectedVehicle,
       selectedDate,

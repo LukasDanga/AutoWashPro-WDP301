@@ -35,7 +35,7 @@ const authValidators = {
 const vehicleValidators = {
   create: [
     body('licensePlate').trim().notEmpty().withMessage('License plate is required').isLength({ max: 20 }),
-    body('vehicleType').isIn(['sedan', 'suv', 'pickup', 'van', 'motorcycle']).withMessage('Invalid vehicle type'),
+    body('vehicleType').isIn(['sedan', 'suv', 'pickup', 'van']).withMessage('Invalid vehicle type'),
     body('brand').trim().notEmpty().withMessage('Brand is required').isLength({ max: 50 }),
     body('model').optional().trim().isLength({ max: 50 }),
     body('color').trim().notEmpty().withMessage('Color is required').isLength({ max: 30 }),
@@ -45,7 +45,7 @@ const vehicleValidators = {
   update: [
     param('id').isMongoId().withMessage('Invalid vehicle ID'),
     body('licensePlate').optional().trim().isLength({ max: 20 }),
-    body('vehicleType').optional().isIn(['sedan', 'suv', 'pickup', 'van', 'motorcycle']),
+    body('vehicleType').optional().isIn(['sedan', 'suv', 'pickup', 'van']),
     body('brand').optional().trim(),
     body('color').optional().trim(),
     body('isDefault').optional().isBoolean(),

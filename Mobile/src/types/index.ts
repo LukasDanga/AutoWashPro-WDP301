@@ -39,7 +39,7 @@ export interface AuthResponse {
 }
 
 // ============ Vehicle Types ============
-export type VehicleType = 'sedan' | 'suv' | 'pickup' | 'van' | 'motorcycle';
+export type VehicleType = 'sedan' | 'suv' | 'pickup' | 'van';
 
 export interface Vehicle {
   _id: string;

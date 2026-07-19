@@ -69,7 +69,7 @@ const BRANCH_PACKAGES = [
     price: 99000,
     duration: 30,
     category: 'external',
-    vehicleTypes: ['sedan', 'suv', 'pickup', 'van', 'motorcycle'],
+    vehicleTypes: ['sedan', 'suv', 'pickup', 'van'],
     status: 'active',
     subServices: [
       { name: 'Phủ sáp bóng (Wax)', price: 100000, duration: 20, isOptional: true },
