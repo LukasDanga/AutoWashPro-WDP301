@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   Text,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import {
@@ -41,9 +41,9 @@ import { typography } from '../../src/theme/typography';
 import {
   spacing,
   borderRadius,
-  shadows,
 } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
+import { consumePendingVoucher } from '../../src/utils/voucherStore';
 import type {
   Branch,
   Package as ServicePackage,
@@ -107,6 +107,9 @@ export default function RecurringBookingScreen() {
   const [customWeeks, setCustomWeeks] = useState<string>('4');
 
   const [voucherCode, setVoucherCode] = useState('');
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [paymentOption, setPaymentOption] = useState<'deposit' | 'full'>('deposit');
+
   const [note, setNote] = useState('');
 
   // Slots for selected day-of-week (first slot preview)
@@ -123,15 +126,45 @@ export default function RecurringBookingScreen() {
 
   const filteredPackages = useMemo(
     () =>
-      packages.filter(
-        (pkg) => !pkg.branchId || pkg.branchId === selectedBranch?._id,
-      ),
+      packages.filter((pkg) => {
+        if (!pkg.branchId) return true;
+        const bid =
+          typeof pkg.branchId === 'object' && pkg.branchId !== null
+            ? (pkg.branchId as any)._id || (pkg.branchId as any).id
+            : pkg.branchId;
+        return bid === selectedBranch?._id;
+      }),
     [packages, selectedBranch?._id],
   );
 
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  // Fetch branch-specific packages when branch changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!selectedBranch?._id) return;
+      try {
+        const list = await branchApi.getBranchPackages(selectedBranch._id);
+        if (cancelled || !Array.isArray(list)) return;
+        setPackages((prev) => {
+          const merged = [...prev, ...list];
+          // Dedupe by _id
+          const seen = new Set<string>();
+          return merged.filter((p) => {
+            if (seen.has(p._id)) return false;
+            seen.add(p._id);
+            return true;
+          });
+        });
+      } catch {
+        /* fall back to already-loaded catalog */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedBranch?._id]);
 
   // Fetch slots when entering recurrence step or when the chosen weekday changes.
   useEffect(() => {
@@ -317,15 +350,51 @@ export default function RecurringBookingScreen() {
     }
   };
 
+  // Build preview dates list (same logic as BE booking.service.js)
+  const buildPreviewDates = (weekdays: number[], weeksCount: number): Date[] => {
+    const dates: Date[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let w = 0; w < weeksCount; w++) {
+      for (let d = 0; d < 7; d++) {
+        const candidate = new Date(today);
+        candidate.setDate(today.getDate() + w * 7 + d);
+        if (weekdays.includes(candidate.getDay()) && candidate >= today) {
+          dates.push(new Date(candidate));
+        }
+      }
+    }
+    return dates;
+  };
+
+  const previewDates = useMemo(
+    () => buildPreviewDates(selectedWeekdays, getEffectiveWeeks()),
+    [selectedWeekdays, getEffectiveWeeks()]
+  );
+
   // Returns the effective weeks value (always clamped to 1..12).
-  const getEffectiveWeeks = (): number => {
+  function getEffectiveWeeks(): number {
     if (weeksMode === 'custom') {
       const n = parseInt(customWeeks, 10);
       if (isNaN(n) || n < 1) return 0;
       return Math.min(12, n);
     }
     return weeks;
-  };
+  }
+
+  // Read voucher selection when returning from voucher-picker screen
+  // Apply discount optimistically (like landing page) — BE will validate on submit
+  useFocusEffect(
+    useCallback(() => {
+      const pending = consumePendingVoucher();
+      if (pending) {
+        setVoucherCode(pending.code);
+        setVoucherDiscount(pending.discount);
+      }
+    }, []),
+  );
+
+  const voucherSavings = voucherDiscount;
 
   const handleSubmit = async () => {
     if (
@@ -356,53 +425,19 @@ export default function RecurringBookingScreen() {
         },
       );
 
-      toast.show({
-        variant: 'success',
-        message: `Đã tạo ${result.totalCreated} lịch hẹn${
-          result.totalFailed > 0
-            ? `, ${result.totalFailed} ngày bị bỏ qua do trùng slot`
-            : ''
-        }.`,
-      });
-
-      // Cọc gộp cho cả nhóm định kỳ: BE gắn toàn bộ deposit vào buổi đầu
-      // (isRecurringFirst). Nếu buổi đầu tạo thất bại (trùng slot), thử
-      // buổi kế tiếp trong nhóm đã tạo thành công để lấy depositAmount.
+      // Navigate to payment checkout with the first deposit booking
       const depositBooking = result.created.find(
         (b: any) => (b.depositAmount ?? 0) > 0,
       ) as any;
-      const depositAmt = depositBooking?.depositAmount ?? 0;
       const depositBookingId = depositBooking?._id ?? result.created[0]?._id;
 
-      AlertDialog.show({
-        title: 'Đặt lịch định kỳ thành công!',
-        message:
-          `Đã tạo ${result.totalCreated} lịch hẹn` +
-          (result.totalFailed > 0 ? `, ${result.totalFailed} ngày bị bỏ qua do trùng slot` : '') +
-          (depositAmt > 0
-            ? `\n\nCọc gộp cho cả nhóm: ${formatCurrency(depositAmt)}.\nĐặt cọc ngay để giữ chỗ cho tất cả các buổi.`
-            : '\n\nĐơn không yêu cầu đặt cọc.'),
-        variant: 'success',
-        actions: [
-          {
-            text: 'Về lịch sử',
-            onPress: () => router.replace('/(tabs)/history'),
-          },
-          {
-            text: depositAmt > 0 ? 'Đặt cọc ngay' : 'Xem chi tiết',
-            onPress: () => {
-              if (!depositBookingId) {
-                router.replace('/(tabs)/history');
-                return;
-              }
-              const target = depositAmt > 0
-                ? `/payment/select?bookingId=${depositBookingId}&type=deposit`
-                : `/booking/${depositBookingId}`;
-              router.replace(target as any);
-            },
-          },
-        ],
-      });
+      if (depositBookingId) {
+        router.replace(
+          `/payment/checkout?bookingId=${depositBookingId}&type=deposit` as any,
+        );
+      } else {
+        router.replace('/(tabs)/history');
+      }
     } catch (error: any) {
       const apiMessage =
         error?.response?.data?.message || error?.message || 'Không thể tạo lịch định kỳ';
@@ -800,13 +835,46 @@ export default function RecurringBookingScreen() {
           Tổng số buổi ước tính
         </AppText>
         <AppText variant="h2" color="primary">
-          {selectedWeekdays.length * getEffectiveWeeks()} buổi
+          {previewDates.length} buổi
         </AppText>
         <AppText variant="caption" color="textTertiary">
           {selectedWeekdays.length} thứ × {getEffectiveWeeks()} tuần
           {selectedTime ? ` • lúc ${selectedTime}` : ''}
         </AppText>
       </Card>
+
+      {/* Preview dates list */}
+      {previewDates.length > 0 && (
+        <Card style={styles.previewDatesCard}>
+          <AppText variant="label" color="textSecondary">
+            Lịch dự kiến ({previewDates.length} buổi)
+          </AppText>
+          <View style={styles.previewDatesList}>
+            {previewDates.slice(0, 8).map((d, i) => {
+              const weekdayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+              return (
+                <View key={i} style={styles.previewDateItem}>
+                  <Text style={styles.previewDateWeekday}>
+                    {weekdayLabels[d.getDay()]}
+                  </Text>
+                  <Text style={styles.previewDateValue}>
+                    {d.toLocaleDateString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          {previewDates.length > 8 && (
+            <AppText variant="caption" color="textTertiary" style={styles.previewMore}>
+              +{previewDates.length - 8} ngày nữa
+            </AppText>
+          )}
+        </Card>
+      )}
     </View>
   );
 
@@ -815,10 +883,11 @@ export default function RecurringBookingScreen() {
     const totalSessions = selectedWeekdays.length * effectiveWeeks;
     const pricePerSession = selectedPackage?.price || 0;
     const totalEstimate = totalSessions * pricePerSession;
+    const finalEstimate = Math.max(0, totalEstimate - voucherSavings);
     // Cọc 30% × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
     // Quy ước: gộp 1 lần thanh toán thay vì tách theo từng buổi.
     const depositRate = userTier === 'gold' || userTier === 'diamond' ? 0.3 : 0.3;
-    const depositAmount = Math.round((totalEstimate * depositRate) / 1000) * 1000;
+    const depositAmount = Math.round((finalEstimate * depositRate) / 1000) * 1000;
     const weekdayLabels = selectedWeekdays
       .map(d => WEEKDAY_OPTIONS.find(o => o.value === d)?.long)
       .filter(Boolean)
@@ -865,6 +934,37 @@ export default function RecurringBookingScreen() {
             <Text style={styles.summaryLabel}>Tổng buổi</Text>
             <Text style={styles.summaryValue}>{totalSessions} buổi</Text>
           </View>
+
+          {/* Preview dates in confirm step */}
+          {previewDates.length > 0 && (
+            <View style={styles.confirmPreviewDates}>
+              <Text style={styles.confirmPreviewTitle}>
+                Lịch dự kiến ({previewDates.length} buổi)
+              </Text>
+              {previewDates.slice(0, 8).map((d, i) => {
+                const weekdayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+                return (
+                  <View key={i} style={styles.confirmPreviewItem}>
+                    <Text style={styles.confirmPreviewWeekday}>
+                      {weekdayLabels[d.getDay()]}
+                    </Text>
+                    <Text style={styles.confirmPreviewDate}>
+                      {d.toLocaleDateString('vi-VN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                );
+              })}
+              {previewDates.length > 8 && (
+                <Text style={styles.confirmPreviewMore}>
+                  +{previewDates.length - 8} ngày nữa
+                </Text>
+              )}
+            </View>
+          )}
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Đơn giá</Text>
@@ -878,6 +978,22 @@ export default function RecurringBookingScreen() {
               {formatCurrency(totalEstimate)}
             </Text>
           </View>
+          {voucherSavings > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: '#10b981' }]}>Giảm giá voucher</Text>
+              <Text style={[styles.summaryPrice, { color: '#10b981' }]}>
+                -{formatCurrency(voucherSavings)}
+              </Text>
+            </View>
+          )}
+          {voucherSavings > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { fontWeight: '700' }]}>Thành tiền</Text>
+              <Text style={[styles.summaryPrice, { fontWeight: '700' }]}>
+                {formatCurrency(finalEstimate)}
+              </Text>
+            </View>
+          )}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Cọc trước (30%)</Text>
             <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
@@ -887,23 +1003,52 @@ export default function RecurringBookingScreen() {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Còn lại khi hoàn thành</Text>
             <Text style={styles.summaryValue}>
-              {formatCurrency(Math.max(0, totalEstimate - depositAmount))}
+              {formatCurrency(Math.max(0, finalEstimate - depositAmount))}
             </Text>
           </View>
           <AppText variant="caption" color="textTertiary" style={styles.summaryFootnote}>
             * Cọc gộp 1 lần cho cả nhóm ({totalSessions} buổi). Phần còn lại thanh toán sau buổi cuối.
-            Tổng tiền có thể giảm nếu một số ngày bị trùng slot và bị backend bỏ qua.
           </AppText>
         </Card>
 
-        <Input
-          label="Mã giảm giá (tùy chọn)"
-          placeholder="Nhập mã voucher"
-          value={voucherCode}
-          onChangeText={setVoucherCode}
-          autoCapitalize="characters"
-          containerStyle={styles.voucherInput}
-        />
+        {/* Voucher Picker — navigates to dedicated screen */}
+        <TouchableOpacity
+          style={[styles.voucherButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => {
+            router.push(
+              `/booking/voucher-picker?branchId=${selectedBranch?._id || ''}&orderAmount=${totalEstimate}`,
+            );
+          }}
+        >
+          <View style={styles.voucherButtonContent}>
+            <Text style={{ fontSize: 20, marginRight: spacing.sm }}>🏷️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.voucherButtonLabel, { color: colors.textSecondary }]}>VOUCHER & ƯU ĐÃI</Text>
+              {voucherCode ? (
+                <Text style={[styles.voucherButtonSelected, { color: colors.primary }]}>
+                  {voucherCode}{voucherDiscount > 0 ? ` — giảm ${formatCurrency(voucherDiscount)}` : ''}
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 14, color: colors.textTertiary, marginTop: 2 }}>
+                  Chọn voucher để tiết kiệm thêm
+                </Text>
+              )}
+            </View>
+            {voucherCode ? (
+              <TouchableOpacity
+                onPress={() => { setVoucherCode(''); setVoucherDiscount(0); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ marginLeft: spacing.sm }}
+              >
+                <Text style={{ fontSize: 20, color: colors.textTertiary }}>✕</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={{ fontSize: 22, color: colors.textTertiary, marginLeft: spacing.sm }}>›</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+
+
 
         <Input
           label="Ghi chú (tùy chọn)"
@@ -1190,6 +1335,38 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     backgroundColor: colors.infoLight,
   },
+  previewDatesCard: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceDark,
+  },
+  previewDatesList: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  previewDateItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+  },
+  previewDateWeekday: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  previewDateValue: {
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  previewMore: {
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   summaryCard: {
     marginBottom: spacing.md,
   },
@@ -1222,6 +1399,40 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontStyle: 'italic',
   },
+  confirmPreviewDates: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  confirmPreviewTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  confirmPreviewItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+    paddingHorizontal: spacing.xs,
+  },
+  confirmPreviewWeekday: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  confirmPreviewDate: {
+    fontSize: 12,
+    color: colors.textPrimary,
+  },
+  confirmPreviewMore: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
   voucherInput: {
     marginTop: spacing.md,
   },
@@ -1236,5 +1447,25 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: spacing.xxl,
+  },
+  voucherButton: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  voucherButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voucherButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  voucherButtonSelected: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });

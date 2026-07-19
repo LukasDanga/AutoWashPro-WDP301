@@ -64,12 +64,23 @@ export const getPayment = async (id: string): Promise<Payment> => {
   return response.data;
 };
 
+// Simulate payment confirmation (for bank transfer / demo)
+export const simulatePayment = async (data: {
+  transactionId: string;
+  gatewayTransactionId?: string;
+  success?: boolean;
+}): Promise<any> => {
+  const response = await apiClient.post('/payments/simulate', data);
+  return response.data;
+};
+
 // Export all payment API functions
 export const paymentApi = {
   createPayment,
   getMyPayments,
   getPaymentByBooking,
   getPayment,
+  simulatePayment,
 };
 
 export default paymentApi;
