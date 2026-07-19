@@ -74,7 +74,7 @@ exports.getUserVouchers = catchAsync(async (req, res) => {
 });
 
 exports.getAvailableVouchers = catchAsync(async (req, res) => {
-  const result = await voucherService.getAvailableVouchersForUser(req.userId, req.query.branchId);
+  const result = await voucherService.getAvailableVouchersForUser(req.userId, req.query.branchId, req.query);
   success(res, result, 'Available vouchers retrieved');
 });
 
