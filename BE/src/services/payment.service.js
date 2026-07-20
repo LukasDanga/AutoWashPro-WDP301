@@ -9,6 +9,26 @@ const loyaltyService = require('./loyalty.service');
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo'];
 
+/**
+ * Khi thanh toán TOÀN BỘ (full) cho 1 booking thuộc nhóm ĐỊNH KỲ, tiền đã bao gồm
+ * giá của tất cả các buổi trong nhóm (xem cách tính fullPrice ở createPayment).
+ * Vì vậy phải đánh dấu luôn các buổi còn lại là 'paid' — nếu không, khách đã trả
+ * đủ tiền online vẫn bị hệ thống coi là chưa thanh toán ở các buổi sau.
+ */
+const markRecurringSiblingsPaid = async (booking, paymentMethod, session) => {
+  if (booking.bookingType !== 'recurring' || !booking.recurringGroupId) return;
+  const q = Booking.updateMany(
+    {
+      recurringGroupId: booking.recurringGroupId,
+      _id: { $ne: booking._id },
+      status: { $ne: 'cancelled' },
+    },
+    { paymentStatus: 'paid', paidAt: new Date(), paymentMethod, depositPaid: true }
+  );
+  if (session) q.session(session);
+  await q;
+};
+
 const generateQrDataUrl = async (transactionId, amount, method, paymentType) => {
   let content;
   if (method === 'bank') {
@@ -72,7 +92,26 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
-  const fullPrice = booking.finalPrice ?? booking.packageId.price;
+  // Với booking ĐỊNH KỲ (recurring): tiền cọc được gộp toàn nhóm vào buổi đầu
+  // (isRecurringFirst) còn `finalPrice` của MỖI booking chỉ là giá 1 buổi. Vì vậy
+  // khi tính "tổng tiền phải trả" (full) ta phải CỘNG finalPrice của TẤT CẢ buổi
+  // trong nhóm — nếu chỉ lấy booking.finalPrice sẽ thu nhầm tiền của 1 buổi.
+  let fullPrice = booking.finalPrice ?? booking.packageId.price;
+  if (booking.bookingType === 'recurring' && booking.recurringGroupId) {
+    const groupBookings = await Booking.find({
+      recurringGroupId: booking.recurringGroupId,
+      status: { $ne: 'cancelled' },
+    })
+      .select('finalPrice packageId')
+      .populate('packageId', 'price');
+    if (groupBookings.length > 0) {
+      fullPrice = groupBookings.reduce(
+        (sum, b) => sum + (b.finalPrice ?? b.packageId?.price ?? 0),
+        0
+      );
+    }
+  }
+
   const deposit = booking.depositAmount || 0;
 
   let amount;
@@ -83,6 +122,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     amount = overrideAmount || deposit;
     isDeposit = true;
   } else {
+    // Full: thu phần còn lại nếu đã cọc, ngược lại thu toàn bộ (đã bao gồm cả nhóm nếu recurring)
     amount = booking.depositPaid ? Math.max(0, fullPrice - deposit) : fullPrice;
   }
 
@@ -147,6 +187,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method },
           { session }
         );
+        await markRecurringSiblingsPaid(booking, method, session);
         await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
         await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
@@ -277,6 +318,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
     } else {
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+      await markRecurringSiblingsPaid(booking, payment.method, session);
       await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
       await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
       sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
@@ -374,6 +416,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
       } else {
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+        await markRecurringSiblingsPaid(booking, payment.method, session);
         await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
