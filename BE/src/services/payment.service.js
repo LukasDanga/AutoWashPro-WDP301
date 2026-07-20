@@ -9,15 +9,16 @@ const loyaltyService = require('./loyalty.service');
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo'];
 
-const generateQrDataUrl = async (transactionId, amount, method) => {
+const generateQrDataUrl = async (transactionId, amount, method, paymentType) => {
   let content;
   if (method === 'bank') {
     const bankId = process.env.SEPAY_BANK_ID;
     const acc = process.env.SEPAY_BANK_ACCOUNT;
+    const prefix = paymentType === 'full' ? 'THANH TOAN' : 'DAT COC';
     if (bankId && acc) {
-      return `https://qr.sepay.vn/img?bank=${bankId}&acc=${acc}&amount=${amount}&des=${transactionId}`;
+      return `https://qr.sepay.vn/img?bank=${bankId}&acc=${acc}&amount=${amount}&des=${prefix} ${transactionId}`;
     }
-    content = `AUTOWASH\nMã GD: ${transactionId}\nSố tiền: ${amount.toLocaleString('vi-VN')}đ`;
+    content = `AUTOWASH ${prefix}\nMã GD: ${transactionId}\nSố tiền: ${amount.toLocaleString('vi-VN')}đ`;
     return QRCode.toDataURL(content, { width: 300, margin: 1 });
   }
   return QRCode.toDataURL('Invalid format', { width: 300, margin: 1 });
@@ -95,7 +96,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   const existingPending = await Payment.findOne({ bookingId, status: 'pending' });
   if (existingPending && method !== 'cash') {
     if (method === 'bank' && isDeposit && !existingPending.qrCode) {
-      existingPending.qrCode = await generateQrDataUrl(existingPending.transactionId, amount, method);
+      existingPending.qrCode = await generateQrDataUrl(existingPending.transactionId, amount, method, paymentType);
       await existingPending.save();
     }
     return existingPending;
@@ -162,7 +163,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
   // Bank: tạo QR code (deposit hoặc full)
   if (method === 'bank') {
-    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method);
+    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method, paymentType);
   }
   // VNPay / MoMo: không cần QR, trả về payment record để FE gọi payment service tạo URL
   await payment.save();
