@@ -2190,7 +2190,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       </svg>
                     </div>
                     <h3 className="text-xl font-bold text-slate-800">Chuyển khoản ngân hàng</h3>
-                    <p className="text-slate-400 text-xs mt-1">Quét mã QR bằng app ngân hàng bất kỳ</p>
+                    <p className="text-slate-400 text-xs mt-1">Quét mã QR hoặc chuyển khoản thủ công</p>
                   </div>
 
                   <div className="px-8 pb-2 flex justify-center">
@@ -2210,6 +2210,41 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         }
                       </div>
                     </div>
+
+                    {/* Thông tin tài khoản thụ hưởng */}
+                    <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                      <div className="p-3 flex items-center justify-between">
+                        <span className="text-xs text-slate-400 font-semibold">Ngân hàng</span>
+                        <span className="text-sm font-bold text-slate-700">{depositPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
+                      </div>
+                      <div className="p-3 flex items-center justify-between">
+                        <span className="text-xs text-slate-400 font-semibold">Số tài khoản</span>
+                        <span className="text-sm font-bold text-slate-700 font-mono tracking-wider">{depositPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                      </div>
+                      <div className="p-3 flex items-center justify-between">
+                        <span className="text-xs text-slate-400 font-semibold">Chủ tài khoản</span>
+                        <span className="text-sm font-bold text-slate-700">{depositPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
+                      </div>
+                      <div className="p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-400 font-semibold">Nội dung chuyển khoản</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(depositPayment.bankInfo?.transferContent || `WASHPRO ${depositPayment.transactionId}`);
+                              alert('Đã copy nội dung CK!');
+                            }}
+                            className="text-[10px] font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                        <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
+                          {depositPayment.bankInfo?.transferContent || `WASHPRO ${depositPayment.transactionId}`}
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
                       <span className="text-xs text-slate-400 font-semibold">Mã giao dịch</span>
                       <span className="text-sm font-bold text-slate-700 font-mono">{depositPayment.transactionId}</span>
