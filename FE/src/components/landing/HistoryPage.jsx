@@ -66,6 +66,7 @@ export default function HistoryPage({ onBack, apiBase, token }) {
 
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [sort, setSort] = useState('-createdAt'); // Mới nhất default
@@ -107,6 +108,12 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   const [showCancelRecurringConfirm, setShowCancelRecurringConfirm] = useState(false);
   const [cancelRecurringTarget, setCancelRecurringTarget] = useState(null);
 
+  // Recurring group modal
+  const [showRecurringGroupModal, setShowRecurringGroupModal] = useState(false);
+  const [recurringGroupTarget, setRecurringGroupTarget] = useState(null);
+  const [recurringGroupBookings, setRecurringGroupBookings] = useState([]);
+  const [recurringGroupLoading, setRecurringGroupLoading] = useState(false);
+
   // Rebook modal
   const [showRebookModal, setShowRebookModal] = useState(false);
   const [rebookTarget, setRebookTarget] = useState(null);
@@ -120,16 +127,18 @@ export default function HistoryPage({ onBack, apiBase, token }) {
     showToast(message, type);
   }
 
-  const doFetch = useCallback((kw, st, df, dt, pg, so) => {
+  const doFetch = useCallback((kw, st, tp, df, dt, pg, so, gbr) => {
     setLoading(true);
     const params = new URLSearchParams();
     params.set('page', pg);
     params.set('limit', limit);
     if (kw.trim()) params.set('keyword', kw.trim());
     if (st) params.set('status', st);
+    if (tp) params.set('bookingType', tp);
     if (df) params.set('dateFrom', df);
     if (dt) params.set('dateTo', dt);
     if (so) params.set('sort', so);
+    if (gbr) params.set('groupByRecurring', 'true');
 
     const url = `${apiBase || API_BASE}/bookings/my?${params.toString()}`;
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -146,11 +155,12 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   useEffect(() => {
     if (!token) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const gbr = viewMode === 'list';
     debounceRef.current = setTimeout(() => {
-      doFetch(keyword, statusFilter, dateFrom, dateTo, page, sort);
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [keyword, statusFilter, dateFrom, dateTo, page, sort, token, doFetch]);
+  }, [keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode, token, doFetch]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -176,16 +186,44 @@ export default function HistoryPage({ onBack, apiBase, token }) {
     }
   }
 
+  const loadRecurringGroup = useCallback(async () => {
+    if (!recurringGroupTarget?.recurringGroupId) return;
+    setRecurringGroupLoading(true);
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/bookings/my?recurringGroupId=${recurringGroupTarget.recurringGroupId}&limit=100`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        const result = payload?.data || payload;
+        setRecurringGroupBookings(Array.isArray(result) ? result : (result?.bookings || []));
+      }
+    } catch (e) {
+      console.error(e);
+      setRecurringGroupBookings([]);
+    } finally {
+      setRecurringGroupLoading(false);
+    }
+  }, [recurringGroupTarget, token, apiBase]);
+
+  useEffect(() => {
+    if (showRecurringGroupModal && recurringGroupTarget) {
+      loadRecurringGroup();
+    }
+  }, [showRecurringGroupModal, recurringGroupTarget, loadRecurringGroup]);
+
   /* ── SSE: auto-refresh on notification ── */
   useSSE(token, 'notification', useCallback(() => {
-    doFetch(keyword, statusFilter, dateFrom, dateTo, page, sort);
-  }, [doFetch, keyword, statusFilter, dateFrom, dateTo, page, sort]));
+    const gbr = viewMode === 'list';
+    doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
+  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]));
 
   useSSE(token, 'my_bookings_updated', useCallback(() => {
-    doFetch(keyword, statusFilter, dateFrom, dateTo, page, sort);
-  }, [doFetch, keyword, statusFilter, dateFrom, dateTo, page, sort]));
+    const gbr = viewMode === 'list';
+    doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
+  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]));
 
-  function resetFilters() { setKeyword(''); setStatusFilter(''); setDateFrom(''); setDateTo(''); setSort('-createdAt'); setPage(1); }
+  function resetFilters() { setKeyword(''); setStatusFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setSort('-createdAt'); setPage(1); }
   function onFilterChange(setter, value) { setter(value); setPage(1); }
   function openReview(b) { setReviewTarget(b); setRating(b.rating || 0); setFeedbackText(b.feedback || ''); setShowReviewModal(true); }
 
@@ -234,7 +272,8 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
       showToastMsg('Đã hủy đơn thành công');
       setShowCancelConfirm(false); setCancelTarget(null); setCancelReason('');
-      doFetch(keyword, statusFilter, dateFrom, dateTo, page);
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) { setCancelConfirmError(e.message); }
     finally { setCancelLoading(false); }
   }
@@ -281,7 +320,8 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
       showToastMsg('Đặt lại thành công! Vui lòng kiểm tra lịch mới.');
       setShowRebookModal(false); setRebookTarget(null);
-      doFetch(keyword, statusFilter, dateFrom, dateTo, page);
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) { setRebookFormError(e.message); }
     finally { setRebookLoading(false); }
   }
@@ -303,7 +343,8 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
       showToastMsg('Đã hủy toàn bộ lịch định kỳ');
       setShowCancelRecurringConfirm(false); setCancelRecurringTarget(null);
-      doFetch(keyword, statusFilter, dateFrom, dateTo, page);
+      setShowRecurringGroupModal(false);
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (e) { showToastMsg(e.message, 'error'); }
     finally { setCancelLoading(false); }
   }
@@ -679,8 +720,8 @@ export default function HistoryPage({ onBack, apiBase, token }) {
           <>
             {/* filters */}
             <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                <div className="relative sm:col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                <div className="relative md:col-span-2">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
                   <input type="text" value={keyword} onChange={e => onFilterChange(setKeyword, e.target.value)}
                     placeholder="Tìm gói dịch vụ hoặc chi nhánh..."
@@ -689,6 +730,12 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                 <select value={statusFilter} onChange={e => onFilterChange(setStatusFilter, e.target.value)}
                   className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
                   {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <select value={typeFilter} onChange={e => onFilterChange(setTypeFilter, e.target.value)}
+                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
+                  <option value="">Tất cả loại lịch</option>
+                  <option value="single">Lịch thường</option>
+                  <option value="recurring">Lịch định kỳ</option>
                 </select>
                 <select value={sort} onChange={e => onFilterChange(setSort, e.target.value)}
                   className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
@@ -745,6 +792,40 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                     const canReview = b.status === 'completed';
                     const hasReview = b.rating || b.feedback;
                     const isNewB = isNew(b.createdAt);
+                    
+                    if (b.isGroup) {
+                      return (
+                        <div key={bId} onClick={() => { setRecurringGroupTarget(b); setDetailBooking(b); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
+                          <div className="flex items-start justify-between gap-4 pl-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-3 mb-1">
+                                <span className="text-base font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">{b.packageId?.name || b.packageName || 'Dịch vụ'}</span>
+                                <span className="inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap bg-indigo-50 text-indigo-600 border-indigo-200">
+                                  Định kỳ ({b.groupCount} buổi)
+                                </span>
+                                {isNewB && (
+                                  <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm animate-pulse">MỚI</span>
+                                )}
+                              </div>
+                              <p className="text-sm text-slate-500 font-medium">{b.branchId?.name || b.branchName || ''}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-lg font-black text-slate-900">{formatCurrency(b.groupTotalPrice)}</p>
+                              {b.groupTotalDeposit > 0 && (
+                                <span className="inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-amber-50 text-amber-600 border-amber-200">
+                                  Cọc {formatCurrency(b.groupTotalDeposit)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-4 pl-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
+                            {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="font-semibold text-slate-800">{b.vehicleId.licensePlate || ''}</span></span>}
+                            <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">Cập nhật lần cuối: {formatDate(b.createdAt)}</span></span>
+                          </div>
+                        </div>
+                      );
+                    }
                     
                     return (
                       <div key={bId} onClick={() => setDetailBooking(b)} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden group">
@@ -886,7 +967,13 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       </main>
 
       {/* ── DETAIL MODAL (RECEIPT TEMPLATE) ── */}
-      {detailBooking && (
+      {detailBooking && (() => {
+        const displayTotal = detailBooking.isGroup ? (detailBooking.groupTotalPrice || 0) : (detailBooking.totalAmount || detailBooking.finalPrice || 0);
+        const displayDeposit = detailBooking.isGroup ? (detailBooking.groupTotalDeposit || 0) : (detailBooking.depositAmount || 0);
+        const displayId = detailBooking.isGroup ? (detailBooking.recurringGroupId || detailBooking._id) : detailBooking._id;
+        const displayInvoiceNumber = String(displayId).slice(-8).toUpperCase();
+        
+        return (
         <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
           onClick={() => setDetailBooking(null)}>
           <div className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] font-sans text-slate-900 relative" onClick={e => e.stopPropagation()}>
@@ -905,9 +992,9 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                   <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Receipt</h2>
                   <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
                     <div className="font-semibold text-black">Invoice number</div>
-                    <div className="text-black">AWP-{String(detailBooking._id).slice(-8).toUpperCase()}</div>
+                    <div className="text-black">AWP-{displayInvoiceNumber}</div>
                     <div className="font-semibold text-black">Receipt number</div>
-                    <div className="text-black">{detailBooking._id}</div>
+                    <div className="text-black">{displayId}</div>
                     <div className="font-semibold text-black">Date paid</div>
                     <div className="text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
                   </div>
@@ -944,7 +1031,7 @@ export default function HistoryPage({ onBack, apiBase, token }) {
               {/* Big Payment Status */}
               <div className="mb-10">
                 <h3 className="text-2xl font-bold text-black mb-3">
-                  {formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)} {detailBooking.paymentStatus === 'paid' ? `paid on ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `due on ${formatDate(detailBooking.bookingDate)}`}
+                  {formatCurrency(displayTotal)} {detailBooking.paymentStatus === 'paid' ? `paid on ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `due on ${formatDate(detailBooking.bookingDate)}`}
                 </h3>
                 <p className="text-[13px] text-black max-w-xl leading-relaxed">
                   While we prefer electronic payment methods,<br/>
@@ -973,14 +1060,28 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                   </thead>
                   <tbody>
                     <tr className="border-b border-slate-200">
-                      <td className="py-3 text-left">
+                      <td className="py-3 text-left align-top">
                         <div className="font-normal text-black">{detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ rửa xe'}</div>
-                        <div className="text-black">{formatDate(detailBooking.bookingDate)} • {detailBooking.startTime || '—'}</div>
+                        {!detailBooking.isGroup && <div className="text-black">{formatDate(detailBooking.bookingDate)} • {detailBooking.startTime || '—'}</div>}
+                        {detailBooking.isGroup && (
+                          <div className="mt-2 space-y-1">
+                            {recurringGroupLoading ? (
+                              <div className="text-slate-500 text-xs italic">Đang tải chi tiết buổi...</div>
+                            ) : (
+                              recurringGroupBookings.map((rb, idx) => (
+                                <div key={idx} className="text-slate-600 text-xs flex gap-2 items-center">
+                                  <span>Buổi {idx + 1}: {formatDate(rb.bookingDate)} • {rb.startTime}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100">{STATUS_MAP[rb.status]?.label || rb.status}</span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </td>
-                      <td className="py-3 text-right text-black">1</td>
-                      <td className="py-3 text-right text-black">{formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)}</td>
-                      <td className="py-3 text-right text-black">10%</td>
-                      <td className="py-3 text-right text-black">{formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)}</td>
+                      <td className="py-3 text-right text-black align-top">{detailBooking.isGroup ? detailBooking.groupCount : 1}</td>
+                      <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.finalPrice || detailBooking.totalAmount)}</td>
+                      <td className="py-3 text-right text-black align-top">10%</td>
+                      <td className="py-3 text-right text-black align-top">{formatCurrency(displayTotal)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -990,40 +1091,40 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                   <div className="w-[300px] text-[13px]">
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="text-black">Subtotal</span>
-                      <span className="text-black">{formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)}</span>
+                      <span className="text-black">{formatCurrency(displayTotal)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="text-black">Total excluding tax</span>
-                      <span className="text-black">{formatCurrency(Math.round((detailBooking.totalAmount || detailBooking.finalPrice) * 0.9))}</span>
+                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">VAT - Vietnam (10% on {formatCurrency(Math.round((detailBooking.totalAmount || detailBooking.finalPrice) * 0.9))})</span>
-                      <span className="text-black">{formatCurrency(Math.round((detailBooking.totalAmount || detailBooking.finalPrice) * 0.1))}</span>
+                      <span className="text-black">VAT - Vietnam (10% on {formatCurrency(Math.round((displayTotal) * 0.9))})</span>
+                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="font-normal text-black">Total</span>
-                      <span className="font-normal text-black">{formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)}</span>
+                      <span className="font-normal text-black">{formatCurrency(displayTotal)}</span>
                     </div>
                     {detailBooking.paymentStatus === 'deposit_paid' && (
                       <div className="flex justify-between py-1 border-b border-slate-200">
                         <span className="font-normal text-black">Deposit Paid</span>
-                        <span className="font-normal text-black">-{formatCurrency(detailBooking.depositAmount || 0)}</span>
+                        <span className="font-normal text-black">-{formatCurrency(displayDeposit || 0)}</span>
                       </div>
                     )}
                     <div className="flex justify-between py-1.5 border-b border-black">
                       <span className="font-bold text-black">Amount {detailBooking.paymentStatus === 'paid' ? 'paid' : 'due'}</span>
                       <span className="font-bold text-black">
                         {detailBooking.paymentStatus === 'paid' 
-                          ? formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)
+                          ? formatCurrency(displayTotal)
                           : detailBooking.paymentStatus === 'deposit_paid'
-                            ? formatCurrency(Math.max(0, (detailBooking.totalAmount || detailBooking.finalPrice || 0) - (detailBooking.depositAmount || 0)))
-                            : formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)
+                            ? formatCurrency(Math.max(0, (displayTotal || 0) - (displayDeposit || 0)))
+                            : formatCurrency(displayTotal)
                         }
                       </span>
                     </div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {/* Payment History */}
               <div>
@@ -1045,10 +1146,10 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                       <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
                       <td className="py-3 text-right text-black">
                         {detailBooking.paymentStatus === 'paid' 
-                          ? formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice) 
-                          : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(detailBooking.depositAmount) : '0đ')}
+                          ? formatCurrency(displayTotal) 
+                          : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
                       </td>
-                      <td className="py-3 text-right text-black">AWP-{String(detailBooking._id).slice(-8).toUpperCase()}</td>
+                      <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1079,11 +1180,23 @@ export default function HistoryPage({ onBack, apiBase, token }) {
 
             {/* Footer Actions (Sticky) */}
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
-              {(detailBooking.status === 'pending' || detailBooking.status === 'confirmed') && (
+              {(!detailBooking.isGroup && (detailBooking.status === 'pending' || detailBooking.status === 'confirmed')) && (
                 <>
                   <button onClick={() => { setDetailBooking(null); handleCancel(detailBooking); }} disabled={cancelLoading}
                     className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 text-center">
                     Hủy đơn
+                  </button>
+                  <button onClick={() => { setDetailBooking(null); handleShowQR(detailBooking); }}
+                    className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center">
+                    Mã QR
+                  </button>
+                </>
+              )}
+              {(detailBooking.isGroup && recurringGroupBookings.some(b => b.status === 'pending' || b.status === 'confirmed')) && (
+                <>
+                  <button onClick={() => { setDetailBooking(null); handleCancelRecurring(detailBooking); }} disabled={cancelLoading}
+                    className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 text-center">
+                    Hủy lịch trình định kỳ
                   </button>
                   <button onClick={() => { setDetailBooking(null); handleShowQR(detailBooking); }}
                     className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center">
@@ -1097,7 +1210,7 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                     className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-black text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 text-center">
                     Đặt lại
                   </button>
-                  {detailBooking.status === 'completed' && (
+                  {!detailBooking.isGroup && detailBooking.status === 'completed' && (
                     <button onClick={() => { setDetailBooking(null); openReview(detailBooking); }}
                       className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors text-center ${detailBooking.rating ? 'border border-slate-300 bg-white text-black hover:bg-slate-50' : 'bg-black text-white hover:bg-slate-800'}`}>
                       {detailBooking.rating ? 'Sửa đánh giá' : 'Đánh giá'}
@@ -1109,7 +1222,8 @@ export default function HistoryPage({ onBack, apiBase, token }) {
 
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── REVIEW MODAL ── */}
       {showReviewModal && reviewTarget && (
@@ -1199,6 +1313,94 @@ export default function HistoryPage({ onBack, apiBase, token }) {
                 className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-400 transition-colors disabled:opacity-50">
                 {cancelLoading ? 'Đang hủy...' : 'Hủy tất cả'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RECURRING GROUP MODAL ── */}
+      {showRecurringGroupModal && (
+        <div className="fixed inset-0 z-[9900] bg-black/40 backdrop-blur-sm flex justify-end"
+          onClick={() => { setShowRecurringGroupModal(false); setRecurringGroupTarget(null); setRecurringGroupBookings([]); }}>
+          <div className="bg-white w-full max-w-xl h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Chi tiết lịch định kỳ</h3>
+                <p className="text-sm text-slate-500 mt-0.5">{recurringGroupTarget?.packageId?.name || recurringGroupTarget?.packageName || 'Gói dịch vụ'}</p>
+              </div>
+              <button onClick={() => { setShowRecurringGroupModal(false); setRecurringGroupTarget(null); setRecurringGroupBookings([]); }} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                ✕
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-wrap gap-4 items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-indigo-900">Tổng cộng {recurringGroupTarget?.groupCount} buổi</div>
+                  <div className="text-xs text-indigo-700 mt-1">Tổng tiền: {formatCurrency(recurringGroupTarget?.groupTotalPrice)}</div>
+                </div>
+                {recurringGroupBookings.some(b => b.status === 'pending' || b.status === 'confirmed') && (
+                  <button onClick={() => handleCancelRecurring(recurringGroupTarget)}
+                    disabled={cancelLoading}
+                    className="px-4 py-2 rounded-lg bg-red-100 text-red-600 text-sm font-bold hover:bg-red-200 transition-colors">
+                    Hủy toàn bộ định kỳ
+                  </button>
+                )}
+              </div>
+
+              {recurringGroupLoading ? (
+                <div className="py-12 text-center text-slate-400 text-sm">Đang tải danh sách...</div>
+              ) : recurringGroupBookings.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-sm">Không có dữ liệu</div>
+              ) : (
+                <div className="space-y-3">
+                  {recurringGroupBookings.map(b => {
+                    const bId = b._id || b.id;
+                    const canReview = b.status === 'completed';
+                    const hasReview = b.rating || b.feedback;
+                    return (
+                      <div key={bId} onClick={() => setDetailBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="font-semibold text-slate-800 text-sm">{formatDate(b.bookingDate)} · {b.startTime}</div>
+                            <div className="text-xs text-slate-500 mt-1">{b.branchId?.name || b.branchName || ''}</div>
+                          </div>
+                          <StatusBadge status={b.status} />
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
+                          {(b.status === 'pending' || b.status === 'confirmed') && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); handleShowQR(b); }}
+                                className="px-2.5 py-1 rounded text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors">
+                                Xem QR
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); handleCancel(b); }}
+                                disabled={cancelLoading}
+                                className="px-2.5 py-1 rounded text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors disabled:opacity-50">
+                                Hủy đơn này
+                              </button>
+                            </>
+                          )}
+                          {(b.status === 'completed' || b.status === 'cancelled') && (
+                            <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
+                              disabled={rebookLoading}
+                              className="px-2.5 py-1 rounded text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
+                              Đặt lại
+                            </button>
+                          )}
+                          {canReview && !hasReview && (
+                            <button onClick={(e) => { e.stopPropagation(); openReview(b); }}
+                              className="ml-auto px-2.5 py-1 rounded text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors">
+                              Đánh giá
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

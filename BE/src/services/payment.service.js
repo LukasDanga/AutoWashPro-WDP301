@@ -29,6 +29,20 @@ const markRecurringSiblingsPaid = async (booking, paymentMethod, session) => {
   await q;
 };
 
+const markRecurringSiblingsDepositPaid = async (booking, paymentMethod, session) => {
+  if (booking.bookingType !== 'recurring' || !booking.recurringGroupId) return;
+  const q = Booking.updateMany(
+    {
+      recurringGroupId: booking.recurringGroupId,
+      _id: { $ne: booking._id },
+      status: { $ne: 'cancelled' },
+    },
+    { paymentStatus: 'deposit_paid', depositPaidAt: new Date(), paymentMethod, depositPaid: true }
+  );
+  if (session) q.session(session);
+  await q;
+};
+
 const generateQrDataUrl = async (transactionId, amount, method, paymentType) => {
   let content;
   if (method === 'bank') {
@@ -181,6 +195,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: method },
           { session }
         );
+        await markRecurringSiblingsDepositPaid(booking, method, session);
       } else {
         await Booking.findByIdAndUpdate(
           booking._id,
@@ -316,6 +331,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
 
     if (payment.paymentType === 'deposit') {
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
+      await markRecurringSiblingsDepositPaid(booking, payment.method, session);
     } else {
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
       await markRecurringSiblingsPaid(booking, payment.method, session);
@@ -414,6 +430,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 
       if (payment.paymentType === 'deposit') {
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
+        await markRecurringSiblingsDepositPaid(booking, payment.method, session);
       } else {
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
         await markRecurringSiblingsPaid(booking, payment.method, session);

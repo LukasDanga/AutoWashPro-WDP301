@@ -331,6 +331,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   }
   if (filters.status) query.status = filters.status;
   if (filters.bookingType) query.bookingType = filters.bookingType;
+  if (filters.recurringGroupId) query.recurringGroupId = filters.recurringGroupId;
 
   // date range (dateFrom/dateTo) or single bookingDate
   if (filters.dateFrom || filters.dateTo) {
@@ -383,6 +384,72 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   if (filters.sort) {
     if (filters.sort === '-createdAt') sortObj = { createdAt: -1 };
     else if (filters.sort === 'createdAt') sortObj = { createdAt: 1 };
+  }
+
+  if (filters.groupByRecurring === 'true') {
+    const pipeline = [
+      { $match: query },
+      { $sort: sortObj },
+      {
+        $group: {
+          _id: { $ifNull: ["$recurringGroupId", "$_id"] },
+          doc: { $first: "$$ROOT" },
+          groupCount: { $sum: 1 },
+          totalFinalPrice: { $sum: "$finalPrice" },
+          totalDepositAmount: { $sum: "$depositAmount" }
+        }
+      },
+      {
+        $replaceRoot: {
+          newRoot: {
+            $mergeObjects: [
+              "$doc",
+              {
+                isGroup: { $cond: [{ $eq: [{ $type: "$doc.recurringGroupId" }, "missing"] }, false, true] },
+                groupCount: "$groupCount",
+                groupTotalPrice: "$totalFinalPrice",
+                groupTotalDeposit: "$totalDepositAmount"
+              }
+            ]
+          }
+        }
+      },
+      { $sort: sortObj },
+      { $skip: skip },
+      { $limit: limit }
+    ];
+
+    const countPipeline = [
+      { $match: query },
+      { $group: { _id: { $ifNull: ["$recurringGroupId", "$_id"] } } },
+      { $count: "total" }
+    ];
+
+    const [aggResults, countResult] = await Promise.all([
+      Booking.aggregate(pipeline),
+      Booking.aggregate(countPipeline)
+    ]);
+
+    const total = countResult.length > 0 ? countResult[0].total : 0;
+
+    await Booking.populate(aggResults, [
+      { path: 'userId', select: 'name email phone tier' },
+      { path: 'branchId', select: 'name address' },
+      { path: 'packageId', select: 'name price duration' },
+      { path: 'vehicleId', select: 'licensePlate vehicleType brand color' }
+    ]);
+
+    return {
+      bookings: aggResults,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1,
+      },
+    };
   }
 
   const [bookings, total] = await Promise.all([
@@ -1162,10 +1229,10 @@ exports.createRecurringBooking = async (data) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-      const bookingStr = bookingDate.toISOString().split('T')[0];
+      const bookingStr = bookingDate.toLocaleDateString('en-CA');
 
       // Check if it's today and time has passed
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toLocaleDateString('en-CA');
       if (bookingStr === todayStr) {
         const now = new Date();
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -1273,7 +1340,7 @@ exports.createRecurringBooking = async (data) => {
       if (session.inTransaction()) {
         await session.abortTransaction();
       }
-      const bookingStr = bookingDate.toISOString().split('T')[0];
+      const bookingStr = bookingDate.toLocaleDateString('en-CA');
       failed.push({ date: bookingStr, reason: err.message || 'Lỗi không xác định' });
     } finally {
       session.endSession();
@@ -1367,10 +1434,10 @@ exports.checkRecurringConflicts = async (data) => {
   }
 
   const results = [];
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
   for (const bookingDate of targetDates) {
-    const bookingStr = bookingDate.toISOString().split('T')[0];
+    const bookingStr = bookingDate.toLocaleDateString('en-CA');
     let reason = null;
     let conflict = false;
 
