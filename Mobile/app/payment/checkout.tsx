@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,8 +6,10 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { paymentApi, bookingApi } from '../../src/api';
 import {
@@ -26,7 +28,7 @@ import { spacing, borderRadius } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
 import type { PaymentType } from '../../src/types';
 
-type CheckoutStep = 'amount' | 'qr' | 'success';
+type CheckoutStep = 'amount' | 'qr' | 'vnpay_pending' | 'success';
 
 export default function PaymentCheckoutScreen() {
   const router = useRouter();
@@ -45,6 +47,7 @@ export default function PaymentCheckoutScreen() {
   const [pollCount, setPollCount] = useState(0);
   const [error, setError] = useState('');
   const [paymentMode, setPaymentMode] = useState<'deposit' | 'full'>('deposit');
+  const [paymentMethod, setPaymentMethod] = useState<'bank' | 'vnpay'>('bank');
 
   useEffect(() => {
     let cancelled = false;
@@ -69,14 +72,23 @@ export default function PaymentCheckoutScreen() {
     return () => { cancelled = true; };
   }, [bookingId]);
 
+  // Với đơn định kỳ (recurring), booking.finalPrice = giá 1 buổi còn
+  // booking.depositAmount = 30% × tổng nhóm (BE đã tính đúng). Dùng
+  // depositAmount / 0.3 làm tổng thay vì finalPrice để không thiếu tiền.
   const totalAmount = useMemo(() => {
     if (!booking) return 0;
+    const beDeposit = booking.depositAmount ?? 0;
+    if (beDeposit > 0) {
+      // Tổng = deposit / 30% (làm tròn 1.000đ)
+      return Math.round((beDeposit / 0.3) / 1000) * 1000;
+    }
     return booking.finalPrice ?? booking.totalPrice ?? 0;
   }, [booking]);
 
   const depositAmount = useMemo(() => {
     if (!booking) return 0;
-    return Math.round((totalAmount * 0.3) / 1000) * 1000;
+    // Ưu tiên depositAmount từ BE (đã gộp cả nhóm nếu recurring)
+    return booking.depositAmount ?? Math.round((totalAmount * 0.3) / 1000) * 1000;
   }, [booking, totalAmount]);
 
   const amount = useMemo(() => {
@@ -94,14 +106,27 @@ export default function PaymentCheckoutScreen() {
     setIsProcessing(true);
     setError('');
     try {
-      const p = await paymentApi.createPayment({
-        bookingId,
-        paymentMethod: 'bank',
-        type: paymentMode === 'full' ? 'full' : 'deposit',
-      });
-      setPayment(p);
-      setStep('qr');
-      setPollCount(0);
+      if (paymentMethod === 'bank') {
+        const p = await paymentApi.createPayment({
+          bookingId,
+          paymentMethod: 'bank',
+          type: paymentMode === 'full' ? 'full' : 'deposit',
+        });
+        setPayment(p);
+        setStep('qr');
+        setPollCount(0);
+      } else {
+        // VNPay: lấy paymentUrl rồi mở trình duyệt
+        const result = await paymentApi.createVnpayPayment({
+          bookingId,
+          paymentType: paymentMode === 'full' ? 'full' : 'deposit',
+          amount: amount,
+        });
+        setPayment(result.payment ?? result);
+        await Linking.openURL(result.paymentUrl);
+        setStep('vnpay_pending');
+        setPollCount(0);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Không thể tạo thanh toán');
     } finally {
@@ -109,9 +134,9 @@ export default function PaymentCheckoutScreen() {
     }
   };
 
-  // Poll payment status when QR is shown
+  // Poll payment status when QR is shown or waiting for VNPay
   useEffect(() => {
-    if (step !== 'qr' || !payment) return;
+    if ((step !== 'qr' && step !== 'vnpay_pending') || !payment) return;
     const interval = setInterval(async () => {
       try {
         const p = await paymentApi.getPaymentByBooking(bookingId);
@@ -288,6 +313,55 @@ export default function PaymentCheckoutScreen() {
     );
   }
 
+  // ------- Step: VNPAY_PENDING -------
+  if (step === 'vnpay_pending') {
+    return (
+      <ScreenContainer>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.qrHeader}>
+            <View style={[styles.qrIconWrap, { backgroundColor: colors.primaryLight ?? '#eff6ff' }]}>
+              <AppText style={styles.qrIcon}>🌐</AppText>
+            </View>
+            <AppText variant="h3" style={styles.qrTitle}>Đang chờ thanh toán VNPay</AppText>
+            <AppText variant="body" color="textSecondary" style={styles.qrSubtitle}>
+              Hoàn tất thanh toán trên trình duyệt, hệ thống sẽ tự động xác nhận.
+            </AppText>
+          </View>
+
+          <Card style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.surface }}>
+            <View style={styles.summaryRow}>
+              <AppText variant="body" color="textSecondary">Số tiền cần thanh toán</AppText>
+              <AppText variant="h2" color="primary">{formatCurrency(amount)}</AppText>
+            </View>
+            {remainingAmount > 0 && (
+              <>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" color="textSecondary">Còn lại (thanh toán sau)</AppText>
+                  <AppText variant="body" color="textTertiary">{formatCurrency(remainingAmount)}</AppText>
+                </View>
+              </>
+            )}
+          </Card>
+
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} size="large" />
+          </View>
+
+          <AppText variant="caption" color="textTertiary" style={styles.pollingText}>
+            Đang kiểm tra thanh toán... ({pollCount})
+          </AppText>
+        </ScrollView>
+
+        <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+          <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
+            <AppText variant="body" color="textSecondary">Hủy</AppText>
+          </TouchableOpacity>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
   // ------- Step: AMOUNT (default) -------
   return (
     <ScreenContainer>
@@ -394,7 +468,17 @@ export default function PaymentCheckoutScreen() {
           <AppText variant="label" color="textSecondary" style={styles.methodLabel}>
             PHƯƠNG THỨC THANH TOÁN
           </AppText>
-          <View style={styles.methodRow}>
+
+          {/* Bank transfer option */}
+          <TouchableOpacity
+            onPress={() => setPaymentMethod('bank')}
+            activeOpacity={0.7}
+            style={[
+              styles.methodOption,
+              { borderColor: colors.border, backgroundColor: colors.background },
+              paymentMethod === 'bank' && { borderColor: '#10b981', backgroundColor: '#ecfdf5' },
+            ]}
+          >
             <View style={[styles.methodIconWrap, { backgroundColor: '#10b981' }]}>
               <AppText style={styles.methodIconText}>🏦</AppText>
             </View>
@@ -402,7 +486,36 @@ export default function PaymentCheckoutScreen() {
               <AppText variant="body" style={styles.methodName}>Ngân hàng</AppText>
               <AppText variant="caption" color="textTertiary">Chuyển khoản qua mã QR</AppText>
             </View>
-          </View>
+            {paymentMethod === 'bank' && (
+              <View style={[styles.radio, { borderColor: '#10b981' }]}>
+                <View style={[styles.radioInner, { backgroundColor: '#10b981' }]} />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* VNPay option */}
+          <TouchableOpacity
+            onPress={() => setPaymentMethod('vnpay')}
+            activeOpacity={0.7}
+            style={[
+              styles.methodOption,
+              { borderColor: colors.border, backgroundColor: colors.background },
+              paymentMethod === 'vnpay' && { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+            ]}
+          >
+            <View style={[styles.methodIconWrap, { backgroundColor: '#2563eb' }]}>
+              <AppText style={styles.methodIconText}>🌐</AppText>
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="body" style={styles.methodName}>VNPay</AppText>
+              <AppText variant="caption" color="textTertiary">Cổng thanh toán VNPay</AppText>
+            </View>
+            {paymentMethod === 'vnpay' && (
+              <View style={[styles.radio, { borderColor: '#2563eb' }]}>
+                <View style={[styles.radioInner, { backgroundColor: '#2563eb' }]} />
+              </View>
+            )}
+          </TouchableOpacity>
         </Card>
       </ScrollView>
 
@@ -507,9 +620,26 @@ const styles = StyleSheet.create({
   methodLabel: {
     marginBottom: spacing.sm,
   },
-  methodRow: {
+  methodOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    marginBottom: spacing.sm,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   methodIconWrap: {
     width: 40,

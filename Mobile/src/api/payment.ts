@@ -74,6 +74,16 @@ export const simulatePayment = async (data: {
   return response.data;
 };
 
+// Create VNPay payment URL for a booking
+export const createVnpayPayment = async (data: {
+  bookingId: string;
+  paymentType: PaymentType;
+  amount?: number;
+}): Promise<{ paymentUrl: string; transactionId: string; payment: Payment }> => {
+  const response = await apiClient.post('/payments/vnpay-create', data);
+  return response.data;
+};
+
 // Export all payment API functions
 export const paymentApi = {
   createPayment,
@@ -81,6 +91,7 @@ export const paymentApi = {
   getPaymentByBooking,
   getPayment,
   simulatePayment,
+  createVnpayPayment,
 };
 
 export default paymentApi;

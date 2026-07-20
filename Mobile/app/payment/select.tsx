@@ -114,18 +114,28 @@ export default function PaymentSelectScreen() {
   const [paidPayment, setPaidPayment] = useState<any | null>(null);
 
   // Tính số tiền cần trả cho payableType — match logic BE.
+  // Với đơn định kỳ (recurring), booking.finalPrice = giá 1 buổi,
+  // nhưng depositAmount = 30% × tổng nhóm (BE đã tính đúng).
+  // Dùng depositAmount / 0.3 để lấy tổng thay vì finalPrice.
+  const fullAmount = useMemo(() => {
+    if (!booking) return 0;
+    const beDeposit = booking.depositAmount ?? 0;
+    if (beDeposit > 0) {
+      return Math.round((beDeposit / 0.3) / 1000) * 1000; // recurring: tổng nhóm
+    }
+    return booking.finalPrice ?? booking.totalPrice ?? 0; // đơn lẻ: giữ nguyên
+  }, [booking]);
+
   const computedAmount = useMemo(() => {
     if (!booking) return 0;
-    const full = booking.finalPrice ?? booking.totalPrice ?? 0;
     const deposit = booking.depositAmount ?? 0;
     if (payableType === 'deposit') return deposit;
     if (payableType === 'remaining') {
-      // Phần còn lại = full − deposit (nếu đã cọc) hoặc full (nếu chưa).
-      if (booking.depositPaid) return Math.max(0, full - deposit);
-      return full;
+      if (booking.depositPaid) return Math.max(0, fullAmount - deposit);
+      return fullAmount;
     }
-    return full;
-  }, [booking, payableType]);
+    return fullAmount;
+  }, [booking, payableType, fullAmount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -404,7 +414,7 @@ export default function PaymentSelectScreen() {
           <View style={styles.summaryRow}>
             <AppText variant="caption" color="textSecondary">Tổng đơn</AppText>
             <AppText variant="bodySmall" style={styles.summaryValue}>
-              {formatCurrency(booking.finalPrice ?? booking.totalPrice ?? 0)}
+              {formatCurrency(fullAmount)}
             </AppText>
           </View>
           {booking.depositAmount ? (
