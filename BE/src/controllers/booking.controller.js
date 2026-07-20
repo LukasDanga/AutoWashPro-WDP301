@@ -306,12 +306,9 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
     const txnRef = result.data.txnRef;
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
-      // Không có bookingId/slotPackId → provisional → redirect về trang chủ
-      if (payment && !payment.bookingId && !payment.slotPackId) {
-        return res.redirect(302, `${feUrl}/?vnpay_result=${encoded}`);
-      }
-      if (payment?.slotPackId) {
-        return res.redirect(302, `${feUrl}/?vnpay_result=${encoded}`);
+      // Provisional & slot pack đều redirect về /booking (nơi BookingWidget render)
+      if (payment && (!payment.bookingId || payment.slotPackId)) {
+        return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
       }
     } catch (err) {
       console.error('Confirm payment error:', err.message);

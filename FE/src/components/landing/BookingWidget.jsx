@@ -632,7 +632,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }, []);
 
   // Tạo booking sau khi VNPay/Bank payment thành công
+  const [creatingBooking, setCreatingBooking] = useState(false);
+
   async function createBookingAfterPayment(isBank = false, pendingData = null) {
+    if (creatingBooking) return;
+    setCreatingBooking(true);
     const draft = isBank ? pendingData : JSON.parse(sessionStorage.getItem('aw_bookingDraft') || '{}');
     if (!draft || !draft.branchId) { setError('Lỗi dữ liệu draft'); return; }
 
@@ -693,9 +697,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       setShowSuccessModal(true);
     } catch (err) {
       setError(err.message || 'Không thể tạo lịch hẹn sau thanh toán');
+      setCreatingBooking(false);
     } finally {
       setBookingLoading(false);
       sessionStorage.removeItem('aw_bookingDraft');
+      setCreatingBooking(false);
     }
   }
 
