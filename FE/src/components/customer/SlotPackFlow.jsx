@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
@@ -668,91 +669,97 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       </AnimatePresence>
 
       {/* QR Payment Modal */}
-      <AnimatePresence>
-        {showQrModal && slotPackPayment && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
-            onClick={() => { if (!buyLoading) { setShowQrModal(false); setSlotPackPayment(null); } }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[1.5rem] w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-slate-800 text-center mb-4">Chuyển khoản ngân hàng</h3>
-              <div className="flex justify-center mb-4">
-                <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shadow-sm">
-                  <img src={slotPackPayment.qrCode} alt="QR code" className="w-48 h-48" />
-                </div>
-              </div>
-              <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 mb-4">
-                <div className="p-3 flex justify-between">
-                  <span className="text-xs text-slate-400 font-semibold">Ngân hàng</span>
-                  <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
-                </div>
-                <div className="p-3 flex justify-between">
-                  <span className="text-xs text-slate-400 font-semibold">Số tài khoản</span>
-                  <span className="text-sm font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '97966888888'}</span>
-                </div>
-                <div className="p-3 flex justify-between">
-                  <span className="text-xs text-slate-400 font-semibold">Chủ tài khoản</span>
-                  <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
-                </div>
-                <div className="p-3">
-                  <span className="text-xs text-slate-400 font-semibold block mb-1">Nội dung chuyển khoản</span>
-                  <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
-                    {slotPackPayment.bankInfo?.transferContent || `THANH TOAN ${slotPackPayment.transactionId}`}
+      {createPortal(
+        <AnimatePresence>
+          {showQrModal && slotPackPayment && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
+              onClick={() => { if (!buyLoading) { setShowQrModal(false); setSlotPackPayment(null); } }}>
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-[1.5rem] w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-slate-800 text-center mb-4">Chuyển khoản ngân hàng</h3>
+                <div className="flex justify-center mb-4">
+                  <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shadow-sm">
+                    <img src={slotPackPayment.qrCode} alt="QR code" className="w-48 h-48" />
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400 pt-0.5 mb-4">
-                <RefreshCw className={`w-3 h-3 ${payPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
-                Đang kiểm tra thanh toán...
-              </div>
-              <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2 mt-4 -mx-6 -mb-6 rounded-b-[1.5rem]">
-                <button type="button" onClick={() => checkSlotPackPayment()}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
-                  Đã chuyển khoản
-                </button>
-                <button type="button" onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
-                  className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
-                  Hủy
-                </button>
-              </div>
+                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 mb-4">
+                  <div className="p-3 flex justify-between">
+                    <span className="text-xs text-slate-400 font-semibold">Ngân hàng</span>
+                    <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
+                  </div>
+                  <div className="p-3 flex justify-between">
+                    <span className="text-xs text-slate-400 font-semibold">Số tài khoản</span>
+                    <span className="text-sm font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                  </div>
+                  <div className="p-3 flex justify-between">
+                    <span className="text-xs text-slate-400 font-semibold">Chủ tài khoản</span>
+                    <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
+                  </div>
+                  <div className="p-3">
+                    <span className="text-xs text-slate-400 font-semibold block mb-1">Nội dung chuyển khoản</span>
+                    <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
+                      {slotPackPayment.bankInfo?.transferContent || `THANH TOAN ${slotPackPayment.transactionId}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400 pt-0.5 mb-4">
+                  <RefreshCw className={`w-3 h-3 ${payPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
+                  Đang kiểm tra thanh toán...
+                </div>
+                <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2 mt-4 -mx-6 -mb-6 rounded-b-[1.5rem]">
+                  <button type="button" onClick={() => checkSlotPackPayment()}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
+                    Đã chuyển khoản
+                  </button>
+                  <button type="button" onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
+                    className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                    Hủy
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
       {/* Voucher Modal */}
-      <AnimatePresence>
-        {voucherModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
-            onClick={(e) => { if (e.target === e.currentTarget) setVoucherModalOpen(false); }}
-          >
+      {createPortal(
+        <AnimatePresence>
+          {voucherModalOpen && (
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+              onClick={(e) => { if (e.target === e.currentTarget) setVoucherModalOpen(false); }}
             >
-              <div className="shrink-0 border-b border-slate-100 px-5 py-4 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-lg">Chọn Ưu Đãi</h3>
-                <button
-                  onClick={() => setVoucherModalOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <VoucherPicker
-                  apiBase={apiBase} token={token} selected={appliedVoucher}
-                  onSelect={(v) => { setAppliedVoucher(v); setVoucherModalOpen(false); }}
-                  orderAmount={baseTotal} compact branchId={selectedBranch}
-                />
-              </div>
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="shrink-0 border-b border-slate-100 px-5 py-4 flex justify-between items-center">
+                  <h3 className="font-bold text-slate-800 text-lg">Chọn Ưu Đãi</h3>
+                  <button
+                    onClick={() => setVoucherModalOpen(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <VoucherPicker
+                    apiBase={apiBase} token={token} selected={appliedVoucher}
+                    onSelect={(v) => { setAppliedVoucher(v); setVoucherModalOpen(false); }}
+                    orderAmount={baseTotal} compact branchId={selectedBranch}
+                  />
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
