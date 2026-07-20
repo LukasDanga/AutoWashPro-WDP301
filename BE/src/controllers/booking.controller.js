@@ -1,5 +1,6 @@
 const bookingService = require('../services/booking.service');
 const paymentService = require('../services/payment.service');
+const vnpayService = require('../services/vnpay.service');
 const sseService = require('../services/sse.service');
 const { catchAsync, success } = require('../utils/helpers');
 const QRCode = require('qrcode');
@@ -213,4 +214,66 @@ exports.simulatePayment = catchAsync(async (req, res) => {
   const { transactionId, gatewayTransactionId } = req.body;
   const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId || 'SIMULATED', true);
   success(res, payment, 'Payment simulated successfully');
+});
+
+exports.vnpayCallback = catchAsync(async (req, res) => {
+  const { transactionId, gatewayTransactionId, status: paymentStatus } = req.body;
+  if (!transactionId) {
+    return res.status(400).json({ success: false, message: 'Missing transactionId' });
+  }
+  const isSuccess = paymentStatus !== 'failed';
+  const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId || 'VNPAY', isSuccess);
+  success(res, payment, isSuccess ? 'VNPay payment confirmed' : 'VNPay payment failed');
+});
+
+exports.createVnpayPayment = catchAsync(async (req, res) => {
+  const { bookingId, paymentType, amount } = req.body;
+  const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+
+  // Tạo payment record trước
+  const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, 'vnpay', paymentType || 'deposit', amount);
+  const vnpayUrl = vnpayService.createPaymentUrl({
+    amount: payment.amount,
+    ipAddr,
+    txnRef: payment.transactionId,
+  });
+
+  success(res, { paymentUrl: vnpayUrl, transactionId: payment.transactionId, payment }, 'VNPay URL created');
+});
+
+exports.handleVnpayReturn = catchAsync(async (req, res) => {
+  console.log('=== VNPay Return Called ===');
+  const result = vnpayService.verifyReturnUrl(req.query);
+
+  const feUrl = process.env.FE_URL || 'http://localhost:5173';
+  const resultJson = JSON.stringify(result);
+  const encoded = encodeURIComponent(resultJson);
+
+  if (result.success) {
+    const txnRef = result.data.txnRef;
+    try {
+      await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+    } catch (err) {
+      console.error('Confirm payment error:', err.message);
+    }
+  }
+
+  return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
+});
+
+exports.handleVnpayIPN = catchAsync(async (req, res) => {
+  console.log('=== VNPay IPN Called ===');
+  const result = vnpayService.verifyReturnUrl(req.query);
+
+  if (result.success) {
+    const txnRef = result.data.txnRef;
+    try {
+      await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+    } catch (err) {
+      console.error('IPN confirm error:', err.message);
+    }
+    return res.json({ RspCode: '00', Message: 'Confirm Success' });
+  }
+
+  return res.json({ RspCode: '97', Message: 'Invalid signature' });
 });

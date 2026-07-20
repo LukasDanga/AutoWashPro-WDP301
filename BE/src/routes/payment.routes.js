@@ -101,4 +101,16 @@ router.post('/sepay/webhook', bookingController.sepayWebhook);
 // Giả lập thanh toán (dành cho nút test ở localhost)
 router.post('/simulate', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.simulatePayment);
 
+// Tạo VNPay payment URL
+router.post('/vnpay-create', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.createVnpayPayment);
+
+// VNPay return redirect (VNPay gọi GET về đây sau khi user thanh toán)
+router.get('/vnpay-return', bookingController.handleVnpayReturn);
+
+// VNPay IPN (server-to-server notification từ VNPay)
+router.get('/vnpay-ipn', bookingController.handleVnpayIPN);
+
+// VNPay callback (FE gọi sau khi nhận được redirect từ VNPay return)
+router.post('/vnpay-callback', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.vnpayCallback);
+
 module.exports = router;
