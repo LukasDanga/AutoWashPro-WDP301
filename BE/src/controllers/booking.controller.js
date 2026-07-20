@@ -100,7 +100,7 @@ exports.createPayment = catchAsync(async (req, res) => {
       bankId: process.env.SEPAY_BANK_ID || 'MB',
       accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
       accountHolder: 'CONG TY CO PHAN AUTO WASH PRO',
-      transferContent: `WASHPRO ${payment.transactionId}`,
+      transferContent: `${paymentType === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId}`,
     };
   }
   
