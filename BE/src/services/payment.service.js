@@ -93,21 +93,28 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     throw Object.assign(new Error(`Cannot create payment for booking with status '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
   }
 
-  const existingPending = await Payment.findOne({ bookingId, status: 'pending' });
-  if (existingPending && method !== 'cash') {
-    if (method === 'bank' && isDeposit && !existingPending.qrCode) {
-      existingPending.qrCode = await generateQrDataUrl(existingPending.transactionId, amount, method, paymentType);
-      await existingPending.save();
-    }
-    return existingPending;
-  }
-
   const targetUserId = booking.userId;
 
-  // Check for existing pending payment first (prevents upsert race on concurrent requests)
-  let payment = await Payment.findOne({ bookingId, status: 'pending' });
-  if (!payment) {
-    payment = new Payment({ bookingId, userId: targetUserId, amount, method, paymentType, transactionId: generateTransactionId(), status: 'pending' });
+  // Atomically create or get existing pending payment (prevents E11000 race on concurrent requests)
+  let payment = await Payment.findOneAndUpdate(
+    { bookingId, status: 'pending' },
+    {
+      $setOnInsert: {
+        bookingId,
+        userId: targetUserId,
+        amount,
+        method,
+        paymentType,
+        transactionId: generateTransactionId(),
+        status: 'pending',
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  // Generate QR code for bank deposit if missing
+  if (method === 'bank' && isDeposit && !payment.qrCode) {
+    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method, paymentType);
     await payment.save();
   }
 

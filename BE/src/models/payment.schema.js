@@ -28,7 +28,23 @@ paymentSchema.index({ slotPackId: 1 });
 paymentSchema.index({ userId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ gatewayTransactionId: 1 });
-// Prevent multiple pending payments for the same booking
-paymentSchema.index({ bookingId: 1, status: 1 }, { unique: true, partialFilterExpression: { status: 'pending', bookingId: { $ne: null } } });
+// Ngăn một booking có nhiều payment đang 'pending' cùng lúc.
+//
+// LƯU Ý: partialFilterExpression của MongoDB CHỈ hỗ trợ một tập toán tử giới
+// hạn (`$eq`, `$exists`, `$gt/$gte/$lt/$lte`, `$type`, `$and`, `$or`, `$in`).
+// KHÔNG hỗ trợ `$ne`. Trước đây index dùng `{ bookingId: { $ne: null } }` nên
+// build thất bại / thành unique thường, khiến các provisional payment
+// (bookingId = null) đụng khóa và trả về E11000 "bookingId already exists".
+//
+// Dùng `{ $exists: true }` để chỉ áp ràng buộc unique cho payment có bookingId
+// và đang 'pending'. Provisional payment (không có bookingId) không dính index
+// này nên tạo bao nhiêu cái cũng được.
+paymentSchema.index(
+  { bookingId: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { bookingId: { $exists: true }, status: 'pending' },
+  }
+);
 
 module.exports = mongoose.model('Payment', paymentSchema);
