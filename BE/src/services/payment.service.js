@@ -9,6 +9,26 @@ const loyaltyService = require('./loyalty.service');
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo'];
 
+/**
+ * Khi thanh toán TOÀN BỘ (full) cho 1 booking thuộc nhóm ĐỊNH KỲ, tiền đã bao gồm
+ * giá của tất cả các buổi trong nhóm (xem cách tính fullPrice ở createPayment).
+ * Vì vậy phải đánh dấu luôn các buổi còn lại là 'paid' — nếu không, khách đã trả
+ * đủ tiền online vẫn bị hệ thống coi là chưa thanh toán ở các buổi sau.
+ */
+const markRecurringSiblingsPaid = async (booking, paymentMethod, session) => {
+  if (booking.bookingType !== 'recurring' || !booking.recurringGroupId) return;
+  const q = Booking.updateMany(
+    {
+      recurringGroupId: booking.recurringGroupId,
+      _id: { $ne: booking._id },
+      status: { $ne: 'cancelled' },
+    },
+    { paymentStatus: 'paid', paidAt: new Date(), paymentMethod, depositPaid: true }
+  );
+  if (session) q.session(session);
+  await q;
+};
+
 const generateQrDataUrl = async (transactionId, amount, method, paymentType) => {
   let content;
   if (method === 'bank') {
@@ -72,7 +92,26 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
-  const fullPrice = booking.finalPrice ?? booking.packageId.price;
+  // Với booking ĐỊNH KỲ (recurring): tiền cọc được gộp toàn nhóm vào buổi đầu
+  // (isRecurringFirst) còn `finalPrice` của MỖI booking chỉ là giá 1 buổi. Vì vậy
+  // khi tính "tổng tiền phải trả" (full) ta phải CỘNG finalPrice của TẤT CẢ buổi
+  // trong nhóm — nếu chỉ lấy booking.finalPrice sẽ thu nhầm tiền của 1 buổi.
+  let fullPrice = booking.finalPrice ?? booking.packageId.price;
+  if (booking.bookingType === 'recurring' && booking.recurringGroupId) {
+    const groupBookings = await Booking.find({
+      recurringGroupId: booking.recurringGroupId,
+      status: { $ne: 'cancelled' },
+    })
+      .select('finalPrice packageId')
+      .populate('packageId', 'price');
+    if (groupBookings.length > 0) {
+      fullPrice = groupBookings.reduce(
+        (sum, b) => sum + (b.finalPrice ?? b.packageId?.price ?? 0),
+        0
+      );
+    }
+  }
+
   const deposit = booking.depositAmount || 0;
 
   let amount;
@@ -83,6 +122,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     amount = overrideAmount || deposit;
     isDeposit = true;
   } else {
+    // Full: thu phần còn lại nếu đã cọc, ngược lại thu toàn bộ (đã bao gồm cả nhóm nếu recurring)
     amount = booking.depositPaid ? Math.max(0, fullPrice - deposit) : fullPrice;
   }
 
@@ -93,21 +133,28 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     throw Object.assign(new Error(`Cannot create payment for booking with status '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
   }
 
-  const existingPending = await Payment.findOne({ bookingId, status: 'pending' });
-  if (existingPending && method !== 'cash') {
-    if (method === 'bank' && isDeposit && !existingPending.qrCode) {
-      existingPending.qrCode = await generateQrDataUrl(existingPending.transactionId, amount, method, paymentType);
-      await existingPending.save();
-    }
-    return existingPending;
-  }
-
   const targetUserId = booking.userId;
 
-  // Check for existing pending payment first (prevents upsert race on concurrent requests)
-  let payment = await Payment.findOne({ bookingId, status: 'pending' });
-  if (!payment) {
-    payment = new Payment({ bookingId, userId: targetUserId, amount, method, paymentType, transactionId: generateTransactionId(), status: 'pending' });
+  // Atomically create or get existing pending payment (prevents E11000 race on concurrent requests)
+  let payment = await Payment.findOneAndUpdate(
+    { bookingId, status: 'pending' },
+    {
+      $setOnInsert: {
+        bookingId,
+        userId: targetUserId,
+        amount,
+        method,
+        paymentType,
+        transactionId: generateTransactionId(),
+        status: 'pending',
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  // Generate QR code for bank deposit if missing
+  if (method === 'bank' && isDeposit && !payment.qrCode) {
+    payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method, paymentType);
     await payment.save();
   }
 
@@ -140,6 +187,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method },
           { session }
         );
+        await markRecurringSiblingsPaid(booking, method, session);
         await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
         await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
@@ -167,6 +215,68 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   }
   // VNPay / MoMo: không cần QR, trả về payment record để FE gọi payment service tạo URL
   await payment.save();
+  return payment;
+};
+
+exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
+  const slotPack = await mongoose.model('SlotPack').findById(slotPackId);
+  if (!slotPack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'NOT_FOUND' });
+
+  const existingPending = await Payment.findOne({ slotPackId, status: 'pending' });
+  if (existingPending) return existingPending;
+
+  const transactionId = generateTransactionId();
+  const payment = new Payment({
+    slotPackId,
+    userId,
+    amount: amount || slotPack.finalPriceAfterVoucher || slotPack.finalPrice,
+    method,
+    paymentType: 'full',
+    status: 'pending',
+    transactionId,
+  });
+
+  if (method === 'bank') {
+    payment.qrCode = await generateQrDataUrl(transactionId, payment.amount, method, 'full');
+  }
+
+  await payment.save();
+  return payment;
+};
+
+exports.createProvisionalBankPayment = async (userId, amount, paymentType = 'deposit') => {
+  const transactionId = generateTransactionId();
+  const payment = new Payment({
+    userId,
+    amount,
+    method: 'bank',
+    paymentType,
+    status: 'pending',
+    transactionId,
+  });
+  payment.qrCode = await generateQrDataUrl(transactionId, amount, 'bank', paymentType);
+  await payment.save();
+  return payment;
+};
+
+exports.getPaymentBySlotPack = async (slotPackId) => {
+  let payment = await Payment.findOne({ slotPackId })
+    .populate('slotPackId', 'packCode finalPrice paymentStatus')
+    .populate('userId', 'name email');
+
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+  // Auto-poll SePay
+  if (payment.status !== 'paid' && payment.method === 'bank') {
+    const isPaid = await pollSepayTransaction(payment.transactionId, payment.amount);
+    if (isPaid) {
+      await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
+      payment = await Payment.findOne({ slotPackId })
+        .populate('slotPackId', 'packCode finalPrice paymentStatus')
+        .populate('userId', 'name email');
+    }
+  }
+
   return payment;
 };
 
@@ -208,6 +318,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
     } else {
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+      await markRecurringSiblingsPaid(booking, payment.method, session);
       await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
       await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
       sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
@@ -246,6 +357,49 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     }
 
+    if (payment.slotPackId) {
+      // Xử lý thanh toán cho SlotPack
+      const slotPack = await mongoose.model('SlotPack').findById(payment.slotPackId).session(session);
+      if (!slotPack) {
+        await session.abortTransaction();
+        throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'NOT_FOUND' });
+      }
+
+      if (success) {
+        payment.status = 'paid';
+        payment.paidAt = new Date();
+        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+        await payment.save({ session });
+
+        await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+      } else {
+        payment.status = 'failed';
+        await payment.save({ session });
+      }
+
+      await session.commitTransaction();
+      if (success) {
+        const sPack = await mongoose.model('SlotPack').findById(payment.slotPackId);
+        sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
+      }
+      return payment;
+    }
+
+    // Provisional payment (no bookingId, no slotPackId) — just mark as paid
+    if (!payment.bookingId && !payment.slotPackId) {
+      if (success) {
+        payment.status = 'paid';
+        payment.paidAt = new Date();
+        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+        await payment.save({ session });
+      } else {
+        payment.status = 'failed';
+        await payment.save({ session });
+      }
+      await session.commitTransaction();
+      return payment;
+    }
+
     const booking = await Booking.findById(payment.bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
@@ -262,6 +416,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
       } else {
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+        await markRecurringSiblingsPaid(booking, payment.method, session);
         await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });

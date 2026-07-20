@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { RefreshCw } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
 
 const DISCOUNT_TIERS = [
@@ -98,6 +99,12 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const [buyError, setBuyError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  const [paymentMethod, setPaymentMethod] = useState('bank');
+  const [slotPackPayment, setSlotPackPayment] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [payPollCount, setPayPollCount] = useState(0);
+
   const [myPacks, setMyPacks] = useState([]);
   const [packsLoading, setPacksLoading] = useState(false);
   const [showMyPacks, setShowMyPacks] = useState(false);
@@ -187,11 +194,91 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi tạo gói slot');
-      setBuyResult(data.data || data);
-      setShowSuccessModal(true);
+      const pack = data.data || data;
+      setBuyResult(pack);
+
+      // Tạo thanh toán theo phương thức đã chọn
+      const payRes = await fetch(`${apiBase}/slot-packs/${pack._id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ method: paymentMethod }),
+      });
+      const payData = await payRes.json();
+      if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
+      const payResult = payData.data || payData;
+
+      if (paymentMethod === 'vnpay') {
+        // Lưu thông tin vào sessionStorage rồi redirect
+        sessionStorage.setItem('aw_lastSlotPack', JSON.stringify({
+          packCode: pack.packCode,
+          finalPrice: pack.finalPriceAfterVoucher || pack.finalPrice,
+          packageName: pkg?.name || '',
+          branchName: branchObj?.name || 'Toàn hệ thống',
+          paymentMethod: 'vnpay',
+        }));
+        window.location.href = payResult.paymentUrl;
+      } else {
+        setSlotPackPayment(payResult);
+        setShowQrModal(true);
+      }
     } catch (err) { setBuyError(err.message); }
     finally { setBuyLoading(false); }
   }
+
+  // Kiểm tra thanh toán Bank (polling)
+  const checkSlotPackPayment = useCallback(async () => {
+    if (!buyResult?._id || !slotPackPayment) return;
+    try {
+      const res = await fetch(`${apiBase}/slot-packs/${buyResult._id}/payment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const p = data?.data || data;
+      if (p?.status === 'paid') {
+        setBuyResult(prev => prev ? { ...prev, paymentStatus: 'paid' } : prev);
+        setShowQrModal(false);
+        setSlotPackPayment(null);
+        setShowSuccessModal(true);
+      }
+    } catch (e) { /* ignore */ }
+    setPayPollCount(c => c + 1);
+  }, [buyResult, slotPackPayment, apiBase, token]);
+
+  // Poll every 10s when QR is shown
+  useEffect(() => {
+    if (!showQrModal || !slotPackPayment) return;
+    const interval = setInterval(checkSlotPackPayment, 10000);
+    return () => clearInterval(interval);
+  }, [showQrModal, slotPackPayment, checkSlotPackPayment]);
+
+  // Xử lý VNPay return (đọc từ sessionStorage do BookingWidget chuyển tiếp)
+  useEffect(() => {
+    const vnpayResultEncoded = sessionStorage.getItem('aw_slotPackVnpayResult');
+    if (vnpayResultEncoded) {
+      sessionStorage.removeItem('aw_slotPackVnpayResult');
+      try {
+        const parsed = JSON.parse(decodeURIComponent(vnpayResultEncoded));
+        const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
+        if (success) {
+          const stored = sessionStorage.getItem('aw_lastSlotPack');
+          if (stored) {
+            const restored = JSON.parse(stored);
+            setBuyResult({ packCode: restored.packCode, paymentStatus: 'paid', finalPrice: restored.finalPrice, ...restored });
+          } else {
+            setBuyResult({ paymentStatus: 'paid' });
+          }
+          setShowSuccessModal(true);
+        } else {
+          setBuyError(parsed?.message || 'Thanh toán VNPay thất bại');
+        }
+      } catch (e) { /* ignore */ }
+      sessionStorage.removeItem('aw_lastSlotPack');
+      const url = new URL(window.location);
+      url.searchParams.delete('vnpay_result');
+      window.history.replaceState({}, '', url);
+    }
+  }, []);
 
   const isStandalone = stepProp === undefined;
 
@@ -399,7 +486,40 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           {buyError && (
             <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{buyError}</div>
           )}
-          <div className="mt-6 pt-4 border-t border-slate-200">
+
+          {/* Payment Method Selection */}
+          <div className="mt-5">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Chọn phương thức thanh toán</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setPaymentMethod('bank')}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'bank' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${paymentMethod === 'bank' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" /></svg>
+                </div>
+                <div>
+                  <div className={`text-sm font-bold ${paymentMethod === 'bank' ? 'text-emerald-700' : 'text-slate-600'}`}>Ngân hàng</div>
+                  <div className="text-[11px] text-slate-400">Chuyển khoản QR</div>
+                </div>
+              </button>
+              <button type="button" onClick={() => setPaymentMethod('vnpay')}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'vnpay' ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${paymentMethod === 'vnpay' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
+                </div>
+                <div>
+                  <div className={`text-sm font-bold ${paymentMethod === 'vnpay' ? 'text-blue-700' : 'text-slate-600'}`}>VNPay</div>
+                  <div className="text-[11px] text-slate-400">Cổng thanh toán</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <button onClick={handleBuy} disabled={buyLoading || !pkg}
+            className={`w-full mt-4 py-3.5 rounded-xl font-semibold text-sm transition-all ${buyLoading || !pkg ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-600 text-white shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)] hover:bg-emerald-500'}`}>
+            {buyLoading ? 'ĐANG XỬ LÝ...' : `MUA ${slotCount} LẦN — ${formatCurrency(finalTotal)}`}
+          </button>
+
+          <div className="mt-4 pt-4 border-t border-slate-200">
             <button onClick={() => setShowMyPacks(!showMyPacks)} className="text-sm text-emerald-600 font-semibold hover:text-emerald-700 transition-colors">
               📦 {showMyPacks ? 'Ẩn' : 'Xem'} gói của tôi {myPacks.filter(p => p.status === 'active').length > 0 && `(${myPacks.filter(p => p.status === 'active').length}active)`}
             </button>
@@ -413,10 +533,6 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
               </div>
             )}
           </div>
-          <button onClick={handleBuy} disabled={buyLoading || !pkg}
-            className={`w-full mt-6 py-3.5 rounded-xl font-semibold text-sm transition-all ${buyLoading || !pkg ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-600 text-white shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)] hover:bg-emerald-500'}`}>
-            {buyLoading ? 'ĐANG TẠO GÓI...' : `MUA ${slotCount} LẦN — ${formatCurrency(finalTotal)}`}
-          </button>
         </motion.div>
       )}
 
@@ -488,9 +604,15 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                 </div>
               </div>
 
-              <div className="mt-4 p-4 rounded-xl bg-sky-50 border border-sky-200 text-center text-sm text-sky-700">
-                Đưa mã <span className="font-mono font-bold">{buyResult.packCode}</span> cho nhân viên khi đến rửa xe.
-              </div>
+              {buyResult.paymentStatus === 'paid' ? (
+                <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center text-sm text-emerald-700 font-semibold">
+                  ✓ Đã thanh toán — mã <span className="font-mono font-bold">{buyResult.packCode}</span> đã sẵn sàng sử dụng.
+                </div>
+              ) : (
+                <div className="mt-4 p-4 rounded-xl bg-sky-50 border border-sky-200 text-center text-sm text-sky-700">
+                  Đưa mã <span className="font-mono font-bold">{buyResult.packCode}</span> cho nhân viên khi đến rửa xe.
+                </div>
+              )}
 
               <div className="flex gap-3 mt-8">
                 <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); }}
@@ -502,6 +624,54 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   Lịch sử gói lượt
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QR Payment Modal */}
+      <AnimatePresence>
+        {showQrModal && slotPackPayment && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={() => { if (!buyLoading) { setShowQrModal(false); setSlotPackPayment(null); } }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[1.5rem] w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-slate-800 text-center mb-4">Chuyển khoản ngân hàng</h3>
+              <div className="flex justify-center mb-4">
+                <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shadow-sm">
+                  <img src={slotPackPayment.qrCode} alt="QR code" className="w-48 h-48" />
+                </div>
+              </div>
+              <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 mb-4">
+                <div className="p-3 flex justify-between">
+                  <span className="text-xs text-slate-400 font-semibold">Ngân hàng</span>
+                  <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
+                </div>
+                <div className="p-3 flex justify-between">
+                  <span className="text-xs text-slate-400 font-semibold">Số tài khoản</span>
+                  <span className="text-sm font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                </div>
+                <div className="p-3 flex justify-between">
+                  <span className="text-xs text-slate-400 font-semibold">Chủ tài khoản</span>
+                  <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
+                </div>
+                <div className="p-3">
+                  <span className="text-xs text-slate-400 font-semibold block mb-1">Nội dung chuyển khoản</span>
+                  <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
+                    {slotPackPayment.bankInfo?.transferContent || `THANH TOAN ${slotPackPayment.transactionId}`}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-1 text-xs text-slate-400 mb-4">
+                <RefreshCw className={`w-3 h-3 ${payPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
+                Đang kiểm tra thanh toán...
+              </div>
+              <button onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
+                className="w-full py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                Đóng
+              </button>
             </motion.div>
           </motion.div>
         )}

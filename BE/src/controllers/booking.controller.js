@@ -229,6 +229,46 @@ exports.simulatePayment = catchAsync(async (req, res) => {
   success(res, payment, 'Payment simulated successfully');
 });
 
+exports.createVnpayProvisional = catchAsync(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid amount' });
+  }
+  const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+
+  const paymentService = require('../services/payment.service');
+  const Payment = require('../models/payment.schema');
+
+  const transactionId = `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+  const payment = new Payment({
+    userId: req.userId,
+    amount,
+    method: 'vnpay',
+    paymentType: 'full',
+    status: 'pending',
+    transactionId,
+  });
+  await payment.save();
+
+  const vnpayUrl = vnpayService.createPaymentUrl({
+    amount,
+    ipAddr,
+    txnRef: transactionId,
+  });
+
+  success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'VNPay provisional URL created');
+});
+
+exports.createBankProvisional = catchAsync(async (req, res) => {
+  const { amount, paymentType } = req.body;
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid amount' });
+  }
+  const paymentService = require('../services/payment.service');
+  const payment = await paymentService.createProvisionalBankPayment(req.userId, amount, paymentType || 'deposit');
+  success(res, payment, 'Bank provisional payment created');
+});
+
 exports.vnpayCallback = catchAsync(async (req, res) => {
   const { transactionId, gatewayTransactionId, status: paymentStatus } = req.body;
   if (!transactionId) {
@@ -265,7 +305,11 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   if (result.success) {
     const txnRef = result.data.txnRef;
     try {
-      await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+      const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+      // Provisional & slot pack đều redirect về /booking (nơi BookingWidget render)
+      if (payment && (!payment.bookingId || payment.slotPackId)) {
+        return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
+      }
     } catch (err) {
       console.error('Confirm payment error:', err.message);
     }

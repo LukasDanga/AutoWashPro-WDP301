@@ -35,6 +35,11 @@ const { ROLES } = require('../config/permissions');
  */
 router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.create, validate, bookingController.createBooking);
 
+// POST /api/bookings/vnpay-provisional — Tạo VNPay URL trước khi có booking
+router.post('/vnpay-provisional', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
+  body('amount').isFloat({ gt: 0 }).withMessage('Amount must be positive'),
+], validate, bookingController.createVnpayProvisional);
+
 // POST /api/bookings/recurring/check-conflicts — Kiểm tra trùng lịch trước khi tạo
 router.post('/recurring/check-conflicts', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   body('branchId').isMongoId().withMessage('Invalid branch ID'),
