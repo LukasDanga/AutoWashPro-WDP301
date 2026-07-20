@@ -196,6 +196,21 @@ exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
   return payment;
 };
 
+exports.createProvisionalBankPayment = async (userId, amount, paymentType = 'deposit') => {
+  const transactionId = generateTransactionId();
+  const payment = new Payment({
+    userId,
+    amount,
+    method: 'bank',
+    paymentType,
+    status: 'pending',
+    transactionId,
+  });
+  payment.qrCode = await generateQrDataUrl(transactionId, amount, 'bank', paymentType);
+  await payment.save();
+  return payment;
+};
+
 exports.getPaymentBySlotPack = async (slotPackId) => {
   let payment = await Payment.findOne({ slotPackId })
     .populate('slotPackId', 'packCode finalPrice paymentStatus')

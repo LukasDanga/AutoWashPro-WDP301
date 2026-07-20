@@ -259,6 +259,16 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
   success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'VNPay provisional URL created');
 });
 
+exports.createBankProvisional = catchAsync(async (req, res) => {
+  const { amount, paymentType } = req.body;
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid amount' });
+  }
+  const paymentService = require('../services/payment.service');
+  const payment = await paymentService.createProvisionalBankPayment(req.userId, amount, paymentType || 'deposit');
+  success(res, payment, 'Bank provisional payment created');
+});
+
 exports.vnpayCallback = catchAsync(async (req, res) => {
   const { transactionId, gatewayTransactionId, status: paymentStatus } = req.body;
   if (!transactionId) {

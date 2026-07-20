@@ -391,7 +391,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setError('');
     try {
       if (pendingDeposit.isDraft) {
-        // Draft: lưu data, chưa tạo booking — hiển thị thông tin ngân hàng
+        // Draft: lưu data, tạo provisional bank payment (có QR code)
         const pb = pendingDeposit._pendingData;
         const isRec = pendingDeposit.tab === 'recurring';
         const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
@@ -411,22 +411,23 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           paymentMode,
           branchName: selectedBranch?.name || '',
           pkgName: pkg?.name || '',
+          pkgPrice: pkg?.price || 0,
+          subServicesPrices: pkg?.subServices?.reduce((acc, s) => { acc[s.name] = s.price || 0; return acc; }, {}),
           vehicleInfo: vehicle ? { licensePlate: vehicle.licensePlate || vehicle.name, name: vehicle.name } : null,
         };
         setDepositDraft(draft);
 
-        // Hiển thị thông tin tài khoản — không tạo payment
-        setDepositPayment({
-          amount: paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0),
-          method: 'bank',
-          bankInfo: {
-            bankName: 'Ngân hàng TMCP Quân đội (MB)',
-            accountNumber: '97966888888',
-            accountHolder: 'CONG TY CO PHAN AUTO WASH PRO',
-            transferContent: `${paymentMode === 'full' ? 'THANH TOAN' : 'DAT COC'} BK${Date.now()}`,
-          },
-          transactionId: `TEMP${Date.now()}`,
+        // Tạo provisional bank payment (có QR code)
+        const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+        const res = await fetch(`${apiBase}/payments/bank-provisional`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ amount: actualAmount, paymentType: paymentMode }),
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Lỗi tạo thanh toán');
+        const payment = data?.data || data;
+        setDepositPayment(payment);
         setDepositQrStep('qr');
         setDepositPollCount(0);
       } else {
@@ -514,6 +515,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           paymentMode,
           branchName: selectedBranch?.name || '',
           pkgName: pkg?.name || '',
+          pkgPrice: pkg?.price || 0,
+          subServicesPrices: pkg?.subServices?.reduce((acc, s) => { acc[s.name] = s.price || 0; return acc; }, {}),
           vehicleInfo: vehicle ? { licensePlate: vehicle.licensePlate || vehicle.name, name: vehicle.name } : null,
         };
         sessionStorage.setItem('aw_bookingDraft', JSON.stringify(draft));
@@ -671,16 +674,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       });
 
       // Build lastBooking
+      const subPrices = draft.subServicesPrices || {};
       setLastBooking({
         branch: { name: draft.branchName || selectedBranch?.name || '' },
         vehicle: draft.vehicleInfo || vehicle || { licensePlate: '' },
-        pkg: { name: draft.pkgName || pkg?.name || '' },
+        pkg: { name: draft.pkgName || pkg?.name || '', price: draft.pkgPrice || 0 },
         currentDate: isRec ? null : { label: draft.bookingDate ? new Date(draft.bookingDate).toLocaleDateString('vi-VN', { weekday: 'short' }) : '', iso: draft.bookingDate },
         selectedTime: draft.startTime,
         total: draft.finalPrice || 0,
         discount: 0, points: 0, isPayingWithPack: false,
         bookingCode: newCode,
-        subServices: (draft.selectedSubServices || []).map(n => ({ name: n, price: 0 })),
+        subServices: (draft.selectedSubServices || []).map(n => ({ name: n, price: subPrices[n] || 0 })),
         recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
         depositAmount: draft.depositAmount || 0,
         depositPaid: true,
