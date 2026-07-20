@@ -1257,6 +1257,8 @@ export default function ManagerBookings() {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [todayOnly, setTodayOnly] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
@@ -1269,7 +1271,7 @@ export default function ManagerBookings() {
 
   const notify = showToast;
 
-  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, pg = page) => {
+  const fetch_ = useCallback(async (q = search, sf = statusFilter, tf = typeFilter, today = todayOnly, df = dateFrom, dt = dateTo, pg = page) => {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams({ page: pg, limit: PAGE_SIZE });
@@ -1277,6 +1279,7 @@ export default function ManagerBookings() {
       if (tf) params.set('bookingType', tf);
       if (q.trim()) params.set('search', q.trim());
       if (today) { const d = getTodayStr(); params.set('dateFrom', d); params.set('dateTo', d); }
+      else if (df) { params.set('dateFrom', df); if (dt) params.set('dateTo', dt); }
       const res = await api(`/bookings?${params}`);
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
@@ -1288,7 +1291,7 @@ export default function ManagerBookings() {
       setTotalPages(pagination?.totalPages ?? data?.totalPages ?? 1);
     } catch (err) { setError(err.message || 'Không thể tải dữ liệu'); }
     finally { setLoading(false); }
-  }, [search, statusFilter, typeFilter, todayOnly, page]);
+  }, [search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, page]);
 
   useEffect(() => { fetch_(); }, []); // eslint-disable-line
 
@@ -1304,13 +1307,13 @@ export default function ManagerBookings() {
   const handleSearch = (v) => {
     setSearch(v);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => { setPage(1); fetch_(v, statusFilter, typeFilter, todayOnly, 1); }, 420);
+    debounce.current = setTimeout(() => { setPage(1); fetch_(v, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, 1); }, 420);
   };
 
-  const handleFilter = (v) => { setStatusFilter(v); setPage(1); fetch_(search, v, typeFilter, todayOnly, 1); };
-  const handleTypeFilter = (v) => { setTypeFilter(v); setPage(1); fetch_(search, statusFilter, v, todayOnly, 1); };
-  const handleTodayToggle = () => { const next = !todayOnly; setTodayOnly(next); setPage(1); fetch_(search, statusFilter, typeFilter, next, 1); };
-  const handlePageChange = (pg) => { setPage(pg); fetch_(search, statusFilter, typeFilter, todayOnly, pg); };
+  const handleFilter = (v) => { setStatusFilter(v); setPage(1); fetch_(search, v, typeFilter, todayOnly, dateFrom, dateTo, 1); };
+  const handleTypeFilter = (v) => { setTypeFilter(v); setPage(1); fetch_(search, statusFilter, v, todayOnly, dateFrom, dateTo, 1); };
+  const handleTodayToggle = () => { const next = !todayOnly; setTodayOnly(next); setPage(1); if (next) { setDateFrom(''); setDateTo(''); } fetch_(search, statusFilter, typeFilter, next, '', '', 1); };
+  const handlePageChange = (pg) => { setPage(pg); fetch_(search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, pg); };
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
@@ -1349,7 +1352,7 @@ export default function ManagerBookings() {
       const result = p?.data ?? p;
       notify(`Đã xác nhận ${result.confirmed} đơn`);
       if (after) after();
-      else fetch_(search, statusFilter, typeFilter, todayOnly, page);
+      else fetch_(search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, page);
     } catch (err) {
       notify(err.message || 'Xác nhận thất bại', 'error');
     } finally {
@@ -1403,13 +1406,22 @@ export default function ManagerBookings() {
               <option value="recurring">Định kỳ</option>
               <option value="slot_pack_usage">Gói lượt</option>
             </select>
-            <button onClick={handleTodayToggle}
-              className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-              }`}>
-              📅 Hôm nay
-            </button>
-            <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly)} disabled={loading}
+            <div className="flex items-center gap-1.5">
+              <input type="date" value={dateFrom} max={dateTo || undefined}
+                onChange={(e) => { const v = e.target.value; setDateFrom(v); setTodayOnly(false); setPage(1); fetch_(search, statusFilter, typeFilter, false, v, dateTo, 1); }}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+              <span className="text-slate-400 text-xs">→</span>
+              <input type="date" value={dateTo} min={dateFrom || undefined}
+                onChange={(e) => { const v = e.target.value; setDateTo(v); setTodayOnly(false); setPage(1); fetch_(search, statusFilter, typeFilter, false, dateFrom, v, 1); }}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+              <button onClick={() => { setDateFrom(''); setDateTo(''); setTodayOnly(true); setPage(1); fetch_(search, statusFilter, typeFilter, true, '', '', 1); }}
+                className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                  todayOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                }`}>
+                📅 Hôm nay
+              </button>
+            </div>
+            <button onClick={() => fetch_(search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo)} disabled={loading}
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
               <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -1440,7 +1452,9 @@ export default function ManagerBookings() {
       <p className="text-xs text-slate-400">
         {todayOnly
           ? `Lịch hôm nay (${new Date().toLocaleDateString('vi-VN')}) — `
-          : ''}
+          : dateFrom || dateTo
+            ? `Từ ${dateFrom || '...'} đến ${dateTo || '...'} — `
+            : ''}
         {total > 0 ? `${total} lịch hẹn` : ''}
       </p>
 
