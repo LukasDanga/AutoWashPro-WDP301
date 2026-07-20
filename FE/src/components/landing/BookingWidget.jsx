@@ -558,6 +558,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     const params = new URLSearchParams(window.location.search);
     const vnpayResult = params.get('vnpay_result');
     if (vnpayResult) {
+      // Nếu là slot pack payment, chuyển qua SlotPackFlow xử lý
+      if (sessionStorage.getItem('aw_lastSlotPack')) {
+        sessionStorage.setItem('aw_slotPackVnpayResult', vnpayResult);
+        setTab('slot_pack');
+        const url = new URL(window.location);
+        url.searchParams.delete('vnpay_result');
+        window.history.replaceState({}, '', url);
+        return;
+      }
+
       try {
         const parsed = JSON.parse(decodeURIComponent(vnpayResult));
         const success = parsed?.success !== false && parsed?.data?.responseCode === '00';

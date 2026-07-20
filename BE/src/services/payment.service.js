@@ -170,6 +170,53 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   return payment;
 };
 
+exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
+  const slotPack = await mongoose.model('SlotPack').findById(slotPackId);
+  if (!slotPack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'NOT_FOUND' });
+
+  const existingPending = await Payment.findOne({ slotPackId, status: 'pending' });
+  if (existingPending) return existingPending;
+
+  const transactionId = generateTransactionId();
+  const payment = new Payment({
+    slotPackId,
+    userId,
+    amount: amount || slotPack.finalPriceAfterVoucher || slotPack.finalPrice,
+    method,
+    paymentType: 'full',
+    status: 'pending',
+    transactionId,
+  });
+
+  if (method === 'bank') {
+    payment.qrCode = await generateQrDataUrl(transactionId, payment.amount, method, 'full');
+  }
+
+  await payment.save();
+  return payment;
+};
+
+exports.getPaymentBySlotPack = async (slotPackId) => {
+  let payment = await Payment.findOne({ slotPackId })
+    .populate('slotPackId', 'packCode finalPrice paymentStatus')
+    .populate('userId', 'name email');
+
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+  // Auto-poll SePay
+  if (payment.status !== 'paid' && payment.method === 'bank') {
+    const isPaid = await pollSepayTransaction(payment.transactionId, payment.amount);
+    if (isPaid) {
+      await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
+      payment = await Payment.findOne({ slotPackId })
+        .populate('slotPackId', 'packCode finalPrice paymentStatus')
+        .populate('userId', 'name email');
+    }
+  }
+
+  return payment;
+};
+
 exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -244,6 +291,49 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     if (!payment) {
       await session.abortTransaction();
       throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    }
+
+    if (payment.slotPackId) {
+      // Xử lý thanh toán cho SlotPack
+      const slotPack = await mongoose.model('SlotPack').findById(payment.slotPackId).session(session);
+      if (!slotPack) {
+        await session.abortTransaction();
+        throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'NOT_FOUND' });
+      }
+
+      if (success) {
+        payment.status = 'paid';
+        payment.paidAt = new Date();
+        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+        await payment.save({ session });
+
+        await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+      } else {
+        payment.status = 'failed';
+        await payment.save({ session });
+      }
+
+      await session.commitTransaction();
+      if (success) {
+        const sPack = await mongoose.model('SlotPack').findById(payment.slotPackId);
+        sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
+      }
+      return payment;
+    }
+
+    // Provisional payment (no bookingId, no slotPackId) — just mark as paid
+    if (!payment.bookingId && !payment.slotPackId) {
+      if (success) {
+        payment.status = 'paid';
+        payment.paidAt = new Date();
+        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+        await payment.save({ session });
+      } else {
+        payment.status = 'failed';
+        await payment.save({ session });
+      }
+      await session.commitTransaction();
+      return payment;
     }
 
     const booking = await Booking.findById(payment.bookingId).session(session);

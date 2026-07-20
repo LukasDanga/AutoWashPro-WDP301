@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema(
   {
-    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', required: true },
+    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
+    slotPackId: { type: mongoose.Schema.Types.ObjectId, ref: 'SlotPack' },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     amount: { type: Number, required: true, min: 0 },
     method: { type: String, enum: ['cash', 'momo', 'vnpay', 'bank'], required: true },
@@ -23,10 +24,11 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.index({ bookingId: 1 });
+paymentSchema.index({ slotPackId: 1 });
 paymentSchema.index({ userId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ gatewayTransactionId: 1 });
 // Prevent multiple pending payments for the same booking
-paymentSchema.index({ bookingId: 1, status: 1 }, { unique: true, partialFilterExpression: { status: 'pending' } });
+paymentSchema.index({ bookingId: 1, status: 1 }, { unique: true, partialFilterExpression: { status: 'pending', bookingId: { $ne: null } } });
 
 module.exports = mongoose.model('Payment', paymentSchema);

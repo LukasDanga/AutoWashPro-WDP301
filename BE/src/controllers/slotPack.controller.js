@@ -1,4 +1,6 @@
 const slotPackService = require('../services/slotPack.service');
+const paymentService = require('../services/payment.service');
+const vnpayService = require('../services/vnpay.service');
 const { catchAsync, success } = require('../utils/helpers');
 const { ROLES } = require('../config/permissions');
 
@@ -82,4 +84,42 @@ exports.previewDiscount = catchAsync(async (req, res) => {
   }
   const preview = slotPackService.previewDiscount(slots, price);
   success(res, preview, 'Preview calculated');
+});
+
+/** POST /api/slot-packs/:id/pay — Tạo thanh toán cho gói slot */
+exports.paySlotPack = catchAsync(async (req, res) => {
+  const { method } = req.body;
+  const slotPackId = req.params.id;
+
+  if (!['bank', 'vnpay'].includes(method)) {
+    return res.status(400).json({ success: false, message: 'Phương thức thanh toán không hợp lệ' });
+  }
+
+  const payment = await paymentService.createSlotPackPayment(slotPackId, req.userId, method);
+
+  if (method === 'vnpay') {
+    const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+    const vnpayUrl = vnpayService.createPaymentUrl({
+      amount: payment.amount,
+      ipAddr,
+      txnRef: payment.transactionId,
+    });
+    return success(res, { paymentUrl: vnpayUrl, transactionId: payment.transactionId, payment }, 'VNPay URL created');
+  }
+
+  const result = payment.toObject ? payment.toObject() : { ...payment };
+  result.bankInfo = {
+    bankName: 'Ngân hàng TMCP Quân đội (MB)',
+    bankId: process.env.SEPAY_BANK_ID || 'MB',
+    accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
+    accountHolder: 'CONG TY CO PHAN AUTO WASH PRO',
+    transferContent: `THANH TOAN ${payment.transactionId}`,
+  };
+  success(res, result, 'Payment created');
+});
+
+/** GET /api/slot-packs/:id/payment — Kiểm tra trạng thái thanh toán */
+exports.getSlotPackPayment = catchAsync(async (req, res) => {
+  const payment = await paymentService.getPaymentBySlotPack(req.params.id);
+  success(res, payment);
 });

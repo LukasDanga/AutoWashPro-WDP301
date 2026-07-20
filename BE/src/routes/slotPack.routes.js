@@ -141,4 +141,17 @@ router.post('/:id/cancel', authenticate, [
   param('id').isMongoId().withMessage('Invalid slot pack ID'),
 ], validate, slotPackController.cancelSlotPack);
 
+/**
+ * POST /api/slot-packs/:id/pay — Thanh toán gói slot (bank hoặc vnpay)
+ */
+router.post('/:id/pay', authenticate, authorize(ROLES.CUSTOMER, ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId().withMessage('Invalid slot pack ID'),
+  body('method').isIn(['bank', 'vnpay']).withMessage('Method must be bank or vnpay'),
+], validate, slotPackController.paySlotPack);
+
+/**
+ * GET /api/slot-packs/:id/payment — Kiểm tra trạng thái thanh toán
+ */
+router.get('/:id/payment', authenticate, slotPackController.getSlotPackPayment);
+
 module.exports = router;
