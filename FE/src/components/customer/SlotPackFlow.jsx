@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
 
 const DISCOUNT_TIERS = [
@@ -98,6 +98,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const [buyResult, setBuyResult] = useState(null);
   const [buyError, setBuyError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [voucherModalOpen, setVoucherModalOpen] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState('bank');
   const [slotPackPayment, setSlotPackPayment] = useState(null);
@@ -443,7 +444,24 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <h3 className="text-lg font-semibold text-slate-800 mb-6">Voucher & Thanh toán</h3>
           <div className="mb-6">
-            <VoucherPicker apiBase={apiBase} token={token} selected={appliedVoucher} onSelect={setAppliedVoucher} orderAmount={baseTotal} />
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Ưu đãi</span>
+            <button type="button" onClick={() => setVoucherModalOpen(true)}
+              className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-bold text-slate-700">Voucher & Ưu đãi</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {appliedVoucher ? `Đã chọn: ${appliedVoucher.code}` : 'Chọn mã giảm giá'}
+                  </div>
+                </div>
+              </div>
+              <span className="text-emerald-600 font-semibold text-sm">
+                {appliedVoucher ? 'Thay đổi' : 'Chọn >'}
+              </span>
+            </button>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Tóm tắt đơn hàng</div>
@@ -489,35 +507,62 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
 
           {/* Payment Method Selection */}
           <div className="mt-5">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Chọn phương thức thanh toán</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Số tiền cần thanh toán</span>
+            <div className="grid grid-cols-1 gap-3 mb-4">
+              <button type="button"
+                className="p-2.5 border-2 rounded-xl text-left transition-all border-emerald-500 bg-emerald-50 shadow-sm"
+              >
+                <div className="font-bold text-xs text-emerald-700">Thanh toán 100%</div>
+                <div className="mt-0.5 text-base font-black text-emerald-600">{formatCurrency(finalTotal)}</div>
+              </button>
+            </div>
+
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Chọn phương thức</span>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setPaymentMethod('bank')}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'bank' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${paymentMethod === 'bank' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" /></svg>
-                </div>
-                <div>
-                  <div className={`text-sm font-bold ${paymentMethod === 'bank' ? 'text-emerald-700' : 'text-slate-600'}`}>Ngân hàng</div>
-                  <div className="text-[11px] text-slate-400">Chuyển khoản QR</div>
-                </div>
-              </button>
-              <button type="button" onClick={() => setPaymentMethod('vnpay')}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'vnpay' ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${paymentMethod === 'vnpay' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
-                </div>
-                <div>
-                  <div className={`text-sm font-bold ${paymentMethod === 'vnpay' ? 'text-blue-700' : 'text-slate-600'}`}>VNPay</div>
-                  <div className="text-[11px] text-slate-400">Cổng thanh toán</div>
-                </div>
-              </button>
+              {[
+                { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
+                { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
+              ].map(m => (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(m.value)}
+                  className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${
+                    paymentMethod === m.value
+                      ? 'border-emerald-500 bg-emerald-50/30 shadow-sm'
+                      : 'border-slate-100 bg-white hover:border-slate-200'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{ backgroundColor: m.color }}>
+                    {m.value === 'bank' ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className={`text-xs font-bold ${paymentMethod === m.value ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    {m.label}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <button onClick={handleBuy} disabled={buyLoading || !pkg}
-            className={`w-full mt-4 py-3.5 rounded-xl font-semibold text-sm transition-all ${buyLoading || !pkg ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-600 text-white shadow-[0_4px_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.5)] hover:bg-emerald-500'}`}>
-            {buyLoading ? 'ĐANG XỬ LÝ...' : `MUA ${slotCount} LẦN — ${formatCurrency(finalTotal)}`}
-          </button>
+          <div className="mt-5 p-3 bg-slate-50 border border-slate-100 rounded-xl flex gap-3">
+            <button type="button" onClick={() => setStep(step - 1)} disabled={buyLoading}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98] disabled:opacity-50">
+              Quay lại
+            </button>
+            <button onClick={handleBuy} disabled={buyLoading || !pkg}
+              className={`flex-[2] px-4 py-2.5 rounded-xl font-bold text-sm text-white shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${buyLoading || !pkg ? 'bg-slate-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+              {buyLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+              {buyLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN ${paymentMethod === 'vnpay' ? 'VNPAY ' : ''}${formatCurrency(finalTotal)}`}
+            </button>
+          </div>
 
           <div className="mt-4 pt-4 border-t border-slate-200">
             <button onClick={() => setShowMyPacks(!showMyPacks)} className="text-sm text-emerald-600 font-semibold hover:text-emerald-700 transition-colors">
@@ -536,7 +581,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
         </motion.div>
       )}
 
-      {isStandalone && (
+      {isStandalone && step < 4 && (
         <div className="flex items-center justify-between mt-8 pt-5 border-t border-slate-200">
           {step > 1 ? (
             <button onClick={() => setStep(step - 1)}
@@ -544,19 +589,12 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
               Quay lại
             </button>
           ) : <div />}
-          {step < 4 ? (
-            <button onClick={() => setStep(step + 1)} disabled={!canAdvance}
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                canAdvance ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-              }`}>
-              Tiếp theo
-            </button>
-          ) : (
-            <button onClick={() => { setInternalStep(1); setSelectedBranch(''); setSelectedVehicle(''); setSelectedPackage(''); setSlotCount(5); setAppliedVoucher(null); setBuyResult(null); setBuyError(''); }}
-              className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
-              Đặt lại
-            </button>
-          )}
+          <button onClick={() => setStep(step + 1)} disabled={!canAdvance}
+            className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              canAdvance ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+            }`}>
+            Tiếp theo
+          </button>
         </div>
       )}
 
@@ -564,7 +602,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       <AnimatePresence>
         {showSuccessModal && buyResult && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
             onClick={() => { setShowSuccessModal(false); setBuyResult(null); }}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-[1.5rem] w-full max-w-lg p-8 shadow-xl max-h-[90vh] overflow-y-auto"
@@ -633,7 +671,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       <AnimatePresence>
         {showQrModal && slotPackPayment && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
             onClick={() => { if (!buyLoading) { setShowQrModal(false); setSlotPackPayment(null); } }}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-[1.5rem] w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto"
@@ -664,14 +702,53 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-center gap-1 text-xs text-slate-400 mb-4">
+              <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400 pt-0.5 mb-4">
                 <RefreshCw className={`w-3 h-3 ${payPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
                 Đang kiểm tra thanh toán...
               </div>
-              <button onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
-                className="w-full py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
-                Đóng
-              </button>
+              <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2 mt-4 -mx-6 -mb-6 rounded-b-[1.5rem]">
+                <button type="button" onClick={() => checkSlotPackPayment()}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
+                  Đã chuyển khoản
+                </button>
+                <button type="button" onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
+                  className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                  Hủy
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Voucher Modal */}
+      <AnimatePresence>
+        {voucherModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setVoucherModalOpen(false); }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="shrink-0 border-b border-slate-100 px-5 py-4 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 text-lg">Chọn Ưu Đãi</h3>
+                <button
+                  onClick={() => setVoucherModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <VoucherPicker
+                  apiBase={apiBase} token={token} selected={appliedVoucher}
+                  onSelect={(v) => { setAppliedVoucher(v); setVoucherModalOpen(false); }}
+                  orderAmount={baseTotal} compact branchId={selectedBranch}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}
