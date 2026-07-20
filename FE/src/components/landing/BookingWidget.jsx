@@ -104,6 +104,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [depositPollCount, setDepositPollCount] = useState(0);
   const [voucherModalOpen, setVoucherModalOpen] = useState(false);
 
+  // Draft data để tạo booking sau khi payment confirm
+  const [depositDraft, setDepositDraft] = useState(null);
+
   // Process pending booking after login
   const [processingPending, setProcessingPending] = useState(false);
 
@@ -387,63 +390,62 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setDepositLoading(true);
     setError('');
     try {
-      let bookingId = pendingDeposit._id;
-      let actualDepositAmount = pendingDeposit.depositAmount;
-
       if (pendingDeposit.isDraft) {
-        // Create booking first, then pay
+        // Draft: lưu data, chưa tạo booking — hiển thị thông tin ngân hàng
         const pb = pendingDeposit._pendingData;
         const isRec = pendingDeposit.tab === 'recurring';
         const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
-        const ep = isRec ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
-        const bBody = pb
-          ? (isRec
-            ? { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, weekdays: pb.selectedDays, startTime: pb.selectedTime, weeks: pb.weeks, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' }
-            : { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, bookingDate: pb.selectedDate || undefined, startTime: pb.selectedTime, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' })
-          : (isRec
-            ? { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, weekdays: selectedDays, startTime: selectedTime, weeks, voucherCode: appliedVoucher?.code || undefined, selectedSubServices: currentSubServices, note: '' }
-            : { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, bookingDate: currentDate?.iso, startTime: selectedTime, voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined), selectedSubServices: currentSubServices, slotPackId: selectedSlotPack || undefined, note: '' });
-        const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
-        const bd = await br.json();
-        if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
-        const newBk = bd?.data || bd;
-        bookingId = newBk._id || newBk.id;
-        actualDepositAmount = newBk.depositAmount || actualDepositAmount;
-        const newCode = newBk?.bookingCode || newBk?.code || '';
-        setBookingCode(newCode);
-        setLastBooking({
-          branch: selectedBranch || { name: '' },
-          vehicle: vehicle || { licensePlate: vId },
-          pkg: pkg || { name: '' },
-          currentDate: isRec ? null : currentDate,
-          selectedTime: pb ? pb.selectedTime : selectedTime,
-          total: pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0,
-          discount, points, isPayingWithPack: false, bookingCode: newCode,
-          subServices: (currentSubServices || pb?.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
-          recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
-          depositAmount: actualDepositAmount, depositPaid: false,
+        const draft = {
+          branchId: pb?.branchId || selectedBranch?._id || selectedBranch?.id,
+          packageId: pb?.packageId || pkg?._id || pkg?.id,
+          vehicleId: vId,
+          bookingDate: pb?.selectedDate || (isRec ? undefined : currentDate?.iso),
+          startTime: pb?.selectedTime || selectedTime,
+          weekdays: pb?.selectedDays || selectedDays,
+          weeks: pb?.weeks || weeks,
+          voucherCode: pb?.appliedVoucher?.code || appliedVoucher?.code,
+          selectedSubServices: pb?.selectedSubServices || currentSubServices,
+          isRecurring: isRec,
+          finalPrice: pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0,
+          depositAmount: pendingDeposit.depositAmount || 0,
+          paymentMode,
+          branchName: selectedBranch?.name || '',
+          pkgName: pkg?.name || '',
+          vehicleInfo: vehicle ? { licensePlate: vehicle.licensePlate || vehicle.name, name: vehicle.name } : null,
+        };
+        setDepositDraft(draft);
+
+        // Hiển thị thông tin tài khoản — không tạo payment
+        setDepositPayment({
+          amount: paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0),
+          method: 'bank',
+          bankInfo: {
+            bankName: 'Ngân hàng TMCP Quân đội (MB)',
+            accountNumber: '97966888888',
+            accountHolder: 'CONG TY CO PHAN AUTO WASH PRO',
+            transferContent: `${paymentMode === 'full' ? 'THANH TOAN' : 'DAT COC'} BK${Date.now()}`,
+          },
+          transactionId: `TEMP${Date.now()}`,
         });
-        setPendingDeposit(prev => ({ ...prev, _id: bookingId, isDraft: false }));
+        setDepositQrStep('qr');
+        setDepositPollCount(0);
+      } else {
+        // Booking đã tồn tại (VD: định kỳ) — tạo payment ngay
+        const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+        const res = await fetch(`${apiBase}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingId: pendingDeposit._id, method: depositMethod, paymentType: paymentMode, amount: actualAmount }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Lỗi thanh toán');
+        const payment = data?.data || data;
+        setDepositPayment(payment);
+        setDepositQrStep('qr');
+        setDepositPollCount(0);
       }
-
-      const bodyObj = { bookingId, method: depositMethod, paymentType: paymentMode };
-      if (actualDepositAmount > 0 && paymentMode === 'deposit') { bodyObj.amount = actualDepositAmount; }
-      const res = await fetch(`${apiBase}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(bodyObj),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Lỗi thanh toán cọc');
-
-      const payment = data?.data || data;
-
-      // Show QR code for bank transfer
-      setDepositPayment(payment);
-      setDepositQrStep('qr');
-      setDepositPollCount(0);
     } catch (err) {
-      setError(err.message || 'Lỗi thanh toán cọc');
+      setError(err.message || 'Lỗi thanh toán');
     } finally {
       setDepositLoading(false);
     }
@@ -487,66 +489,102 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setVnpayLoading(true);
     setError('');
     try {
-      let bookingId = pendingDeposit._id;
-      let actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
-      let fullPrice = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
-      let bookingCodeValue = bookingCode || '';
-
       if (pendingDeposit.isDraft) {
-        const pb = pendingDeposit._pendingData;
+        // Draft: lưu draft, tạo provisional VNPay — chưa tạo booking
         const isRec = pendingDeposit.tab === 'recurring';
         const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
-        const ep = isRec ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
-        const bBody = pb
-          ? (isRec
-            ? { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, weekdays: pb.selectedDays, startTime: pb.selectedTime, weeks: pb.weeks, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' }
-            : { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, bookingDate: pb.selectedDate || undefined, startTime: pb.selectedTime, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' })
-          : (isRec
-            ? { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, weekdays: selectedDays, startTime: selectedTime, weeks, voucherCode: appliedVoucher?.code || undefined, selectedSubServices: currentSubServices, note: '' }
-            : { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, bookingDate: currentDate?.iso, startTime: selectedTime, voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined), selectedSubServices: currentSubServices, slotPackId: selectedSlotPack || undefined, note: '' });
-        const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
-        const bd = await br.json();
-        if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
-        const newBk = bd?.data || bd;
-        bookingId = newBk._id || newBk.id;
-        actualAmount = paymentMode === 'full' ? (newBk.finalPrice || actualAmount) : (newBk.depositAmount || actualAmount);
-        fullPrice = newBk.finalPrice || fullPrice;
-        bookingCodeValue = newBk.bookingCode || newBk.code || '';
+        const pb = pendingDeposit._pendingData;
+        const fullPrice = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
+        const depositAmt = pendingDeposit.depositAmount || 0;
+        const actualAmount = paymentMode === 'full' ? fullPrice : depositAmt;
+
+        const draft = {
+          branchId: pb?.branchId || selectedBranch?._id || selectedBranch?.id,
+          packageId: pb?.packageId || pkg?._id || pkg?.id,
+          vehicleId: vId,
+          bookingDate: pb?.selectedDate || (isRec ? undefined : currentDate?.iso),
+          startTime: pb?.selectedTime || selectedTime,
+          weekdays: pb?.selectedDays || selectedDays,
+          weeks: pb?.weeks || weeks,
+          voucherCode: pb?.appliedVoucher?.code || appliedVoucher?.code,
+          selectedSubServices: pb?.selectedSubServices || currentSubServices,
+          isRecurring: isRec,
+          finalPrice: fullPrice,
+          depositAmount: depositAmt,
+          paymentMode,
+          branchName: selectedBranch?.name || '',
+          pkgName: pkg?.name || '',
+          vehicleInfo: vehicle ? { licensePlate: vehicle.licensePlate || vehicle.name, name: vehicle.name } : null,
+        };
+        sessionStorage.setItem('aw_bookingDraft', JSON.stringify(draft));
+
+        // Gọi provisional VNPay
+        const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ amount: actualAmount }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
+        const paymentUrl = data?.data?.paymentUrl;
+        if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
+
+        // Lưu lastBooking preview để khôi phục sau VNPay return
+        const lastBk = {
+          branch: selectedBranch || { name: '' },
+          vehicle: vehicle || { licensePlate: '' },
+          pkg: pkg || { name: '' },
+          currentDate,
+          selectedTime,
+          total: fullPrice,
+          discount: 0, points: 0, isPayingWithPack: false,
+          bookingCode: '',
+          subServices: (currentSubServices || []).map(n => {
+            const s = pkg?.subServices?.find(x => x.name === n);
+            return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+          }),
+          depositAmount: depositAmt,
+          depositPaid: true,
+          paymentMode,
+        };
+        sessionStorage.setItem('aw_lastBooking', JSON.stringify(lastBk));
+
+        window.location.href = paymentUrl;
+      } else {
+        // Booking đã tồn tại — tạo VNPay payment bình thường
+        const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+        const res = await fetch(`${apiBase}/payments/vnpay-create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: paymentMode, amount: actualAmount }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
+        const paymentUrl = data?.data?.paymentUrl;
+        if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
+
+        const fullPrice = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
+        const depositAmt = pendingDeposit.depositAmount || 0;
+        const lastBk = {
+          branch: selectedBranch || { name: '' },
+          vehicle: vehicle || { licensePlate: '' },
+          pkg: pkg || { name: '' },
+          currentDate,
+          selectedTime,
+          total: fullPrice,
+          discount: 0, points: 0, isPayingWithPack: false,
+          bookingCode: '',
+          subServices: (currentSubServices || []).map(n => {
+            const s = pkg?.subServices?.find(x => x.name === n);
+            return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+          }),
+          depositAmount: depositAmt,
+          depositPaid: true,
+          paymentMode,
+        };
+        sessionStorage.setItem('aw_lastBooking', JSON.stringify(lastBk));
+        window.location.href = paymentUrl;
       }
-
-      // Gọi BE để tạo payment record + VNPay URL (1 lần gọi duy nhất)
-      const res = await fetch(`${apiBase}/payments/vnpay-create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingId, paymentType: paymentMode, amount: actualAmount }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
-      const paymentUrl = data?.data?.paymentUrl;
-      if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
-
-      // Lưu thông tin booking để khôi phục sau VNPay return
-      const lastBk = {
-        branch: selectedBranch || { name: '' },
-        vehicle: vehicle || { licensePlate: '' },
-        pkg: pkg || { name: '' },
-        currentDate,
-        selectedTime,
-        total: fullPrice,
-        discount: 0, points: 0, isPayingWithPack: false,
-        bookingCode: bookingCodeValue,
-        subServices: (currentSubServices || []).map(n => {
-          const s = pkg?.subServices?.find(x => x.name === n);
-          return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
-        }),
-        depositAmount: pendingDeposit.depositAmount || 0,
-        depositPaid: true,
-        paymentMode: paymentMode,
-      };
-      sessionStorage.setItem('aw_lastBooking', JSON.stringify(lastBk));
-
-      // Redirect đến VNPay
-      window.location.href = paymentUrl;
     } catch (e) {
       setError(e.message || 'Thanh toán VNPay thất bại');
       setVnpayLoading(false);
@@ -572,13 +610,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const parsed = JSON.parse(decodeURIComponent(vnpayResult));
         const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
         if (success) {
-          // Khôi phục lastBooking từ sessionStorage
-          const stored = sessionStorage.getItem('aw_lastBooking');
-          if (stored) {
-            try { setLastBooking(JSON.parse(stored)); } catch (e) { /* ignore */ }
-            sessionStorage.removeItem('aw_lastBooking');
-          }
-          setShowSuccessModal(true);
+          // Tạo booking từ draft data đã lưu (provisional VNPay)
+          createBookingAfterPayment();
         } else {
           setError(parsed?.message || 'Thanh toán VNPay thất bại');
         }
@@ -595,34 +628,114 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }, []);
 
-  // Simulate payment confirmation (for demo)
-  async function simulatePaymentConfirm() {
-    if (!depositPayment) return;
+  // Tạo booking sau khi VNPay/Bank payment thành công
+  async function createBookingAfterPayment(isBank = false, pendingData = null) {
+    const draft = isBank ? pendingData : JSON.parse(sessionStorage.getItem('aw_bookingDraft') || '{}');
+    if (!draft || !draft.branchId) { setError('Lỗi dữ liệu draft'); return; }
+
+    setBookingLoading(true);
     try {
-      const res = await fetch(`${apiBase}/payments/simulate`, {
+      const isRec = draft.isRecurring;
+      const ep = isRec ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+      const bBody = isRec
+        ? { branchId: draft.branchId, packageId: draft.packageId, vehicleId: draft.vehicleId, weekdays: draft.weekdays, startTime: draft.startTime, weeks: draft.weeks, voucherCode: draft.voucherCode || undefined, selectedSubServices: draft.selectedSubServices || [], note: '' }
+        : { branchId: draft.branchId, packageId: draft.packageId, vehicleId: draft.vehicleId, bookingDate: draft.bookingDate, startTime: draft.startTime, voucherCode: draft.voucherCode || undefined, selectedSubServices: draft.selectedSubServices || [], note: '' };
+      const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
+      const bd = await br.json();
+      if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
+      const newBk = bd?.data || bd;
+      const bkId = newBk._id || newBk.id;
+      const newCode = newBk?.bookingCode || newBk?.code || '';
+
+      // Tạo payment cho booking
+      const actualAmount = draft.paymentMode === 'full' ? draft.finalPrice : draft.depositAmount;
+      const method = isBank ? 'bank' : 'vnpay';
+      const payRes = await fetch(`${apiBase}/payments`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: bkId, method, paymentType: draft.paymentMode, amount: actualAmount }),
+      });
+      const payData = await payRes.json();
+      if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
+      const payment = payData?.data || payData;
+
+      // Confirm payment
+      await fetch(`${apiBase}/payments/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          transactionId: depositPayment.transactionId,
-          gatewayTransactionId: `SIM${Date.now()}`,
+          transactionId: payment.transactionId,
+          gatewayTransactionId: method === 'bank' ? `SIM${Date.now()}` : 'VNPAY',
           success: true,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Lỗi xác nhận thanh toán');
-      setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
-      setDepositQrStep('success');
-      setTimeout(() => {
-        setPendingDeposit(null);
-        setDepositPayment(null);
-        setDepositQrStep('select');
-        setShowSuccessModal(true);
-      }, 1500);
+
+      // Build lastBooking
+      setLastBooking({
+        branch: { name: draft.branchName || selectedBranch?.name || '' },
+        vehicle: draft.vehicleInfo || vehicle || { licensePlate: '' },
+        pkg: { name: draft.pkgName || pkg?.name || '' },
+        currentDate: isRec ? null : { label: draft.bookingDate ? new Date(draft.bookingDate).toLocaleDateString('vi-VN', { weekday: 'short' }) : '', iso: draft.bookingDate },
+        selectedTime: draft.startTime,
+        total: draft.finalPrice || 0,
+        discount: 0, points: 0, isPayingWithPack: false,
+        bookingCode: newCode,
+        subServices: (draft.selectedSubServices || []).map(n => ({ name: n, price: 0 })),
+        recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
+        depositAmount: draft.depositAmount || 0,
+        depositPaid: true,
+        paymentMode: draft.paymentMode,
+      });
+      setShowSuccessModal(true);
+    } catch (err) {
+      setError(err.message || 'Không thể tạo lịch hẹn sau thanh toán');
+    } finally {
+      setBookingLoading(false);
+      sessionStorage.removeItem('aw_bookingDraft');
+    }
+  }
+
+  // Simulate payment confirmation (for demo)
+  async function simulatePaymentConfirm() {
+    if (!depositPayment) return;
+    setDepositLoading(true);
+    try {
+      if (depositDraft) {
+        // Draft flow: tạo booking + payment + confirm
+        await createBookingAfterPayment(true, depositDraft);
+        setDepositQrStep('success');
+        setTimeout(() => {
+          setPendingDeposit(null);
+          setDepositPayment(null);
+          setDepositDraft(null);
+          setDepositQrStep('select');
+        }, 1500);
+      } else {
+        // Booking đã tồn tại — chỉ simulate confirm payment
+        const res = await fetch(`${apiBase}/payments/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            transactionId: depositPayment.transactionId,
+            gatewayTransactionId: `SIM${Date.now()}`,
+            success: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Lỗi xác nhận thanh toán');
+        setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
+        setDepositQrStep('success');
+        setTimeout(() => {
+          setPendingDeposit(null);
+          setDepositPayment(null);
+          setDepositQrStep('select');
+          setShowSuccessModal(true);
+        }, 1500);
+      }
     } catch (err) {
       setError(err.message || 'Lỗi xác nhận thanh toán');
+    } finally {
+      setDepositLoading(false);
     }
   }
 
@@ -2190,7 +2303,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100/80"
               onClick={e => e.stopPropagation()}
             >
-              {depositQrStep === 'qr' && depositPayment?.qrCode ? (
+              {depositQrStep === 'qr' && depositPayment ? (
                 <>
                   {/* QR Code View */}
                   <div className="pt-8 pb-4 text-center px-6">
@@ -2203,11 +2316,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <p className="text-slate-400 text-xs mt-1">Quét mã QR hoặc chuyển khoản thủ công</p>
                   </div>
 
-                  <div className="px-8 pb-2 flex justify-center">
-                    <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shadow-sm">
-                      <img src={depositPayment.qrCode} alt="QR code" className="w-56 h-56" />
+                  {depositPayment.qrCode && (
+                    <div className="px-8 pb-2 flex justify-center">
+                      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shadow-sm">
+                        <img src={depositPayment.qrCode} alt="QR code" className="w-56 h-56" />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="px-8 py-4 space-y-2">
                     <div className="bg-slate-50 rounded-xl p-3 text-center">
