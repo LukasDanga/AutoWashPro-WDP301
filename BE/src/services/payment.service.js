@@ -7,7 +7,7 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-const VALID_METHODS = ['cash', 'bank'];
+const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo'];
 
 const generateQrDataUrl = async (transactionId, amount, method) => {
   let content;
@@ -94,7 +94,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
   const existingPending = await Payment.findOne({ bookingId, status: 'pending' });
   if (existingPending && method !== 'cash') {
-    if (isDeposit && !existingPending.qrCode) {
+    if (method === 'bank' && isDeposit && !existingPending.qrCode) {
       existingPending.qrCode = await generateQrDataUrl(existingPending.transactionId, amount, method);
       await existingPending.save();
     }
@@ -164,6 +164,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   if (method === 'bank') {
     payment.qrCode = await generateQrDataUrl(payment.transactionId, amount, method);
   }
+  // VNPay / MoMo: không cần QR, trả về payment record để FE gọi payment service tạo URL
   await payment.save();
   return payment;
 };
@@ -191,10 +192,6 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     if (!VALID_METHODS.includes(method)) {
       await session.abortTransaction();
       throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
-    }
-    if (payment.method !== method) {
-      await session.abortTransaction();
-      throw Object.assign(new Error('Payment method mismatch'), { statusCode: 400, code: 'METHOD_MISMATCH' });
     }
     if (booking.status === 'cancelled') {
       await session.abortTransaction();

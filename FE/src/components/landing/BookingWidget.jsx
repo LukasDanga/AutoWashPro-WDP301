@@ -100,6 +100,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [depositMethod, setDepositMethod] = useState('bank');
   const [paymentMode, setPaymentMode] = useState('deposit'); // 'deposit' or 'full'
   const [depositLoading, setDepositLoading] = useState(false);
+  const [vnpayLoading, setVnpayLoading] = useState(false);
   const [depositPollCount, setDepositPollCount] = useState(0);
   const [voucherModalOpen, setVoucherModalOpen] = useState(false);
 
@@ -480,6 +481,109 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     const interval = setInterval(checkPaymentStatus, 10000);
     return () => clearInterval(interval);
   }, [depositQrStep, depositPayment, checkPaymentStatus]);
+
+  async function payWithVnpay() {
+    if (!pendingDeposit) return;
+    setVnpayLoading(true);
+    setError('');
+    try {
+      let bookingId = pendingDeposit._id;
+      let actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+      let fullPrice = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
+      let bookingCodeValue = bookingCode || '';
+
+      if (pendingDeposit.isDraft) {
+        const pb = pendingDeposit._pendingData;
+        const isRec = pendingDeposit.tab === 'recurring';
+        const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
+        const ep = isRec ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
+        const bBody = pb
+          ? (isRec
+            ? { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, weekdays: pb.selectedDays, startTime: pb.selectedTime, weeks: pb.weeks, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' }
+            : { branchId: pb.branchId, packageId: pb.packageId, vehicleId: vId, bookingDate: pb.selectedDate || undefined, startTime: pb.selectedTime, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' })
+          : (isRec
+            ? { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, weekdays: selectedDays, startTime: selectedTime, weeks, voucherCode: appliedVoucher?.code || undefined, selectedSubServices: currentSubServices, note: '' }
+            : { branchId: selectedBranch?._id || selectedBranch?.id, packageId: pkg?._id || pkg?.id, vehicleId: vId, bookingDate: currentDate?.iso, startTime: selectedTime, voucherCode: isPayingWithPack ? undefined : (appliedVoucher?.code || undefined), selectedSubServices: currentSubServices, slotPackId: selectedSlotPack || undefined, note: '' });
+        const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
+        const bd = await br.json();
+        if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
+        const newBk = bd?.data || bd;
+        bookingId = newBk._id || newBk.id;
+        actualAmount = paymentMode === 'full' ? (newBk.finalPrice || actualAmount) : (newBk.depositAmount || actualAmount);
+        fullPrice = newBk.finalPrice || fullPrice;
+        bookingCodeValue = newBk.bookingCode || newBk.code || '';
+      }
+
+      // Gọi BE để tạo payment record + VNPay URL (1 lần gọi duy nhất)
+      const res = await fetch(`${apiBase}/payments/vnpay-create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId, paymentType: paymentMode, amount: actualAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
+      const paymentUrl = data?.data?.paymentUrl;
+      if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
+
+      // Lưu thông tin booking để khôi phục sau VNPay return
+      const lastBk = {
+        branch: selectedBranch || { name: '' },
+        vehicle: vehicle || { licensePlate: '' },
+        pkg: pkg || { name: '' },
+        currentDate,
+        selectedTime,
+        total: fullPrice,
+        discount: 0, points: 0, isPayingWithPack: false,
+        bookingCode: bookingCodeValue,
+        subServices: (currentSubServices || []).map(n => {
+          const s = pkg?.subServices?.find(x => x.name === n);
+          return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+        }),
+        depositAmount: pendingDeposit.depositAmount || 0,
+        depositPaid: true,
+        paymentMode: paymentMode,
+      };
+      sessionStorage.setItem('aw_lastBooking', JSON.stringify(lastBk));
+
+      // Redirect đến VNPay
+      window.location.href = paymentUrl;
+    } catch (e) {
+      setError(e.message || 'Thanh toán VNPay thất bại');
+      setVnpayLoading(false);
+    }
+  }
+
+  // Xử lý VNPay return callback (BE đã tự confirm, FE chỉ đọc kết quả)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vnpayResult = params.get('vnpay_result');
+    if (vnpayResult) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(vnpayResult));
+        const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
+        if (success) {
+          // Khôi phục lastBooking từ sessionStorage
+          const stored = sessionStorage.getItem('aw_lastBooking');
+          if (stored) {
+            try { setLastBooking(JSON.parse(stored)); } catch (e) { /* ignore */ }
+            sessionStorage.removeItem('aw_lastBooking');
+          }
+          setShowSuccessModal(true);
+        } else {
+          setError(parsed?.message || 'Thanh toán VNPay thất bại');
+        }
+      } catch (e) {
+        setError('Lỗi xử lý kết quả thanh toán VNPay');
+      }
+      setPendingDeposit(null);
+      setDepositPayment(null);
+      setDepositQrStep('select');
+      // Clean URL params
+      const url = new URL(window.location);
+      url.searchParams.delete('vnpay_result');
+      window.history.replaceState({}, '', url);
+    }
+  }, []);
 
   // Simulate payment confirmation (for demo)
   async function simulatePaymentConfirm() {
@@ -1716,12 +1820,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             }
                           </span>
                         </div>
-                        {total > 0 && (
-                          <div className="flex justify-between items-center pt-2">
-                            <span className="text-sm font-semibold text-amber-600">Đặt cọc (30%)</span>
-                            <span className="text-lg font-bold text-amber-600">{formatCurrency(tab === 'recurring' ? Math.round((totalBase - discount) * previewDates.length * 0.3 / 1000) * 1000 : Math.round(total * 0.3 / 1000) * 1000)}</span>
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   </div>
@@ -1783,6 +1882,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
 
+                  {message && (
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 text-sm font-semibold flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 shrink-0" />
+                      <span>{message}</span>
+                    </div>
+                  )}
                   {error && (
                     <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-sm font-semibold flex items-center gap-2">
                       <AlertCircle className="w-5 h-5 shrink-0" />
@@ -1938,24 +2043,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
               <div className="p-6 space-y-4 overflow-y-auto flex-1">
                 {/* Booking Code Callout */}
-                <div className="text-center bg-slate-50 border border-slate-100/60 p-4 rounded-2xl">
-                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Mã đặt lịch của bạn</span>
-                  <div className="flex items-center justify-center gap-2 mt-1.5 font-mono">
-                    <span className="text-xl font-extrabold text-emerald-600 tracking-wider">
-                      {lastBooking.bookingCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(lastBooking.bookingCode);
-                        alert('Đã copy mã đặt lịch!');
-                      }}
-                      className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 transition-colors"
-                      title="Sao chép"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                <div className="text-center bg-gradient-to-br from-emerald-50 to-emerald-100/60 border-2 border-emerald-200/70 p-5 rounded-2xl shadow-sm">
+                  <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wider block">Mã đặt lịch của bạn</span>
+                  <span className="block mt-2 text-2xl font-black text-emerald-700 tracking-[0.15em] font-mono">
+                    {lastBooking.bookingCode}
+                  </span>
                 </div>
 
                 {/* Details list */}
@@ -2114,7 +2206,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <div className="text-[11px] text-slate-400 mt-1">
                         {paymentMode === 'full' 
                           ? 'Thanh toán 100%'
-                          : `Đặt cọc ${Math.round(((depositPayment.amount || pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}% · Còn lại ${formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)`
+                          : `Đặt cọc 30% · Còn lại ${formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)`
                         }
                       </div>
                     </div>
@@ -2183,8 +2275,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <>
                             <div className="flex justify-between items-end">
                               <div>
-                                <span className="text-amber-600 font-semibold text-sm">Đặt cọc ({Math.round(((pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}%)</span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">{Math.round(((pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
+                                <span className="text-amber-600 font-semibold text-sm">Đặt cọc (30%)</span>
+                                <div className="text-[11px] text-slate-400 mt-0.5">30% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
                               </div>
                               <span className="font-black text-xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
                             </div>
@@ -2220,7 +2312,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           onClick={() => setPaymentMode('deposit')} 
                           className={`p-4 border-2 rounded-xl text-left transition-all ${paymentMode === 'deposit' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-200 hover:border-amber-200 hover:bg-amber-50/50'}`}
                         >
-                          <div className={`font-bold text-sm ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc {Math.round(((pendingDeposit.depositAmount || 0) / (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 1)) * 100)}%</div>
+                          <div className={`font-bold text-sm ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc 30%</div>
                           <div className={`mt-1 text-lg font-black ${paymentMode === 'deposit' ? 'text-amber-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
                         </button>
                         <button 
@@ -2235,9 +2327,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                     <div>
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Chọn phương thức</span>
-                      <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         {[
-                          { value: 'bank', label: 'Ngân hàng', color: '#10b981', icon: '' },
+                          { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
+                          { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
                         ].map(m => (
                           <button
                             key={m.value}
@@ -2254,7 +2347,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
                                 </svg>
-                              ) : m.icon}
+                              ) : (
+                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                                </svg>
+                              )}
                             </div>
                             <span className={`text-xs font-bold ${depositMethod === m.value ? 'text-emerald-700' : 'text-slate-500'}`}>
                               {m.label}
@@ -2275,10 +2372,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <ArrowLeft className="w-4 h-4" />
                       Quay lại
                     </button>
-                    <button type="button" onClick={payDeposit} disabled={depositLoading}
+                    <button type="button" onClick={depositMethod === 'vnpay' ? payWithVnpay : payDeposit} disabled={depositLoading || vnpayLoading}
                       className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
-                      {depositLoading ? (
+                      {depositLoading || vnpayLoading ? (
                         <><RefreshCw className="w-4 h-4 animate-spin" />{'ĐANG XỬ LÝ...'}</>
+                      ) : depositMethod === 'vnpay' ? (
+                        'THANH TOÁN VNPAY ' + formatCurrency(paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0))
                       ) : paymentMode === 'full' ? (
                         'THANH TOÁN ' + formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)
                       ) : (

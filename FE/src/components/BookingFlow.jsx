@@ -64,6 +64,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [bookingCode, setBookingCode] = useState('');
   const [pendingDeposit, setPendingDeposit] = useState(null); // booking đang chờ đặt cọc
   const [depositLoading, setDepositLoading] = useState(false);
+  const [vnpayLoading, setVnpayLoading] = useState(false);
   const [mySlotPacks, setMySlotPacks] = useState([]);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
   const [activeNav, setActiveNav] = useState('dashboard');
@@ -251,6 +252,26 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       setPendingDeposit(null);
     } catch (e) { setMessage(e.message || 'Thanh toán cọc thất bại'); }
     finally { setDepositLoading(false); }
+  }
+
+  async function payWithVnpay() {
+    if (!pendingDeposit) return;
+    setVnpayLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/payments/vnpay-create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: 'deposit', amount: pendingDeposit.depositAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
+      const paymentUrl = data?.data?.paymentUrl;
+      if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
+      window.location.href = paymentUrl;
+    } catch (e) {
+      setMessage(e.message || 'Thanh toán VNPay thất bại');
+      setVnpayLoading(false);
+    }
   }
 
   return (
@@ -594,10 +615,16 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                   <span style={{ color: '#475569', fontWeight: 600 }}>{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || 0) - (pendingDeposit.depositAmount || 0)))}</span>
                 </div>
               </div>
-              <button type="button" onClick={payDeposit} disabled={depositLoading}
-                style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
-                {depositLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN CỌC ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button type="button" onClick={payDeposit} disabled={depositLoading}
+                  style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
+                  {depositLoading ? 'ĐANG XỬ LÝ...' : `CHUYỂN KHOẢN ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+                </button>
+                <button type="button" onClick={payWithVnpay} disabled={vnpayLoading}
+                  style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid #10b981', background: '#fff', color: '#10b981', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: vnpayLoading ? 0.7 : 1 }}>
+                  {vnpayLoading ? 'ĐANG CHUYỂN HƯỚNG...' : `THANH TOÁN VNPay ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+                </button>
+              </div>
               <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center' }}>
                 Tiền cọc sẽ không được hoàn lại nếu bạn không đến đúng giờ hẹn.
               </p>
