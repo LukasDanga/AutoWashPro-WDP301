@@ -125,9 +125,13 @@ function PackCard({ pack, onQuickBook, onCancelPack, cancelPackLoading }) {
       )}
       {pack.status === 'active' && (
         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-          <button onClick={() => onQuickBook?.(pack)}
-            className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition-all">
-            Đặt lịch nhanh
+          <button onClick={() => onQuickBook?.(pack)} disabled={pack.remainingSlots <= 0}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              pack.remainingSlots <= 0
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-emerald-600 text-white hover:bg-emerald-500'
+            }`}>
+            {pack.remainingSlots <= 0 ? 'Đã hết lượt' : 'Đặt lịch nhanh'}
           </button>
           <button onClick={() => onCancelPack?.(packId)} disabled={cancelPackLoading === packId}
             className="px-4 py-2 rounded-xl border border-red-200 text-red-500 text-xs font-bold hover:bg-red-50 disabled:opacity-40 transition-all">
@@ -217,6 +221,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [qbSubmitting, setQbSubmitting] = useState(false);
   const [qbError, setQbError] = useState('');
   const [cancelPackLoading, setCancelPackLoading] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [qbBranchId, setQbBranchId] = useState('');
 
   const debounceRef = useRef(null);
 
@@ -266,6 +272,17 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       })
       .finally(() => setSlotPacksLoading(false));
   }, [apiBase, token]);
+
+  // Fetch public branches cho pack không khóa chi nhánh
+  useEffect(() => {
+    fetch(`${apiBase || API_BASE}/branches/public`)
+      .then(r => r.json())
+      .then(payload => {
+        const data = payload?.data || payload;
+        setBranches(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {});
+  }, [apiBase]);
 
   useEffect(() => {
     if (viewMode === 'slot_packs') {
@@ -451,7 +468,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   function openQuickBookFromPack(pack) {
     setQuickBookPack(pack);
     setQuickBookPrefill(null);
-    setQbVehicleId('');
+    setQbBranchId('');
+    // Nếu pack có vehicleId thì prefill luôn xe đó
+    const vid = pack.vehicleId?._id || pack.vehicleId?.id || '';
+    setQbVehicleId(vid);
     setQbDate('');
     setQbSlots([]);
     setQbTime('');
@@ -473,7 +493,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   // Fetch slots khi chọn ngày trong quick book
   useEffect(() => {
     if (!qbDate) { setQbSlots([]); setQbTime(''); return; }
-    const branchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
+    // Ưu tiên branch từ pack → prefill → qbBranchId (khi pack không khóa chi nhánh)
+    const branchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id
+      || qbBranchId
+      || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
     const pkgId = quickBookPack?.packageId?._id || quickBookPack?.packageId?.id || quickBookPrefill?.packageId?._id || quickBookPrefill?.packageId?.id;
     if (!branchId || !pkgId) return;
     setQbSlotsLoading(true);
@@ -491,10 +514,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   }, [qbDate, quickBookPack, quickBookPrefill, apiBase, token]);
 
   async function confirmQuickBook() {
+    // Validate pack vẫn còn lượt
+    if (quickBookPack && quickBookPack.remainingSlots <= 0) {
+      setQbError('Gói lượt này đã hết lượt sử dụng');
+      return;
+    }
     if (!qbDate) { setQbError('Vui lòng chọn ngày'); return; }
     if (!qbTime) { setQbError('Vui lòng chọn khung giờ'); return; }
-    const branchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
+    const branchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id
+      || qbBranchId
+      || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
     const pkgId = quickBookPack?.packageId?._id || quickBookPack?.packageId?.id || quickBookPrefill?.packageId?._id || quickBookPrefill?.packageId?.id;
+    if (!branchId) { setQbError('Vui lòng chọn chi nhánh'); return; }
     const vehicleId = qbVehicleId || quickBookPrefill?.vehicleId?._id || quickBookPrefill?.vehicleId?.id;
     if (!vehicleId) { setQbError('Vui lòng chọn xe'); return; }
     setQbSubmitting(true);
@@ -515,7 +546,14 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Đặt lịch thất bại');
+      if (!res.ok) {
+        const serverMsg = data.message || data.error || '';
+        // Nếu pack hết lượt / hết hạn / không còn hiệu lực → thông báo rõ
+        if (serverMsg.toLowerCase().includes('slot') || serverMsg.toLowerCase().includes('hết lượt') || serverMsg.includes('remain')) {
+          throw new Error('Gói lượt đã hết hoặc không còn hiệu lực. Vui lòng kiểm tra lại.');
+        }
+        throw new Error(serverMsg || 'Đặt lịch thất bại');
+      }
       showToastMsg(quickBookPack ? 'Đã đặt lịch từ gói lượt!' : 'Đặt lịch thành công!');
       setShowQuickBookModal(false);
       fetchSlotPacks();
@@ -527,14 +565,16 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }
 
-  // Auto-select first vehicle cho quick book
+  // Auto-select first vehicle cho quick book (chỉ khi pack không khóa xe)
   useEffect(() => {
     if (!showQuickBookModal) return;
-    if (quickBookPrefill?.vehicleId?._id || quickBookPrefill?.vehicleId?.id) return; // already set
+    if (quickBookPrefill?.vehicleId?._id || quickBookPrefill?.vehicleId?.id) return;
+    // Nếu pack đã khóa xe, không auto-select
+    if (quickBookPack?.vehicleId?._id || quickBookPack?.vehicleId?.id) return;
     if (!qbVehicleId && userVehicles.length > 0) {
       setQbVehicleId(userVehicles[0]._id || userVehicles[0].id);
     }
-  }, [showQuickBookModal, quickBookPrefill, userVehicles, qbVehicleId]);
+  }, [showQuickBookModal, quickBookPrefill, quickBookPack, userVehicles, qbVehicleId]);
 
   async function handleCancelPack(packId) {
     if (!confirm('Bạn có chắc muốn hủy gói lượt này?')) return;
@@ -1812,22 +1852,44 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 </div>
               )}
 
+              {/* Khi pack không khóa chi nhánh → cho chọn chi nhánh */}
+              {pack && !(pack.branchId?._id || pack.branchId?.id) && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 block mb-1.5 uppercase tracking-wider">Chọn chi nhánh</label>
+                  <select value={qbBranchId} onChange={e => setQbBranchId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400">
+                    <option value="">-- Chọn chi nhánh --</option>
+                    {branches.map(b => (
+                      <option key={b._id || b.id} value={b._id || b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1.5 uppercase tracking-wider">Chọn xe</label>
                 <select value={qbVehicleId} onChange={e => setQbVehicleId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400">
+                  disabled={!!(quickBookPack?.vehicleId?._id || quickBookPack?.vehicleId?.id)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
                   {userVehicles.map(v => (
                     <option key={v._id || v.id} value={v._id || v.id}>
                       {v.licensePlate || v.name} {v.brand ? `(${v.brand})` : ''}
                     </option>
                   ))}
                 </select>
+                {(quickBookPack?.vehicleId?._id || quickBookPack?.vehicleId?.id) && (
+                  <p className="text-[11px] text-slate-400 mt-1">Gói này chỉ áp dụng cho xe đã chọn</p>
+                )}
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1.5 uppercase tracking-wider">Chọn ngày</label>
-                <input type="date" value={qbDate} min={new Date().toISOString().split('T')[0]} onChange={e => setQbDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400" />
+                <input type="date" value={qbDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={e => setQbDate(e.target.value)}
+                  // Khi pack không khóa chi nhánh mà chưa chọn chi nhánh → disable
+                  disabled={!!(pack && !(pack.branchId?._id || pack.branchId?.id) && !qbBranchId)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed" />
               </div>
 
               {qbDate && (
