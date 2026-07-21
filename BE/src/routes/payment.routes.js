@@ -85,6 +85,28 @@ router.get('/unviewed-count', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER
 
 /**
  * @swagger
+ * /api/payments/range:
+ *   delete:
+ *     summary: Delete payments by date range or all (admin only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: all
+ *         schema: { type: string }
+ *         description: Set "true" to delete all payments
+ */
+router.delete('/range', authenticate, authorize(ROLES.ADMIN), bookingController.deletePaymentsByDateRange);
+
+/**
+ * @swagger
  * /api/payments/{id}/viewed:
  *   patch:
  *     summary: Mark payment as viewed (admin/manager)

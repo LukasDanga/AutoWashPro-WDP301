@@ -82,6 +82,21 @@ exports.deleteBooking = catchAsync(async (req, res) => {
   success(res, null, 'Booking deleted');
 });
 
+exports.deleteBookingsByDateRange = catchAsync(async (req, res) => {
+  const { dateFrom, dateTo, all } = req.query;
+  let result;
+  if (all === 'true') {
+    result = await bookingService.deleteAllBookings();
+  } else {
+    if (!dateFrom || !dateTo) {
+      throw Object.assign(new Error('Vui lòng cung cấp dateFrom và dateTo'), { statusCode: 400 });
+    }
+    result = await bookingService.deleteBookingsByDateRange(dateFrom, dateTo);
+  }
+  sseService.broadcastToAll('slots_updated');
+  success(res, result, `Đã xóa ${result.deletedCount} đặt lịch`);
+});
+
 exports.getAvailableSlots = catchAsync(async (req, res) => {
   const { branchId, date, packageId } = req.query;
   const slots = await bookingService.getAvailableSlots(branchId, date, packageId);
@@ -152,6 +167,20 @@ exports.refundPayment = catchAsync(async (req, res) => {
   const { bookingId } = req.body;
   const payment = await paymentService.refundPayment(bookingId);
   success(res, payment, 'Payment refunded');
+});
+
+exports.deletePaymentsByDateRange = catchAsync(async (req, res) => {
+  const { dateFrom, dateTo, all } = req.query;
+  let result;
+  if (all === 'true') {
+    result = await paymentService.deleteAllPayments();
+  } else {
+    if (!dateFrom || !dateTo) {
+      throw Object.assign(new Error('Vui lòng cung cấp dateFrom và dateTo'), { statusCode: 400 });
+    }
+    result = await paymentService.deletePaymentsByDateRange(dateFrom, dateTo);
+  }
+  success(res, result, `Đã xóa ${result.deletedCount} giao dịch`);
 });
 
 
@@ -280,7 +309,7 @@ exports.vnpayCallback = catchAsync(async (req, res) => {
 });
 
 exports.createVnpayPayment = catchAsync(async (req, res) => {
-  const { bookingId, paymentType, amount } = req.body;
+  const { bookingId, paymentType, amount, returnUrl } = req.body;
   const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
 
   // Tạo payment record trước
@@ -289,6 +318,7 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
     amount: payment.amount,
     ipAddr,
     txnRef: payment.transactionId,
+    returnUrl: returnUrl || undefined,
   });
 
   success(res, { paymentUrl: vnpayUrl, transactionId: payment.transactionId, payment }, 'VNPay URL created');
@@ -302,10 +332,19 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   const resultJson = JSON.stringify(result);
   const encoded = encodeURIComponent(resultJson);
 
+  // Mobile deep link support: if client=mobile was passed in returnUrl,
+  // redirect to the app scheme so Expo Router picks it up.
+  const isMobile = req.query.client === 'mobile';
+  const mobileBookingId = req.query.bookingId || '';
+
   if (result.success) {
     const txnRef = result.data.txnRef;
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+      if (isMobile) {
+        const deepLinkId = mobileBookingId || result.data.txnRef || '';
+        return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+      }
       // Provisional & slot pack đều redirect về /booking (nơi BookingWidget render)
       if (payment && (!payment.bookingId || payment.slotPackId)) {
         return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
@@ -315,6 +354,10 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
     }
   }
 
+  if (isMobile) {
+    const deepLinkId = mobileBookingId || req.query.txnRef || '';
+    return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+  }
   return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
 });
 
