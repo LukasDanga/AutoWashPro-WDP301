@@ -228,9 +228,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [qbApplyingVoucher, setQbApplyingVoucher] = useState(false);
   const [qbAvailableVouchers, setQbAvailableVouchers] = useState([]);
   const [qbVouchersLoading, setQbVouchersLoading] = useState(false);
-  const [qbShowPayment, setQbShowPayment] = useState(false);
-  const [qbCreatedBooking, setQbCreatedBooking] = useState(null);
-  const [qbSimulating, setQbSimulating] = useState(false);
+  const [qbQrStep, setQbQrStep] = useState('form'); // 'form' | 'qr' | 'vnpay_redirect'
+  const [qbDepositPayment, setQbDepositPayment] = useState(null);
+  const [qbDraft, setQbDraft] = useState(null);
+  const [qbQrPollCount, setQbQrPollCount] = useState(0);
+  const [qbQrLoading, setQbQrLoading] = useState(false);
+  const qbPollRef = useRef(null);
+
+  // Cleanup poll khi modal đóng
+  useEffect(() => {
+    if (!showQuickBookModal) {
+      if (qbPollRef.current) clearInterval(qbPollRef.current);
+    }
+  }, [showQuickBookModal]);
 
   const debounceRef = useRef(null);
 
@@ -484,8 +494,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQbError('');
     setQbVoucherCode('');
     setQbVoucherDiscount(0);
-    setQbShowPayment(false);
-    setQbCreatedBooking(null);
+    setQbDraft(null);
+    setQbDepositPayment(null);
+    setQbQrStep('form');
+    if (qbPollRef.current) clearInterval(qbPollRef.current);
     setShowQuickBookModal(true);
   }
 
@@ -500,8 +512,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQbVoucherCode('');
     setQbVoucherDiscount(0);
     setQbAvailableVouchers([]);
-    setQbShowPayment(false);
-    setQbCreatedBooking(null);
+    setQbDraft(null);
+    setQbDepositPayment(null);
+    setQbQrStep('form');
+    if (qbPollRef.current) clearInterval(qbPollRef.current);
     setShowQuickBookModal(true);
   }
 
@@ -604,6 +618,115 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
     const vehicleId = qbVehicleId || quickBookPrefill?.vehicleId?._id || quickBookPrefill?.vehicleId?.id;
     if (!vehicleId) { setQbError('Vui lòng chọn xe'); return; }
+
+    if (quickBookPack) {
+      // Gói slot → đã thanh toán 100% → tạo booking ngay
+      setQbSubmitting(true);
+      setQbError('');
+      try {
+        const res = await fetch(`${apiBase || API_BASE}/bookings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            branchId, packageId: pkgId, vehicleId,
+            bookingDate: qbDate, startTime: qbTime,
+            slotPackId: quickBookPack._id || quickBookPack.id,
+            selectedSubServices: [], note: '',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || 'Đặt lịch thất bại');
+        showToastMsg('Đã đặt lịch từ gói lượt!');
+        setShowQuickBookModal(false);
+        fetchSlotPacks();
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      } catch (e) {
+        setQbError(e.message);
+      } finally {
+        setQbSubmitting(false);
+      }
+      return;
+    }
+
+    // Không dùng gói → lưu draft, tạo provisional payment trước
+    const deposit = getQbDeposit();
+    if (deposit <= 0) {
+      // Miễn phí → tạo booking ngay
+      setQbSubmitting(true);
+      setQbError('');
+      try {
+        const res = await fetch(`${apiBase || API_BASE}/bookings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            branchId, packageId: pkgId, vehicleId,
+            bookingDate: qbDate, startTime: qbTime,
+            voucherCode: qbVoucherCode.trim() || undefined,
+            selectedSubServices: [], note: '',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || 'Đặt lịch thất bại');
+        showToastMsg('Đặt lịch thành công!');
+        setShowQuickBookModal(false);
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      } catch (e) {
+        setQbError(e.message);
+      } finally {
+        setQbSubmitting(false);
+      }
+      return;
+    }
+
+    // Có cọc → lưu draft, chuyển sang bước thanh toán
+    setQbDraft({ branchId, packageId: pkgId, vehicleId, deposit });
+    setQbError('');
+    const api = apiBase || API_BASE;
+    setQbQrLoading(true);
+    try {
+      const payRes = await fetch(`${api}/payments/bank-provisional`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amount: deposit, paymentType: 'deposit' }),
+      });
+      const payData = await payRes.json();
+      if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
+      setQbDepositPayment(payData?.data || payData);
+      setQbQrStep('qr');
+      setQbQrPollCount(0);
+    } catch (e) {
+      setQbError(e.message);
+    } finally {
+      setQbQrLoading(false);
+    }
+  }
+
+  // Poll payment status every 10s
+  useEffect(() => {
+    if (qbQrStep !== 'qr' || !qbDepositPayment) return;
+    qbPollRef.current = setInterval(async () => {
+      try {
+        const payment = qbDepositPayment;
+        const pid = payment._id || payment.id;
+        const res = await fetch(`${apiBase || API_BASE}/payments/booking/${pid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const p = data?.data || data;
+        if (p?.status === 'paid') {
+          clearInterval(qbPollRef.current);
+          await createBookingAfterQbPayment();
+        }
+        setQbQrPollCount(c => c + 1);
+      } catch {}
+    }, 10000);
+    return () => { if (qbPollRef.current) clearInterval(qbPollRef.current); };
+  }, [qbQrStep, qbDepositPayment, apiBase, token]);
+
+  async function createBookingAfterQbPayment() {
+    if (!qbDraft) return;
+    const d = qbDraft;
     setQbSubmitting(true);
     setQbError('');
     try {
@@ -611,35 +734,34 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          branchId,
-          packageId: pkgId,
-          vehicleId,
-          bookingDate: qbDate,
-          startTime: qbTime,
+          branchId: d.branchId, packageId: d.packageId, vehicleId: d.vehicleId,
+          bookingDate: qbDate, startTime: qbTime,
           voucherCode: qbVoucherCode.trim() || undefined,
-          slotPackId: quickBookPack ? (quickBookPack._id || quickBookPack.id) : undefined,
-          selectedSubServices: [],
-          note: '',
+          selectedSubServices: [], note: '',
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        const serverMsg = data.message || data.error || '';
-        if (serverMsg.toLowerCase().includes('slot') || serverMsg.toLowerCase().includes('hết lượt') || serverMsg.includes('remain')) {
-          throw new Error('Gói lượt đã hết hoặc không còn hiệu lực. Vui lòng kiểm tra lại.');
-        }
-        throw new Error(serverMsg || 'Đặt lịch thất bại');
-      }
-      if (quickBookPack) {
-        // Gói slot → đã thanh toán 100%
-        showToastMsg('Đã đặt lịch từ gói lượt!');
-        setShowQuickBookModal(false);
-      } else {
-        // Không dùng gói → cần thanh toán cọc
-        setQbCreatedBooking(data?.data);
-        setQbShowPayment(true);
-      }
-      fetchSlotPacks();
+      if (!res.ok) throw new Error(data.message || data.error || 'Tạo booking thất bại');
+      const bk = data?.data || data;
+      // Tạo payment record cho booking
+      const payRes = await fetch(`${apiBase || API_BASE}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: bk._id || bk.id, method: 'bank', paymentType: 'deposit', amount: d.deposit }),
+      });
+      const payData = await payRes.json();
+      if (!payRes.ok) throw new Error(payData.message || 'Tạo payment thất bại');
+      // Simulate confirm
+      await fetch(`${apiBase || API_BASE}/payments/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          transactionId: payData?.data?.transactionId,
+          gatewayTransactionId: `SIM${Date.now()}`,
+        }),
+      });
+      showToastMsg('Đặt lịch và thanh toán thành công!');
+      setShowQuickBookModal(false);
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (e) {
       setQbError(e.message);
@@ -648,40 +770,27 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }
 
-  async function handleQbPayment(method) {
-    if (!qbCreatedBooking) return;
-    const booking = qbCreatedBooking;
-    const bookingId = booking._id || booking.id;
-    const deposit = getQbDeposit();
-    if (deposit <= 0) return;
-    setQbSimulating(true);
+  // Simulate/Nút "Đã chuyển khoản" cho demo
+  async function simulateQbPayment() {
+    if (!qbDepositPayment) return;
+    setQbQrLoading(true);
     setQbError('');
     try {
-      // Tạo payment record
-      const payRes = await fetch(`${apiBase || API_BASE}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingId, method, paymentType: 'deposit', amount: deposit }),
-      });
-      const payData = await payRes.json();
-      if (!payRes.ok) throw new Error(payData.message || payData.error || 'Tạo payment thất bại');
-      // Simulate thanh toán (demo)
+      // Gọi simulate trước → cập nhật trạng thái payment thành paid
       const simRes = await fetch(`${apiBase || API_BASE}/payments/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          transactionId: payData?.data?.transactionId,
-          gatewayTransactionId: `SIM_${Date.now()}`,
+          transactionId: qbDepositPayment.transactionId,
+          gatewayTransactionId: `SIM${Date.now()}`,
         }),
       });
-      const simData = await simRes.json();
-      if (!simRes.ok) throw new Error(simData.message || 'Xác nhận thanh toán thất bại');
-      showToastMsg('Đặt lịch và thanh toán thành công!');
-      setShowQuickBookModal(false);
+      if (!simRes.ok) throw new Error('Xác nhận thanh toán thất bại');
+      await createBookingAfterQbPayment();
     } catch (e) {
       setQbError(e.message);
     } finally {
-      setQbSimulating(false);
+      setQbQrLoading(false);
     }
   }
 
@@ -1945,40 +2054,49 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const pkgName = pack?.packageId?.name || prefill?.packageName || prefill?.packageId?.name || '';
         const basePrice = getQbBasePrice();
         const deposit = getQbDeposit();
-        if (qbShowPayment) {
+        if (qbQrStep === 'qr') {
+          const pay = qbDepositPayment;
+          const qrCodeUrl = pay?.qrCode || '';
           return (
           <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setShowQuickBookModal(false)}>
+            onClick={() => { setQbQrStep('form'); setQbDepositPayment(null); if (qbPollRef.current) clearInterval(qbPollRef.current); }}>
             <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-              <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0">
-                <h3 className="text-lg font-bold text-slate-900">Thanh toán</h3>
+              <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900">Thanh toán cọc</h3>
+                <button onClick={() => { setQbQrStep('form'); setQbDepositPayment(null); if (qbPollRef.current) clearInterval(qbPollRef.current); }}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </div>
-              <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
-                <div className="rounded-xl bg-sky-50 border border-sky-200 p-4 text-center">
+              <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1 text-center">
+                <div className="rounded-xl bg-sky-50 border border-sky-200 p-4">
                   <div className="text-xs text-sky-700 font-semibold uppercase tracking-wider">Tiền cọc</div>
                   <div className="text-2xl font-extrabold text-slate-900 mt-1">{deposit.toLocaleString('vi-VN')}đ</div>
                   <div className="text-xs text-slate-500 mt-1">(30% — {Math.max(0, basePrice - qbVoucherDiscount).toLocaleString('vi-VN')}đ)</div>
                 </div>
-                {qbVoucherDiscount > 0 && (
-                  <div className="text-xs text-emerald-600 text-center">Đã giảm {qbVoucherDiscount.toLocaleString('vi-VN')}đ từ voucher</div>
+                {qrCodeUrl && (
+                  <div className="flex justify-center">
+                    <img src={qrCodeUrl} alt="QR thanh toán" className="w-56 h-56 rounded-xl border border-slate-200 shadow-sm" />
+                  </div>
                 )}
-                <div className="flex gap-3">
-                  <button onClick={() => handleQbPayment('vnpay')} disabled={qbSimulating}
-                    className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-500 disabled:opacity-40 transition-all">
-                    {qbSimulating ? 'Đang xử lý...' : 'Thanh toán VNPay'}
-                  </button>
-                  <button onClick={() => handleQbPayment('bank')} disabled={qbSimulating}
-                    className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 transition-all">
-                    {qbSimulating ? 'Đang xử lý...' : 'Chuyển khoản'}
-                  </button>
+                <div className="text-xs text-slate-500 space-y-1">
+                  <p>Quét mã QR bằng app ngân hàng</p>
+                  <p>hoặc chuyển khoản tới tài khoản bên dưới</p>
                 </div>
+                {pay?._id && (
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-left text-xs space-y-1.5">
+                    <div className="flex justify-between"><span className="text-slate-500">Mã giao dịch:</span><span className="font-mono font-bold text-slate-800">{pay.transactionId}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">Số tiền:</span><span className="font-bold text-slate-800">{deposit.toLocaleString('vi-VN')}đ</span></div>
+                  </div>
+                )}
+                <button onClick={simulateQbPayment} disabled={qbQrLoading}
+                  className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 transition-all">
+                  {qbQrLoading ? 'Đang xử lý...' : 'Tôi đã chuyển khoản'}
+                </button>
+                <p className="text-[11px] text-slate-400">(Nếu bạn đã chuyển khoản, hãy bấm vào nút trên để xác nhận)</p>
                 {qbError && (
                   <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{qbError}</div>
                 )}
-                <button onClick={() => { setShowQuickBookModal(false); setQbShowPayment(false); }}
-                  className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all">
-                  Hủy
-                </button>
               </div>
             </div>
           </div>
@@ -2145,9 +2263,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{qbError}</div>
               )}
 
-              <button onClick={confirmQuickBook} disabled={qbSubmitting || !qbDate || !qbTime}
+              <button onClick={confirmQuickBook} disabled={qbSubmitting || qbQrLoading || !qbDate || !qbTime}
                 className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                {qbSubmitting ? 'Đang đặt...' : pack ? 'Đặt lịch (miễn phí)' : `Đặt cọc ${deposit.toLocaleString('vi-VN')}đ`}
+                {qbSubmitting ? 'Đang đặt...' : qbQrLoading ? 'Đang tạo mã QR...' : pack ? 'Đặt lịch (miễn phí)' : `Đặt cọc ${deposit.toLocaleString('vi-VN')}đ`}
               </button>
             </div>
           </div>
