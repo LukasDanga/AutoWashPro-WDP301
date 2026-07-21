@@ -35,6 +35,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import {
@@ -659,26 +660,32 @@ export default function BookingScreen() {
       // honest ("Thanh toán bằng Gói Lượt").
       const voucherToSend = isPayingWithPack ? undefined : voucherCode || undefined;
 
-      const response = await bookingApi.createBooking({
-        branchId: selectedBranch._id,
-        packageId: selectedPackage._id,
-        vehicleId: selectedVehicle._id,
-        bookingDate: selectedDate,
-        startTime: selectedTime,
-        voucherCode: voucherToSend,
-        selectedSubServices: selectedSubServices,
-        slotPackId: selectedSlotPackId || undefined,
-        note: '',
-      });
-      resetAll();
-      // Web parity: only redirect to payment if a deposit is actually owed.
-      // Slot-pack bookings have depositAmount=0, so they skip the payment step
-      // and show a simple success toast instead. (BookingFlow.jsx:229-234)
-      if ((response.depositAmount || 0) > 0 && !response.depositPaid) {
-        router.replace(
-          `/payment/checkout?bookingId=${response._id}&type=deposit` as any,
-        );
+      const needsDeposit = !isPayingWithPack && finalPrice > 0;
+
+      if (needsDeposit) {
+        // Payment-first flow: navigate to checkout WITHOUT creating booking.
+        // Checkout reads draft from BookingContext and creates booking after
+        // payment succeeds (matches landing page flow).
+        // Persist extra fields not in BookingContext for checkout to read.
+        await AsyncStorage.setItem('aw_checkout_extras', JSON.stringify({
+          voucherCode: voucherToSend,
+          selectedSubServices,
+        }));
+        router.replace('/payment/checkout?type=deposit' as any);
       } else {
+        // Slot pack or free booking: create booking directly (no payment step).
+        const response = await bookingApi.createBooking({
+          branchId: selectedBranch._id,
+          packageId: selectedPackage._id,
+          vehicleId: selectedVehicle._id,
+          bookingDate: selectedDate,
+          startTime: selectedTime,
+          voucherCode: voucherToSend,
+          selectedSubServices: selectedSubServices,
+          slotPackId: selectedSlotPackId || undefined,
+          note: '',
+        });
+        resetAll();
         toast.success(
           'Đặt lịch thành công!',
           `Đã giữ chỗ ${selectedPackage?.name || 'Dịch vụ'} lúc ${selectedTime}.`,
@@ -739,7 +746,11 @@ export default function BookingScreen() {
       <Header title="Đặt lịch rửa xe" showBack onBackPress={handleBack} />
 
       <View style={[styles.progressContainer, { backgroundColor: colors.background }]}>
-        <StepIndicator steps={stepsForIndicator} currentIndex={stepIndex} />
+        <StepIndicator
+          steps={stepsForIndicator}
+          currentIndex={stepIndex}
+          onStepPress={(idx) => setStep(STEP_META[idx].key)}
+        />
       </View>
 
       <ScrollView
@@ -1459,16 +1470,6 @@ export default function BookingScreen() {
                   {formatCurrency(finalPrice)}
                 </AppText>
               </View>
-              {!isPayingWithPack && finalPrice > 0 ? (
-                <View style={[styles.priceRow, { marginTop: spacing.xs }]}>
-                  <AppText variant="body" color="textSecondary">
-                    Tiền cọc (30%)
-                  </AppText>
-                  <AppText variant="body" style={{ color: colors.warning, fontWeight: '600' }}>
-                    {formatCurrency(depositAmount)}
-                  </AppText>
-                </View>
-              ) : null}
               <View
                 style={[
                   styles.priceRow,
