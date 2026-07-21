@@ -21,6 +21,7 @@ import {
   Icons,
   ScreenContainer,
   BookingStatusBadge,
+  BottomNavBar,
   useToast,
   PressableScale,
 } from '../../src/components/common';
@@ -148,7 +149,6 @@ export default function HistoryDayScreen() {
 
     return (
       <PressableScale
-        activeOpacity={0.7}
         onPress={() => {
           // Recurring rows auto-open the group modal (matches FE
           // HistoryPage behavior). Single bookings navigate to detail.
@@ -247,6 +247,7 @@ export default function HistoryDayScreen() {
           renderItem={renderBookingItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={<View style={{ height: 90 }} />}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchBookings(); }} tintColor={colors.primary} colors={[colors.primary]} />
           }
@@ -299,6 +300,7 @@ export default function HistoryDayScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+      <BottomNavBar />
     </ScreenContainer>
   );
 }
