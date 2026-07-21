@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import useSSE from '@/hooks/useSSE';
 import { showToast } from '@/lib/toast';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import {
   CurrencyDollar,
   CheckCircle,
@@ -19,9 +18,8 @@ import {
   ArrowUpRight,
   ArrowUUpLeft,
   ArrowsClockwise,
-  Sun,
-  Receipt,
   Check,
+  Trash,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
@@ -77,9 +75,11 @@ const STATUS_TABS = [
   { key: 'refunded', label: 'Đã hoàn tiền' },
 ];
 
-const METHOD_OPTIONS = [
-  { key: 'all', label: 'Tất cả' },
+const METHOD_TABS = [
+  { key: '', label: 'Tất cả' },
   { key: 'cash', label: 'Tiền mặt' },
+  { key: 'momo', label: 'MoMo' },
+  { key: 'vnpay', label: 'VNPay' },
   { key: 'bank', label: 'Chuyển khoản' },
 ];
 
@@ -340,6 +340,8 @@ export default function AdminPayments() {
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
   const [newIds, setNewIds] = useState(() => new Set());
@@ -349,7 +351,11 @@ export default function AdminPayments() {
   const [refundSuccess, setRefundSuccess] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [stats, setStats] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteDateFrom, setDeleteDateFrom] = useState('');
+  const [deleteDateTo, setDeleteDateTo] = useState('');
+  const [deleteAll, setDeleteAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const PAGE_SIZE = 10;
 
   const markViewed = useCallback(async (id) => {
@@ -365,16 +371,17 @@ export default function AdminPayments() {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (methodFilter) params.set('method', methodFilter);
-      if (dateFilter === 'today') {
+      if (dateFrom || dateTo) {
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo) params.set('dateTo', dateTo);
+      } else if (dateFilter === 'today') {
         params.set('today', 'true');
       } else if (dateFilter) {
         params.set('date', dateFilter);
       }
-      if (search) params.set('search', search); // Currently backend doesn't filter search but we pass it
+      if (search) params.set('search', search);
       params.set('page', page);
       params.set('limit', PAGE_SIZE);
-      params.set('withStats', 'true');
-
       const res = await api(`/payments?${params}`);
       if (!res.ok) { const e = await readErr(res); throw new Error(e); }
       const payload = await res.json();
@@ -383,7 +390,6 @@ export default function AdminPayments() {
       let list = [];
       if (responseData && responseData.payments) {
          list = responseData.payments;
-         setStats(responseData.stats || null);
       } else if (Array.isArray(responseData)) {
          list = responseData;
       }
@@ -395,7 +401,7 @@ export default function AdminPayments() {
       setPayments(list);
       setNewIds(new Set(list.filter(p => !p.viewedAt && p.status === 'paid').map(p => p._id)));
     } catch (e) { setError(e.message); } finally { setLoading(false); }
-  }, [statusFilter, methodFilter, dateFilter, page, search]);
+  }, [statusFilter, methodFilter, dateFilter, dateFrom, dateTo, page, search]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -416,6 +422,29 @@ export default function AdminPayments() {
   const paginated = filtered;
 
   function onFilter(setter, value) { setter(value); setPage(1); }
+
+  async function deletePaymentsByRange() {
+    if (deleteAll) {
+      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ dữ liệu thanh toán? Hành động này không thể hoàn tác!')) return;
+    } else {
+      if (!deleteDateFrom || !deleteDateTo) return alert('Vui lòng chọn khoảng ngày');
+      if (!confirm(`Bạn có chắc muốn xóa giao dịch từ ${deleteDateFrom} đến ${deleteDateTo}?`)) return;
+    }
+    setDeleting(true);
+    try {
+      const params = deleteAll ? 'all=true' : `dateFrom=${deleteDateFrom}&dateTo=${deleteDateTo}`;
+      const res = await api(`/payments/range?${params}`, { method: 'DELETE' });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Xóa thất bại'); }
+      const result = await res.json();
+      showToast(result.message || 'Đã xóa thành công', 'success');
+      setShowDeleteModal(false);
+      setDeleteDateFrom('');
+      setDeleteDateTo('');
+      setDeleteAll(false);
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { setDeleting(false); }
+  }
 
   async function handleConfirm() {
     if (!detail) return;
@@ -458,36 +487,6 @@ export default function AdminPayments() {
 
   return (
     <div className="space-y-5">
-      {/* Chart Section */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-6">
-        <h3 className="text-sm font-bold text-slate-800 mb-4">Doanh thu 6 tháng gần nhất</h3>
-        <div className="h-56 w-full">
-          {stats && stats.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
-                <YAxis tickFormatter={(val) => `${val / 1000}k`} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dx={-10} />
-                <Tooltip 
-                  formatter={(val) => [formatCurrency(val), 'Doanh thu']}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}
-                  cursor={{ fill: '#f1f5f9' }}
-                />
-                <Bar dataKey="totalAmount" radius={[4, 4, 0, 0]}>
-                  {stats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === stats.length - 1 ? '#10b981' : '#cbd5e1'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
-              <svg className="w-8 h-8 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-              <span className="text-sm">Chưa có dữ liệu</span>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
@@ -535,23 +534,24 @@ export default function AdminPayments() {
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400">
           {METHOD_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
-        <div className="flex items-center gap-1">
-          <button onClick={() => onFilter(setDateFilter, dateFilter === 'today' ? '' : 'today')}
-            className={`flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
-              dateFilter === 'today'
-                ? 'border-amber-300 bg-amber-50 text-amber-700'
-                : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-            }`}>
-            <Sun size={13} /> Hôm nay
+        <input type="date" value={dateFrom} onChange={e => onFilter(setDateFrom, e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        <span className="text-xs text-slate-400">→</span>
+        <input type="date" value={dateTo} onChange={e => onFilter(setDateTo, e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
+            className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-500 hover:bg-slate-50">
+            <X size={12} /> Bỏ lọc ngày
           </button>
-          <input type="date" value={dateFilter === 'today' ? '' : dateFilter}
-            onChange={e => onFilter(setDateFilter, e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          />
-        </div>
+        )}
         <button onClick={load} disabled={loading}
-          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
+        </button>
+        <button onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500">
+          <Trash size={12} /> Xóa giao dịch
         </button>
       </div>
 
@@ -641,6 +641,52 @@ export default function AdminPayments() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => { if (!deleting) setShowDeleteModal(false); }}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800">Xóa giao dịch theo khoảng ngày</h2>
+              <button disabled={deleting} onClick={() => setShowDeleteModal(false)} className="text-slate-400 hover:text-slate-600 disabled:opacity-30 text-lg">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                {deleteAll ? 'Bạn sắp xóa toàn bộ dữ liệu thanh toán.' : 'Chọn khoảng ngày muốn xóa.'}
+                <span className="font-semibold text-red-600"> Hành động này không thể hoàn tác!</span>
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={deleteAll} onChange={(e) => setDeleteAll(e.target.checked)}
+                  className="rounded border-slate-300 text-red-600 focus:ring-red-400" />
+                <span className="text-sm font-medium text-slate-700">Xóa tất cả dữ liệu</span>
+              </label>
+              {!deleteAll && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-500 mb-1">Từ ngày</label>
+                    <input type="date" value={deleteDateFrom} onChange={(e) => setDeleteDateFrom(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-500 mb-1">Đến ngày</label>
+                    <input type="date" value={deleteDateTo} onChange={(e) => setDeleteDateTo(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="border-t border-slate-100 px-6 py-4 flex gap-3 justify-end">
+              <button disabled={deleting} onClick={() => setShowDeleteModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">Hủy</button>
+              <button onClick={deletePaymentsByRange} disabled={deleting || (!deleteAll && (!deleteDateFrom || !deleteDateTo))}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">
+                {deleting ? <Spinner size={14} className="animate-spin" /> : <Trash size={14} />}
+                {deleting ? 'Đang xóa...' : 'Xóa dữ liệu'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Detail Modal */}

@@ -1055,6 +1055,24 @@ exports.deleteBooking = async (id, userRole) => {
   return booking;
 };
 
+exports.deleteBookingsByDateRange = async (dateFrom, dateTo) => {
+  const from = new Date(dateFrom);
+  const to = new Date(dateTo);
+  to.setHours(23, 59, 59, 999);
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    throw Object.assign(new Error('Ngày không hợp lệ'), { statusCode: 400 });
+  }
+  const result = await Booking.deleteMany({
+    bookingDate: { $gte: from, $lte: to },
+  });
+  return { deletedCount: result.deletedCount };
+};
+
+exports.deleteAllBookings = async () => {
+  const result = await Booking.deleteMany({});
+  return { deletedCount: result.deletedCount };
+};
+
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),

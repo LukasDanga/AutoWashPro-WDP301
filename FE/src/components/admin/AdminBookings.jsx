@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import {
   MagnifyingGlass, ArrowClockwise, X, Buildings, CalendarBlank,
-  CheckCircle, XCircle, Clock, Spinner,
+  CheckCircle, XCircle, Clock, Spinner, Trash,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import useSSE from '@/hooks/useSSE';
@@ -50,6 +50,11 @@ export default function AdminBookings() {
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteDateFrom, setDeleteDateFrom] = useState('');
+  const [deleteDateTo, setDeleteDateTo] = useState('');
+  const [deleteAll, setDeleteAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const token = getStoredToken();
 
   const load = useCallback(async (pg = page) => {
@@ -99,6 +104,29 @@ export default function AdminBookings() {
     finally { setCancelling(false); }
   }
 
+  async function deleteBookingsByRange() {
+    if (deleteAll) {
+      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ dữ liệu đặt lịch? Hành động này không thể hoàn tác!')) return;
+    } else {
+      if (!deleteDateFrom || !deleteDateTo) return alert('Vui lòng chọn khoảng ngày');
+      if (!confirm(`Bạn có chắc muốn xóa đặt lịch từ ${deleteDateFrom} đến ${deleteDateTo}? Hành động này không thể hoàn tác!`)) return;
+    }
+    setDeleting(true);
+    try {
+      const params = deleteAll ? 'all=true' : `dateFrom=${deleteDateFrom}&dateTo=${deleteDateTo}`;
+      const res = await api(`/bookings/range?${params}`, { method: 'DELETE' });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Xóa thất bại'); }
+      const result = await res.json();
+      alert(result.message || 'Đã xóa thành công');
+      setShowDeleteModal(false);
+      setDeleteDateFrom('');
+      setDeleteDateTo('');
+      setDeleteAll(false);
+      load(1);
+    } catch (e) { alert(e.message); }
+    finally { setDeleting(false); }
+  }
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -137,6 +165,10 @@ export default function AdminBookings() {
             <X size={12} /> Xóa lọc
           </button>
         )}
+        <button onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500 ml-auto">
+          <Trash size={12} /> Xóa đặt lịch
+        </button>
       </div>
 
       {/* Count */}
@@ -242,6 +274,52 @@ export default function AdminBookings() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Delete by date range modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => { if (!deleting) setShowDeleteModal(false); }}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800">Xóa đặt lịch theo khoảng ngày</h2>
+              <button disabled={deleting} onClick={() => setShowDeleteModal(false)} className="text-slate-400 hover:text-slate-600 disabled:opacity-30 text-lg">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                {deleteAll ? 'Bạn sắp xóa toàn bộ dữ liệu đặt lịch.' : 'Chọn khoảng ngày muốn xóa.'}
+                <span className="font-semibold text-red-600"> Hành động này không thể hoàn tác!</span>
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={deleteAll} onChange={(e) => setDeleteAll(e.target.checked)}
+                  className="rounded border-slate-300 text-red-600 focus:ring-red-400" />
+                <span className="text-sm font-medium text-slate-700">Xóa tất cả dữ liệu</span>
+              </label>
+              {!deleteAll && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-500 mb-1">Từ ngày</label>
+                    <input type="date" value={deleteDateFrom} onChange={(e) => setDeleteDateFrom(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-500 mb-1">Đến ngày</label>
+                    <input type="date" value={deleteDateTo} onChange={(e) => setDeleteDateTo(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="border-t border-slate-100 px-6 py-4 flex gap-3 justify-end">
+              <button disabled={deleting} onClick={() => setShowDeleteModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">Hủy</button>
+              <button onClick={deleteBookingsByRange} disabled={deleting || (!deleteAll && (!deleteDateFrom || !deleteDateTo))}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">
+                {deleting ? <Spinner size={14} className="animate-spin" /> : <Trash size={14} />}
+                {deleting ? 'Đang xóa...' : 'Xóa dữ liệu'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

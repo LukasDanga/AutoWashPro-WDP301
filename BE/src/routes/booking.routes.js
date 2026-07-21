@@ -358,6 +358,32 @@ router.get('/:id/qr', authenticate, [param('id').isMongoId()], validate, booking
 
 /**
  * @swagger
+ * /api/bookings/range:
+ *   delete:
+ *     summary: Delete bookings by date range (admin only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: dateFrom
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date (YYYY-MM-DD)
+ *       - in: query
+ *         name: dateTo
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date (YYYY-MM-DD)
+ */
+router.delete('/range', authenticate, authorize(ROLES.ADMIN), bookingController.deleteBookingsByDateRange);
+
+/**
+ * @swagger
  * /api/bookings/{id}:
  *   delete:
  *     summary: Delete booking (admin only)

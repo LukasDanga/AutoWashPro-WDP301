@@ -12,7 +12,7 @@
  *  - Animated progress fill signals state changes subtly without being noisy.
  */
 import React from 'react';
-import { View, StyleSheet, AccessibilityInfo } from 'react-native';
+import { View, Pressable, StyleSheet, AccessibilityInfo } from 'react-native';
 import { useColors } from '../../theme/ThemeContext';
 import { spacing, borderRadius } from '../../theme/spacing';
 import { Icon, Icons } from './Icon';
@@ -29,12 +29,15 @@ interface StepIndicatorProps {
   currentIndex: number;
   /** When true, all previous steps are visually completed */
   completedThrough?: number;
+  /** Called when a step circle is pressed. Receive the step index. */
+  onStepPress?: (index: number) => void;
 }
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
   steps,
   currentIndex,
   completedThrough,
+  onStepPress,
 }) => {
   const colors = useColors();
   const completedIdx = completedThrough ?? currentIndex - 1;
@@ -61,7 +64,13 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
 
           return (
             <React.Fragment key={s.key}>
-              <View style={styles.stepItem}>
+              <Pressable
+                style={styles.stepItem}
+                onPress={onStepPress ? () => onStepPress(i) : undefined}
+                disabled={!onStepPress || i >= currentIndex}
+                accessibilityRole="button"
+                accessibilityLabel={`${s.label}${i < currentIndex ? ' - nhấn để quay lại' : ''}`}
+              >
                 <View
                   style={[
                     styles.dot,
@@ -103,7 +112,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                 >
                   {s.label}
                 </Text>
-              </View>
+              </Pressable>
 
               {!isLast ? (
                 <View

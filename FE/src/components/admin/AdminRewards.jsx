@@ -16,6 +16,8 @@ import {
   Gift,
   Coin,
   Trophy,
+  ArrowUp,
+  ArrowDown,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -468,6 +470,26 @@ function WheelManagementTab() {
     }
   };
 
+  const moveGift = async (id, direction) => {
+    const sorted = [...gifts].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const idx = sorted.findIndex(g => g._id === id);
+    if (idx === -1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const current = sorted[idx];
+    const target = sorted[swapIdx];
+    const tempOrder = current.sortOrder || 0;
+    try {
+      await Promise.all([
+        api(`/gifts/${current._id}`, { method: 'PUT', body: JSON.stringify({ sortOrder: target.sortOrder || 0 }) }),
+        api(`/gifts/${target._id}`, { method: 'PUT', body: JSON.stringify({ sortOrder: tempOrder }) }),
+      ]);
+      fetchGifts();
+    } catch (e) {
+      showToast('Sắp xếp thất bại', 'error');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -480,12 +502,20 @@ function WheelManagementTab() {
 
       {loading ? (
         <div className="flex justify-center py-10"><Spinner /></div>
+      ) : gifts.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50">
+          <Gift size={48} className="mx-auto mb-3 opacity-50" />
+          <p className="text-sm">Chưa có ô thưởng nào. Hãy thêm ô thưởng đầu tiên!</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {gifts.map(g => (
+          {[...gifts].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map((g, i, arr) => (
             <div key={g._id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col relative overflow-hidden">
               <div className="absolute top-0 right-0 w-2 h-full" style={{ backgroundColor: g.color || '#ccc' }}></div>
-              <h4 className="font-bold text-slate-800 text-lg pr-4">{g.name}</h4>
+              <div className="flex items-start justify-between mb-1">
+                <h4 className="font-bold text-slate-800 text-lg">{g.name}</h4>
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">#{g.sortOrder || i}</span>
+              </div>
               <p className="text-sm text-slate-500 mb-4">{g.description || 'Không có mô tả'}</p>
               
               <div className="grid grid-cols-2 gap-2 mb-4">
@@ -509,15 +539,27 @@ function WheelManagementTab() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 mt-auto">
-                <button onClick={() => { setEditingGift(g); setModalOpen(true); }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                  <PencilSimple size={16} />
-                </button>
-                <button onClick={() => handleDelete(g._id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                  <Trash size={16} />
-                </button>
+              <div className="flex items-center justify-between mt-auto">
+                <div className="flex gap-1">
+                  <button onClick={() => moveGift(g._id, 'up')} disabled={i === 0}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                    <ArrowUp size={14} />
+                  </button>
+                  <button onClick={() => moveGift(g._id, 'down')} disabled={i === arr.length - 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setEditingGift(g); setModalOpen(true); }}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                    <PencilSimple size={16} />
+                  </button>
+                  <button onClick={() => handleDelete(g._id)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                    <Trash size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -597,7 +639,7 @@ function WheelGiftModal({ initial, onSave, onClose, saving }) {
               <input type="number" min="0" className={inp} value={form.value} onChange={e => set('value', Number(e.target.value))} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Tỷ lệ trúng (%) <span className="text-red-500">*</span></label>
               <input type="number" min="0" max="100" required className={inp} value={form.probability} onChange={e => set('probability', Number(e.target.value))} />
@@ -605,6 +647,10 @@ function WheelGiftModal({ initial, onSave, onClose, saving }) {
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Màu sắc ô</label>
               <input type="color" className="w-full h-[38px] rounded cursor-pointer border border-slate-200" value={form.color} onChange={e => set('color', e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Thứ tự</label>
+              <input type="number" min="0" className={inp} value={form.sortOrder} onChange={e => set('sortOrder', Number(e.target.value))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Trạng thái</label>
@@ -906,7 +952,9 @@ export default function AdminRewards() {
         </div>
       )}
 
-      {activeTab === 'report' ? (
+      {activeTab === 'wheel' ? (
+        <WheelManagementTab />
+      ) : activeTab === 'report' ? (
         <VoucherUsageReportTab />
       ) : activeTab === 'list' && (
         <>

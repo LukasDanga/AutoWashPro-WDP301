@@ -75,12 +75,37 @@ export const simulatePayment = async (data: {
 };
 
 // Create VNPay payment URL for a booking
+// Optional returnUrl overrides BE VNP_RETURN_URL (useful when ngrok is down
+// and mobile should deep-link back into the app after OTP).
 export const createVnpayPayment = async (data: {
   bookingId: string;
   paymentType: PaymentType;
   amount?: number;
+  returnUrl?: string;
 }): Promise<{ paymentUrl: string; transactionId: string; payment: Payment }> => {
   const response = await apiClient.post('/payments/vnpay-create', data);
+  return response.data;
+};
+
+// Create provisional bank payment (no booking required)
+export const createBankProvisional = async (
+  amount: number,
+  paymentType: string = 'deposit',
+): Promise<Payment> => {
+  const response = await apiClient.post('/payments/bank-provisional', {
+    amount,
+    paymentType,
+  });
+  return response.data;
+};
+
+// Create provisional VNPay payment (no booking required)
+export const createVnpayProvisional = async (
+  amount: number,
+): Promise<{ paymentUrl: string; transactionId: string; payment: Payment }> => {
+  const response = await apiClient.post('/bookings/vnpay-provisional', {
+    amount,
+  });
   return response.data;
 };
 
@@ -92,6 +117,8 @@ export const paymentApi = {
   getPayment,
   simulatePayment,
   createVnpayPayment,
+  createBankProvisional,
+  createVnpayProvisional,
 };
 
 export default paymentApi;

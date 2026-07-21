@@ -19,6 +19,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import {
@@ -73,7 +74,15 @@ const WEEKDAY_OPTIONS = [
   { value: 0, short: 'CN', long: 'Chủ Nhật' },
 ];
 
-const WEEK_PRESETS = [4, 8, 12]; // backend allows up to 12
+const WEEK_PRESETS = [1, 2, 3, 4, 6, 8, 12]; // match landing page (WEEKS_OPTIONS)
+
+// Loyalty point multiplier per tier — mirrors FE RecurringBookingFlow.jsx.
+function getPointMultiplier(tier?: string): number {
+  if (tier === 'diamond') return 2.0;
+  if (tier === 'gold') return 1.5;
+  if (tier === 'silver') return 1.2;
+  return 1;
+}
 
 export default function RecurringBookingScreen() {
   const router = useRouter();
@@ -105,8 +114,6 @@ export default function RecurringBookingScreen() {
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([6]); // default: every Saturday
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [weeks, setWeeks] = useState<number>(4);
-  const [weeksMode, setWeeksMode] = useState<'preset' | 'custom'>('preset');
-  const [customWeeks, setCustomWeeks] = useState<string>('4');
 
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherDiscount, setVoucherDiscount] = useState(0);
@@ -326,30 +333,7 @@ export default function RecurringBookingScreen() {
   };
 
   const selectPresetWeeks = (w: number) => {
-    setWeeksMode('preset');
     setWeeks(w);
-  };
-
-  const selectCustomWeeks = () => {
-    setWeeksMode('custom');
-  };
-
-  const handleCustomWeeksChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 2);
-    if (cleaned === '') {
-      setCustomWeeks('');
-      return;
-    }
-    const n = parseInt(cleaned, 10);
-    if (Number.isNaN(n)) return;
-    // Clamp visually so the field always matches what we'll submit.
-    if (n < 1) {
-      setCustomWeeks('1');
-    } else if (n > 12) {
-      setCustomWeeks('12');
-    } else {
-      setCustomWeeks(String(n));
-    }
   };
 
   // Build preview dates list (same logic as BE booking.service.js)
@@ -376,12 +360,7 @@ export default function RecurringBookingScreen() {
 
   // Returns the effective weeks value (always clamped to 1..12).
   function getEffectiveWeeks(): number {
-    if (weeksMode === 'custom') {
-      const n = parseInt(customWeeks, 10);
-      if (isNaN(n) || n < 1) return 0;
-      return Math.min(12, n);
-    }
-    return weeks;
+    return Math.min(12, Math.max(1, weeks || 0));
   }
 
   // Read voucher selection when returning from voucher-picker screen
@@ -458,47 +437,34 @@ export default function RecurringBookingScreen() {
         ? `\n\n[Dịch vụ thêm]: ${selectedSubServices.map(s => s.name).join(', ')}`
         : '';
 
-      const result: RecurringBookingResult = await bookingApi.createRecurringBooking(
-        {
-          branchId: selectedBranch._id,
-          packageId: selectedPackage._id,
-          vehicleId: selectedVehicle._id,
-          weekdays: selectedWeekdays,
-          startTime: selectedTime,
-          weeks: effectiveWeeks,
-          voucherCode: voucherCode.trim() || undefined,
-          note: (note.trim() + subServicesNote).trim() || undefined,
-          subServices: selectedSubServices.map(s => s._id),
-        } as any,
-      );
+      const totalSessions = previewDates.length > 0
+        ? previewDates.length
+        : selectedWeekdays.length * effectiveWeeks;
+      const basePrice = selectedPackage?.price || 0;
+      const subServicesPrice = selectedSubServices.reduce((sum, s) => sum + (s.price || 0), 0);
+      const totalEstimate = totalSessions * (basePrice + subServicesPrice);
+      const computedTotal = Math.max(0, totalEstimate - voucherSavings);
+      const computedDeposit = paymentOption === 'full'
+        ? computedTotal
+        : Math.round((computedTotal * 0.3) / 1000) * 1000;
 
-      Alert.alert(
-        'Kết quả đặt lịch định kỳ',
-        `Tạo thành công: ${result.totalCreated ?? result.created?.length ?? 0} buổi\n` +
-          `Thất bại: ${result.totalFailed ?? result.failed?.length ?? 0} buổi\n` +
-          ((result.failed && result.failed.length > 0) 
-            ? `\nChi tiết thất bại:\n` + result.failed.map((f: any) => `- ${f.date}: ${f.reason}`).join('\n') 
-            : ''),
-        [
-          {
-            text: 'Đóng',
-            onPress: () => {
-              const depositBooking = result.created?.find(
-                (b: any) => (b.depositAmount ?? 0) > 0,
-              ) as any;
-              const depositBookingId = depositBooking?._id ?? result.created?.[0]?._id;
+      const recurringDraft = {
+        branchId: selectedBranch._id,
+        packageId: selectedPackage._id,
+        vehicleId: selectedVehicle._id,
+        weekdays: selectedWeekdays,
+        startTime: selectedTime,
+        weeks: effectiveWeeks,
+        voucherCode: voucherCode.trim() || undefined,
+        note: (note.trim() + subServicesNote).trim() || undefined,
+        subServices: selectedSubServices.map(s => s._id),
+        totalAmount: computedTotal,
+        depositAmount: computedDeposit,
+        paymentOption,
+      };
 
-              if (depositBookingId) {
-                router.replace(
-                  `/payment/checkout?bookingId=${depositBookingId}&type=deposit` as any,
-                );
-              } else {
-                router.replace('/(tabs)/history');
-              }
-            }
-          }
-        ]
-      );
+      await AsyncStorage.setItem('aw_recurring_draft', JSON.stringify(recurringDraft));
+      router.replace('/payment/checkout?type=recurring' as any);
     } catch (error: any) {
       const apiMessage =
         error?.response?.data?.message || error?.message || 'Không thể tạo lịch định kỳ';
@@ -513,33 +479,44 @@ export default function RecurringBookingScreen() {
 
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
-      {STEPS.map((s, index) => (
-        <View key={s.key} style={styles.progressStep}>
-          <View
-            style={[
-              styles.progressDot,
-              index <= getStepIndex() && styles.progressDotActive,
-            ]}
+      {STEPS.map((s, index) => {
+        const isCurrentOrPast = index <= getStepIndex();
+        return (
+          <TouchableOpacity
+            key={s.key}
+            style={styles.progressStep}
+            onPress={() => {
+              if (index < getStepIndex()) setStep(STEPS[index].key);
+            }}
+            disabled={index >= getStepIndex()}
+            activeOpacity={0.7}
           >
-            <Text
+            <View
               style={[
-                styles.progressDotText,
-                index <= getStepIndex() && styles.progressDotTextActive,
+                styles.progressDot,
+                isCurrentOrPast && styles.progressDotActive,
               ]}
             >
-              {index + 1}
+              <Text
+                style={[
+                  styles.progressDotText,
+                  isCurrentOrPast && styles.progressDotTextActive,
+                ]}
+              >
+                {index + 1}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.progressLabel,
+                isCurrentOrPast && styles.progressLabelActive,
+              ]}
+            >
+              {s.label}
             </Text>
-          </View>
-          <Text
-            style={[
-              styles.progressLabel,
-              index <= getStepIndex() && styles.progressLabelActive,
-            ]}
-          >
-            {s.label}
-          </Text>
-        </View>
-      ))}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 
@@ -807,63 +784,100 @@ export default function RecurringBookingScreen() {
           Không có khung giờ trống
         </AppText>
       ) : (
-        <View style={styles.timeGrid}>
-          {daySlots.map((slot, idx) => {
-            // Determine the FIRST upcoming date matching one of the chosen
-            // weekdays — same logic as fetchSlotsForFirstWeekday so the keys
-            // line up with userBookedSlotKeys.
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            let candidate = new Date(today);
-            candidate.setDate(today.getDate() + 1);
-            for (let i = 0; i < 7; i++) {
-              if (selectedWeekdays.includes(candidate.getDay())) break;
-              candidate.setDate(candidate.getDate() + 1);
-            }
-            const slotDateStr = candidate.toISOString().split('T')[0];
-            const userHasThisSlot = userBookedSlotKeys.has(
-              `${slotDateStr}|${slot.startTime}`,
+        <>
+          {(() => {
+            // Group slots into morning / afternoon like landing page TIME_SLOTS layout.
+            const morning = daySlots.filter(s => {
+              const hour = parseInt((s.startTime || '0').split(':')[0], 10);
+              return hour < 12;
+            });
+            const afternoon = daySlots.filter(s => {
+              const hour = parseInt((s.startTime || '0').split(':')[0], 10);
+              return hour >= 12;
+            });
+
+            const renderSlotGrid = (slots: AvailableSlot[]) => (
+              <View style={styles.timeGrid}>
+                {slots.map((slot, idx) => {
+                  // Determine the FIRST upcoming date matching one of the chosen
+                  // weekdays — same logic as fetchSlotsForFirstWeekday so the keys
+                  // line up with userBookedSlotKeys.
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  let candidate = new Date(today);
+                  candidate.setDate(today.getDate() + 1);
+                  for (let i = 0; i < 7; i++) {
+                    if (selectedWeekdays.includes(candidate.getDay())) break;
+                    candidate.setDate(candidate.getDate() + 1);
+                  }
+                  const slotDateStr = candidate.toISOString().split('T')[0];
+                  const userHasThisSlot = userBookedSlotKeys.has(
+                    `${slotDateStr}|${slot.startTime}`,
+                  );
+                  const isUnavailable = !slot.available && !userHasThisSlot;
+                  const isVipOnly =
+                    !!slot.vipOnly && !isUnavailable && !userHasThisSlot && !isVip;
+                  const isLocked = userHasThisSlot || isUnavailable || isVipOnly;
+                  const canBook = slot.available && !isVipOnly;
+                  return (
+                    <TouchableOpacity
+                      key={`${slot.startTime}-${idx}`}
+                      style={[
+                        styles.timeCard,
+                        isLocked && styles.timeCardDisabled,
+                        selectedTime === slot.startTime && styles.timeCardSelected,
+                      ]}
+                      disabled={!canBook}
+                      onPress={() => canBook && setSelectedTime(slot.startTime)}
+                    >
+                      <Text
+                        style={[
+                          styles.timeText,
+                          isLocked && styles.timeTextDisabled,
+                          selectedTime === slot.startTime && styles.timeTextSelected,
+                        ]}
+                      >
+                        {slot.startTime}
+                      </Text>
+                      {userHasThisSlot ? (
+                        <Text style={[styles.timeSlotFull, { color: colors.primary }]}>
+                          Bạn đã đặt
+                        </Text>
+                      ) : isUnavailable ? (
+                        <Text style={styles.timeSlotFull}>Kín</Text>
+                      ) : isVipOnly ? (
+                        <Text style={[styles.timeSlotFull, { color: colors.warning }]}>
+                          VIP
+                        </Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             );
-            const isUnavailable = !slot.available && !userHasThisSlot;
-            const isVipOnly =
-              !!slot.vipOnly && !isUnavailable && !userHasThisSlot && !isVip;
-            const isLocked = userHasThisSlot || isUnavailable || isVipOnly;
-            const canBook = slot.available && !isVipOnly;
+
             return (
-              <TouchableOpacity
-                key={`${slot.startTime}-${idx}`}
-                style={[
-                  styles.timeCard,
-                  isLocked && styles.timeCardDisabled,
-                  selectedTime === slot.startTime && styles.timeCardSelected,
-                ]}
-                disabled={!canBook}
-                onPress={() => canBook && setSelectedTime(slot.startTime)}
-              >
-                <Text
-                  style={[
-                    styles.timeText,
-                    isLocked && styles.timeTextDisabled,
-                    selectedTime === slot.startTime && styles.timeTextSelected,
-                  ]}
-                >
-                  {slot.startTime}
-                </Text>
-                {userHasThisSlot ? (
-                  <Text style={[styles.timeSlotFull, { color: colors.primary }]}>
-                    Bạn đã đặt
-                  </Text>
-                ) : isUnavailable ? (
-                  <Text style={styles.timeSlotFull}>Kín</Text>
-                ) : isVipOnly ? (
-                  <Text style={[styles.timeSlotFull, { color: colors.warning }]}>
-                    VIP
-                  </Text>
+              <View>
+                {morning.length > 0 ? (
+                  <View style={{ marginBottom: spacing.sm }}>
+                    <AppText variant="caption" color="textSecondary" style={styles.slotGroupLabel}>
+                      Buổi sáng
+                    </AppText>
+                    {renderSlotGrid(morning)}
+                  </View>
                 ) : null}
-              </TouchableOpacity>
+                {afternoon.length > 0 ? (
+                  <View>
+                    <AppText variant="caption" color="textSecondary" style={styles.slotGroupLabel}>
+                      Buổi chiều
+                    </AppText>
+                    {renderSlotGrid(afternoon)}
+                  </View>
+                ) : null}
+              </View>
             );
-          })}
-        </View>
+          })()}
+        </>
       )}
 
       <AppText variant="caption" color="textTertiary" style={styles.helperText}>
@@ -872,9 +886,9 @@ export default function RecurringBookingScreen() {
         ngày đã kín — bạn sẽ thấy số buổi tạo được / bị bỏ qua sau khi đặt.
       </AppText>
 
-      {/* Weeks picker */}
+      {/* Weeks picker — presets match landing page: 1,2,3,4,6,8,12 */}
       <AppText variant="label" style={styles.sectionLabel}>
-        Số tuần
+        Số tuần lặp lại
       </AppText>
       <View style={styles.weeksRow}>
         {WEEK_PRESETS.map(w => (
@@ -882,48 +896,24 @@ export default function RecurringBookingScreen() {
             key={w}
             style={[
               styles.weekChip,
-              weeksMode === 'preset' && weeks === w && styles.weekChipActive,
+              weeks === w && styles.weekChipActive,
             ]}
             onPress={() => selectPresetWeeks(w)}
           >
             <Text
               style={[
                 styles.weekChipText,
-                weeksMode === 'preset' && weeks === w && styles.weekChipTextActive,
+                weeks === w && styles.weekChipTextActive,
               ]}
             >
-              {w} tuần
+              {w}
             </Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity
-          style={[
-            styles.weekChip,
-            weeksMode === 'custom' && styles.weekChipActive,
-          ]}
-          onPress={selectCustomWeeks}
-        >
-          <Text
-            style={[
-              styles.weekChipText,
-              weeksMode === 'custom' && styles.weekChipTextActive,
-            ]}
-          >
-            Khác…
-          </Text>
-        </TouchableOpacity>
       </View>
-
-      {weeksMode === 'custom' && (
-        <Input
-          label="Nhập số tuần (1–12)"
-          value={customWeeks}
-          onChangeText={handleCustomWeeksChange}
-          keyboardType="number-pad"
-          placeholder="VD: 6"
-          containerStyle={styles.customWeeksInput}
-        />
-      )}
+      <AppText variant="caption" color="textTertiary" style={styles.helperText}>
+        {getEffectiveWeeks()} tuần · {previewDates.length} buổi dự kiến
+      </AppText>
 
       {/* Total sessions preview */}
       <Card style={styles.previewCard}>
@@ -976,16 +966,26 @@ export default function RecurringBookingScreen() {
 
   const renderConfirmStep = () => {
     const effectiveWeeks = getEffectiveWeeks();
-    const totalSessions = selectedWeekdays.length * effectiveWeeks;
+    // Prefer actual preview dates (skips past days) over naive multiplication.
+    const totalSessions = previewDates.length > 0
+      ? previewDates.length
+      : selectedWeekdays.length * effectiveWeeks;
     const basePrice = selectedPackage?.price || 0;
     const subServicesPrice = selectedSubServices.reduce((sum, s) => sum + (s.price || 0), 0);
     const pricePerSession = basePrice + subServicesPrice;
     const totalEstimate = totalSessions * pricePerSession;
     const finalEstimate = Math.max(0, totalEstimate - voucherSavings);
     // Cọc 30% × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
-    // Quy ước: gộp 1 lần thanh toán thay vì tách theo từng buổi.
-    const depositRate = userTier === 'gold' || userTier === 'diamond' ? 0.3 : 0.3;
-    const depositAmount = Math.round((finalEstimate * depositRate) / 1000) * 1000;
+    const depositAmount = Math.round((finalEstimate * 0.3) / 1000) * 1000;
+    const payNowAmount = paymentOption === 'full' ? finalEstimate : depositAmount;
+    // Loyalty points — match FE RecurringBookingFlow.jsx (5% × tier multiplier).
+    const priceAfterVoucherPerSession = totalSessions > 0
+      ? Math.max(0, Math.floor(finalEstimate / totalSessions))
+      : Math.max(0, pricePerSession - Math.floor(voucherSavings / Math.max(1, totalSessions)));
+    const pointsPerSession = Math.floor(
+      priceAfterVoucherPerSession * 0.05 * getPointMultiplier(userTier),
+    );
+    const totalPoints = pointsPerSession * totalSessions;
     const weekdayLabels = selectedWeekdays
       .map(d => WEEKDAY_OPTIONS.find(o => o.value === d)?.long)
       .filter(Boolean)
@@ -1048,11 +1048,11 @@ export default function RecurringBookingScreen() {
                 Lịch dự kiến ({previewDates.length} buổi)
               </Text>
               {previewDates.slice(0, 8).map((d, i) => {
-                const weekdayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+                const weekdayShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
                 return (
                   <View key={i} style={styles.confirmPreviewItem}>
                     <Text style={styles.confirmPreviewWeekday}>
-                      {weekdayLabels[d.getDay()]}
+                      {weekdayShort[d.getDay()]}
                     </Text>
                     <Text style={styles.confirmPreviewDate}>
                       {d.toLocaleDateString('vi-VN', {
@@ -1100,20 +1100,94 @@ export default function RecurringBookingScreen() {
               </Text>
             </View>
           )}
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Cọc trước (30%)</Text>
-            <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
+          {totalPoints > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Điểm tích lũy ước tính</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
+                +{totalPoints} điểm
+              </Text>
+            </View>
+          ) : null}
+        </Card>
+
+        {/* Payment mode toggle — deposit 30% vs full payment (match landing page) */}
+        <AppText variant="label" style={styles.sectionLabel}>
+          Hình thức thanh toán
+        </AppText>
+        <View style={styles.paymentOptionRow}>
+          <TouchableOpacity
+            style={[
+              styles.paymentOptionCard,
+              paymentOption === 'deposit' && styles.paymentOptionCardActive,
+            ]}
+            onPress={() => setPaymentOption('deposit')}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.paymentOptionTitle,
+                paymentOption === 'deposit' && styles.paymentOptionTitleActive,
+              ]}
+            >
+              Đặt cọc 30%
+            </Text>
+            <Text
+              style={[
+                styles.paymentOptionAmount,
+                paymentOption === 'deposit' && styles.paymentOptionAmountActive,
+              ]}
+            >
               {formatCurrency(depositAmount)}
             </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Còn lại khi hoàn thành</Text>
-            <Text style={styles.summaryValue}>
-              {formatCurrency(Math.max(0, finalEstimate - depositAmount))}
+            <Text
+              style={[
+                styles.paymentOptionHint,
+                paymentOption === 'deposit' && styles.paymentOptionHintActive,
+              ]}
+            >
+              Còn lại {formatCurrency(Math.max(0, finalEstimate - depositAmount))} sau buổi cuối
             </Text>
-          </View>
-          <AppText variant="caption" color="textTertiary" style={styles.summaryFootnote}>
-            * Cọc gộp 1 lần cho cả nhóm ({totalSessions} buổi). Phần còn lại thanh toán sau buổi cuối.
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.paymentOptionCard,
+              paymentOption === 'full' && styles.paymentOptionCardActive,
+            ]}
+            onPress={() => setPaymentOption('full')}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.paymentOptionTitle,
+                paymentOption === 'full' && styles.paymentOptionTitleActive,
+              ]}
+            >
+              Thanh toán đủ
+            </Text>
+            <Text
+              style={[
+                styles.paymentOptionAmount,
+                paymentOption === 'full' && styles.paymentOptionAmountActive,
+              ]}
+            >
+              {formatCurrency(finalEstimate)}
+            </Text>
+            <Text
+              style={[
+                styles.paymentOptionHint,
+                paymentOption === 'full' && styles.paymentOptionHintActive,
+              ]}
+            >
+              Thanh toán 100% ngay
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Card style={styles.payNowCard}>
+          <AppText variant="label" color="textSecondary">
+            Số tiền thanh toán ngay
+          </AppText>
+          <AppText variant="h2" color="primary">
+            {formatCurrency(payNowAmount)}
           </AppText>
         </Card>
 
@@ -1153,8 +1227,6 @@ export default function RecurringBookingScreen() {
             )}
           </View>
         </TouchableOpacity>
-
-
 
         <Input
           label="Ghi chú (tùy chọn)"
@@ -1412,11 +1484,13 @@ const styles = StyleSheet.create({
   },
   weeksRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   weekChip: {
-    flex: 1,
-    paddingVertical: spacing.md,
+    minWidth: 48,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     borderWidth: 1,
@@ -1424,7 +1498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   weekChipActive: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   weekChipText: {
@@ -1435,6 +1509,59 @@ const styles = StyleSheet.create({
   weekChipTextActive: {
     color: colors.textInverse,
     fontWeight: '700',
+  },
+  slotGroupLabel: {
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  paymentOptionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  paymentOptionCard: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  paymentOptionCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  paymentOptionTitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  paymentOptionTitleActive: {
+    color: colors.primary,
+  },
+  paymentOptionAmount: {
+    ...typography.h4,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  paymentOptionAmountActive: {
+    color: colors.primary,
+  },
+  paymentOptionHint: {
+    ...typography.caption,
+    color: colors.textTertiary,
+    fontSize: 11,
+  },
+  paymentOptionHintActive: {
+    color: colors.textSecondary,
+  },
+  payNowCard: {
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.infoLight,
   },
   previewCard: {
     marginTop: spacing.lg,
@@ -1541,9 +1668,6 @@ const styles = StyleSheet.create({
   },
   voucherInput: {
     marginTop: spacing.md,
-  },
-  customWeeksInput: {
-    marginTop: spacing.sm,
   },
   bottomAction: {
     padding: spacing.md,

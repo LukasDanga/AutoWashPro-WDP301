@@ -251,6 +251,13 @@ export interface Payment {
   qrCode?: string;
   // Gateway redirect URL (MoMo/VNPay) — FE dùng WebView/Linking.
   paymentUrl?: string;
+  bankInfo?: {
+    bankName?: string;
+    bankId?: string;
+    accountNumber?: string;
+    accountHolder?: string;
+    transferContent?: string;
+  };
   paidAt?: string;
   refundedAt?: string;
   createdAt: string;

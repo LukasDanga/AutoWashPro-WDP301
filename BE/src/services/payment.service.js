@@ -255,7 +255,21 @@ exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
     payment.qrCode = await generateQrDataUrl(transactionId, payment.amount, method, 'full');
   }
 
-  await payment.save();
+  try {
+    await payment.save();
+  } catch (err) {
+    console.error('[createSlotPackPayment] save error:', {
+      code: err.code,
+      message: err.message,
+      keyPattern: err.keyPattern,
+      bookingIdInDoc: payment.bookingId,
+      slotPackId: payment.slotPackId,
+      method: payment.method,
+      status: payment.status,
+      toJSON: JSON.stringify(payment.toObject()),
+    });
+    throw err;
+  }
   return payment;
 };
 
@@ -515,7 +529,20 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
       query.status = { $ne: 'pending' };
     }
     if (filters.method) query.method = filters.method;
-    if (filters.today === 'true' || filters.today === true) {
+    if (filters.dateFrom || filters.dateTo) {
+      const dateQuery = {};
+      if (filters.dateFrom) {
+        const from = new Date(filters.dateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (!isNaN(from.getTime())) dateQuery.$gte = from;
+      }
+      if (filters.dateTo) {
+        const to = new Date(filters.dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (!isNaN(to.getTime())) dateQuery.$lte = to;
+      }
+      if (Object.keys(dateQuery).length) query.createdAt = dateQuery;
+    } else if (filters.today === 'true' || filters.today === true) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const end = new Date();
@@ -718,4 +745,23 @@ exports.refundPayment = async (bookingId) => {
   } finally {
     session.endSession();
   }
+};
+
+exports.deletePaymentsByDateRange = async (dateFrom, dateTo) => {
+  const from = new Date(dateFrom);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(dateTo);
+  to.setHours(23, 59, 59, 999);
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    throw Object.assign(new Error('Ngày không hợp lệ'), { statusCode: 400 });
+  }
+  const result = await Payment.deleteMany({
+    createdAt: { $gte: from, $lte: to },
+  });
+  return { deletedCount: result.deletedCount };
+};
+
+exports.deleteAllPayments = async () => {
+  const result = await Payment.deleteMany({});
+  return { deletedCount: result.deletedCount };
 };

@@ -33,7 +33,7 @@ import { useColors } from '../src/theme/ThemeContext';
 import { spacing, borderRadius } from '../src/theme/spacing';
 import { formatCurrency } from '../src/utils';
 import type { SlotPack, Branch, Package, Vehicle } from '../src/types';
-import { getPendingVoucher, clearPendingVoucher } from '../src/utils/voucherStore';
+import { consumePendingVoucher } from '../src/utils/voucherStore';
 import { useFocusEffect } from 'expo-router';
 
 const DISCOUNT_TIERS = [
@@ -122,10 +122,11 @@ export default function SlotPacksScreen() {
   useFocusEffect(
     useCallback(() => {
       if (isBuying && step === 4) {
-        const voucher = getPendingVoucher();
+        // voucherStore only exports consumePendingVoucher (read + clear).
+        // Older names getPendingVoucher/clearPendingVoucher do not exist.
+        const voucher = consumePendingVoucher();
         if (voucher) {
           setAppliedVoucher(voucher);
-          clearPendingVoucher();
         }
       }
     }, [isBuying, step])
@@ -292,8 +293,8 @@ export default function SlotPacksScreen() {
     setBuyError('');
     try {
       const pack = await slotPackApi.buySlotPack({
-        branchId: selectedBranch === 'ALL' ? undefined : selectedBranch,
-        vehicleId: selectedVehicle === 'ALL' ? undefined : selectedVehicle,
+        branchId: selectedBranch !== 'ALL' ? selectedBranch : undefined,
+        vehicleId: selectedVehicle !== 'ALL' ? selectedVehicle : undefined,
         packageId: selectedPackage,
         totalSlots: slotCount,
         voucherCode: appliedVoucher?.code,
@@ -333,7 +334,24 @@ export default function SlotPacksScreen() {
       setIsBuying(false);
       setShowQrModal(true);
     } catch (err: any) {
-      setBuyError(err.response?.data?.message || err.message || 'Lỗi mua gói slot');
+      // BE returns { success, message, errors: [{ field, message }] } on validation.
+      const resData = err.response?.data;
+      let errorMsg = resData?.message || err.message || 'Lỗi mua gói slot';
+      if (Array.isArray(resData?.errors) && resData.errors.length > 0) {
+        // Map field-level errors to Vietnamese labels
+        const fieldLabels: Record<string, string> = {
+          branchId: 'Chi nhánh',
+          packageId: 'Gói dịch vụ',
+          vehicleId: 'Xe',
+          totalSlots: 'Số lượt',
+          voucherCode: 'Mã voucher',
+        };
+        const details = resData.errors
+          .map((e: any) => `${fieldLabels[e.field] || e.field}: ${e.message}`)
+          .join(', ');
+        errorMsg = `${errorMsg} — ${details}`;
+      }
+      setBuyError(errorMsg);
     } finally {
       setBuyLoading(false);
     }
