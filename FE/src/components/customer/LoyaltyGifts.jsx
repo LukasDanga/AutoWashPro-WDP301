@@ -9,6 +9,39 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('exchange');
+  const [tierConfig, setTierConfig] = useState(null);
+
+  // Fallback tiers if API fails
+  const FALLBACK_TIER_MAP = {
+    diamond: { label: 'Kim cương', color: '#0891b2', minPoints: 1000000 },
+    gold: { label: 'Vàng', color: '#b45309', minPoints: 500000 },
+    silver: { label: 'Bạc', color: '#64748b', minPoints: 100000 },
+    bronze: { label: 'Đồng', color: '#b45309', minPoints: 0 },
+  };
+
+  useEffect(() => {
+    async function fetchTiers() {
+      try {
+        const res = await fetch(`${apiBase}/loyalty/tiers`);
+        if (res.ok) {
+          const payload = await res.json();
+          const map = {};
+          payload.data.forEach(t => {
+            // map color class to hex for styles if needed, but we can also just use existing colors
+            let hex = '#b45309';
+            if (t.id === 'diamond') hex = '#0891b2';
+            else if (t.id === 'silver') hex = '#64748b';
+            else if (t.id === 'gold') hex = '#b45309';
+            map[t.id] = { label: t.name, color: hex, minPoints: t.minPoints };
+          });
+          setTierConfig(map);
+        }
+      } catch (err) {
+        console.error('Failed to fetch tiers', err);
+      }
+    }
+    fetchTiers();
+  }, [apiBase]);
 
   const fetchVouchers = async () => {
     setLoading(true);
@@ -47,28 +80,16 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
 
   const formatCurrency = (val) => new Intl.NumberFormat('vi-VN').format(val) + 'đ';
 
+  const actualTierMap = tierConfig || FALLBACK_TIER_MAP;
+  
   const getTierColor = (tier) => {
-    switch (tier) {
-      case 'bronze': return '#b45309';
-      case 'silver': return '#64748b';
-      case 'gold': return '#b45309';
-      case 'diamond': return '#0891b2';
-      default: return '#b45309';
-    }
+    return actualTierMap[tier]?.color || '#b45309';
   };
 
-  const getNextTier = (tier) => {
-    switch (tier) {
-      case 'bronze': return { name: 'Bạc', points: 100000 };
-      case 'silver': return { name: 'Vàng', points: 500000 };
-      case 'gold': return { name: 'Kim Cương', points: 1000000 };
-      case 'diamond': return { name: 'Tối đa', points: 1000000 };
-      default: return { name: 'Bạc', points: 100000 };
-    }
-  };
+  const nextTierId = user?.tier === 'bronze' ? 'silver' : user?.tier === 'silver' ? 'gold' : user?.tier === 'gold' ? 'diamond' : null;
+  const nextTier = nextTierId ? actualTierMap[nextTierId] : { label: 'Tối đa', minPoints: 1000000 };
 
-  const nextTier = getNextTier(user?.tier);
-  const progress = user?.tier === 'diamond' ? 100 : Math.min(100, ((user?.lifetimePoints || 0) / nextTier.points) * 100);
+  const progress = user?.tier === 'diamond' ? 100 : Math.min(100, ((user?.lifetimePoints || 0) / nextTier.minPoints) * 100);
 
   return (
     <div className="aw-loyalty-container" style={{ padding: '24px' }}>
@@ -155,7 +176,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
           <div className="progress-text">
             <span>Đã tích lũy: {formatCurrency(user?.lifetimePoints || 0)}</span>
             {user?.tier !== 'diamond' && (
-              <span>Cần thêm {formatCurrency(nextTier.points - (user?.lifetimePoints || 0))} để lên hạng {nextTier.name}</span>
+              <span>Cần thêm {formatCurrency(nextTier.minPoints - (user?.lifetimePoints || 0))} để lên hạng {nextTier.label}</span>
             )}
           </div>
         </div>

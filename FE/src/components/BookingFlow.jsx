@@ -65,6 +65,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [pendingDeposit, setPendingDeposit] = useState(null); // booking đang chờ đặt cọc
   const [depositLoading, setDepositLoading] = useState(false);
   const [vnpayLoading, setVnpayLoading] = useState(false);
+  const [selectedPayMethod, setSelectedPayMethod] = useState('bank');
   const [mySlotPacks, setMySlotPacks] = useState([]);
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
   const [activeNav, setActiveNav] = useState('dashboard');
@@ -594,38 +595,98 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       {pendingDeposit && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)', padding: 16 }}>
           <div style={{ width: '100%', maxWidth: 420, background: '#fff', borderRadius: 20, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Đặt cọc giữ chỗ</h3>
-              <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                Để tránh giữ chỗ ảo, vui lòng đặt cọc trước. Phần còn lại thanh toán khi hoàn thành dịch vụ.
-              </p>
+            {/* Header */}
+            <div style={{ background: '#fff', padding: '24px 24px 0', textAlign: 'center' }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: 24 }}>💲</div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Thanh toán</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Vui lòng thanh toán để hoàn tất đặt lịch</p>
             </div>
-            <div style={{ padding: 24 }}>
-              <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: '#64748b', fontSize: '0.9rem' }}>Tổng tiền dịch vụ</span>
+
+            <div style={{ padding: '16px 24px 24px' }}>
+              {/* Summary */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ color: '#64748b', fontSize: '0.88rem' }}>Tổng dịch vụ</span>
                   <strong style={{ color: '#0f172a' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: '#10b981', fontSize: '0.9rem', fontWeight: 600 }}>Tiền cọc (30%)</span>
-                  <strong style={{ color: '#10b981', fontSize: '1.05rem' }}>{formatCurrency(pendingDeposit.depositAmount || 0)}</strong>
+                {/* Payment amount options display */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                  <div style={{ borderRadius: 10, border: '2px solid #e2e8f0', padding: '10px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Thanh toán cọc 30%</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
+                  </div>
+                  <div style={{ borderRadius: 10, border: '2px solid #10b981', background: 'rgba(16,185,129,0.06)', padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginBottom: 2 }}>Thanh toán 100%</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#10b981' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px dashed rgba(16,185,129,0.25)' }}>
-                  <span style={{ color: '#64748b', fontSize: '0.85rem' }}>Còn lại trả khi xong</span>
-                  <span style={{ color: '#475569', fontWeight: 600 }}>{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || 0) - (pendingDeposit.depositAmount || 0)))}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Còn lại (thanh toán sau)</span>
+                  <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.82rem' }}>{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || 0) - (pendingDeposit.depositAmount || 0)))}</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <button type="button" onClick={payDeposit} disabled={depositLoading}
-                  style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
-                  {depositLoading ? 'ĐANG XỬ LÝ...' : `CHUYỂN KHOẢN ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
-                </button>
-                <button type="button" onClick={payWithVnpay} disabled={vnpayLoading}
-                  style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid #10b981', background: '#fff', color: '#10b981', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: vnpayLoading ? 0.7 : 1 }}>
-                  {vnpayLoading ? 'ĐANG CHUYỂN HƯỚNG...' : `THANH TOÁN VNPay ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+
+              {/* SỐ TIỀN CẦN THANH TOÁN label */}
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>SỐ TIỀN CẦN THANH TOÁN</div>
+
+              {/* Payment method selection */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>CHỌN PHƯƠNG THỨC</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[
+                    { id: 'bank', label: 'Ngân hàng', icon: '🏦' },
+                    { id: 'vnpay', label: 'VNPay', icon: '💳' },
+                    { id: 'cash', label: 'Tiền mặt', icon: '💵' },
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedPayMethod(m.id)}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                        padding: '10px 6px', borderRadius: 10, border: '2px solid',
+                        borderColor: selectedPayMethod === m.id ? '#10b981' : '#e2e8f0',
+                        background: selectedPayMethod === m.id ? 'rgba(16,185,129,0.06)' : '#fff',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                      }}>
+                      <span style={{ fontSize: 20 }}>{m.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: selectedPayMethod === m.id ? '#10b981' : '#64748b' }}>{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action button */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(selectedPayMethod === 'bank') && (
+                  <button type="button" onClick={payDeposit} disabled={depositLoading}
+                    style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
+                    {depositLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+                  </button>
+                )}
+                {selectedPayMethod === 'vnpay' && (
+                  <button type="button" onClick={payWithVnpay} disabled={vnpayLoading}
+                    style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: vnpayLoading ? 0.7 : 1 }}>
+                    {vnpayLoading ? 'ĐANG CHUYỂN HƯỚNG...' : `THANH TOÁN VNPay ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+                  </button>
+                )}
+                {selectedPayMethod === 'cash' && (
+                  <button type="button"
+                    onClick={() => {
+                      setMessage(`Đặt lịch thành công! Vui lòng đến tiệm để thanh toán tiền mặt ${formatCurrency(pendingDeposit.depositAmount || 0)} khi làm dịch vụ.`);
+                      setPendingDeposit(null);
+                    }}
+                    style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#0f172a', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>
+                    XÁC NHẬN — TRẢ TIỀN MẶT TẠI TIỆM
+                  </button>
+                )}
+                <button type="button" onClick={() => setPendingDeposit(null)}
+                  style={{ width: '100%', padding: 12, borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                  ← Quay lại
                 </button>
               </div>
-              <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center' }}>
+
+              <p style={{ margin: '10px 0 0', fontSize: '0.72rem', color: '#cbd5e1', textAlign: 'center' }}>
                 Tiền cọc sẽ không được hoàn lại nếu bạn không đến đúng giờ hẹn.
               </p>
             </div>
