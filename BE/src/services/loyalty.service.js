@@ -9,20 +9,58 @@ const calculatePoints = (amount, tier = 'bronze') => {
   return Math.floor(amount * 0.05 * multiplier);
 };
 
-// Mốc thăng hạng
-const TIER_THRESHOLDS = {
-  bronze: 0,
-  silver: 100000,
-  gold: 500000,
-  diamond: 1000000,
+// Cấu hình các mốc điểm và ưu đãi của hạng thành viên
+const TIER_CONFIG = {
+  bronze: {
+    id: 'bronze',
+    name: 'Đồng',
+    minPoints: 0,
+    multiplier: 1.0,
+    color: 'text-orange-600',
+    bg: 'bg-orange-50 border-orange-200',
+    benefits: ['Tích lũy 5% điểm thưởng từ mỗi hóa đơn', 'Nhận thông báo ưu đãi sớm nhất']
+  },
+  silver: {
+    id: 'silver',
+    name: 'Bạc',
+    minPoints: 100000,
+    multiplier: 1.2,
+    color: 'text-slate-600',
+    bg: 'bg-slate-100 border-slate-300',
+    benefits: ['Tất cả ưu đãi của hạng Đồng', 'Hệ số nhân điểm x1.2', 'Ưu tiên rửa xe không cần chờ lâu']
+  },
+  gold: {
+    id: 'gold',
+    name: 'Vàng',
+    minPoints: 500000,
+    multiplier: 1.5,
+    color: 'text-yellow-600',
+    bg: 'bg-yellow-50 border-yellow-200',
+    benefits: ['Tất cả ưu đãi của hạng Bạc', 'Hệ số nhân điểm x1.5', 'Giảm 5% khi mua gói dịch vụ', 'Tặng 1 lần xịt gầm miễn phí mỗi tháng']
+  },
+  diamond: {
+    id: 'diamond',
+    name: 'Kim cương',
+    minPoints: 1000000,
+    multiplier: 2.0,
+    color: 'text-blue-600',
+    bg: 'bg-blue-50 border-blue-200',
+    benefits: ['Tất cả ưu đãi của hạng Vàng', 'Hệ số nhân điểm siêu tốc x2.0', 'Giảm 10% khi mua gói dịch vụ', 'Phục vụ phòng chờ VIP', 'Tặng 1 lượt rửa xe tiêu chuẩn miễn phí mỗi tháng']
+  },
 };
 
 // Xác định hạng dựa trên tổng điểm đời người (lifetimePoints)
 const determineTier = (lifetimePoints) => {
-  if (lifetimePoints >= TIER_THRESHOLDS.diamond) return 'diamond';
-  if (lifetimePoints >= TIER_THRESHOLDS.gold) return 'gold';
-  if (lifetimePoints >= TIER_THRESHOLDS.silver) return 'silver';
+  if (lifetimePoints >= TIER_CONFIG.diamond.minPoints) return 'diamond';
+  if (lifetimePoints >= TIER_CONFIG.gold.minPoints) return 'gold';
+  if (lifetimePoints >= TIER_CONFIG.silver.minPoints) return 'silver';
   return 'bronze';
+};
+
+
+// Hàm lấy cấu hình hạng
+exports.getTierConfig = () => {
+  return Object.values(TIER_CONFIG).sort((a, b) => a.minPoints - b.minPoints);
 };
 
 /**
@@ -37,7 +75,7 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
 
   user.loyaltyPoints += pointsEarned;
   user.lifetimePoints += pointsEarned;
-  
+
   // Gia hạn điểm 6 tháng
   const sixMonthsLater = new Date();
   sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);

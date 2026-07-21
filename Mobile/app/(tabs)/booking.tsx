@@ -8,15 +8,18 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Platform, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Text as AppText,
   PressableScale,
   Icon,
   Icons,
   ScreenContainer,
+  Card,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
+import { shadows, layout } from '../../src/theme/spacing';
 
 export default function BookingTabScreen() {
   const router = useRouter();
@@ -85,7 +88,7 @@ export default function BookingTabScreen() {
             accessibilityLabel="Đặt lịch thường"
             style={styles.pressable}
           >
-            <View style={styles.card}>
+            <Card accentBlob pressFeedback="none" padding={0}>
               <View style={styles.cardRow}>
                 <View style={styles.iconContainer}>
                   <Icon name={Icons.carOutline} size={28} color={colors.primary} />
@@ -100,7 +103,7 @@ export default function BookingTabScreen() {
                 </View>
                 <Icon name={Icons.forward} size={24} color="#CBD5E1" />
               </View>
-            </View>
+            </Card>
           </PressableScale>
         </Animated.View>
 
@@ -113,7 +116,7 @@ export default function BookingTabScreen() {
             accessibilityLabel="Đặt lịch định kỳ"
             style={styles.pressable}
           >
-            <View style={styles.card}>
+            <Card accentBlob pressFeedback="none" padding={0}>
               <View style={styles.cardRow}>
                 <View style={styles.iconContainer}>
                   <Icon name={Icons.refresh} size={28} color={colors.primary} />
@@ -128,7 +131,7 @@ export default function BookingTabScreen() {
                 </View>
                 <Icon name={Icons.forward} size={24} color="#CBD5E1" />
               </View>
-            </View>
+            </Card>
           </PressableScale>
         </Animated.View>
 
@@ -141,28 +144,34 @@ export default function BookingTabScreen() {
             accessibilityLabel="Gói lượt"
             style={styles.pressable}
           >
-            <View style={[styles.card, styles.slotPackCard]}>
-              {/* Best Value badge */}
+            <View style={{ position: 'relative' }}>
               <View style={styles.badgeContainer}>
                 <View style={styles.badge}>
                   <AppText style={styles.badgeText}>Best Value</AppText>
                 </View>
               </View>
-
-              <View style={styles.cardRow}>
-                <View style={styles.iconContainerAccent}>
-                  <Icon name={Icons.voucher} size={28} color={colors.accent} />
+              <LinearGradient
+                colors={['#FFFFFF', '#F0F9FF'] as const}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.gradientCard, styles.slotPackCard]}
+              >
+                <View style={[styles.cardBlob, { backgroundColor: `${colors.accent}1F` }]} />
+                <View style={styles.cardRow}>
+                  <View style={styles.iconContainerAccent}>
+                    <Icon name={Icons.voucher} size={28} color={colors.accent} />
+                  </View>
+                  <View style={styles.cardText}>
+                    <AppText style={styles.cardTitle} color="#1A1A1A">
+                      Gói lượt
+                    </AppText>
+                    <AppText style={styles.cardDescription} color="#6B7280">
+                      Mua gói nhiều lượt để nhận giá ưu đãi tốt nhất
+                    </AppText>
+                  </View>
+                  <Icon name={Icons.forward} size={24} color="#CBD5E1" />
                 </View>
-                <View style={styles.cardText}>
-                  <AppText style={styles.cardTitle} color="#1A1A1A">
-                    Gói lượt
-                  </AppText>
-                  <AppText style={styles.cardDescription} color="#6B7280">
-                    Mua gói nhiều lượt để nhận giá ưu đãi tốt nhất
-                  </AppText>
-                </View>
-                <Icon name={Icons.forward} size={24} color="#CBD5E1" />
-              </View>
+              </LinearGradient>
             </View>
           </PressableScale>
         </Animated.View>
@@ -182,13 +191,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   headerTitle: {
-    ...typography.h2,
+    fontFamily: 'Outfit_700Bold',
     fontSize: 26,
-    fontWeight: '700',
+    color: '#1A1A1A',
   },
   headerSubtitle: {
-    ...typography.bodySmall,
+    fontFamily: 'Outfit_400Regular',
     fontSize: 14,
+    color: '#6B7280',
   },
 
   // Scroll content
@@ -206,28 +216,23 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
 
-  // Card base
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+  // Card base (legacy for LinearGradient)
+  gradientCard: {
+    borderRadius: layout.cardRadius,
     borderWidth: 1,
-    borderColor: '#E9EEF5',
     minHeight: 110,
     justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1A1A',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.04,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 2,
-      },
-      default: {
-        elevation: 2,
-      },
-    }),
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  cardBlob: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    top: -40,
+    right: -30,
+    zIndex: -1,
   },
 
   // Card row layout
@@ -262,20 +267,22 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardTitle: {
-    ...typography.h4,
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 18,
-    fontWeight: '600',
+    color: '#1A1A1A',
   },
   cardDescription: {
-    ...typography.bodySmall,
+    fontFamily: 'Outfit_400Regular',
     fontSize: 14,
     lineHeight: 20,
+    color: '#6B7280',
   },
 
   // Slot pack card specific
   slotPackCard: {
     position: 'relative',
     overflow: 'visible',
+    borderColor: '#BAE6FD', // colors.infoLight hex
   },
   badgeContainer: {
     position: 'absolute',
@@ -304,9 +311,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   badgeText: {
+    fontFamily: 'Outfit_600SemiBold',
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 0.3,
   },
 });

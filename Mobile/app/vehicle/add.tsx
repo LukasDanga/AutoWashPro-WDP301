@@ -9,7 +9,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Switch,
+  Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { vehicleApi } from '../../src/api';
 import {
@@ -149,7 +151,13 @@ export default function VehicleFormScreen() {
   return (
     <ScreenContainer padded={false}>
       <Header title={isEditing ? 'Sửa phương tiện' : 'Thêm phương tiện'} showBack />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={20}
+      >
         <Input
           label="Biển số xe *"
           placeholder="VD: 30A-12345"
@@ -256,7 +264,7 @@ export default function VehicleFormScreen() {
             accessibilityLabel="Đặt làm phương tiện mặc định"
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={[styles.bottomAction, { borderTopColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
         <Button

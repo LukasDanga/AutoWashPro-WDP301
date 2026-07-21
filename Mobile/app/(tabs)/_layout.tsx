@@ -155,23 +155,23 @@ const styles = StyleSheet.create({
     // Subtle top border via shadow
     ...Platform.select({
       ios: {
-        shadowColor: '#1A1A1A',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.04,
-        shadowRadius: 16,
+        shadowColor: '#0050cb',
+        shadowOffset: { width: 0, height: -8 },
+        shadowOpacity: 0.06,
+        shadowRadius: 20,
       },
       android: {
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: '#E5E7EB',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.03)',
+        elevation: 8,
       },
       default: {},
     }),
   },
   tabBarLabel: {
-    ...typography.caption,
-    fontWeight: '500',
+    fontFamily: 'Outfit_600SemiBold',
     marginTop: 4,
-    fontSize: 12,
+    fontSize: 11,
   },
   tabBarItem: {
     // Touch target handled by Tabs (>=48dp)

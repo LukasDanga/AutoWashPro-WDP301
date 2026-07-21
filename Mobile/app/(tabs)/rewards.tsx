@@ -34,7 +34,7 @@ import {
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
-import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
+import { spacing, borderRadius, shadows, layout } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
 import type { Voucher, UserVoucher, UserTier, Gift } from '../../src/types';
 
@@ -158,13 +158,13 @@ const ctab = StyleSheet.create({
     zIndex: 1,
   },
   label: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 14,
-    fontWeight: '500',
     color: '#94A3B8',
   },
   labelActive: {
+    fontFamily: 'Outfit_700Bold',
     color: '#2563EB',
-    fontWeight: '700',
   },
 });
 
@@ -221,8 +221,8 @@ const ts = StyleSheet.create({
     gap: 4,
   },
   label: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 11,
-    fontWeight: '500',
     color: '#64748B',
   },
 });
@@ -334,14 +334,10 @@ const hero = StyleSheet.create({
   card: {
     marginHorizontal: 20,
     marginBottom: 16,
-    borderRadius: 24,
+    borderRadius: layout.cardRadius,
     padding: 24,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 6,
+    ...shadows.md,
   },
   blob1: {
     position: 'absolute',
@@ -368,9 +364,9 @@ const hero = StyleSheet.create({
     marginBottom: 8,
   },
   cardLabel: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
-    fontWeight: '500',
     letterSpacing: 0.3,
   },
   pointsRow: {
@@ -380,15 +376,15 @@ const hero = StyleSheet.create({
     marginTop: 4,
   },
   pointsValue: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 44,
-    fontWeight: '800',
     color: '#FFFFFF',
     lineHeight: 50,
     letterSpacing: -1,
   },
   pointsUnit: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 17,
-    fontWeight: '600',
     color: 'rgba(255,255,255,0.85)',
     marginBottom: 4,
   },
@@ -416,8 +412,8 @@ const hero = StyleSheet.create({
     elevation: 2,
   },
   redeemText: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 15,
-    fontWeight: '700',
     flex: 1,
     textAlign: 'center',
   },
@@ -455,8 +451,8 @@ const sh = StyleSheet.create({
     paddingBottom: 12,
   },
   textCol: { flex: 1 },
-  title: { fontSize: 18, fontWeight: '700', color: '#0F172A', letterSpacing: 0.1 },
-  subtitle: { fontSize: 13, color: '#94A3B8', marginTop: 2 },
+  title: { fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#0F172A', letterSpacing: 0.1 },
+  subtitle: { fontFamily: 'Outfit_400Regular', fontSize: 13, color: '#94A3B8', marginTop: 2 },
 });
 
 // ─── Voucher Card ──────────────────────────────────────────────────────────────
@@ -593,15 +589,11 @@ const vc = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 20,
     marginBottom: 12,
-    borderRadius: 16,
+    borderRadius: layout.cardRadius,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     minHeight: 110,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.md,
   },
   cardUsed: { opacity: 0.65 },
   discountSection: {
@@ -622,14 +614,14 @@ const vc = StyleSheet.create({
     right: -28,
   },
   discountValue: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 22,
-    fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
   },
   discountLabel: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 10,
-    fontWeight: '700',
     color: 'rgba(255,255,255,0.9)',
     letterSpacing: 1.2,
     marginTop: 2,
@@ -669,8 +661,8 @@ const vc = StyleSheet.create({
     marginBottom: 2,
   },
   voucherName: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 15,
-    fontWeight: '700',
     color: '#0F172A',
     flex: 1,
   },

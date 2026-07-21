@@ -51,11 +51,12 @@ export function SegmentedControl<T extends string = string>({
         horizontal: true,
         showsHorizontalScrollIndicator: false,
         contentContainerStyle: styles.scrollContent,
+        style,
       }
-    : { style: [styles.row, fullWidth && styles.fullWidth] };
+    : { style: [styles.row, { backgroundColor: colors.surfaceDark }, fullWidth && styles.fullWidth, style] };
 
   return (
-    <Container {...(containerProps as any)} style={style}>
+    <Container {...(containerProps as any)}>
       {options.map((opt) => {
         const selected = opt.value === value;
         const handlePress = () => {
@@ -78,16 +79,17 @@ export function SegmentedControl<T extends string = string>({
               styles.segment,
               fullWidth && styles.segmentFlex,
               {
-                backgroundColor: selected ? colors.surfaceElevated : 'transparent',
+                backgroundColor: selected ? colors.primary : 'transparent',
                 borderColor: selected ? 'transparent' : 'transparent',
                 opacity: opt.disabled ? opacity.disabled : pressed ? opacity.pressed : 1,
               },
+              selected && styles.segmentActive,
             ]}
           >
             <Text
               variant="label"
               weight={selected ? '600' : '500'}
-              color={selected ? 'primary' : 'textSecondary'}
+              color={selected ? '#FFFFFF' : 'textSecondary'}
             >
               {opt.label}
             </Text>
@@ -97,7 +99,7 @@ export function SegmentedControl<T extends string = string>({
                   styles.countBadge,
                   {
                     backgroundColor: selected
-                      ? colors.primarySubtle
+                      ? '#FFFFFF'
                       : colors.surfaceDark,
                   },
                 ]}
@@ -152,6 +154,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  segmentActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 3,
   },
 });
 

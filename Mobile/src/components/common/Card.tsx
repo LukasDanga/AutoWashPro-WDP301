@@ -16,9 +16,10 @@ import {
   Pressable,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import { useColors } from '../../theme/ThemeContext';
-import { spacing, shadows, ShadowKey } from '../../theme/spacing';
+import { spacing, shadows, ShadowKey, layout } from '../../theme/spacing';
 import { duration, scale } from '../../theme/tokens';
 
 interface CardProps extends ViewProps {
@@ -30,11 +31,14 @@ interface CardProps extends ViewProps {
   onLongPress?: () => void;
   disabled?: boolean;
   pressFeedback?: 'opacity' | 'scale' | 'both';
+  accentBlob?: boolean;
+  blobColor?: string;
+  blobStyle?: any;
 }
 
 export const Card: React.FC<CardProps> = ({
   variant = 'default',
-  shadow = 'sm',
+  shadow = 'md',
   padding = 'md',
   children,
   style,
@@ -42,6 +46,9 @@ export const Card: React.FC<CardProps> = ({
   onLongPress,
   disabled = false,
   pressFeedback = 'both',
+  accentBlob = false,
+  blobColor,
+  blobStyle,
   ...props
 }) => {
   const colors = useColors();
@@ -87,24 +94,36 @@ export const Card: React.FC<CardProps> = ({
     }
   };
 
+  const isElevated = variant === 'elevated' || variant === 'default';
+
   const cardContent = (
     <Animated.View
       style={[
         {
           backgroundColor: variant === 'flat' ? colors.surface : colors.surfaceElevated,
-          borderRadius: 16,
+          borderRadius: layout.cardRadius,
           padding: paddingValue,
           opacity: opacityAnim,
           transform: [{ scale: scaleAnim }],
-          borderWidth: variant === 'outlined' ? 1 : 0,
-          borderColor: variant === 'outlined' ? colors.border : 'transparent',
-          ...(variant === 'elevated' ? shadows[shadow] : {}),
+          borderWidth: variant === 'outlined' ? 1 : (isElevated ? 1 : 0),
+          borderColor: variant === 'outlined' ? colors.border : (isElevated ? 'rgba(0,0,0,0.04)' : 'transparent'),
+          overflow: 'hidden',
+          ...(isElevated ? shadows[shadow] : {}),
         },
         disabled && { opacity: 0.5 },
         style,
       ]}
       {...props}
     >
+      {accentBlob && (
+        <View
+          style={[
+            styles.cardBlob,
+            { backgroundColor: blobColor || `${colors.primary}14` },
+            blobStyle,
+          ]}
+        />
+      )}
       {children}
     </Animated.View>
   );
@@ -129,7 +148,15 @@ export const Card: React.FC<CardProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Intentionally minimal — visual styling is applied inline via useColors()
+  cardBlob: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    top: -40,
+    right: -30,
+    zIndex: -1,
+  },
 });
 
 export default Card;

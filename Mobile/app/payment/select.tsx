@@ -29,6 +29,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { paymentApi, bookingApi } from '../../src/api';
 import {
@@ -44,7 +45,7 @@ import {
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
-import { spacing, borderRadius } from '../../src/theme/spacing';
+import { spacing, borderRadius, layout, shadows } from '../../src/theme/spacing';
 import { formatCurrency, formatDate } from '../../src/utils';
 import type { PaymentMethod, PaymentType, Booking } from '../../src/types';
 
@@ -105,6 +106,16 @@ export default function PaymentSelectScreen() {
   const { isAuthenticated } = useAuth();
   const colors = useColors();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
+
+  const bottomActionStyle = [
+    styles.bottomAction,
+    {
+      backgroundColor: colors.background,
+      borderTopColor: colors.border,
+      paddingBottom: Math.max(insets.bottom, 12) + 12,
+    },
+  ];
 
   const bookingId = (params.bookingId as string) || '';
   const rawType = (params.type as PayableType) || 'deposit';
@@ -284,63 +295,72 @@ export default function PaymentSelectScreen() {
       <ScreenContainer>
         <Header title="Quét QR để thanh toán" showBack />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Card style={[styles.qrCard, { backgroundColor: colors.surface }]}>
-            <AppText variant="h4" style={styles.cardTitle}>
-              {TYPE_LABEL[payableType]} — {selectedMethod === 'momo' ? 'MoMo' : selectedMethod === 'vnpay' ? 'VNPay' : 'Ngân hàng'}
-            </AppText>
-            <AppText variant="body" color="textSecondary" style={styles.qrCaption}>
-              Mở app {selectedMethod === 'momo' ? 'MoMo' : 'ngân hàng'} và quét mã bên dưới
-            </AppText>
-
-            {paidPayment.qrCode ? (
-              <View style={styles.qrBox}>
-                <Image
-                  source={{ uri: paidPayment.qrCode }}
-                  style={styles.qrImage}
-                  resizeMode="contain"
-                />
-              </View>
-            ) : paidPayment.paymentUrl ? (
-              <View style={styles.urlBox}>
-                <AppText variant="caption" color="textSecondary" style={styles.urlText}>
-                  {paidPayment.paymentUrl}
-                </AppText>
-                <Button
-                  title="Mở cổng thanh toán"
-                  onPress={() => Linking.openURL(paidPayment.paymentUrl)}
-                  style={{ marginTop: spacing.sm }}
-                />
-              </View>
-            ) : (
-              <AppText variant="body" color="textSecondary">
-                Đang chờ cổng thanh toán xử lý…
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.doubleBezelInner}>
+              <AppText variant="h4" style={styles.cardTitle}>
+                {TYPE_LABEL[payableType]} — {selectedMethod === 'momo' ? 'MoMo' : selectedMethod === 'vnpay' ? 'VNPay' : 'Ngân hàng'}
               </AppText>
-            )}
+              <AppText variant="body" color="textSecondary" style={styles.qrCaption}>
+                Mở app {selectedMethod === 'momo' ? 'MoMo' : 'ngân hàng'} và quét mã bên dưới
+              </AppText>
 
-            <View style={styles.amountRow}>
-              <AppText variant="body" color="textSecondary">Số tiền</AppText>
-              <AppText variant="h3" color="primary">
-                {formatCurrency(paidPayment.amount ?? computedAmount)}
+              {paidPayment.qrCode ? (
+                <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: spacing.md, padding: 6, borderRadius: 24 }]}>
+                  <View style={styles.doubleBezelInner}>
+                    <Image
+                      source={{ uri: paidPayment.qrCode }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </View>
+              ) : paidPayment.paymentUrl ? (
+                <View style={styles.urlBox}>
+                  <AppText variant="caption" color="textSecondary" style={styles.urlText}>
+                    {paidPayment.paymentUrl}
+                  </AppText>
+                  <Button
+                    title="Mở cổng thanh toán"
+                    onPress={() => Linking.openURL(paidPayment.paymentUrl)}
+                    style={{ marginTop: spacing.sm }}
+                    size="large"
+                  />
+                </View>
+              ) : (
+                <AppText variant="body" color="textSecondary">
+                  Đang chờ cổng thanh toán xử lý…
+                </AppText>
+              )}
+
+              <View style={[styles.summaryDivider || { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md, width: '100%' }]} />
+
+              <View style={styles.amountRow}>
+                <AppText variant="body" color="textSecondary">Số tiền</AppText>
+                <AppText variant="h3" color="primary" style={{ fontWeight: '700' }}>
+                  {formatCurrency(paidPayment.amount ?? computedAmount)}
+                </AppText>
+              </View>
+              {paidPayment.transactionId ? (
+                <AppText variant="caption" color="textTertiary" style={styles.txnId}>
+                  Mã giao dịch: {paidPayment.transactionId}
+                </AppText>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.infoSubtle || colors.infoLight, borderColor: colors.info, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <Icon name="information-circle-outline" size={20} color={colors.info} />
+              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+                Sau khi quét QR và xác nhận trên app, hệ thống sẽ tự cập nhật trạng
+                thái thanh toán trong vài giây. Bạn có thể quay lại trang chi tiết
+                đơn để xem trạng thái mới nhất.
               </AppText>
             </View>
-            {paidPayment.transactionId ? (
-              <AppText variant="caption" color="textTertiary" style={styles.txnId}>
-                Mã giao dịch: {paidPayment.transactionId}
-              </AppText>
-            ) : null}
-          </Card>
-
-          <Card style={[styles.infoCard, { backgroundColor: colors.infoLight }]}>
-            <Icon name="information-circle-outline" size={20} color={colors.info} />
-            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-              Sau khi quét QR và xác nhận trên app, hệ thống sẽ tự cập nhật trạng
-              thái thanh toán trong vài giây. Bạn có thể quay lại trang chi tiết
-              đơn để xem trạng thái mới nhất.
-            </AppText>
-          </Card>
+          </View>
         </ScrollView>
 
-        <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <View style={bottomActionStyle}>
           <Button
             title="Tôi đã thanh toán — xem chi tiết"
             onPress={handleViewDetail}
@@ -359,18 +379,20 @@ export default function PaymentSelectScreen() {
       <ScreenContainer>
         <Header title="Đặt cọc thành công" showBack />
         <View style={styles.content}>
-          <Card style={[styles.successCard, { backgroundColor: colors.successLight }]}>
-            <Icon name="checkmark-circle" size={56} color={colors.success} />
-            <AppText variant="h3" style={styles.successTitle}>
-              {TYPE_LABEL[payableType]} thành công
-            </AppText>
-            <AppText variant="body" color="textSecondary" style={styles.successText}>
-              Số tiền {formatCurrency(paidPayment.amount ?? computedAmount)} sẽ được
-              thu khi bạn đến chi nhánh. Đơn của bạn đang chờ nhân viên xác nhận.
-            </AppText>
-          </Card>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.successSubtle || colors.successLight, borderColor: colors.success, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <Icon name="checkmark-circle" size={56} color={colors.success} />
+              <AppText variant="h3" style={styles.successTitle}>
+                {TYPE_LABEL[payableType]} thành công
+              </AppText>
+              <AppText variant="body" color="textSecondary" style={[styles.successText, { lineHeight: 20 }]}>
+                Số tiền {formatCurrency(paidPayment.amount ?? computedAmount)} sẽ được
+                thu khi bạn đến chi nhánh. Đơn của bạn đang chờ nhân viên xác nhận.
+              </AppText>
+            </View>
+          </View>
         </View>
-        <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <View style={bottomActionStyle}>
           <Button title="Xem chi tiết đơn" onPress={handleViewDetail} fullWidth size="large" />
         </View>
       </ScreenContainer>
@@ -390,97 +412,108 @@ export default function PaymentSelectScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Booking summary */}
-        <Card style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <View style={[styles.iconWrap, { backgroundColor: colors.primarySubtle }]}>
-              <Icon name="receipt-outline" size={20} color={colors.primary} />
+        <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.doubleBezelInner}>
+            <View style={styles.summaryHeader}>
+              <View style={[styles.iconWrap, { backgroundColor: colors.primarySubtle }]}>
+                <Icon name="receipt-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodySmall" color="textSecondary">
+                  Mã đặt lịch
+                </AppText>
+                <AppText variant="body" style={{ fontWeight: '600' }}>
+                  #{booking._id.slice(-8).toUpperCase()}
+                </AppText>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <AppText variant="bodySmall" color="textSecondary">
-                Mã đặt lịch
-              </AppText>
-              <AppText variant="body">
-                #{booking._id.slice(-8).toUpperCase()}
-              </AppText>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <AppText variant="caption" color="textSecondary">Gói dịch vụ</AppText>
-            <AppText variant="bodySmall" style={styles.summaryValue}>
-              {(booking.packageId as any)?.name || '—'}
-            </AppText>
-          </View>
-          <View style={styles.summaryRow}>
-            <AppText variant="caption" color="textSecondary">Ngày giờ</AppText>
-            <AppText variant="bodySmall" style={styles.summaryValue}>
-              {formatDate(booking.bookingDate)} • {booking.startTime}
-            </AppText>
-          </View>
-          <View style={styles.summaryRow}>
-            <AppText variant="caption" color="textSecondary">Tổng đơn</AppText>
-            <AppText variant="bodySmall" style={styles.summaryValue}>
-              {formatCurrency(fullAmount)}
-            </AppText>
-          </View>
-          {booking.depositAmount ? (
+            <View style={[styles.summaryDivider || { height: 1, backgroundColor: colors.divider, marginVertical: spacing.sm }]} />
             <View style={styles.summaryRow}>
-              <AppText variant="caption" color="textSecondary">Cọc (30%)</AppText>
-              <AppText variant="bodySmall" style={styles.summaryValue}>
-                {formatCurrency(booking.depositAmount)}
-                {booking.depositPaid ? ' • đã cọc' : ' • chưa cọc'}
+              <AppText variant="caption" color="textSecondary">Gói dịch vụ</AppText>
+              <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
+                {(booking.packageId as any)?.name || '—'}
               </AppText>
             </View>
-          ) : null}
-        </Card>
+            <View style={styles.summaryRow}>
+              <AppText variant="caption" color="textSecondary">Ngày giờ</AppText>
+              <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
+                {formatDate(booking.bookingDate)} • {booking.startTime}
+              </AppText>
+            </View>
+            <View style={styles.summaryRow}>
+              <AppText variant="caption" color="textSecondary">Tổng đơn</AppText>
+              <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
+                {formatCurrency(fullAmount)}
+              </AppText>
+            </View>
+            {booking.depositAmount ? (
+              <View style={styles.summaryRow}>
+                <AppText variant="caption" color="textSecondary">Cọc (30%)</AppText>
+                <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
+                  {formatCurrency(booking.depositAmount)}
+                  {booking.depositPaid ? ' • đã cọc' : ' • chưa cọc'}
+                </AppText>
+              </View>
+            ) : null}
+          </View>
+        </View>
 
         {/* Trạng thái chặn thanh toán */}
         {isFullyPaid ? (
-          <Card style={[styles.warnCard, { backgroundColor: colors.successLight }]}>
-            <Icon name="checkmark-circle" size={20} color={colors.success} />
-            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-              Đơn này đã được thanh toán đủ. Không cần đặt cọc thêm.
-            </AppText>
-          </Card>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.successSubtle || colors.successLight, borderColor: colors.success, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <Icon name="checkmark-circle" size={20} color={colors.success} />
+              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+                Đơn này đã được thanh toán đủ. Không cần đặt cọc thêm.
+              </AppText>
+            </View>
+          </View>
         ) : null}
         {isDepositAlreadyPaid ? (
-          <Card style={[styles.warnCard, { backgroundColor: colors.infoLight }]}>
-            <Icon name="information-circle-outline" size={20} color={colors.info} />
-            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-              Bạn đã đặt cọc cho đơn này. Có thể thanh toán phần còn lại sau khi
-              dịch vụ hoàn thành.
-            </AppText>
-          </Card>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.infoSubtle || colors.infoLight, borderColor: colors.info, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <Icon name="information-circle-outline" size={20} color={colors.info} />
+              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+                Bạn đã đặt cọc cho đơn này. Có thể thanh toán phần còn lại sau khi dịch vụ hoàn thành.
+              </AppText>
+            </View>
+          </View>
         ) : null}
         {isZeroDeposit && payableType === 'deposit' ? (
-          <Card style={[styles.warnCard, { backgroundColor: colors.warningLight }]}>
-            <Icon name="alert-circle-outline" size={20} color={colors.warning} />
-            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-              Đơn này không yêu cầu đặt cọc (gói slot / thanh toán trọn gói).
-            </AppText>
-          </Card>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningSubtle || colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <Icon name="alert-circle-outline" size={20} color={colors.warning} />
+              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+                Đơn này không yêu cầu đặt cọc (gói slot / thanh toán trọn gói).
+              </AppText>
+            </View>
+          </View>
         ) : null}
         {isRemainingNotEligible ? (
-          <Card style={[styles.warnCard, { backgroundColor: colors.warningLight }]}>
-            <Icon name="alert-circle-outline" size={20} color={colors.warning} />
-            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-              Cần đặt cọc trước khi thanh toán phần còn lại.
-            </AppText>
-          </Card>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningSubtle || colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <Icon name="alert-circle-outline" size={20} color={colors.warning} />
+              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+                Cần đặt cọc trước khi thanh toán phần còn lại.
+              </AppText>
+            </View>
+          </View>
         ) : null}
 
         {/* Số tiền cần trả */}
-        <Card style={styles.amountCard}>
-          <AppText variant="label" color="textSecondary">
-            {TYPE_LABEL[payableType]}
-          </AppText>
-          <AppText variant="h1" color="primary" style={styles.amountText}>
-            {formatCurrency(computedAmount)}
-          </AppText>
-          <AppText variant="caption" color="textTertiary">
-            {TYPE_DESCRIPTION[payableType]}
-          </AppText>
-        </Card>
+        <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.doubleBezelInner}>
+            <AppText variant="label" color="textSecondary">
+              {TYPE_LABEL[payableType]}
+            </AppText>
+            <AppText variant="h1" color="primary" style={[styles.amountText, { fontWeight: '700' }]}>
+              {formatCurrency(computedAmount)}
+            </AppText>
+            <AppText variant="caption" color="textTertiary">
+              {TYPE_DESCRIPTION[payableType]}
+            </AppText>
+          </View>
+        </View>
 
         {/* Phương thức */}
         <AppText variant="h4" style={styles.sectionTitle}>
@@ -491,7 +524,7 @@ export default function PaymentSelectScreen() {
           <TouchableOpacity
             key={option.id}
             onPress={() => setSelectedMethod(option.id)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
             disabled={
               isFullyPaid ||
               isZeroDeposit ||
@@ -499,39 +532,44 @@ export default function PaymentSelectScreen() {
               isDepositAlreadyPaid
             }
           >
-            <Card
+            <View
               style={[
-                styles.paymentCard,
-                selectedMethod === option.id && {
-                  borderColor: colors.primary,
-                  borderWidth: 2,
+                styles.doubleBezelOuter,
+                {
+                  backgroundColor: selectedMethod === option.id ? colors.primarySubtle : colors.surface,
+                  borderColor: selectedMethod === option.id ? colors.primary : colors.border,
+                  opacity: (isFullyPaid || isZeroDeposit || isRemainingNotEligible || isDepositAlreadyPaid) ? 0.5 : 1,
                 },
               ]}
             >
-              <View style={styles.paymentContent}>
-                <View style={[styles.paymentIcon, { backgroundColor: colors.primarySubtle }]}>
-                  <Icon name={option.icon} size={24} color={colors.primary} />
-                </View>
-                <View style={styles.paymentInfo}>
-                  <AppText variant="body" style={styles.paymentName}>
-                    {option.name}
-                  </AppText>
-                  <AppText variant="caption" color="textSecondary">
-                    {option.description}
-                  </AppText>
-                </View>
-                <View
-                  style={[
-                    styles.radio,
-                    { borderColor: selectedMethod === option.id ? colors.primary : colors.border },
-                  ]}
-                >
+              <View
+                style={[
+                  styles.doubleBezelInner,
+                  { backgroundColor: selectedMethod === option.id ? colors.primarySubtle : colors.background }
+                ]}
+              >
+                <View style={styles.paymentContent}>
+                  <View style={[styles.paymentIcon, { backgroundColor: colors.primarySubtle }]}>
+                    <Icon name={option.icon} size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.paymentInfo}>
+                    <AppText variant="body" style={styles.paymentName}>
+                      {option.name}
+                    </AppText>
+                    <AppText variant="caption" color="textSecondary">
+                      {option.description}
+                    </AppText>
+                  </View>
                   {selectedMethod === option.id ? (
-                    <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                  ) : null}
+                    <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
+                      <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>
+                    </View>
+                  ) : (
+                    <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
+                  )}
                 </View>
               </View>
-            </Card>
+            </View>
           </TouchableOpacity>
         ))}
 
@@ -544,7 +582,7 @@ export default function PaymentSelectScreen() {
       </ScrollView>
 
       {/* Bottom Action */}
-      <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={bottomActionStyle}>
         <Button
           title={
             isFullyPaid
@@ -580,6 +618,18 @@ export default function PaymentSelectScreen() {
 }
 
 const styles = StyleSheet.create({
+  doubleBezelOuter: {
+    padding: spacing.lg,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: spacing.md,
+    backgroundColor: '#FFFFFF',
+    ...shadows.md,
+  },
+  doubleBezelInner: {
+    backgroundColor: 'transparent',
+  },
   content: {
     flex: 1,
     padding: spacing.md,

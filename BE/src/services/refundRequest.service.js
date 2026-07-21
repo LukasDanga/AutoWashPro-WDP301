@@ -38,7 +38,7 @@ exports.getAll = async (filters = {}, userRole, userId) => {
     query.status = filters.status;
   }
   return RefundRequest.find(query)
-    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status paymentStatus finalPrice branchId' })
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status paymentStatus finalPrice depositAmount deposit depositPaid branchId' })
     .populate('userId', 'name email phone')
     .populate('reviewedBy', 'name')
     .sort({ createdAt: -1 });

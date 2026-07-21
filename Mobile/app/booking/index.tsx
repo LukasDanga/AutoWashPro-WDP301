@@ -61,7 +61,7 @@ import {
   useToast,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
-import { spacing, borderRadius } from '../../src/theme/spacing';
+import { spacing, borderRadius, layout, shadows } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
 import { consumePendingVoucher } from '../../src/utils/voucherStore';
 import type {
@@ -138,6 +138,7 @@ export default function BookingScreen() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [branchPackageCounts, setBranchPackageCounts] = useState<{ counts: Record<string, number>; globalCount: number }>({ counts: {}, globalCount: 0 });
 
   const [dateSlots, setDateSlots] = useState<Record<string, AvailableSlot[]>>({});
   const [dateSlotsErrors, setDateSlotsErrors] = useState<Record<string, string>>({});
@@ -214,6 +215,25 @@ export default function BookingScreen() {
         ]);
         if (cancelled) return;
         setBranches(branchesRes);
+
+        // Compute and store branch package counts ONCE using the raw initial catalog.
+        // This prevents other branches from falsely appearing empty after dedupe
+        // drops their specific package variants when a branch is selected.
+        const counts: Record<string, number> = {};
+        let globalCount = 0;
+        for (const pkg of packagesRes) {
+          if (pkg.status !== 'active') continue;
+          const bid = typeof pkg.branchId === 'object' && pkg.branchId !== null
+            ? (pkg.branchId as any)._id || (pkg.branchId as any).id
+            : pkg.branchId;
+          if (bid) {
+            counts[String(bid)] = (counts[String(bid)] || 0) + 1;
+          } else {
+            globalCount++;
+          }
+        }
+        setBranchPackageCounts({ counts, globalCount });
+
         // Dedupe packages — backend has been observed to return the same
         // (name, price, duration, category) under multiple `_id`s (one per
         // branch), which made the picker show duplicates. We don't know
@@ -270,9 +290,12 @@ export default function BookingScreen() {
         const v = vehicles.find((x) => x._id === (params.vehicleId as string));
         if (v) setSelectedVehicle(v);
       }
-      // If a branch was pre-selected, skip the branch step (mirrors the web
-      // widget's `setStep(initialBranchId ? 2 : 1)`).
-      if (params.branchId && step === 'branch') {
+      if (params.quickBook === 'true') {
+        setStep('datetime');
+        if (typeof params.quickBookSlotPackId === 'string') {
+          setSelectedSlotPackId(params.quickBookSlotPackId);
+        }
+      } else if (params.branchId && step === 'branch') {
         setStep('package');
       }
     })();
@@ -333,19 +356,7 @@ export default function BookingScreen() {
     return dedupePackages(list, selectedBranch?._id ?? null);
   }, [packages, selectedBranch?._id]);
 
-  // Map of branchId → number of active packages (used to badge disabled
-  // branches in the step-1 branch picker).
-  const branchPackageCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const pkg of packages) {
-      if (pkg.status !== 'active') continue;
-      const bid = typeof pkg.branchId === 'object' && pkg.branchId !== null
-        ? (pkg.branchId as any)._id
-        : pkg.branchId;
-      if (bid) counts[String(bid)] = (counts[String(bid)] || 0) + 1;
-    }
-    return counts;
-  }, [packages]);
+
 
   // Fetch branch-specific packages once a branch is picked and merge them
   // into the catalog. The global `getPackages` endpoint does not always
@@ -773,7 +784,7 @@ export default function BookingScreen() {
               />
             ) : (
               branches.map((branch) => {
-                const pkgCount = branchPackageCounts[branch._id] || 0;
+                const pkgCount = (branchPackageCounts.counts[branch._id] || 0) + branchPackageCounts.globalCount;
                 const disabled = pkgCount === 0;
                 return (
                 <SelectableCard
@@ -1508,7 +1519,7 @@ export default function BookingScreen() {
       <View
         style={[
           styles.bottomAction,
-          { backgroundColor: colors.background, borderTopColor: colors.border },
+          { backgroundColor: 'transparent' },
         ]}
       >
         {stepIndex > 0 ? (
@@ -1522,13 +1533,13 @@ export default function BookingScreen() {
           }
         >
           <Button
-            title={step === 'confirm' ? 'Xác nhận đặt lịch' : 'Tiếp tục'}
-            onPress={step === 'confirm' ? handleSubmit : handleNext}
+            title={step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? 'Xác nhận đặt lịch' : 'Tiếp tục'}
+            onPress={step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? handleSubmit : handleNext}
             disabled={!canGoNext() || isLoadingSlots}
             loading={isSubmitting}
             fullWidth
             accessibilityLabel={
-              step === 'confirm' ? 'Xác nhận đặt lịch' : 'Tiếp tục bước tiếp theo'
+              step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? 'Xác nhận đặt lịch' : 'Tiếp tục bước tiếp theo'
             }
           />
         </View>
@@ -1547,15 +1558,15 @@ interface StepLayoutProps {
 const StepLayout: React.FC<StepLayoutProps> = ({ title, subtitle, icon, children }) => {
   const colors = useColors();
   return (
-    <View>
+    <View style={{ paddingTop: spacing.xl, paddingBottom: spacing.xxl }}>
       <View style={styles.stepHeader}>
         <View style={[styles.stepHeaderIcon, { backgroundColor: colors.primarySubtle }]}>
-          <Icon name={icon} size={20} color={colors.primary} />
+          <Icon name={icon} size={24} color={colors.primary} />
         </View>
         <View style={styles.stepHeaderText}>
-          <AppText variant="h3">{title}</AppText>
+          <AppText variant="h2" style={{ fontWeight: '700' }}>{title}</AppText>
           {subtitle ? (
-            <AppText variant="caption" color="textSecondary">
+            <AppText variant="body" color="textSecondary" style={{ marginTop: 4 }}>
               {subtitle}
             </AppText>
           ) : null}
@@ -1572,6 +1583,8 @@ interface SelectableCardProps {
   icon: string;
   title: string;
   subtitle: React.ReactNode;
+  disabled?: boolean;
+  disabledLabel?: string;
 }
 
 const SelectableCard: React.FC<SelectableCardProps> = ({
@@ -1580,22 +1593,27 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
   icon,
   title,
   subtitle,
+  disabled,
+  disabledLabel,
 }) => {
   const colors = useColors();
   return (
     <PressableScale
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
       accessibilityLabel={title}
     >
       <Card
         style={[
           styles.optionCard,
-          selected && {
-            borderWidth: 2,
-            borderColor: colors.primary,
-            backgroundColor: colors.primarySubtle,
+          {
+            backgroundColor: selected ? colors.primarySubtle : colors.surface,
+            borderColor: selected ? colors.primary : colors.borderLight,
+            opacity: disabled ? 0.6 : 1,
+            marginBottom: spacing.md,
+            padding: spacing.lg,
           },
         ]}
       >
@@ -1603,7 +1621,8 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
           <View
             style={[
               styles.optionIcon,
-              { backgroundColor: selected ? colors.primary : colors.surface },
+              { backgroundColor: selected ? colors.primary : colors.background },
+              disabled && { elevation: 0, shadowOpacity: 0 }
             ]}
           >
             <Icon
@@ -1617,14 +1636,25 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
               {title}
             </AppText>
             {subtitle}
+            {disabled && disabledLabel ? (
+              <AppText
+                variant="caption"
+                color="error"
+                style={{ marginTop: spacing.xs, fontWeight: '500' }}
+              >
+                {disabledLabel}
+              </AppText>
+            ) : null}
           </View>
-          {selected ? (
-            <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
-              <Icon name={Icons.checkmark} size={16} color={colors.textInverse} />
-            </View>
-          ) : (
-            <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
-          )}
+          <View style={[
+            selected ? styles.optionCheck : styles.optionCheckEmpty,
+            {
+              backgroundColor: selected ? colors.primary : 'transparent',
+              borderColor: selected ? colors.primary : colors.textTertiary,
+            }
+          ]}>
+            {selected && <Icon name={Icons.check} size={14} color={colors.textInverse} />}
+          </View>
         </View>
       </Card>
     </PressableScale>
@@ -1810,28 +1840,51 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   stepHeaderIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
   stepHeaderText: { flex: 1 },
   // Cards
+  doubleBezelOuter: {
+    padding: 6,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  doubleBezelInner: {
+    borderRadius: 18,
+    padding: spacing.md,
+  },
   optionCard: {
     marginBottom: spacing.sm,
+    borderRadius: layout.cardRadius,
+    ...shadows.md,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   optionIcon: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
   optionInfo: { flex: 1 },
   optionTitle: {
@@ -1845,6 +1898,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,
+    borderWidth: 1.5,
   },
   optionCheckEmpty: {
     width: 24,
@@ -1880,10 +1934,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
     marginRight: spacing.sm,
     minWidth: 76,
     borderWidth: 1,
+    ...shadows.sm,
   },
   dateCardMuted: { opacity: 0.5 },
   dateDay: {
@@ -1907,15 +1962,16 @@ const styles = StyleSheet.create({
   timeCard: {
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     minWidth: 76,
     alignItems: 'center',
     borderWidth: 1,
+    ...shadows.sm,
   },
   timeCardSkeleton: {
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     minWidth: 76,
     alignItems: 'center',
     borderWidth: 1,
@@ -1963,6 +2019,10 @@ const styles = StyleSheet.create({
   // Price
   priceCard: {
     marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
+    borderRadius: layout.cardRadius,
+    ...shadows.md,
   },
   priceRow: {
     flexDirection: 'row',
@@ -1987,8 +2047,8 @@ const styles = StyleSheet.create({
   bottomAction: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.lg,
+    borderTopWidth: 0,
     gap: spacing.sm,
   },
   bottomBackButton: { flex: 1 },

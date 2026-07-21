@@ -9,14 +9,21 @@
  *   - accessible labels & 44pt+ targets
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
+  Text,
   ScrollView,
   StyleSheet,
   Modal,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StatusBar,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
+  Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,12 +49,29 @@ import {
   AlertDialog,
   useToast,
   Input,
+  EmptyState,
+  RefundStatusCard,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency, formatDate } from '../../src/utils';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Booking, BookingStatus } from '../../src/types';
+
+// Local type — captures whatever shape BE returns from POST /refund-requests.
+// BE doesn't always return the same field set, so we keep all fields optional.
+interface RefundRequest {
+  _id?: string;
+  id?: string;
+  status?: 'pending' | 'approved' | 'rejected' | 'processing' | 'completed' | string;
+  reason?: string;
+  refundAmount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  managerReply?: string;
+  processedAt?: string;
+  [k: string]: any;
+}
 
 export default function BookingDetailScreen() {
   const router = useRouter();
@@ -65,8 +89,10 @@ export default function BookingDetailScreen() {
   const [qrFullscreen, setQrFullscreen] = useState(false);
 
   // Refund UI state
-  const [refundRequestData, setRefundRequestData] = useState<any>(null);
+  const [refundRequest, setRefundRequest] = useState<RefundRequest | null>(null);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const refundSectionRef = useRef<View | null>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
   const [refundReason, setRefundReason] = useState('');
   const [isRefunding, setIsRefunding] = useState(false);
 
@@ -92,19 +118,23 @@ export default function BookingDetailScreen() {
         setQrDataUrl(null);
       }
       
-      // Fetch refund requests if booking is cancelled and paid
-      if (response.status === 'cancelled' && (response.depositPaid || response.paymentStatus === 'paid')) {
-        try {
-          const refunds = await refundApi.getMyRefundRequests();
-          const match = refunds.find((r: any) => String(r.bookingId?._id || r.bookingId) === String(id));
-          if (match) setRefundRequestData(match);
-        } catch {
-          // ignore
+      // Fetch refund requests (any status) for this booking — survives reloads.
+      try {
+        const refunds = await refundApi.getMyRefundRequests();
+        const match = refunds.find(
+          (r: any) => String(r.bookingId?._id || r.bookingId) === String(id)
+        );
+        if (match) {
+          setRefundRequest({
+            ...match,
+            status: match.status || 'pending',
+          });
         }
+      } catch {
+        // ignore — refund status is optional
       }
-    } catch (error) {
-      console.error('Error fetching booking:', error);
-      AlertDialog.error('Lỗi', 'Không thể tải thông tin đặt lịch');
+    } catch (error: any) {
+      console.log('Booking not found or error fetching:', error.message || error);
     } finally {
       setIsLoading(false);
     }
@@ -177,9 +207,28 @@ export default function BookingDetailScreen() {
     }
     setIsRefunding(true);
     try {
-      await refundApi.createRefundRequest(id!, refundReason);
-      toast.success('Thành công', 'Yêu cầu hoàn tiền đã được gửi');
+      const created = await refundApi.createRefundRequest(id!, refundReason);
+      // Capture local refund request state so the UI can show status.
+      // BE response shape varies — accept anything truthy that has a status or id.
+      const isDepositOnly = booking?.paymentStatus === 'deposit_paid' || (booking?.depositPaid && booking?.paymentStatus !== 'paid');
+      const actualDeposit = booking?.depositAmount || (booking as any)?.deposit;
+      const expectedRefund = isDepositOnly && actualDeposit ? actualDeposit : (booking?.finalPrice ?? booking?.totalPrice);
+
+      const normalized: RefundRequest = {
+        ...(created || {}),
+        status: created?.status || 'pending',
+        reason: created?.reason || refundReason,
+        createdAt: created?.createdAt || new Date().toISOString(),
+        refundAmount: created?.refundAmount ?? expectedRefund,
+      };
+      setRefundRequest(normalized);
       setShowRefundModal(false);
+      // Card now lives at the TOP of the ScrollView (right under the warning banner),
+      // so a simple scrollTo({y:0}) reliably brings it into view.
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }, 450);
+      toast.success('Thành công', 'Yêu cầu hoàn tiền đã được gửi');
       await fetchBooking();
     } catch (error: any) {
       AlertDialog.error(
@@ -195,15 +244,16 @@ export default function BookingDetailScreen() {
 
   if (!booking) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenContainer>
         <Header showBack title="Chi tiết đặt lịch" />
-        <View style={styles.notFound}>
-          <Icon name={Icons.warning} size={48} color={colors.textTertiary} />
-          <AppText variant="body" color="textSecondary" style={{ marginTop: spacing.md }}>
-            Không tìm thấy thông tin đặt lịch
-          </AppText>
-        </View>
-      </SafeAreaView>
+        <EmptyState
+          iconName={Icons.calendarOutline}
+          title="Không tìm thấy lịch hẹn"
+          message="Lịch hẹn này không tồn tại hoặc đã bị xóa khỏi hệ thống."
+          actionLabel="Quay lại"
+          onAction={() => router.back()}
+        />
+      </ScreenContainer>
     );
   }
 
@@ -234,7 +284,7 @@ export default function BookingDetailScreen() {
   const canRequestRefund =
     booking.status === 'cancelled' &&
     (booking.depositPaid || booking.paymentStatus === 'paid') &&
-    !refundRequestData;
+    !refundRequest;
 
   const hasBottomActions =
     canCancel || canRebook || canPayRemaining || canRequestRefund;
@@ -256,6 +306,7 @@ export default function BookingDetailScreen() {
       />
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -345,6 +396,14 @@ export default function BookingDetailScreen() {
               )}
             </View>
           </Card>
+        ) : null}
+
+        {/* Active refund status card — placed near the top so user sees it immediately
+            when one exists. RefundStatusCard is self-animating on mount. */}
+        {refundRequest ? (
+          <View ref={refundSectionRef} collapsable={false}>
+            <RefundStatusCard request={refundRequest} />
+          </View>
         ) : null}
 
         {/* Date & time */}
@@ -577,7 +636,8 @@ export default function BookingDetailScreen() {
             <AppText variant="body">{booking.note}</AppText>
           </Card>
         ) : null}
-      </ScrollView>
+
+        </ScrollView>
 
       {/* Bottom actions — nằm phía trên thanh điều hướng dưới cùng */}
       {hasBottomActions ? (
@@ -671,7 +731,7 @@ export default function BookingDetailScreen() {
                 </>
               );
             }
-            if (canRequestRefund) {
+            if (canRequestRefund && !refundRequest) {
               return (
                 <View style={styles.singleActionWrap}>
                   <Button
@@ -701,90 +761,221 @@ export default function BookingDetailScreen() {
         transparent
         animationType="fade"
         onRequestClose={() => setShowCancelModal(false)}
+        statusBarTranslucent
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <AppText variant="h4">Xác nhận hủy đặt lịch</AppText>
-              <TouchableOpacity onPress={() => setShowCancelModal(false)}>
-                <Icon name={Icons.close} size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <AppText variant="body" color="textSecondary" style={{ marginBottom: spacing.md }}>
-              Bạn có chắc chắn muốn hủy đơn này? Vui lòng cho chúng tôi biết lý do hủy.
-              Hành động này không thể hoàn tác.
-            </AppText>
-            <Input
-              label="Lý do hủy"
-              placeholder="Nhập lý do hủy đặt lịch..."
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              multiline
-              numberOfLines={3}
-              inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
-            />
-            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
-              <Button
-                title="Quay lại"
-                variant="outline"
-                onPress={() => setShowCancelModal(false)}
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="Xác nhận hủy"
-                variant="danger"
-                onPress={submitCancel}
-                loading={isCancelling}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        </View>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            Keyboard.dismiss();
+            setShowCancelModal(false);
+          }}
+          accessibilityLabel="Đóng hộp thoại"
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKavWrapper}
+            pointerEvents="box-none"
+          >
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                {/* Premium danger hero with gradient + decorative blob */}
+                <LinearGradient
+                  colors={['#FEF2F2', `${colors.error}1A`] as const}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cancelHero}
+                >
+                  {/* Decorative red blob */}
+                  <View style={[styles.cancelHeroBlob, { backgroundColor: `${colors.error}1F` }]} />
+                  <View style={styles.cancelHeroBlob2} />
+                  <View style={styles.cancelHeroIconWrap}>
+                    <Icon name={Icons.errorOutline} size={26} color={colors.error} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cancelHeroTitle}>Xác nhận hủy đặt lịch</Text>
+                    <Text style={styles.cancelHeroSubtitle}>Hành động này không thể hoàn tác</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowCancelModal(false)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={styles.cancelHeroClose}
+                    accessibilityLabel="Đóng"
+                    accessibilityRole="button"
+                  >
+                    <Icon name={Icons.close} size={22} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </LinearGradient>
+
+                <ScrollView
+                  style={styles.cancelBody}
+                  contentContainerStyle={styles.cancelBodyContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <AppText variant="body" color="textSecondary" style={styles.cancelIntro}>
+                    Bạn có chắc chắn muốn hủy đơn này? Vui lòng cho chúng tôi biết lý do hủy.
+                  </AppText>
+
+                  <Text style={styles.cancelReasonLabel}>Lý do hủy</Text>
+                  <Input
+                    placeholder="Nhập lý do hủy đặt lịch..."
+                    value={cancelReason}
+                    onChangeText={setCancelReason}
+                    multiline
+                    numberOfLines={3}
+                    inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
+                    containerStyle={styles.cancelInputContainer}
+                  />
+
+                  <View style={styles.cancelActions}>
+                    <TouchableOpacity
+                      style={[styles.cancelBackBtn, { borderColor: colors.border }]}
+                      onPress={() => setShowCancelModal(false)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.cancelBackBtnText, { color: colors.textPrimary }]}>Quay lại</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.cancelConfirmBtn, isCancelling && { opacity: 0.7 }]}
+                      onPress={submitCancel}
+                      disabled={isCancelling}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                    >
+                      <LinearGradient
+                        colors={['#EF4444', '#B91C1C'] as const}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.cancelConfirmGradient}
+                      >
+                        {/* Decorative white blob for depth */}
+                        <View style={styles.cancelConfirmBlob} />
+                        {isCancelling ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.cancelConfirmText}>Xác nhận hủy</Text>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
 
-      {/* Refund Request Modal */}
+      {/* Refund Request Modal — premium info-blue hero */}
       <Modal
         visible={showRefundModal}
         transparent
         animationType="fade"
         onRequestClose={() => setShowRefundModal(false)}
+        statusBarTranslucent
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <AppText variant="h4">Yêu cầu hoàn tiền</AppText>
-              <TouchableOpacity onPress={() => setShowRefundModal(false)}>
-                <Icon name={Icons.close} size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <AppText variant="body" color="textSecondary" style={{ marginBottom: spacing.md }}>
-              Vui lòng cho chúng tôi biết lý do bạn muốn hoàn tiền cho đặt lịch này.
-            </AppText>
-            <Input
-              label="Lý do hoàn tiền"
-              placeholder="Nhập lý do..."
-              value={refundReason}
-              onChangeText={setRefundReason}
-              multiline
-              numberOfLines={3}
-              inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
-            />
-            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
-              <Button
-                title="Hủy"
-                variant="outline"
-                onPress={() => setShowRefundModal(false)}
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="Gửi yêu cầu"
-                onPress={handleRefundRequest}
-                loading={isRefunding}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        </View>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            Keyboard.dismiss();
+            setShowRefundModal(false);
+          }}
+          accessibilityLabel="Đóng hộp thoại"
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKavWrapper}
+            pointerEvents="box-none"
+          >
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                {/* Premium info-blue hero with gradient + decorative blobs */}
+                <LinearGradient
+                  colors={[colors.infoLight, `${colors.info}1A`] as const}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.refundHero}
+                >
+                  {/* Decorative blobs */}
+                  <View style={[styles.refundHeroBlob, { backgroundColor: `${colors.info}1F` }]} />
+                  <View style={styles.refundHeroBlob2} />
+                  <View style={styles.refundHeroIconWrap}>
+                    <Icon name={Icons.refresh || Icons.help} size={26} color={colors.info} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.refundHeroTitle}>Yêu cầu hoàn tiền</Text>
+                    <Text style={styles.refundHeroSubtitle}>Chúng tôi sẽ phản hồi trong 24 giờ</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowRefundModal(false)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={styles.refundHeroClose}
+                    accessibilityLabel="Đóng"
+                    accessibilityRole="button"
+                  >
+                    <Icon name={Icons.close} size={22} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </LinearGradient>
+
+                <ScrollView
+                  style={styles.refundBody}
+                  contentContainerStyle={styles.refundBodyContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <AppText variant="body" color="textSecondary" style={styles.refundIntro}>
+                    Vui lòng cho chúng tôi biết lý do bạn muốn hoàn tiền cho đặt lịch này.
+                  </AppText>
+
+                  <Text style={styles.refundReasonLabel}>Lý do hoàn tiền</Text>
+                  <Input
+                    placeholder="Nhập lý do hoàn tiền..."
+                    value={refundReason}
+                    onChangeText={setRefundReason}
+                    multiline
+                    numberOfLines={3}
+                    inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
+                    containerStyle={styles.refundInputContainer}
+                  />
+
+                  <View style={styles.refundActions}>
+                    <TouchableOpacity
+                      style={[styles.refundBackBtn, { borderColor: colors.border }]}
+                      onPress={() => setShowRefundModal(false)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.refundBackBtnText, { color: colors.textPrimary }]}>Hủy</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.refundConfirmBtn, isRefunding && { opacity: 0.7 }]}
+                      onPress={handleRefundRequest}
+                      disabled={isRefunding}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                    >
+                      <LinearGradient
+                        colors={[colors.info, colors.primary] as const}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.refundConfirmGradient}
+                      >
+                        <View style={styles.refundConfirmBlob} />
+                        {isRefunding ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.refundConfirmText}>Gửi yêu cầu</Text>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
 
       {/* QR Fullscreen Modal */}
@@ -928,7 +1119,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    // Big bottom padding so the last card (Chi tiết thanh toán) doesn't kiss the
+    // sticky bottom actions bar (~80-100px) + bottom nav (~68px + insets).
+    paddingBottom: spacing.xxl + 120,
   },
   statusHero: {
     borderRadius: borderRadius.xl,
@@ -1006,6 +1199,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
   upcomingPill: {
     flexDirection: 'row',
@@ -1020,6 +1218,8 @@ const styles = StyleSheet.create({
   qrCard: {
     marginBottom: spacing.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
   },
   qrHeader: {
     flexDirection: 'row',
@@ -1033,6 +1233,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginVertical: spacing.sm,
     borderWidth: 1,
+    borderColor: '#E2E8F0', // colors.border
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   qrPlaceholder: {
     width: 180,
@@ -1046,6 +1252,8 @@ const styles = StyleSheet.create({
   },
   feedbackCard: {
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
   },
   replyBox: {
     marginTop: spacing.sm,
@@ -1082,27 +1290,315 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
-  // Refund Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)', // slate-900 65% — fully dims page behind
     justifyContent: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+  },
+  modalKavWrapper: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
   },
   modalContent: {
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    padding: 0, // body+hero handle their own padding
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF', // explicit opaque background — prevents modal from showing page content through
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
+  },
+  // Cancel modal — premium hero + body
+  cancelHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+    position: 'relative',
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FECACA', // red-200 — matches warning palette
+  },
+  cancelHeroBlob: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    top: -50,
+    right: -30,
+  },
+  cancelHeroBlob2: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    bottom: -30,
+    left: -20,
+  },
+  cancelHeroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cancelHeroTitle: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 18,
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  cancelHeroSubtitle: {
+    fontFamily: 'Outfit_500Medium',
+    fontSize: 12,
+    color: '#991B1B', // red-800 — high contrast on light red
+  },
+  cancelHeroClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+  },
+  cancelBody: {
+    // ScrollView outer — no flex grow so modal stays compact when no scroll needed
+    flexGrow: 0,
+  },
+  cancelBodyContent: {
+    padding: spacing.lg,
+  },
+  cancelIntro: {
+    marginBottom: spacing.md,
+    lineHeight: 22,
+  },
+  cancelReasonLabel: {
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 13,
+    color: '#0F172A', // textPrimary
+    marginBottom: spacing.xs,
+  },
+  cancelInputContainer: {
+    marginBottom: spacing.lg,
+    borderRadius: 14,
+  },
+  cancelActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  cancelBackBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  cancelBackBtnText: {
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 15,
+  },
+  cancelConfirmBtn: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  cancelConfirmGradient: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cancelConfirmBlob: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    top: -50,
+    right: -30,
+  },
+  cancelConfirmText: {
+    fontFamily: 'Outfit_700Bold',
+    color: '#FFFFFF',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  // Refund modal — premium info-blue hero + body (mirrors cancel pattern)
+  refundHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+    position: 'relative',
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: '#BAE6FD', // sky-200 — matches info palette
+  },
+  refundHeroBlob: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    top: -50,
+    right: -30,
+  },
+  refundHeroBlob2: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    bottom: -30,
+    left: -20,
+  },
+  refundHeroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
+    zIndex: 2,
+  },
+  refundHeroTitle: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 17,
+    color: '#0F172A', // textPrimary
+    zIndex: 2,
+  },
+  refundHeroSubtitle: {
+    fontFamily: 'Outfit_400Regular',
+    fontSize: 13,
+    color: '#475569', // textSecondary
+    marginTop: 2,
+    zIndex: 2,
+  },
+  refundHeroClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  refundBody: {
+    flexGrow: 0,
+  },
+  refundBodyContent: {
+    padding: spacing.lg,
+  },
+  refundIntro: {
+    marginBottom: spacing.md,
+    lineHeight: 22,
+  },
+  refundReasonLabel: {
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 13,
+    color: '#0F172A', // textPrimary
+    marginBottom: spacing.xs,
+  },
+  refundInputContainer: {
+    marginBottom: spacing.lg,
+    borderRadius: 14,
+  },
+  refundActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  refundBackBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  refundBackBtnText: {
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 15,
+  },
+  refundConfirmBtn: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  refundConfirmGradient: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  refundConfirmBlob: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    top: -50,
+    right: -30,
+  },
+  refundConfirmText: {
+    fontFamily: 'Outfit_700Bold',
+    color: '#FFFFFF',
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
   // QR Modal
   qrModal: {

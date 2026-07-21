@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
 import { slotPackApi, branchApi, packageApi, vehicleApi } from '../src/api';
 import {
@@ -28,13 +28,17 @@ import {
   AlertDialog,
   useToast,
   PressableScale,
+  SegmentedControl,
+  BottomSheet,
 } from '../src/components/common';
 import { useColors } from '../src/theme/ThemeContext';
-import { spacing, borderRadius } from '../src/theme/spacing';
+import { spacing, borderRadius, layout, shadows } from '../src/theme/spacing';
 import { formatCurrency } from '../src/utils';
 import type { SlotPack, Branch, Package, Vehicle } from '../src/types';
 import { consumePendingVoucher } from '../src/utils/voucherStore';
 import { useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DISCOUNT_TIERS = [
   { min: 1, max: 4, pct: 0, label: 'Giá gốc' },
@@ -43,19 +47,22 @@ const DISCOUNT_TIERS = [
   { min: 20, max: 50, pct: 15, label: 'Tiết kiệm 15%' },
 ];
 
-function getDiscountPct(n: number) { return DISCOUNT_TIERS.find(t => n >= t.min && n <= t.max)?.pct || 0; }
-function getDiscountLabel(n: number) { return DISCOUNT_TIERS.find(t => n >= t.min && n <= t.max)?.label || ''; }
+function getDiscountPct(n: number) { return DISCOUNT_TIERS.find(t => n >= t.min && t.max ? n <= t.max : true)?.pct || 0; }
+function getDiscountLabel(n: number) { return DISCOUNT_TIERS.find(t => n >= t.min && t.max ? n <= t.max : true)?.label || ''; }
 
 export default function SlotPacksScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const colors = useColors();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
 
   const [slotPacks, setSlotPacks] = useState<SlotPack[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [filterTab, setFilterTab] = useState<'active' | 'history'>('active');
 
   // Buy Flow State
   const [isBuying, setIsBuying] = useState(false);
@@ -76,6 +83,7 @@ export default function SlotPacksScreen() {
   const [buyLoading, setBuyLoading] = useState(false);
   const [buyError, setBuyError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'vnpay'>('vnpay');
+  const [resumingPackId, setResumingPackId] = useState<string | null>(null);
 
   // Bank-transfer QR modal — populated after `paySlotPack('bank')`.
   // We poll the SlotPack status until it flips to "active" (i.e. the bank
@@ -85,6 +93,7 @@ export default function SlotPacksScreen() {
   const [pendingPaymentPackId, setPendingPaymentPackId] = useState<string | null>(null);
   const [pendingPaymentQr, setPendingPaymentQr] = useState<string | null>(null);
   const [isPollingPayment, setIsPollingPayment] = useState(false);
+  const [qrCountdown, setQrCountdown] = useState<number>(600);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchSlotPacks = useCallback(async () => {
@@ -106,6 +115,14 @@ export default function SlotPacksScreen() {
       setIsRefreshing(false);
     }
   }, [isAuthenticated]);
+
+  const filteredPacks = useMemo(() => {
+    return slotPacks.filter((pack) => {
+      const isActive = pack.status === 'active' && pack.remainingSlots > 0;
+      if (filterTab === 'active') return isActive;
+      return !isActive;
+    });
+  }, [slotPacks, filterTab]);
 
   useEffect(() => {
     fetchSlotPacks();
@@ -131,6 +148,16 @@ export default function SlotPacksScreen() {
       }
     }, [isBuying, step])
   );
+
+  useEffect(() => {
+    if (params.resumePackId && slotPacks.length > 0) {
+      const packToResume = slotPacks.find(p => p._id === params.resumePackId);
+      if (packToResume && packToResume.status === 'pending') {
+        handleResumePayment(packToResume);
+        router.setParams({ resumePackId: undefined });
+      }
+    }
+  }, [params.resumePackId, slotPacks]);
 
   useEffect(() => {
     if (isBuying && step === 1 && branches.length === 0) {
@@ -181,6 +208,7 @@ export default function SlotPacksScreen() {
         setCancellingId(slotPack._id);
         try {
           await slotPackApi.cancelSlotPack(slotPack._id);
+          AsyncStorage.removeItem('aw_slot_pending').catch(() => {});
           toast.success('Đã hủy gói slot', 'Gói slot của bạn đã được hủy');
           fetchSlotPacks();
         } catch (error: any) {
@@ -195,12 +223,29 @@ export default function SlotPacksScreen() {
     );
   };
 
+  const handleQuickBook = (item: SlotPack) => {
+    const branchId = typeof item.branchId === 'object' ? (item.branchId as any)._id : item.branchId;
+    const packageId = typeof item.packageId === 'object' ? (item.packageId as any)._id : item.packageId;
+    const vehicleId = typeof item.vehicleId === 'object' ? (item.vehicleId as any)._id : item.vehicleId;
+    router.push({
+      pathname: '/booking',
+      params: {
+        branchId,
+        packageId,
+        vehicleId,
+        quickBook: 'true',
+        quickBookSlotPackId: item._id,
+      },
+    } as any);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return { bg: colors.successLight, text: colors.success };
       case 'exhausted': return { bg: colors.surfaceDark, text: colors.textSecondary };
       case 'expired': return { bg: colors.errorLight, text: colors.error };
       case 'cancelled': return { bg: colors.warningLight, text: colors.warning };
+      case 'pending': return { bg: colors.warningLight, text: colors.warning };
       default: return { bg: colors.surface, text: colors.textSecondary };
     }
   };
@@ -213,6 +258,7 @@ export default function SlotPacksScreen() {
 
     let cancelled = false;
     setIsPollingPayment(true);
+    setQrCountdown(600);
 
     const poll = async () => {
       if (cancelled) return;
@@ -220,12 +266,13 @@ export default function SlotPacksScreen() {
         const data = await slotPackApi.getMySlotPacks();
         if (cancelled) return;
         const updated = (data || []).find((p) => p._id === pendingPaymentPackId);
-        if (updated && updated.status === 'active') {
+        if (updated && updated.paymentStatus === 'paid') {
           setSlotPacks(data || []);
           setShowQrModal(false);
           setPendingPaymentPackId(null);
           setPendingPaymentQr(null);
           setIsPollingPayment(false);
+          AsyncStorage.removeItem('aw_slot_pending').catch(() => {});
           toast.success('Thanh toán thành công', 'Gói slot đã được kích hoạt.');
           return;
         }
@@ -237,9 +284,27 @@ export default function SlotPacksScreen() {
 
     poll();
 
+    const countdownInterval = setInterval(() => {
+      setQrCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          if (!cancelled) {
+            setShowQrModal(false);
+            setPendingPaymentPackId(null);
+            setPendingPaymentQr(null);
+            setIsPollingPayment(false);
+            toast.error('Hết thời gian chờ', 'Đã quá hạn thời gian quét mã thanh toán.');
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
     return () => {
       cancelled = true;
       setIsPollingPayment(false);
+      clearInterval(countdownInterval);
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -248,17 +313,19 @@ export default function SlotPacksScreen() {
   }, [showQrModal, pendingPaymentPackId]);
 
   const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = { active: 'Đang hoạt động', exhausted: 'Đã dùng hết', expired: 'Đã hết hạn', cancelled: 'Đã hủy' };
+    const labels: Record<string, string> = { active: 'Đang hoạt động', exhausted: 'Đã dùng hết', expired: 'Đã hết hạn', cancelled: 'Đã hủy', pending: 'Chờ thanh toán' };
     return labels[status] || status;
   };
 
   const startBuying = () => {
-    setStep(1);
+    setResumingPackId(null);
     setSelectedBranch('');
     setSelectedVehicle('');
     setSelectedPackage('');
     setSlotCount(5);
+    setStep(1);
     setAppliedVoucher(null);
+    setBuyError('');
     setIsBuying(true);
   };
 
@@ -285,27 +352,34 @@ export default function SlotPacksScreen() {
   };
 
   const handleBuy = async () => {
-    if (!selectedBranch || !selectedVehicle || !selectedPackage) {
+    if (!resumingPackId && (!selectedBranch || !selectedVehicle || !selectedPackage)) {
       setBuyError('Vui lòng chọn đủ chi nhánh, xe và gói dịch vụ.');
       return;
     }
     setBuyLoading(true);
     setBuyError('');
     try {
-      const pack = await slotPackApi.buySlotPack({
-        branchId: selectedBranch !== 'ALL' ? selectedBranch : undefined,
-        vehicleId: selectedVehicle !== 'ALL' ? selectedVehicle : undefined,
-        packageId: selectedPackage,
-        totalSlots: slotCount,
-        voucherCode: appliedVoucher?.code,
-      } as any);
+      let packId = resumingPackId;
+      if (!packId) {
+        const pack = await slotPackApi.buySlotPack({
+          branchId: selectedBranch !== 'ALL' ? selectedBranch : undefined,
+          vehicleId: selectedVehicle !== 'ALL' ? selectedVehicle : undefined,
+          packageId: selectedPackage,
+          totalSlots: slotCount,
+          voucherCode: appliedVoucher?.code,
+        } as any);
+        packId = pack._id;
+        // Save pending slot pack draft for home screen
+        await AsyncStorage.setItem('aw_slot_pending', packId);
+      }
 
-      const payResult = await slotPackApi.paySlotPack(pack._id, paymentMethod);
+      const payResult = await slotPackApi.paySlotPack(packId, paymentMethod);
       if (paymentMethod === 'vnpay') {
         if (payResult.paymentUrl) {
           await Linking.openURL(payResult.paymentUrl);
         }
         setIsBuying(false);
+        setResumingPackId(null);
         fetchSlotPacks();
         toast.success('Vui lòng hoàn tất thanh toán trên VNPay');
         return;
@@ -329,9 +403,10 @@ export default function SlotPacksScreen() {
         return;
       }
 
-      setPendingPaymentPackId(pack._id);
+      setPendingPaymentPackId(packId);
       setPendingPaymentQr(qrCode);
       setIsBuying(false);
+      setResumingPackId(null);
       setShowQrModal(true);
     } catch (err: any) {
       // BE returns { success, message, errors: [{ field, message }] } on validation.
@@ -357,72 +432,96 @@ export default function SlotPacksScreen() {
     }
   };
 
+  const handleResumePayment = (pack: SlotPack) => {
+    const b = pack.branchId && typeof pack.branchId === 'object' ? (pack.branchId as any) : null;
+    const v = pack.vehicleId && typeof pack.vehicleId === 'object' ? (pack.vehicleId as any) : null;
+    const p = pack.packageId && typeof pack.packageId === 'object' ? (pack.packageId as any) : null;
+
+    if (b) setBranches([b]);
+    if (v) setVehicles([v]);
+    if (p) setPackages([p]);
+
+    setSelectedBranch(b ? b._id : 'ALL');
+    setSelectedVehicle(v ? v._id : 'ALL');
+    setSelectedPackage(p ? p._id : '');
+    setSlotCount(pack.totalSlots);
+    setResumingPackId(pack._id);
+    setStep(4);
+    setIsBuying(true);
+  };
+
+
+
   const renderSlotPack = ({ item }: { item: SlotPack }) => {
-    const statusStyle = getStatusColor(item.status);
+    const effectiveStatus = item.paymentStatus === 'unpaid' ? 'pending' : item.status;
+    const statusStyle = getStatusColor(effectiveStatus);
     const isCancelling = cancellingId === item._id;
-    const canCancel = item.status === 'active' && item.remainingSlots > 0;
 
     return (
-      <Card style={styles.slotCard}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconContainer, { backgroundColor: colors.primaryLight }]}>
-            <Icon name={Icons.cubeOutline} size={28} color={colors.primary} />
-          </View>
-          <View style={styles.headerInfo}>
-            <AppText variant="h4">{item.packCode}</AppText>
-            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-              <Text style={[styles.statusText, { color: statusStyle.text }]}>{getStatusLabel(item.status)}</Text>
+      <Card style={[styles.slotCard, { padding: spacing.lg, backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.iconContainer, { backgroundColor: colors.primarySubtle }]}>
+              <Icon name={Icons.cubeOutline} size={28} color={colors.primary} />
+            </View>
+            <View style={styles.headerInfo}>
+              <AppText variant="h4">{item.packCode}</AppText>
+              <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                <Text style={[styles.statusText, { color: statusStyle.text }]}>{getStatusLabel(effectiveStatus)}</Text>
+              </View>
             </View>
           </View>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <AppText variant="caption" color="textSecondary">Tổng slot</AppText>
-            <AppText variant="h3" color="primary">{item.totalSlots}</AppText>
+          <View style={styles.divider} />
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <AppText variant="caption" color="textSecondary">Tổng slot</AppText>
+              <AppText variant="h3" color="primary">{item.totalSlots}</AppText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <AppText variant="caption" color="textSecondary">Đã dùng</AppText>
+              <AppText variant="h3">{item.usedSlots}</AppText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <AppText variant="caption" color="textSecondary">Còn lại</AppText>
+              <AppText variant="h3" color="success">{item.remainingSlots}</AppText>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <AppText variant="caption" color="textSecondary">Đã dùng</AppText>
-            <AppText variant="h3">{item.usedSlots}</AppText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <AppText variant="caption" color="textSecondary">Còn lại</AppText>
-            <AppText variant="h3" color="success">{item.remainingSlots}</AppText>
-          </View>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.infoRow}>
-          <Icon name={Icons.walletOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
-          <AppText variant="bodySmall" color="textSecondary">Giá: {formatCurrency(item.finalPrice ?? item.totalPrice ?? 0)}</AppText>
-        </View>
-        {/* Per-pack "Áp dụng cho gói" label — clarifies the BE constraint
-            that a slot pack is locked to a single package, so the user does
-            not assume they can reuse it for a different package. */}
-        <View style={styles.infoRow}>
-          <Icon name={Icons.cubeOutline} size={16} color={colors.primary} style={styles.infoIcon} />
-          <AppText variant="bodySmall" color="textPrimary" style={{ fontWeight: '600' }}>
-            Áp dụng cho: {getPackPackageLabel(item)}
-          </AppText>
-        </View>
-        {item.expiresAt && (
+          <View style={styles.divider} />
           <View style={styles.infoRow}>
-            <Icon name={Icons.calendarOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
-            <AppText variant="bodySmall" color="textSecondary">Hết hạn: {new Date(item.expiresAt).toLocaleDateString('vi-VN')}</AppText>
+            <Icon name={Icons.walletOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
+            <AppText variant="bodySmall" color="textSecondary">Giá: {formatCurrency(item.finalPrice ?? item.totalPrice ?? 0)}</AppText>
           </View>
-        )}
-        {getPackBranchLabel(item) ? (
           <View style={styles.infoRow}>
-            <Icon name={Icons.locationOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
-            <AppText variant="bodySmall" color="textSecondary">Chi nhánh: {getPackBranchLabel(item)}</AppText>
+            <Icon name={Icons.cubeOutline} size={16} color={colors.primary} style={styles.infoIcon} />
+            <AppText variant="bodySmall" color="textPrimary" style={{ fontWeight: '600' }}>
+              Áp dụng cho: {getPackPackageLabel(item)}
+            </AppText>
           </View>
-        ) : null}
-        {canCancel && (
-          <View style={styles.actions}>
-            <Button title="Hủy gói slot" variant="outline" size="small" onPress={() => handleCancel(item)} loading={isCancelling} style={styles.cancelButton} />
-          </View>
-        )}
+          {item.expiresAt && (
+            <View style={styles.infoRow}>
+              <Icon name={Icons.calendarOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
+              <AppText variant="bodySmall" color="textSecondary">Hết hạn: {new Date(item.expiresAt).toLocaleDateString('vi-VN')}</AppText>
+            </View>
+          )}
+          {getPackBranchLabel(item) ? (
+            <View style={styles.infoRow}>
+              <Icon name={Icons.locationOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
+              <AppText variant="bodySmall" color="textSecondary">Chi nhánh: {getPackBranchLabel(item)}</AppText>
+            </View>
+          ) : null}
+          {effectiveStatus === 'active' && item.remainingSlots > 0 && (
+            <View style={styles.actions}>
+              <Button title="Hủy gói slot" variant="outline" size="small" onPress={() => handleCancel(item)} loading={isCancelling} style={[styles.cancelButton, { flex: 1 }] as any} />
+              <Button title="Đặt lịch nhanh" variant="primary" size="small" onPress={() => handleQuickBook(item)} style={{ flex: 1 } as any} />
+            </View>
+          )}
+          {effectiveStatus === 'pending' && (
+            <View style={styles.actions}>
+              <Button title="Hủy gói slot" variant="outline" size="small" onPress={() => handleCancel(item)} loading={isCancelling} style={[styles.cancelButton, { flex: 1 }] as any} />
+              <Button title="Tiếp tục thanh toán" variant="primary" size="small" onPress={() => handleResumePayment(item)} style={{ flex: 1 } as any} />
+            </View>
+          )}
       </Card>
     );
   };
@@ -450,10 +549,22 @@ export default function SlotPacksScreen() {
 
   return (
     <ScreenContainer>
-      <Header showBack title="Gói slot của tôi" rightNode={<TouchableOpacity onPress={startBuying}><Text style={{ color: colors.primary, fontWeight: '600' }}>Mua gói</Text></TouchableOpacity>} />
+      <Header showBack title="Gói slot của tôi" rightAction={<TouchableOpacity onPress={startBuying}><Text style={{ color: colors.primary, fontWeight: '600' }}>Mua gói</Text></TouchableOpacity>} />
+
+      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+        <SegmentedControl
+          value={filterTab}
+          onChange={(val) => setFilterTab(val as 'active' | 'history')}
+          options={[
+            { value: 'active', label: 'Đang hoạt động' },
+            { value: 'history', label: 'Lịch sử' },
+          ]}
+          fullWidth
+        />
+      </View>
 
       <FlatList
-        data={slotPacks}
+        data={filteredPacks}
         renderItem={renderSlotPack}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
@@ -492,8 +603,17 @@ export default function SlotPacksScreen() {
       />
 
       <Modal visible={isBuying} animationType="slide" onRequestClose={() => setIsBuying(false)}>
-        <ScreenContainer edges={['top', 'bottom']}>
-          <Header title="Mua gói slot" leftNode={<TouchableOpacity onPress={() => setIsBuying(false)}><Icon name={Icons.close} size={24} color={colors.textPrimary} /></TouchableOpacity>} />
+        <ScreenContainer edges={['top']} padded={false}>
+          <Header
+            title="Mua gói slot"
+            showBack
+            onBackPress={() => setIsBuying(false)}
+            rightAction={
+              <TouchableOpacity onPress={() => setIsBuying(false)} style={{ padding: 4 }}>
+                <Icon name={Icons.close} size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            }
+          />
           <ScrollView contentContainerStyle={{ padding: 20 }}>
             {/* Wizard Headers */}
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 20 }}>
@@ -649,56 +769,103 @@ export default function SlotPacksScreen() {
               </View>
             )}
           </ScrollView>
-          <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', gap: 12 }}>
-            {step > 1 && <Button title="Quay lại" variant="outline" onPress={() => setStep(step - 1)} disabled={buyLoading} style={{ flex: 1 }} />}
-            {step < 4 ? (
-              <Button title="Tiếp theo" onPress={() => setStep(step + 1)} disabled={
-                (step === 1 && (!selectedBranch || selectedBranch !== 'ALL' && (branchPackageCounts[selectedBranch] || 0) === 0)) ||
-                (step === 2 && (!selectedVehicle || !selectedPackage)) ||
-                (step === 3 && slotCount < 1)
-              } style={{ flex: 1 }} />
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: Math.max(insets.bottom + 52, 88),
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              flexDirection: 'row',
+              gap: 12,
+              backgroundColor: colors.background,
+            }}
+          >
+            {step === 1 || resumingPackId ? (
+              <Button
+                title="Hủy"
+                variant="outline"
+                onPress={() => {
+                  setIsBuying(false);
+                  setResumingPackId(null);
+                }}
+                disabled={buyLoading}
+                style={{ flex: 1 }}
+              />
             ) : (
-              <Button title={`THANH TOÁN ${formatCurrency(finalTotal)}`} onPress={handleBuy} loading={buyLoading} style={{ flex: 2 }} />
+              <Button
+                title="Quay lại"
+                variant="outline"
+                onPress={() => setStep(step - 1)}
+                disabled={buyLoading}
+                style={{ flex: 1 }}
+              />
+            )}
+            {step < 4 ? (
+              <Button
+                title="Tiếp theo"
+                onPress={() => setStep(step + 1)}
+                disabled={
+                  (step === 1 && (!selectedBranch || (selectedBranch !== 'ALL' && (branchPackageCounts[selectedBranch] || 0) === 0))) ||
+                  (step === 2 && (!selectedVehicle || !selectedPackage)) ||
+                  (step === 3 && slotCount < 1)
+                }
+                style={{ flex: 1 }}
+              />
+            ) : (
+              <Button
+                title={`Thanh toán ${formatCurrency(finalTotal)}`}
+                onPress={handleBuy}
+                loading={buyLoading}
+                style={{ flex: 1 }}
+              />
             )}
           </View>
         </ScreenContainer>
       </Modal>
 
-      {/* Bank-transfer QR modal — shown after the user picks "Ngân hàng". */}
-      <Modal
+      <BottomSheet
         visible={showQrModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowQrModal(false)}
+        onClose={() => setShowQrModal(false)}
+        title="Quét QR để thanh toán"
+        snapPoints={[0.65]}
       >
-        <View style={qrStyles.overlay}>
-          <View style={[qrStyles.modal, { backgroundColor: colors.background }]}>
-            <AppText variant="h3" style={qrStyles.title}>Quét QR để thanh toán</AppText>
-            <AppText variant="bodySmall" color="textSecondary" style={qrStyles.subtitle}>
-              Sử dụng app ngân hàng để quét mã QR bên dưới. Gói slot sẽ được kích hoạt tự động sau khi hệ thống xác nhận thanh toán.
-            </AppText>
+        <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+          <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: spacing.lg, paddingHorizontal: spacing.md }}>
+            Sử dụng app ngân hàng để quét mã QR bên dưới. Gói slot sẽ được kích hoạt tự động sau khi hệ thống xác nhận thanh toán.
+          </AppText>
+          
+          <View style={{
+            padding: 16,
+            backgroundColor: '#ffffff',
+            borderRadius: borderRadius.xl,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.1,
+            shadowRadius: 24,
+            elevation: 10,
+            marginBottom: spacing.xl,
+          }}>
             {pendingPaymentQr ? (
-              <View style={[qrStyles.qrWrapper, { borderColor: colors.border }]}>
-                <Image source={{ uri: pendingPaymentQr }} style={qrStyles.qrImage} resizeMode="contain" />
-              </View>
+              <Image source={{ uri: pendingPaymentQr }} style={{ width: 220, height: 220 }} resizeMode="contain" />
             ) : (
-              <ActivityIndicator size="large" color={colors.primary} />
+              <View style={{ width: 220, height: 220, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
             )}
-            <View style={qrStyles.statusRow}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <AppText variant="bodySmall" color="textSecondary" style={{ marginLeft: 8 }}>
-                {isPollingPayment ? 'Đang chờ xác nhận thanh toán...' : 'Vui lòng không đóng màn hình'}
-              </AppText>
-            </View>
-            <Button
-              title="Đóng"
-              variant="outline"
-              onPress={() => setShowQrModal(false)}
-              style={{ marginTop: 16 }}
-            />
+          </View>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.infoLight, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full }}>
+            <ActivityIndicator size="small" color={colors.info} />
+            <AppText variant="bodySmall" style={{ marginLeft: 8, color: colors.info, fontWeight: '600' }}>
+              {isPollingPayment 
+                ? `Đang chờ thanh toán... (${Math.floor(qrCountdown / 60).toString().padStart(2, '0')}:${(qrCountdown % 60).toString().padStart(2, '0')})` 
+                : 'Vui lòng không đóng màn hình'
+              }
+            </AppText>
           </View>
         </View>
-      </Modal>
+      </BottomSheet>
     </ScreenContainer>
   );
 }
@@ -741,12 +908,35 @@ const qrStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 32 },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 16 },
+  doubleBezelOuter: {
+    padding: 6,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  doubleBezelInner: {
+    borderRadius: 18,
+    padding: spacing.md,
+  },
+  summaryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: layout.cardRadius, marginBottom: 16, ...shadows.md },
   summaryIcon: { marginRight: 12 },
   summaryContent: { flex: 1 },
   slotCard: { marginBottom: 16 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
-  iconContainer: { width: 56, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
+  },
   headerInfo: { flex: 1 },
   statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9999, marginTop: 4 },
   statusText: { fontSize: 12, fontWeight: '600' },
@@ -756,9 +946,9 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 40, backgroundColor: '#eee' },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   infoIcon: { marginRight: 8, width: 20 },
-  actions: { marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#eee' },
+  actions: { marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#eee', flexDirection: 'row', gap: 12 },
   cancelButton: { borderColor: '#f44336' },
-  selectCard: { padding: 16, borderWidth: 1, borderColor: '#eee', borderRadius: 12, marginBottom: 12, backgroundColor: '#fff' },
+  selectCard: { padding: 16, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, marginBottom: 12, backgroundColor: '#fff', ...shadows.sm },
   // Buy-more CTA footer (when packs already exist).
   footerCtaWrap: {
     marginTop: spacing.sm,
