@@ -18,6 +18,12 @@ export const login = async (identifier: string, password: string) => {
   return response.data; // { accessToken, refreshToken, user }
 };
 
+// Login with Google
+export const loginWithGoogle = async (idToken: string) => {
+  const response = await apiClient.post('/auth/google', { idToken });
+  return response.data; // { accessToken, refreshToken, user }
+};
+
 // Refresh token
 export const refreshToken = async (refreshToken: string) => {
   const response = await apiClient.post('/auth/refresh-token', { refreshToken });
@@ -65,6 +71,40 @@ export const changePassword = async (
   return response.data;
 };
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Forgot-password / OTP / reset
+//
+// TODO(BACKEND): these endpoints do not yet exist on the BE side. The Mobile
+// UI currently calls them anyway and gracefully handles 404 by surfacing a
+// clear error to the user (instead of the previous setTimeout-based mock which
+// silently "succeeded"). As soon as the corresponding routes land in
+// `BE/src/routes/authRoutes.js`, these calls will start working without any
+// further Mobile changes.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Request a one-time code to be sent to the user's email. */
+export const forgotPassword = async (email: string): Promise<{ message: string }> => {
+  const response = await apiClient.post('/auth/forgot-password', { email });
+  return response.data;
+};
+
+/** Verify the OTP code that was emailed to the user. */
+export const verifyOtp = async (email: string, otp: string): Promise<{ valid: boolean; resetToken?: string }> => {
+  const response = await apiClient.post('/auth/verify-otp', { email, otp });
+  return response.data;
+};
+
+/** Reset the password using a verified reset token (or verified OTP). */
+export const resetPassword = async (payload: {
+  email: string;
+  otp?: string;
+  resetToken?: string;
+  newPassword: string;
+}): Promise<{ message: string }> => {
+  const response = await apiClient.post('/auth/reset-password', payload);
+  return response.data;
+};
+
 // Export all auth API functions
 export const authApi = {
   register,
@@ -76,6 +116,9 @@ export const authApi = {
   updateCustomerProfile,
   updateProfile,
   changePassword,
+  forgotPassword,
+  verifyOtp,
+  resetPassword,
 };
 
 export default authApi;

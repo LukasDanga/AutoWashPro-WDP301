@@ -16,6 +16,10 @@ export interface User {
   lifetimePoints: number;
   tier: 'bronze' | 'silver' | 'gold' | 'diamond';
   dateOfBirth?: string;
+  branchId?: string;
+  pointsExpiresAt?: string;
+  noShowCount?: number;
+  spinCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,7 +32,7 @@ export interface LoginRequest {
 export interface RegisterRequest {
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   password: string;
 }
 
@@ -71,6 +75,7 @@ export interface CreateVehicleRequest {
 export interface Branch {
   _id: string;
   name: string;
+  city?: string;
   address: string;
   phone?: string;
   email?: string;
@@ -79,10 +84,14 @@ export interface Branch {
   status: 'active' | 'inactive';
   image?: string;
   description?: string;
-  isHot?: boolean;
   location?: {
     type: 'Point';
     coordinates: [number, number];
+  };
+  managerId?: string;
+  mapCoordinates?: {
+    svgCx?: number;
+    svgCy?: number;
   };
   createdAt: string;
   updatedAt: string;
@@ -110,6 +119,8 @@ export interface Package {
   vehicleTypes: VehicleType[];
   subServices?: SubService[];
   branchId?: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -146,13 +157,32 @@ export interface Booking {
   qrCode?: string;
   rating?: number;
   feedback?: string;
+  feedbackAt?: string;
   reply?: string;
+  managerReply?: string;
+  managerReplyAt?: string;
   isRecurring?: boolean;
   recurringGroupId?: string;
   isRecurringFirst?: boolean;
   recurringPosition?: number;
   recurringTotal?: number;
   bookingType?: 'single' | 'recurring' | 'slot_pack_usage';
+  confirmedAt?: string;
+  cancelledAt?: string;
+  cancelledBy?: 'customer' | 'admin' | 'manager' | 'system';
+  cancellationReason?: string;
+  rescheduleCount?: number;
+  lateWarningSentAt?: string;
+  suggestedSlotStartTime?: string;
+  graceExtensionMinutes?: number;
+  priority?: number;
+  slotPackId?: string;
+  paidAt?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  serviceDuration?: number;
+  staffId?: string;
+  rebookedFromId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -166,6 +196,10 @@ export interface CreateBookingRequest {
   note?: string;
   voucherCode?: string;
   subServices?: string[];
+  selectedSubServices?: string[];
+  slotPackId?: string;
+  discountAmount?: number;
+  finalPrice?: number;
 }
 
 export interface CreateRecurringBookingRequest {
@@ -211,7 +245,7 @@ export interface Payment {
   amount: number;
   method: PaymentMethod;
   type: PaymentType;
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: 'pending' | 'paid' | 'failed' | 'refunded';
   transactionId?: string;
   // Base64 data URL của QR code (cash/bank) — FE render bằng <Image>.
   qrCode?: string;
@@ -253,30 +287,31 @@ export type VoucherType = 'percentage' | 'fixed';
 export interface Voucher {
   _id: string;
   code: string;
-  title?: string;
+  name: string;
   description?: string;
-  discountType: 'percent' | 'fixed';
-  discountValue: number;
+  type: 'percentage' | 'fixed';
+  value: number;
   maxDiscount?: number;
-  minOrderValue?: number;
-  expiresAt?: string;
-  used?: boolean;
-  status?: 'active' | 'inactive';
-  type?: VoucherType;
-  value?: number;
   minOrder?: number;
-  validFrom?: string;
-  validTo?: string;
-  tierExclusive?: 'bronze' | 'silver' | 'gold' | 'diamond';
-  usageLimit?: number;
-  usedCount?: number;
-  perUserLimit?: number;
+  quantity?: number;
+  remaining?: number;
+  startDate: string;
+  endDate: string;
+  applicablePackages?: string[];
+  applicableBranches?: string[];
+  applicableToAllPackages?: boolean;
+  applicableToAllBranches?: boolean;
+  status: 'active' | 'inactive';
+  branchId?: string;
+  maxUsagePerUser?: number;
   requiredPoints?: number;
+  applicableTiers?: ('bronze' | 'silver' | 'gold' | 'diamond')[];
+  isBirthdayVoucher?: boolean;
   isTemplate?: boolean;
-  packageIds?: string[];
-  branchIds?: string[];
-  createdAt?: string;
-  updatedAt?: string;
+  assignedTo?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserVoucher extends Voucher {
@@ -308,15 +343,21 @@ export interface SlotPack {
   packageId: string | Package;
   vehicleId: string | Vehicle;
   totalSlots: number;
-  usedSlots: number;
   remainingSlots: number;
-  discount: number; // percentage
-  finalPrice: number;
-  totalPrice?: number; // alias kept for legacy callers
+  usedSlots: number;
   unitPrice: number;
+  discountPercent: number;
+  discountAmount: number;
+  finalPrice: number;
+  voucherCode?: string;
+  voucherDiscount?: number;
+  finalPriceAfterVoucher?: number;
+  priority: number;
   packCode: string;
-  status: 'active' | 'cancelled' | 'expired';
   expiresAt?: string;
+  status: 'active' | 'exhausted' | 'expired' | 'cancelled';
+  paymentStatus: 'unpaid' | 'paid';
+  paidAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -334,12 +375,20 @@ export interface CreateSlotPackRequest {
 export type NotificationType = 
   | 'booking_created'
   | 'booking_confirmed'
-  | 'booking_reminder'
+  | 'booking_cancelled'
   | 'booking_completed'
+  | 'booking_reminder'
+  | 'booking_at_risk'
+  | 'booking_grace_extended'
+  | 'payment_received'
+  | 'payment_confirmed'
   | 'payment_success'
+  | 'refund'
+  | 'voucher'
   | 'voucher_expiring'
   | 'points_earned'
-  | 'promotion';
+  | 'promotion'
+  | 'system';
 
 export interface Notification {
   _id: string;
@@ -364,10 +413,23 @@ export interface Gift {
   _id: string;
   name: string;
   description?: string;
-  image?: string;
-  pointsRequired: number;
-  stock: number;
+  type: 'percentage' | 'fixed' | 'none';
+  value: number;
+  probability: number;
+  color: string;
   status: 'active' | 'inactive';
+  sortOrder: number;
+}
+
+export interface PointHistory {
+  _id: string;
+  userId: string;
+  points: number;
+  type: 'earned' | 'redeemed' | 'expired' | 'adjustment';
+  description: string;
+  referenceId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SlotProduct {

@@ -31,14 +31,14 @@ import type { Payment } from '../../src/types';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Chờ thanh toán',
-  completed: 'Đã thanh toán',
+  paid: 'Đã thanh toán',
   failed: 'Thất bại',
   refunded: 'Đã hoàn tiền',
 };
 
 const STATUS_VARIANTS: Record<string, 'warning' | 'success' | 'error' | 'info' | 'default'> = {
   pending: 'warning',
-  completed: 'success',
+  paid: 'success',
   failed: 'error',
   refunded: 'info',
 };

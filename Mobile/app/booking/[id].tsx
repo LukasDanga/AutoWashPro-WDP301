@@ -25,7 +25,7 @@ import { vi } from 'date-fns/locale';
 import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { bookingApi } from '../../src/api';
+import { bookingApi, refundApi } from '../../src/api';
 import {
   Text as AppText,
   Card,
@@ -40,6 +40,7 @@ import {
   ScreenContainer,
   AlertDialog,
   useToast,
+  Input,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
@@ -55,10 +56,17 @@ export default function BookingDetailScreen() {
   const toast = useToast();
 
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRebooking, setIsRebooking] = useState(false);
   const [qrFullscreen, setQrFullscreen] = useState(false);
+
+  // Refund UI state
+  const [refundRequestData, setRefundRequestData] = useState<any>(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [isRefunding, setIsRefunding] = useState(false);
 
   useEffect(() => {
     if (id) fetchBooking();
@@ -69,6 +77,25 @@ export default function BookingDetailScreen() {
     try {
       const response = await bookingApi.getBooking(id);
       setBooking(response);
+      // Fetch QR separately — backend exposes it via /bookings/:id/qr.
+      // Booking.qrCode is not populated on the Booking document itself.
+      try {
+        const qr = await bookingApi.getBookingQR(id);
+        setQrDataUrl(qr.qrDataUrl || null);
+      } catch {
+        setQrDataUrl(null);
+      }
+      
+      // Fetch refund requests if booking is cancelled and paid
+      if (response.status === 'cancelled' && (response.depositPaid || response.paymentStatus === 'paid')) {
+        try {
+          const refunds = await refundApi.getMyRefundRequests();
+          const match = refunds.find((r: any) => String(r.bookingId?._id || r.bookingId) === String(id));
+          if (match) setRefundRequestData(match);
+        } catch {
+          // ignore
+        }
+      }
     } catch (error) {
       console.error('Error fetching booking:', error);
       AlertDialog.error('Lỗi', 'Không thể tải thông tin đặt lịch');
@@ -140,6 +167,27 @@ export default function BookingDetailScreen() {
     router.push(`/payment/select?bookingId=${booking._id}&type=remaining` as any);
   };
 
+  const handleRefundRequest = async () => {
+    if (!refundReason.trim()) {
+      AlertDialog.error('Lỗi', 'Vui lòng nhập lý do hoàn tiền');
+      return;
+    }
+    setIsRefunding(true);
+    try {
+      await refundApi.createRefundRequest(id!, refundReason);
+      toast.success('Thành công', 'Yêu cầu hoàn tiền đã được gửi');
+      setShowRefundModal(false);
+      await fetchBooking();
+    } catch (error: any) {
+      AlertDialog.error(
+        'Lỗi',
+        error.response?.data?.message || 'Không thể gửi yêu cầu hoàn tiền'
+      );
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
   if (isLoading) return <Loading fullScreen message="Đang tải..." />;
 
   if (!booking) {
@@ -184,6 +232,12 @@ export default function BookingDetailScreen() {
     booking.depositPaid === true &&
     booking.paymentStatus !== 'paid' &&
     ['checked_in', 'in_progress', 'completed'].includes(booking.status);
+
+  // Refund condition: booking cancelled, customer paid something, and no refund request exists yet
+  const canRequestRefund =
+    booking.status === 'cancelled' &&
+    (booking.depositPaid || booking.paymentStatus === 'paid') &&
+    !refundRequestData;
 
   return (
     <ScreenContainer edges={['top']} background="subtle">
@@ -240,6 +294,58 @@ export default function BookingDetailScreen() {
             ) : null}
           </View>
         </LinearGradient>
+
+        {/* At-risk / late warning banner — web parity (BookingsHistory.jsx AtRiskBanner) */}
+        {(booking.status === 'pending' || booking.status === 'confirmed') &&
+          booking.lateWarningSentAt ? (
+          <Card style={[
+            { backgroundColor: colors.warningLight, marginBottom: spacing.md, padding: spacing.md },
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Icon name={Icons.warning} size={20} color={colors.warning} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodySmall" style={{ fontWeight: '700', color: colors.warning }}>
+                  Bạn chưa check-in — sắp bị tự hủy!
+                </AppText>
+                {booking.suggestedSlotStartTime ? (
+                  <AppText variant="caption" color="textSecondary">
+                    Giờ trống gần nhất: {booking.suggestedSlotStartTime}
+                  </AppText>
+                ) : (
+                  <AppText variant="caption" color="textSecondary">
+                    Hãy đổi lịch sớm để tránh hủy tự động.
+                  </AppText>
+                )}
+              </View>
+              {booking.suggestedSlotStartTime ? (
+                <Button 
+                  title={`Đổi sang ${booking.suggestedSlotStartTime}`}
+                  size="small"
+                  loading={isRebooking}
+                  onPress={async () => {
+                    if (!id) return;
+                    setIsRebooking(true);
+                    try {
+                      await bookingApi.updateBooking(id, { startTime: booking.suggestedSlotStartTime });
+                      toast.success('Thành công', `Đã đổi giờ sang ${booking.suggestedSlotStartTime}`);
+                      fetchBooking();
+                    } catch (error: any) {
+                      AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể đổi giờ');
+                    } finally {
+                      setIsRebooking(false);
+                    }
+                  }} 
+                />
+              ) : (
+                <Button 
+                  title="Đổi giờ" 
+                  size="small" 
+                  onPress={handleRebook} 
+                />
+              )}
+            </View>
+          </Card>
+        ) : null}
 
         {/* Date & time */}
         <InfoCard
@@ -391,8 +497,8 @@ export default function BookingDetailScreen() {
               accessibilityLabel="Mở mã QR toàn màn hình"
               accessibilityRole="button"
             >
-              {booking.qrCode ? (
-                <QRCode value={booking.qrCode} size={180} color={colors.textPrimary} backgroundColor={colors.background} />
+              {qrDataUrl ? (
+                <QRCode value={qrDataUrl} size={180} color={colors.textPrimary} backgroundColor={colors.background} />
               ) : (
                 <View style={styles.qrPlaceholder}>
                   <Icon name={Icons.qrCodeOutline} size={48} color={colors.textTertiary} />
@@ -572,6 +678,19 @@ export default function BookingDetailScreen() {
                 </>
               );
             }
+            if (canRequestRefund) {
+              return (
+                <View style={styles.singleActionWrap}>
+                  <Button
+                    title="Yêu cầu hoàn tiền"
+                    size="medium"
+                    icon={<Icon name={Icons.cashOutline} size={18} color={colors.textInverse} />}
+                    onPress={() => setShowRefundModal(true)}
+                    fullWidth
+                  />
+                </View>
+              );
+            }
             if (primaryPaymentAction) {
               return <View style={styles.singleActionWrap}>{primaryPaymentAction}</View>;
             }
@@ -579,6 +698,51 @@ export default function BookingDetailScreen() {
           })()}
         </View>
       </SafeAreaView>
+
+      {/* Refund Request Modal */}
+      <Modal
+        visible={showRefundModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRefundModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <AppText variant="h4">Yêu cầu hoàn tiền</AppText>
+              <TouchableOpacity onPress={() => setShowRefundModal(false)}>
+                <Icon name={Icons.close} size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <AppText variant="body" color="textSecondary" style={{ marginBottom: spacing.md }}>
+              Vui lòng cho chúng tôi biết lý do bạn muốn hoàn tiền cho đặt lịch này.
+            </AppText>
+            <Input
+              label="Lý do hoàn tiền"
+              placeholder="Nhập lý do..."
+              value={refundReason}
+              onChangeText={setRefundReason}
+              multiline
+              numberOfLines={3}
+              inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
+              <Button
+                title="Hủy"
+                variant="outline"
+                onPress={() => setShowRefundModal(false)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Gửi yêu cầu"
+                onPress={handleRefundRequest}
+                loading={isRefunding}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* QR Fullscreen Modal */}
       <Modal
@@ -605,9 +769,9 @@ export default function BookingDetailScreen() {
               <View style={{ width: 44 }} />
             </View>
             <View style={styles.qrModalContent}>
-              {booking.qrCode ? (
+              {qrDataUrl ? (
                 <>
-                  <QRCode value={booking.qrCode} size={260} color="#0F172A" backgroundColor="#FFFFFF" />
+                  <QRCode value={qrDataUrl} size={260} color="#0F172A" backgroundColor="#FFFFFF" />
                   <AppText variant="body" style={styles.qrModalCode}>
                     #{booking._id.slice(-8).toUpperCase()}
                   </AppText>
@@ -874,6 +1038,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
+  },
+  // Refund Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalContent: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
   // QR Modal
   qrModal: {

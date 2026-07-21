@@ -78,10 +78,10 @@ export default function VouchersIndexScreen() {
   };
 
   const getDiscountText = (voucher: any) => {
-    if (voucher.discountType === 'percent') {
-      return `Giảm ${voucher.discountValue}%`;
-    } else if (voucher.discountType === 'fixed') {
-      return `Giảm ${formatCurrency(voucher.discountValue)}`;
+    if (voucher.type === 'percentage') {
+      return `${voucher.value}%`;
+    } else if (voucher.type === 'fixed') {
+      return formatCurrency(voucher.value);
     } else if (voucher.minOrder) {
       return `Đơn từ ${formatCurrency(voucher.minOrder)}`;
     }
@@ -105,7 +105,7 @@ export default function VouchersIndexScreen() {
           )}
         </View>
         
-        <AppText variant="body" style={styles.voucherName}>
+        <AppText variant="h3" style={styles.voucherTitle}>
           {item.name || item.code}
         </AppText>
         
@@ -117,9 +117,7 @@ export default function VouchersIndexScreen() {
         
         <View style={styles.voucherFooter}>
           <AppText variant="caption" color="textTertiary">
-            {item.expiresAt 
-              ? `Hết hạn: ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}`
-              : 'Không có hạn sử dụng'}
+            HSD: {item.endDate ? new Date(item.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
           </AppText>
         </View>
       </Card>

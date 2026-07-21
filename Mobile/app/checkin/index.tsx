@@ -180,7 +180,7 @@ export default function CheckInScreen() {
         bookingApi.getBookingQR(bookingId),
       ]);
       setBooking(bookingData);
-      setQrDataUrl(qrData.qrCode || (qrData as any).qrDataUrl || null);
+      setQrDataUrl(qrData.qrDataUrl || null);
     } catch (err: any) {
       AlertDialog.error('Lỗi', err?.response?.data?.message || 'Không thể tải thông tin booking');
     } finally {
@@ -533,17 +533,56 @@ const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onSc
 };
 
 // ─── ManualEntryContent ───────────────────────────────────────────────────────
+// Accepts either:
+//   • A 24-char ObjectId of a Booking  → GET /bookings/:id
+//   • A Slot Pack code (e.g. SP-XXXX) → GET /slot-packs?packCode=XXXX
 const ManualEntryContent: React.FC<{ onFound: (bookingId: string) => void }> = ({ onFound }) => {
   const [code, setCode] = useState('');
   const [searching, setSearching] = useState(false);
 
+  const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
+  const PACK_CODE_RE = /^[A-Z]{2,4}-[A-Z0-9]{4,12}$/i;
+
   const handleSearch = useCallback(async () => {
-    if (!code.trim()) return;
+    const trimmed = code.trim();
+    if (!trimmed) return;
     setSearching(true);
     try {
-      const apiClient = (await import('../../src/api/client')).apiClient;
-      await apiClient.get(`/bookings/${code.trim()}`);
-      onFound(code.trim());
+      const { apiClient } = await import('../../src/api/client');
+      const { slotPackApi } = await import('../../src/api');
+
+      if (OBJECT_ID_RE.test(trimmed)) {
+        // Treat as a Booking ObjectId
+        await apiClient.get(`/bookings/${trimmed}`);
+        onFound(trimmed);
+        return;
+      }
+
+      if (PACK_CODE_RE.test(trimmed)) {
+        // Treat as a Slot Pack code — pick the first active pack with that code.
+        const packs = await slotPackApi.getMySlotPacks();
+        const match = (packs || []).find(
+          (p) => p.packCode?.toUpperCase() === trimmed.toUpperCase() && p.status === 'active',
+        );
+        if (!match) {
+          AlertDialog.error('Không tìm thấy', 'Không tìm thấy gói slot hợp lệ với mã này.');
+          return;
+        }
+        // Pack consumption creates its own booking on the server; nudge the
+        // user back to the slot-pack flow rather than the booking detail.
+        AlertDialog.show({
+          title: 'Gói slot hợp lệ',
+          message: `Mã gói "${match.packCode}" còn ${match.remainingSlots}/${match.totalSlots} lượt. Vui lòng dùng nút "Đặt lịch dùng gói" trong trang Slot Packs.`,
+          variant: 'info',
+          actions: [{ text: 'Đóng', onPress: () => {} }],
+        });
+        return;
+      }
+
+      AlertDialog.error(
+        'Mã không hợp lệ',
+        'Vui lòng nhập mã booking (24 ký tự hex) hoặc mã gói slot (ví dụ: SP-XXXX).',
+      );
     } catch (err: any) {
       AlertDialog.error('Không tìm thấy', err?.response?.data?.message || 'Không tìm thấy booking với mã này.');
     } finally {
@@ -551,33 +590,36 @@ const ManualEntryContent: React.FC<{ onFound: (bookingId: string) => void }> = (
     }
   }, [code, onFound]);
 
+  const trimmed = code.trim();
+  const isValid = OBJECT_ID_RE.test(trimmed) || PACK_CODE_RE.test(trimmed);
+
   return (
     <Card style={styles.manualCard} padding="lg">
-      <Text style={styles.manualTitle}>Nhập mã Booking</Text>
+      <Text style={styles.manualTitle}>Nhập mã Booking hoặc mã gói Slot</Text>
       <Text style={styles.manualSubtitle}>
-        Nhập mã booking (ObjectId 24 ký tự) để xem thông tin và check-in
+        Nhập mã booking 24 ký tự hoặc mã gói slot (ví dụ SP-A1B2C3)
       </Text>
       <TextInput
         style={styles.codeInput}
-        placeholder="VD: 60d5ec49f1b2c8b3a4e7f123"
+        placeholder="Booking: 60d5ec49f1b2c8b3a4e7f123   |   Pack: SP-A1B2C3"
         placeholderTextColor={staticColors.textTertiary}
         value={code}
         onChangeText={setCode}
-        autoCapitalize="none"
+        autoCapitalize="characters"
         autoCorrect={false}
-        maxLength={24}
+        maxLength={32}
       />
       <Button
-        title={searching ? 'Đang tìm...' : 'Tìm Booking'}
+        title={searching ? 'Đang tìm...' : 'Tìm'}
         onPress={handleSearch}
-        disabled={code.trim().length !== 24 || searching}
+        disabled={!isValid || searching}
         loading={searching}
         style={styles.manualButton}
       />
       <View style={styles.manualNoteContainer}>
         <Icon name={Icons.info} size={14} color={staticColors.textTertiary} />
         <Text style={styles.manualNote}>
-          Tìm mã booking trong mục Lịch sử đặt lịch, chi tiết booking, hoặc email xác nhận.
+          Mã booking có trong Lịch sử đặt lịch / email xác nhận. Mã gói slot có trong mục Slot Packs của tài khoản.
         </Text>
       </View>
     </Card>

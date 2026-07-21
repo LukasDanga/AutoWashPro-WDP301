@@ -31,7 +31,7 @@ import type { Payment } from '../../src/types';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Chờ thanh toán',
-  completed: 'Đã thanh toán',
+  paid: 'Đã thanh toán',
   failed: 'Thất bại',
   refunded: 'Đã hoàn tiền',
 };
@@ -49,7 +49,7 @@ export default function PaymentDetailScreen() {
 
   const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
     pending: { bg: colors.warningLight, text: colors.warning },
-    completed: { bg: colors.successLight, text: colors.success },
+    paid: { bg: colors.successLight, text: colors.success },
     failed: { bg: colors.errorLight, text: colors.error },
     refunded: { bg: colors.infoLight, text: colors.info },
   };

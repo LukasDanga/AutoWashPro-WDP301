@@ -11,8 +11,23 @@ const authValidators = {
     body('identifier').trim().notEmpty().withMessage('Email or phone number is required'),
     body('password').notEmpty().withMessage('Password is required'),
   ],
+  googleLogin: [
+    body('idToken').trim().notEmpty().withMessage('Google ID token is required'),
+  ],
   changePassword: [
     body('currentPassword').notEmpty().withMessage('Current password is required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  ],
+  forgotPassword: [
+    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+  ],
+  verifyOtp: [
+    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+  ],
+  resetPassword: [
+    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
     body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
   ],
   createUser: [

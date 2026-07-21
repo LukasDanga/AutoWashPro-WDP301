@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { AlertDialog } from '../../src/components/common';
 
@@ -33,25 +34,21 @@ const C = {
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { register, isLoading } = useAuth();
+  const { register, loginWithGoogle, isLoading } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phone: '',
+    phone: '', // optional — mirrors web register form (no phone field)
     password: '',
-    confirmPassword: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Refs cho từng field để tránh re-render khi chuyển focus
   const nameRef        = useRef<TextInput>(null);
-  const phoneRef       = useRef<TextInput>(null);
   const emailRef       = useRef<TextInput>(null);
   const passwordRef    = useRef<TextInput>(null);
-  const confirmRef     = useRef<TextInput>(null);
 
   const updateField = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -68,16 +65,14 @@ export default function RegisterScreen() {
       e.email = 'Vui lòng nhập email';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
       e.email = 'Email không hợp lệ';
-    if (!formData.phone.trim())
-      e.phone = 'Vui lòng nhập số điện thoại';
-    else if (!/^[0-9]{10,11}$/.test(formData.phone.replace(/\s/g, '')))
+    // Phone is optional (Web's register form doesn't ask for it). Only
+    // validate the format when the user actually entered something.
+    if (formData.phone.trim() && !/^[0-9]{10,11}$/.test(formData.phone.replace(/\s/g, '')))
       e.phone = 'Số điện thoại không hợp lệ';
     if (!formData.password)
       e.password = 'Vui lòng nhập mật khẩu';
     else if (formData.password.length < 6)
       e.password = 'Mật khẩu phải có ít nhất 6 ký tự';
-    if (formData.password !== formData.confirmPassword)
-      e.confirmPassword = 'Mật khẩu xác nhận không khớp';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -88,7 +83,9 @@ export default function RegisterScreen() {
       await register({
         name: formData.name.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        // Phone is optional — only send it when the user actually entered
+        // a value (Web's AuthScreen.jsx doesn't even ask for it).
+        phone: formData.phone.trim() ? formData.phone.trim() : undefined,
         password: formData.password,
       });
       AlertDialog.show({
@@ -118,6 +115,22 @@ export default function RegisterScreen() {
       case 429: return 'Quá nhiều yêu cầu. Vui lòng thử lại sau.';
       case 500: case 502: case 503: return 'Máy chủ đang bận. Vui lòng thử lại sau.';
       default: return data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
+      if (idToken) {
+        await loginWithGoogle(idToken);
+      }
+    } catch (error: any) {
+      console.log('Google login error:', error);
+      if (error.code !== 'ASYNC_OP_IN_PROGRESS' && error.code !== 'SIGN_IN_CANCELLED') {
+        AlertDialog.error('Đăng nhập thất bại', 'Không thể kết nối với Google. Vui lòng thử lại.');
+      }
     }
   };
 
@@ -156,7 +169,10 @@ export default function RegisterScreen() {
             </Text>
           </View>
 
-          {/* Form */}
+          {/* Form — mirrors web AuthScreen: name, email, password (no phone,
+              no confirm password). Phone is omitted on purpose because Web
+              doesn't ask for it at registration; users can add phone later
+              from the profile edit screen. */}
           <StableField label="Họ và tên" error={errors.name}>
             <TextInput
               ref={nameRef}
@@ -166,21 +182,6 @@ export default function RegisterScreen() {
               value={formData.name}
               onChangeText={v => updateField('name', v)}
               autoCapitalize="words"
-              returnKeyType="next"
-              onSubmitEditing={() => phoneRef.current?.focus()}
-              blurOnSubmit={false}
-            />
-          </StableField>
-
-          <StableField label="Số điện thoại" error={errors.phone}>
-            <TextInput
-              ref={phoneRef}
-              style={[s.textInput, !!errors.phone && s.inputError]}
-              placeholder="0901 234 567"
-              placeholderTextColor={C.textMuted}
-              keyboardType="phone-pad"
-              value={formData.phone}
-              onChangeText={v => updateField('phone', v)}
               returnKeyType="next"
               onSubmitEditing={() => emailRef.current?.focus()}
               blurOnSubmit={false}
@@ -214,9 +215,8 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
                 value={formData.password}
                 onChangeText={v => updateField('password', v)}
-                returnKeyType="next"
-                onSubmitEditing={() => confirmRef.current?.focus()}
-                blurOnSubmit={false}
+                returnKeyType="done"
+                onSubmitEditing={handleRegister}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(p => !p)}
@@ -224,30 +224,6 @@ export default function RegisterScreen() {
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={C.textMuted} />
-              </TouchableOpacity>
-            </View>
-          </StableField>
-
-          <StableField label="Xác nhận mật khẩu" error={errors.confirmPassword}>
-            <View style={s.rowInput}>
-              <TextInput
-                ref={confirmRef}
-                style={[s.textInput, s.textInputFlex, !!errors.confirmPassword && s.inputError]}
-                placeholder="Nhập lại mật khẩu"
-                placeholderTextColor={C.textMuted}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-                value={formData.confirmPassword}
-                onChangeText={v => updateField('confirmPassword', v)}
-                returnKeyType="done"
-                onSubmitEditing={handleRegister}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(p => !p)}
-                style={s.eyeBtn}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={C.textMuted} />
               </TouchableOpacity>
             </View>
           </StableField>
@@ -262,8 +238,26 @@ export default function RegisterScreen() {
             >
               {isLoading
                 ? <ActivityIndicator color="#FFF" />
-                : <Text style={s.ctaText}>Tiếp tục</Text>
+                : <Text style={s.ctaText}>Đăng ký</Text>
               }
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+              <Text style={{ marginHorizontal: 10, color: C.textMuted, fontSize: 13, fontWeight: '600' }}>HOẶC</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+            </View>
+
+            <TouchableOpacity
+              style={[s.cta, { backgroundColor: '#FFF', borderWidth: 1, borderColor: C.border }, isLoading && s.ctaDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="logo-google" size={18} color="#EA4335" style={{ marginRight: 8 }} />
+                <Text style={[s.ctaText, { color: C.textLabel }]}>Tiếp tục với Google</Text>
+              </View>
             </TouchableOpacity>
 
             <Text style={s.footerNote}>

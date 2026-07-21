@@ -18,9 +18,9 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { format, parseISO, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, getDaysInMonth } from 'date-fns';
+import { format, parseISO, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, getDaysInMonth, addDays, subDays } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { bookingApi } from '../../src/api';
+import { bookingApi, slotPackApi } from '../../src/api';
 import {
   Text as AppText,
   Card,
@@ -34,13 +34,14 @@ import {
   BookingStatusBadge,
   Skeleton,
   useToast,
+  RatingSheet,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
-import type { Booking, BookingStatus } from '../../src/types';
+import type { Booking, BookingStatus, SlotPack } from '../../src/types';
 
-type ViewMode = 'calendar' | 'list';
+type ViewMode = 'calendar' | 'week' | 'list' | 'slot_packs';
 type FilterKey = 'all' | 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -50,6 +51,40 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'completed', label: 'Hoàn thành' },
   { key: 'cancelled', label: 'Đã hủy' },
 ];
+
+// Mirror web HistoryPage list filters
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Tất cả trạng thái' },
+  { value: 'pending', label: 'Chờ xử lý' },
+  { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'completed', label: 'Hoàn thành' },
+  { value: 'cancelled', label: 'Đã hủy' },
+];
+const TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Tất cả loại' },
+  { value: 'single', label: 'Lịch thường' },
+  { value: 'recurring', label: 'Lịch định kỳ' },
+];
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: '-createdAt', label: 'Mới nhất' },
+  { value: 'createdAt', label: 'Cũ nhất' },
+  { value: '-bookingDate', label: 'Gần đây nhất (Ngày hẹn)' },
+];
+
+// Mirrors the StatusBadge mapping in the web HistoryPage.jsx
+const SLOTS_KEY: Record<string, { label: string; color: string; bg: string }> = {
+  active: { label: 'Còn hiệu lực', color: '#10b981', bg: '#ecfdf5' },
+  exhausted: { label: 'Đã dùng hết', color: '#6b7280', bg: '#f9fafb' },
+  expired: { label: 'Hết hạn', color: '#ef4444', bg: '#fef2f2' },
+  cancelled: { label: 'Đã hủy', color: '#94a3b8', bg: '#f1f5f9' },
+};
+
+function getPackStatusInfo(pack: any): { label: string; color: string; bg: string } {
+  if (pack.status === 'active' && pack.remainingSlots <= 0) {
+    return SLOTS_KEY.exhausted;
+  }
+  return SLOTS_KEY[pack.status] ?? SLOTS_KEY.cancelled;
+}
 
 const DAYS_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
@@ -88,6 +123,33 @@ export default function HistoryScreen() {
   // List filter
   const [filter, setFilter] = useState<FilterKey>('all');
 
+  // List dropdown filters (mirror web HistoryPage.jsx)
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [typeFilter, setTypeFilter] = useState<string>('');
+  const [sort, setSort] = useState<string>('-createdAt');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
+  // Pagination (web uses limit=50 with server-side paging)
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  // Week-view state (Monday-based start)
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const d = new Date();
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
+  // Slot pack view state
+  const [slotPacks, setSlotPacks] = useState<SlotPack[]>([]);
+  const [slotPacksLoading, setSlotPacksLoading] = useState(false);
+
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Detail modal
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -96,13 +158,17 @@ export default function HistoryScreen() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
 
-  // Review modal
+  // Recurring Modal
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [recurringGroupBookings, setRecurringGroupBookings] = useState<Booking[]>([]);
+  const [recurringLoading, setRecurringLoading] = useState(false);
+  const [recurringCancelLoading, setRecurringCancelLoading] = useState(false);
+
+  // Review modal — delegates all rating UI to the shared `RatingSheet`.
+  // Keeps only the booking context here.
   const [showReview, setShowReview] = useState(false);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewText, setReviewText] = useState('');
-  const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewError, setReviewError] = useState('');
 
   // Rebook modal
   const [showRebook, setShowRebook] = useState(false);
@@ -116,25 +182,72 @@ export default function HistoryScreen() {
   const [qrCode, setQrCode] = useState('');
   const [qrLoading, setQrLoading] = useState(false);
 
-  const fetchBookings = useCallback(async () => {
+  const fetchBookings = useCallback(
+    async (overridePage?: number) => {
+      const targetPage = overridePage ?? page;
+      try {
+        const params: any = {
+          page: targetPage,
+          limit,
+        };
+        if (keyword.trim()) params.keyword = keyword.trim();
+        if (statusFilter) params.status = statusFilter;
+        if (typeFilter) params.bookingType = typeFilter;
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
+        if (sort) params.sort = sort;
+        const result = await bookingApi.getMyBookings(params);
+        setBookings(result.data || []);
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+      } finally {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
+    },
+    // The effect re-fetches on each filter / sort / page change, so we keep
+    // these in the dep list and intentionally ignore the function's own
+    // identity (we want a stable reference for the effect).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [keyword, statusFilter, typeFilter, dateFrom, dateTo, sort, page],
+  );
+
+  const fetchSlotPacks = useCallback(async () => {
     try {
-      const result = await bookingApi.getMyBookings();
-      setBookings(result.data || []);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
+      setSlotPacksLoading(true);
+      const data = await slotPackApi.getMySlotPacks();
+      setSlotPacks(data || []);
+    } catch (e) {
+      console.error('Error fetching slot packs:', e);
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      setSlotPacksLoading(false);
     }
   }, []);
 
+  // Initial load + filter-driven refetch (debounced for the keyword input).
   useEffect(() => {
-    fetchBookings();
+    setIsLoading(true);
+    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = setTimeout(() => {
+      fetchBookings(1);
+      setPage(1);
+    }, 400);
+    return () => {
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    };
   }, [fetchBookings]);
+
+  // Slot packs are loaded on demand when entering the slot_packs view.
+  useEffect(() => {
+    if (viewMode === 'slot_packs') {
+      fetchSlotPacks();
+    }
+  }, [viewMode, fetchSlotPacks]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchBookings();
+    fetchBookings(1);
+    setPage(1);
   };
 
   // Bookmarks by date
@@ -195,17 +308,67 @@ export default function HistoryScreen() {
     setSelectedDate(d);
   }, []);
 
-  // List filter
+  // Stats
+  const stats = useMemo(() => {
+    let pending = 0, confirmed = 0, completed = 0, cancelled = 0;
+    bookings.forEach(b => {
+      if (b.status === 'pending') pending++;
+      else if (b.status === 'confirmed') confirmed++;
+      else if (b.status === 'completed') completed++;
+      else if (b.status === 'cancelled') cancelled++;
+    });
+    return { pending, confirmed, completed, cancelled };
+  }, [bookings]);
+
+  // Recurring Group
+  const loadRecurringGroup = useCallback(async (groupId: string) => {
+    setRecurringLoading(true);
+    setShowRecurringModal(true);
+    try {
+      const result = await bookingApi.getMyBookings({ recurringGroupId: groupId } as any);
+      setRecurringGroupBookings(result.data || []);
+    } catch {
+      toast.error('Không thể tải nhóm định kỳ');
+    } finally {
+      setRecurringLoading(false);
+    }
+  }, [toast]);
+
+  const handleCancelRecurringGroup = useCallback(async (groupId: string) => {
+    setRecurringCancelLoading(true);
+    try {
+      await bookingApi.cancelRecurringGroup(groupId);
+      toast.success('Đã hủy toàn bộ nhóm định kỳ');
+      setShowRecurringModal(false);
+      fetchBookings(1);
+      setPage(1);
+      if (detailBooking) {
+        setDetailBooking(null);
+      }
+    } catch {
+      toast.error('Hủy nhóm thất bại');
+    } finally {
+      setRecurringCancelLoading(false);
+    }
+  }, [toast, fetchBookings, detailBooking]);
+
+  // Local UI list filter (chip-row). When dropdown filters are present,
+  // the server already returned a narrowed list — `filteredBookings` then
+  // only applies the chip filter on top.
+  const dropdownFilteredBookings = useMemo(() => {
+    return bookings;
+  }, [bookings]);
+
   const filteredBookings = useMemo(() => {
-    if (filter === 'all') return bookings;
-    return bookings.filter(b => {
+    if (filter === 'all') return dropdownFilteredBookings;
+    return dropdownFilteredBookings.filter(b => {
       if (filter === 'upcoming') return b.status === 'pending' || b.status === 'confirmed';
       if (filter === 'in_progress') return b.status === 'checked_in' || b.status === 'in_progress';
       if (filter === 'completed') return b.status === 'completed';
       if (filter === 'cancelled') return b.status === 'cancelled';
       return true;
     });
-  }, [bookings, filter]);
+  }, [dropdownFilteredBookings, filter]);
 
   // Load detail
   const loadDetail = useCallback(async (id: string) => {
@@ -224,52 +387,53 @@ export default function HistoryScreen() {
   const handleCancel = useCallback(() => {
     if (!detailBooking) return;
     setCancelError('');
+    setCancelReason('');
     setShowCancelConfirm(true);
   }, [detailBooking]);
 
   const confirmCancel = useCallback(async () => {
     if (!detailBooking) return;
+    if (!cancelReason.trim()) {
+      setCancelError('Vui lòng nhập lý do hủy đơn');
+      return;
+    }
     setCancelLoading(true);
     setCancelError('');
     try {
-      await bookingApi.cancelBooking(detailBooking._id, 'Khách hàng yêu cầu hủy');
+      await bookingApi.cancelBooking(detailBooking._id, cancelReason.trim());
       toast.success('Đã hủy đơn thành công');
       setShowCancelConfirm(false);
       setDetailBooking(prev => prev ? { ...prev, status: 'cancelled' } : null);
-      fetchBookings();
+      fetchBookings(1);
+      setPage(1);
     } catch (e: any) {
       setCancelError(e?.response?.data?.message || 'Hủy thất bại');
     } finally {
       setCancelLoading(false);
     }
-  }, [detailBooking, toast, fetchBookings]);
+  }, [detailBooking, cancelReason, toast, fetchBookings]);
 
-  // Review
+  // Review — the modal opens the shared `RatingSheet`. The sheet owns its
+  // own rating/comment state and submit lifecycle.
   const openReview = useCallback(() => {
     if (!detailBooking) return;
-    setReviewRating(detailBooking.rating || 0);
-    setReviewText(detailBooking.feedback || '');
-    setReviewError('');
     setShowReview(true);
   }, [detailBooking]);
 
-  const submitReview = useCallback(async () => {
-    if (!detailBooking) return;
-    if (reviewRating === 0) { setReviewError('Vui lòng chọn số sao'); return; }
-    setReviewLoading(true);
-    setReviewError('');
-    try {
-      const updated = await bookingApi.submitFeedback(detailBooking._id, { rating: reviewRating, feedback: reviewText.trim() || undefined });
-      setDetailBooking(prev => prev ? { ...prev, ...updated } : null);
-      setBookings(prev => prev.map(b => b._id === updated._id ? { ...b, ...updated } : b));
+  const submitReview = useCallback(
+    async (rating: number, comment: string) => {
+      if (!detailBooking) return;
+      const updated = await bookingApi.submitFeedback(detailBooking._id, {
+        rating,
+        feedback: comment || undefined,
+      });
+      setDetailBooking((prev) => (prev ? { ...prev, ...updated } : null));
+      setBookings((prev) => prev.map((b) => (b._id === updated._id ? { ...b, ...updated } : b)));
       setShowReview(false);
       toast.success('Đánh giá thành công!');
-    } catch (e: any) {
-      setReviewError(e?.response?.data?.message || 'Gửi đánh giá thất bại');
-    } finally {
-      setReviewLoading(false);
-    }
-  }, [detailBooking, reviewRating, reviewText, toast]);
+    },
+    [detailBooking, toast],
+  );
 
   // Rebook
   const handleRebook = useCallback(() => {
@@ -293,7 +457,8 @@ export default function HistoryScreen() {
       await bookingApi.rebookBooking(detailBooking._id, { bookingDate: rebookDate, startTime: rebookTime });
       toast.success('Đặt lại thành công!');
       setShowRebook(false);
-      fetchBookings();
+      fetchBookings(1);
+      setPage(1);
     } catch (e: any) {
       setRebookError(e?.response?.data?.message || 'Đặt lại thất bại');
     } finally {
@@ -309,7 +474,7 @@ export default function HistoryScreen() {
     setShowQR(true);
     try {
       const result = await bookingApi.getBookingQR(detailBooking._id);
-      setQrCode(result.qrCode || '');
+      setQrCode(result.qrDataUrl || '');
     } catch {
       toast.error('Không thể tạo mã QR');
       setShowQR(false);
@@ -323,16 +488,41 @@ export default function HistoryScreen() {
     const packageName = typeof b.packageId === 'object' ? (b.packageId as any).name : 'Dịch vụ';
     const vehiclePlate = typeof b.vehicleId === 'object' ? (b.vehicleId as any).licensePlate : '';
 
+    // "MỚI" badge (web parity): pulse red for bookings created in the
+    // last 24h that are still relevant (pending/confirmed).
+    const created = (b as any).createdAt ? new Date((b as any).createdAt) : null;
+    const isNew =
+      created &&
+      Date.now() - created.getTime() < 24 * 60 * 60 * 1000 &&
+      ['pending', 'confirmed'].includes(b.status);
+
+    // Recurring bookings get a purple "Định kỳ" badge so the user can tell
+    // them apart from one-off bookings at a glance. The same badge appears
+    // in the day view (history/[date].tsx) so the two screens stay
+    // consistent.
+    const isRecurring = !!(b as any).isRecurring || !!(b as any).recurringGroupId;
+
+    const handlePress = () => {
+      // Recurring rows: open the group modal directly so the user lands on
+      // the "toàn bộ lịch định kỳ" view instead of a single booking detail.
+      // This mirrors the FE HistoryPage behavior where tapping a recurring
+      // row immediately shows the recurring group summary.
+      if (isRecurring && (b as any).recurringGroupId) {
+        setDetailBooking(b);
+        loadRecurringGroup((b as any).recurringGroupId);
+        return;
+      }
+      setDetailBooking(b);
+      loadDetail(b._id);
+    };
+
     return (
       <PressableScale
-        onPress={() => {
-          setDetailBooking(b);
-          loadDetail(b._id);
-        }}
+        onPress={handlePress}
         accessibilityRole="button"
         accessibilityLabel={`Đặt lịch ${packageName}`}
       >
-        <Card style={styles.bookingCard}>
+        <Card style={[styles.bookingCard, isNew && { borderLeftWidth: 3, borderLeftColor: '#F43F5E' }, isRecurring && { borderLeftWidth: 3, borderLeftColor: '#8B5CF6' }]}>
           {/* Top: icon + package + status */}
           <View style={styles.visCardTop}>
             <View style={styles.visPackageRow}>
@@ -342,6 +532,16 @@ export default function HistoryScreen() {
               <AppText variant="bodySmall" color="textPrimary" style={styles.visPackageName} numberOfLines={1}>
                 {packageName}
               </AppText>
+              {isNew ? (
+                <View style={{ backgroundColor: '#F43F5E', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <AppText style={{ fontSize: 9, color: '#FFF', fontWeight: '900', letterSpacing: 0.5 }}>MỚI</AppText>
+                </View>
+              ) : null}
+              {isRecurring ? (
+                <View style={{ backgroundColor: '#8B5CF6', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <AppText style={{ fontSize: 9, color: '#FFF', fontWeight: '900', letterSpacing: 0.5 }}>ĐỊNH KỲ</AppText>
+                </View>
+              ) : null}
             </View>
             <BookingStatusBadge status={b.status} />
           </View>
@@ -364,11 +564,26 @@ export default function HistoryScreen() {
 
           {/* Bottom: plate + price */}
           <View style={styles.visCardBottom}>
-            {vehiclePlate ? (
-              <View style={styles.visPlateTag}>
-                <AppText style={styles.visPlateText}>{vehiclePlate}</AppText>
-              </View>
-            ) : <View />}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              {vehiclePlate ? (
+                <View style={styles.visPlateTag}>
+                  <AppText style={styles.visPlateText}>{vehiclePlate}</AppText>
+                </View>
+              ) : <View />}
+              {b.paymentStatus === 'paid' ? (
+                <View style={[styles.visPlateTag, { backgroundColor: colors.successLight }]}>
+                  <AppText style={[styles.visPlateText, { color: colors.success }]}>Đã TT</AppText>
+                </View>
+              ) : b.depositAmount > 0 && (b.depositPaid || b.paymentStatus === 'deposit_paid') ? (
+                <View style={[styles.visPlateTag, { backgroundColor: colors.successLight }]}>
+                  <AppText style={[styles.visPlateText, { color: colors.success }]}>Cọc {formatCurrency(b.depositAmount)}</AppText>
+                </View>
+              ) : b.depositAmount > 0 && !b.depositPaid ? (
+                <View style={[styles.visPlateTag, { backgroundColor: colors.warningLight }]}>
+                  <AppText style={[styles.visPlateText, { color: colors.warning }]}>Cọc {formatCurrency(b.depositAmount)}</AppText>
+                </View>
+              ) : null}
+            </View>
             <AppText variant="bodySmall" color="primary" style={styles.visPrice}>
               {formatCurrency(b.finalPrice)}
             </AppText>
@@ -376,7 +591,7 @@ export default function HistoryScreen() {
         </Card>
       </PressableScale>
     );
-  }, [colors, loadDetail]);
+  }, [colors, loadDetail, loadRecurringGroup]);
 
   return (
     <ScreenContainer background="subtle" edges={['top']}>
@@ -412,8 +627,34 @@ export default function HistoryScreen() {
           keyExtractor={() => 'main'}
           renderItem={() => (
             <View>
-              {/* View toggle */}
-              <View style={[styles.toggleRow, { backgroundColor: colors.surfaceDark }]}>
+              {/* Stats Summary */}
+              <View style={styles.statsRow}>
+                <View style={[styles.statCard, { backgroundColor: colors.warningLight }]}>
+                  <AppText variant="h3" color="warning">{stats.pending}</AppText>
+                  <AppText variant="caption" color="warning" style={{ textAlign: 'center' }}>Chờ xử lý</AppText>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.primarySubtle }]}>
+                  <AppText variant="h3" color="primary">{stats.confirmed}</AppText>
+                  <AppText variant="caption" color="primary" style={{ textAlign: 'center' }}>Đã xác nhận</AppText>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.successLight }]}>
+                  <AppText variant="h3" color="success">{stats.completed}</AppText>
+                  <AppText variant="caption" color="success" style={{ textAlign: 'center' }}>Hoàn thành</AppText>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+                  <AppText variant="h3" color="textSecondary">{stats.cancelled}</AppText>
+                  <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>Đã hủy</AppText>
+                </View>
+              </View>
+
+              {/* View toggle — mirrors web HistoryPage 4 tabs (Lịch tháng /
+                  Lịch tuần / Danh sách / Gói lượt). Wraps horizontally on
+                  narrow screens so all 4 stay reachable. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.toggleRow}
+              >
                 <TouchableOpacity
                   onPress={() => setViewMode('calendar')}
                   style={[styles.toggleBtn, viewMode === 'calendar' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
@@ -423,6 +664,14 @@ export default function HistoryScreen() {
                   <AppText variant="labelSmall" color={viewMode === 'calendar' ? 'primary' : 'textTertiary'}>Lịch tháng</AppText>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  onPress={() => setViewMode('week')}
+                  style={[styles.toggleBtn, viewMode === 'week' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
+                  activeOpacity={0.7}
+                >
+                  <Icon name={Icons.calendarOutline} size={16} color={viewMode === 'week' ? colors.primary : colors.textTertiary} />
+                  <AppText variant="labelSmall" color={viewMode === 'week' ? 'primary' : 'textTertiary'}>Lịch tuần</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
                   onPress={() => setViewMode('list')}
                   style={[styles.toggleBtn, viewMode === 'list' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
                   activeOpacity={0.7}
@@ -430,7 +679,15 @@ export default function HistoryScreen() {
                   <Icon name={Icons.listOutline} size={16} color={viewMode === 'list' ? colors.primary : colors.textTertiary} />
                   <AppText variant="labelSmall" color={viewMode === 'list' ? 'primary' : 'textTertiary'}>Danh sách</AppText>
                 </TouchableOpacity>
-              </View>
+                <TouchableOpacity
+                  onPress={() => setViewMode('slot_packs')}
+                  style={[styles.toggleBtn, viewMode === 'slot_packs' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
+                  activeOpacity={0.7}
+                >
+                  <Icon name={Icons.voucherOutline} size={16} color={viewMode === 'slot_packs' ? colors.primary : colors.textTertiary} />
+                  <AppText variant="labelSmall" color={viewMode === 'slot_packs' ? 'primary' : 'textTertiary'}>Gói lượt</AppText>
+                </TouchableOpacity>
+              </ScrollView>
 
               {/* Calendar view */}
               {viewMode === 'calendar' && (
@@ -513,10 +770,309 @@ export default function HistoryScreen() {
                 </View>
               )}
 
+              {/* Week view — mirrors web's "Lịch tuần" tab. Renders the next
+                  7 days starting from Monday, with a count badge per day. */}
+              {viewMode === 'week' && (
+                <View style={[styles.calendarWrap, { backgroundColor: colors.background }]}>
+                  <View style={[styles.calHeader, { borderBottomColor: colors.border }]}>
+                    <TouchableOpacity
+                      onPress={() => setWeekStart((d) => subDays(d, 7))}
+                      style={styles.calNavBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name={Icons.back} size={20} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                    <View style={styles.calHeaderText}>
+                      <AppText variant="h4" color="textPrimary">
+                        {format(weekStart, 'dd/MM')} - {format(addDays(weekStart, 6), 'dd/MM/yyyy')}
+                      </AppText>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const d = new Date();
+                          const day = d.getDay();
+                          d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+                          d.setHours(0, 0, 0, 0);
+                          setWeekStart(d);
+                        }}
+                        style={[styles.todayBtn, { backgroundColor: '#DCFCE7' }]}
+                        activeOpacity={0.7}
+                      >
+                        <AppText variant="caption" style={{ color: '#16A34A', fontWeight: '700' }}>Tuần này</AppText>
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setWeekStart((d) => addDays(d, 7))}
+                      style={styles.calNavBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name={Icons.forward} size={20} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ maxHeight: 600 }} showsVerticalScrollIndicator={false}>
+                    {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((day) => {
+                      const key = localDateKey(day);
+                      const dayBks = bookingsByDate[key] || [];
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          onPress={() => router.push(`/history/${key}` as any)}
+                          style={[
+                            styles.weekDayRow,
+                            { borderBottomColor: colors.border },
+                          ]}
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              styles.weekDayBadge,
+                              {
+                                backgroundColor: isSameDay(day, new Date())
+                                  ? colors.primary
+                                  : colors.surface,
+                              },
+                            ]}
+                          >
+                            <AppText style={{ fontSize: 11, fontWeight: '700', color: isSameDay(day, new Date()) ? '#FFF' : colors.textSecondary }}>
+                              {DAYS_VN[day.getDay()]}
+                            </AppText>
+                            <AppText
+                              style={{
+                                fontSize: 16,
+                                fontWeight: '800',
+                                color: isSameDay(day, new Date()) ? '#FFF' : colors.textPrimary,
+                              }}
+                            >
+                              {day.getDate()}
+                            </AppText>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: spacing.md }}>
+                            {dayBks.length === 0 ? (
+                              <AppText variant="caption" color="textTertiary">
+                                Không có lịch
+                              </AppText>
+                            ) : (
+                              dayBks.slice(0, 2).map((b) => {
+                                const pkgName =
+                                  typeof b.packageId === 'object' ? (b.packageId as any).name : 'Dịch vụ';
+                                return (
+                                  <AppText
+                                    key={b._id}
+                                    variant="bodySmall"
+                                    color="textPrimary"
+                                    numberOfLines={1}
+                                  >
+                                    ⏰ {b.startTime} — {pkgName}
+                                  </AppText>
+                                );
+                              })
+                            )}
+                            {dayBks.length > 2 ? (
+                              <AppText variant="caption" color="textTertiary">
+                                +{dayBks.length - 2} lịch khác
+                              </AppText>
+                            ) : null}
+                          </View>
+                          {dayBks.length > 0 ? (
+                            <View style={[styles.statPill, { backgroundColor: colors.primarySubtle }]}>
+                              <AppText variant="caption" color="primary" style={{ fontWeight: '700' }}>
+                                {dayBks.length}
+                              </AppText>
+                            </View>
+                          ) : null}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Slot Packs view — mirrors web's "Gói lượt" tab. Lists all
+                  the user's slot packs with status + remaining-slot meter. */}
+              {viewMode === 'slot_packs' && (
+                <View style={{ paddingHorizontal: spacing.screenPadding, marginTop: spacing.md }}>
+                  {slotPacksLoading ? (
+                    <View style={{ padding: 40, alignItems: 'center' }}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                    </View>
+                  ) : slotPacks.length === 0 ? (
+                    <EmptyState
+                      iconName={Icons.voucherOutline}
+                      title="Chưa có gói lượt"
+                      message="Mua trước gói lượt rửa xe để tiết kiệm hơn khi đặt lịch"
+                      actionLabel="Mua gói lượt"
+                      onAction={() => router.push('/slot-packs' as any)}
+                    />
+                  ) : (
+                    slotPacks.map((pack) => {
+                      const st = getPackStatusInfo(pack as any);
+                      const total = pack.totalSlots;
+                      const remain = pack.remainingSlots;
+                      const pct = total > 0 ? (remain / total) * 100 : 0;
+                      const meterColor =
+                        pct > 50 ? colors.success : pct > 20 ? colors.warning : colors.error;
+                      const pkg =
+                        typeof pack.packageId === 'object' && pack.packageId !== null
+                          ? (pack.packageId as any).name
+                          : 'Gói dịch vụ';
+                      const branch =
+                        typeof pack.branchId === 'object' && pack.branchId !== null
+                          ? (pack.branchId as any).name
+                          : '';
+                      return (
+                        <Card key={pack._id} style={{ marginBottom: spacing.sm, padding: spacing.md }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <View style={{ flex: 1 }}>
+                              <AppText style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12, fontWeight: '700', letterSpacing: 1 }} color="textPrimary">
+                                {pack.packCode}
+                              </AppText>
+                              <AppText variant="body" color="textPrimary" style={{ fontWeight: '700', marginTop: 2 }}>
+                                {pkg}
+                              </AppText>
+                              {branch ? (
+                                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+                                  📍 {branch}
+                                </AppText>
+                              ) : null}
+                            </View>
+                            <View style={[styles.statPill, { backgroundColor: st.bg }]}>
+                              <AppText variant="caption" style={{ color: st.color, fontWeight: '700' }}>
+                                {st.label}
+                              </AppText>
+                            </View>
+                          </View>
+                          {/* Slot meter */}
+                          <View style={{ marginTop: spacing.sm }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <AppText variant="caption" color="textSecondary">Còn lại</AppText>
+                              <AppText variant="caption" color="textPrimary" style={{ fontWeight: '700' }}>
+                                {remain}/{total}
+                              </AppText>
+                            </View>
+                            <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.surfaceDark, overflow: 'hidden' }}>
+                              <View
+                                style={{
+                                  height: '100%',
+                                  width: `${pct}%`,
+                                  backgroundColor: meterColor,
+                                }}
+                              />
+                            </View>
+                          </View>
+                          {/* Footer info */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                            <View>
+                              <AppText variant="caption" color="textTertiary">Đã dùng</AppText>
+                              <AppText variant="caption" color="textPrimary" style={{ fontWeight: '700' }}>{pack.usedSlots || 0} lần</AppText>
+                            </View>
+                            <View>
+                              <AppText variant="caption" color="textTertiary">Giá gói</AppText>
+                              <AppText variant="caption" color="textPrimary" style={{ fontWeight: '700' }}>
+                                {formatCurrency((pack as any).finalPriceAfterVoucher ?? pack.finalPrice ?? 0)}
+                              </AppText>
+                            </View>
+                            {pack.expiresAt ? (
+                              <View>
+                                <AppText variant="caption" color="textTertiary">Hết hạn</AppText>
+                                <AppText variant="caption" color="textPrimary" style={{ fontWeight: '700' }}>
+                                  {format(parseISO(pack.expiresAt), 'dd/MM/yyyy')}
+                                </AppText>
+                              </View>
+                            ) : null}
+                          </View>
+                        </Card>
+                      );
+                    })
+                  )}
+                </View>
+              )}
+
               {/* List view */}
               {viewMode === 'list' && (
                 <View>
-                  {/* Filter chips */}
+                  {/* Dropdown filters — mirror web HistoryPage list filters
+                      (keyword + status + type + sort + date range). */}
+                  <View style={styles.dropdownFilters}>
+                    <View style={styles.searchRow}>
+                      <Icon name={Icons.search} size={16} color={colors.textTertiary} />
+                      <TextInput
+                        value={keyword}
+                        onChangeText={(t) => { setKeyword(t); setPage(1); }}
+                        placeholder="Tìm gói dịch vụ hoặc chi nhánh..."
+                        placeholderTextColor={colors.textTertiary}
+                        style={[styles.searchInput, { color: colors.textPrimary }]}
+                        accessibilityLabel="Tìm kiếm đặt lịch"
+                      />
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.dropdownScroll}
+                    >
+                      <View style={styles.dropdownWrap}>
+                        <PickerField
+                          label="Trạng thái"
+                          value={statusFilter}
+                          onChange={(v) => { setStatusFilter(v); setPage(1); }}
+                          options={STATUS_OPTIONS}
+                          colors={colors}
+                        />
+                      </View>
+                      <View style={styles.dropdownWrap}>
+                        <PickerField
+                          label="Loại"
+                          value={typeFilter}
+                          onChange={(v) => { setTypeFilter(v); setPage(1); }}
+                          options={TYPE_OPTIONS}
+                          colors={colors}
+                        />
+                      </View>
+                      <View style={styles.dropdownWrap}>
+                        <PickerField
+                          label="Sắp xếp"
+                          value={sort}
+                          onChange={(v) => { setSort(v); setPage(1); }}
+                          options={SORT_OPTIONS}
+                          colors={colors}
+                        />
+                      </View>
+                      <View style={[styles.dateRangeWrap]}>
+                        <TextInput
+                          value={dateFrom}
+                          onChangeText={(v) => { setDateFrom(v); setPage(1); }}
+                          placeholder="Từ ngày"
+                          placeholderTextColor={colors.textTertiary}
+                          style={[styles.dateInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                          accessibilityLabel="Từ ngày"
+                        />
+                        <TextInput
+                          value={dateTo}
+                          onChangeText={(v) => { setDateTo(v); setPage(1); }}
+                          placeholder="Đến ngày"
+                          placeholderTextColor={colors.textTertiary}
+                          style={[styles.dateInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                          accessibilityLabel="Đến ngày"
+                        />
+                      </View>
+                    </ScrollView>
+                    {(keyword || statusFilter || typeFilter || dateFrom || dateTo) ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setKeyword('');
+                          setStatusFilter('');
+                          setTypeFilter('');
+                          setDateFrom('');
+                          setDateTo('');
+                          setPage(1);
+                        }}
+                        style={[styles.clearFilterBtn, { borderColor: colors.border }]}
+                        activeOpacity={0.7}
+                      >
+                        <AppText variant="caption" style={{ color: colors.textSecondary, fontWeight: '600' }}>✕ Xóa bộ lọc</AppText>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  {/* Status filter chips */}
                   <View style={styles.filterRow}>
                     <FlatList
                       horizontal
@@ -556,6 +1112,27 @@ export default function HistoryScreen() {
                       ))}
                     </View>
                   )}
+
+                  {/* Pagination — mirrors web's page size 50 / pagination UI */}
+                  <View style={styles.paginationRow}>
+                    <Button
+                      title="← Trước"
+                      variant="outline"
+                      onPress={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      style={styles.paginationBtn}
+                    />
+                    <AppText variant="bodySmall" color="textSecondary">
+                      Trang {page}
+                    </AppText>
+                    <Button
+                      title="Sau →"
+                      variant="outline"
+                      onPress={() => setPage((p) => p + 1)}
+                      disabled={filteredBookings.length < limit}
+                      style={styles.paginationBtn}
+                    />
+                  </View>
                 </View>
               )}
             </View>
@@ -603,6 +1180,51 @@ export default function HistoryScreen() {
                       <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{value}</AppText>
                     </View>
                   ))}
+
+                  {detailBooking.subServices && detailBooking.subServices.length > 0 && (
+                    <View style={styles.infoRow}>
+                      <AppText variant="caption" color="textSecondary">Dịch vụ phụ</AppText>
+                      <View style={{ maxWidth: '60%', alignItems: 'flex-end' }}>
+                        {detailBooking.subServices.map((sub: any, idx: number) => (
+                          <AppText key={idx} variant="bodySmall" color="textPrimary" style={{ textAlign: 'right' }}>
+                            {sub.name}
+                          </AppText>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  {detailBooking.depositAmount > 0 && (
+                    <View style={styles.infoRow}>
+                      <AppText variant="caption" color="textSecondary">Tiền cọc</AppText>
+                      <AppText variant="bodySmall" color={detailBooking.depositPaid ? 'success' : 'warning'} style={styles.infoValue}>
+                        {formatCurrency(detailBooking.depositAmount)} ({detailBooking.depositPaid ? 'Đã đóng' : 'Chưa đóng'})
+                      </AppText>
+                    </View>
+                  )}
+                  {detailBooking.note ? (
+                    <View style={styles.infoRow}>
+                      <AppText variant="caption" color="textSecondary">Ghi chú</AppText>
+                      <AppText variant="bodySmall" color="textPrimary" style={styles.infoValue}>{detailBooking.note}</AppText>
+                    </View>
+                  ) : null}
+                  {detailBooking.reply ? (
+                    <View style={[styles.infoRow, { backgroundColor: colors.surface, padding: spacing.sm, borderRadius: borderRadius.sm, marginTop: spacing.xs }]}>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="caption" color="primary" style={{ fontWeight: '600' }}>Cửa hàng phản hồi:</AppText>
+                        <AppText variant="bodySmall" color="textPrimary" style={{ marginTop: 2 }}>{detailBooking.reply}</AppText>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {detailBooking.recurringGroupId && (
+                    <View style={{ marginTop: spacing.md }}>
+                      <Button
+                        title="Quản lý nhóm định kỳ"
+                        variant="outline"
+                        onPress={() => loadRecurringGroup(detailBooking.recurringGroupId!)}
+                      />
+                    </View>
+                  )}
 
                   {detailBooking.rating ? (
                     <View style={[styles.ratingBox]}>
@@ -686,6 +1308,14 @@ export default function HistoryScreen() {
                 <AppText variant="caption" color="error">{cancelError}</AppText>
               </View>
             ) : null}
+            <TextInput
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Nhập lý do hủy đơn..."
+              style={[styles.reviewInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary, marginBottom: spacing.md, minHeight: 80 }]}
+              placeholderTextColor={colors.textTertiary}
+              multiline
+            />
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <Button
                 title="Không, giữ lại"
@@ -706,69 +1336,14 @@ export default function HistoryScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ═══ REVIEW MODAL ═══ */}
-      <Modal visible={showReview} transparent animationType="slide" onRequestClose={() => setShowReview(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowReview(false)}>
-          <TouchableOpacity style={[styles.reviewModal, { backgroundColor: colors.background }]} activeOpacity={1}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <AppText variant="h4" color="textPrimary">Đánh giá dịch vụ</AppText>
-              <TouchableOpacity onPress={() => setShowReview(false)} style={styles.modalCloseBtn} activeOpacity={0.7}>
-                <Icon name={Icons.close} size={18} color={colors.textTertiary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <AppText variant="label" color="textSecondary" style={{ marginBottom: spacing.sm, textAlign: 'center' }}>
-                Chất lượng dịch vụ
-              </AppText>
-              <View style={styles.starRow}>
-                {[1, 2, 3, 4, 5].map(s => (
-                  <TouchableOpacity key={s} onPress={() => setReviewRating(s)} activeOpacity={0.7}>
-                    <AppText style={[styles.star, { color: s <= reviewRating ? '#F59E0B' : colors.border }]}>★</AppText>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {reviewRating > 0 && (
-                <AppText variant="caption" style={{ color: '#F59E0B', fontWeight: '600', textAlign: 'center', marginBottom: spacing.md }}>
-                  {['', 'Rất tệ', 'Tệ', 'Bình thường', 'Tốt', 'Xuất sắc'][reviewRating]}
-                </AppText>
-              )}
-
-              <AppText variant="label" color="textSecondary" style={{ marginBottom: spacing.xs }}>
-                Nhận xét (tùy chọn)
-              </AppText>
-              <TextInput
-                value={reviewText}
-                onChangeText={setReviewText}
-                maxLength={500}
-                multiline
-                placeholder="Chia sẻ trải nghiệm của bạn..."
-                style={[styles.reviewInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-                placeholderTextColor={colors.textTertiary}
-              />
-              <AppText variant="caption" color="textTertiary" style={{ textAlign: 'right', marginTop: 4 }}>{reviewText.length}/500</AppText>
-
-              {reviewError ? (
-                <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
-                  <AppText variant="caption" color="error">{reviewError}</AppText>
-                </View>
-              ) : null}
-            </ScrollView>
-
-            <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <Button title="Hủy" variant="outline" onPress={() => setShowReview(false)} disabled={reviewLoading} style={{ flex: 1 }} />
-                <Button
-                  title={reviewLoading ? 'Đang gửi...' : 'Gửi đánh giá'}
-                  onPress={submitReview}
-                  disabled={reviewLoading || reviewRating === 0}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      {/* ═══ REVIEW SHEET (shared component) ═══ */}
+      <RatingSheet
+        visible={showReview}
+        initialRating={detailBooking?.rating || 0}
+        initialComment={detailBooking?.feedback || ''}
+        onClose={() => setShowReview(false)}
+        onSubmit={submitReview}
+      />
 
       {/* ═══ REBOOK MODAL ═══ */}
       <Modal visible={showRebook} transparent animationType="slide" onRequestClose={() => setShowRebook(false)}>
@@ -829,6 +1404,48 @@ export default function HistoryScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* ═══ RECURRING GROUP MODAL ═══ */}
+      <Modal visible={showRecurringModal} transparent animationType="slide" onRequestClose={() => setShowRecurringModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowRecurringModal(false)}>
+          <TouchableOpacity style={[styles.modalContent, { backgroundColor: colors.background }]} activeOpacity={1}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+              <View>
+                <AppText variant="h4" color="textPrimary">Nhóm định kỳ</AppText>
+              </View>
+              <TouchableOpacity onPress={() => setShowRecurringModal(false)} style={[styles.modalCloseBtn, { backgroundColor: colors.surfaceDark }]} activeOpacity={0.7}>
+                <Icon name={Icons.close} size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.modalBody, { maxHeight: 400 }]}>
+              {recurringLoading ? (
+                <ActivityIndicator size="large" color={colors.primary} />
+              ) : (
+                <ScrollView>
+                  {recurringGroupBookings.map((b, i) => (
+                    <View key={b._id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                      <View>
+                        <AppText variant="bodySmall" color="textPrimary">Lần {i + 1}: {new Date(b.bookingDate).toLocaleDateString('vi-VN')} {b.startTime}</AppText>
+                      </View>
+                      <BookingStatusBadge status={b.status} />
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+            <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+               <Button
+                  title={recurringCancelLoading ? 'Đang hủy...' : 'Hủy toàn bộ'}
+                  onPress={() => detailBooking?.recurringGroupId && handleCancelRecurringGroup(detailBooking.recurringGroupId)}
+                  disabled={recurringCancelLoading}
+                  style={{ backgroundColor: colors.error, marginBottom: spacing.sm }}
+                  textStyle={{ color: '#FFF' }}
+               />
+               <Button title="Đóng" variant="outline" onPress={() => setShowRecurringModal(false)} />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ═══ QR MODAL ═══ */}
       <Modal visible={showQR} transparent animationType="fade" onRequestClose={() => setShowQR(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowQR(false)}>
@@ -883,8 +1500,7 @@ function getStatusFg(status: BookingStatus, colors: any): string {
 }
 
 function detailInfoRows(b: Booking, colors: any): [string, string][] {
-  const pkg = typeof b.packageId === 'object' ? (b.packageId as any).name : '—';
-  const branch = typeof b.branchId === 'object' ? (b.branchId as any).name : '—';
+  const pkg = typeof b.packageId === 'object' ? (b.packageId as any).name : '—';const branch = typeof b.branchId === 'object' ? (b.branchId as any).name : '—';
   const vehicle = typeof b.vehicleId === 'object' ? (b.vehicleId as any).licensePlate : '—';
   const date = b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : '—';
   const payment = b.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán';
@@ -901,6 +1517,88 @@ function detailInfoRows(b: Booking, colors: any): [string, string][] {
     ['Loại đặt', type],
   ];
 }
+
+/**
+ * Compact dropdown field used by the list-view filters. Renders a label,
+ * the selected option text, and a chevron. RN has no native cross-platform
+ * Picker, so the actual cycling happens via a Modal with a vertical choice
+ * list (same UX as the web select).
+ */
+interface PickerFieldProps {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  colors: any;
+}
+
+const PickerField: React.FC<PickerFieldProps> = ({ label, value, options, onChange, colors }) => {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((o) => o.value === value)?.label || options[0]?.label || '';
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+        style={[
+          styles.pickerField,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+        accessibilityLabel={label}
+      >
+        <AppText variant="caption" color="textTertiary">{label}</AppText>
+        <AppText variant="bodySmall" color="textPrimary" numberOfLines={1} style={{ fontWeight: '600' }}>
+          {selectedLabel}
+        </AppText>
+      </TouchableOpacity>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setOpen(false)}
+        >
+          <TouchableOpacity
+            style={[styles.pickerModal, { backgroundColor: colors.background }]}
+            activeOpacity={1}
+          >
+            <AppText variant="label" color="textSecondary" style={{ marginBottom: spacing.sm, textAlign: 'center' }}>
+              {label.toUpperCase()}
+            </AppText>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {options.map((o) => (
+                <TouchableOpacity
+                  key={o.value}
+                  onPress={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                  }}
+                  style={[
+                    styles.pickerItem,
+                    {
+                      backgroundColor: o.value === value ? colors.primarySubtle : 'transparent',
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
+                    variant="bodySmall"
+                    color={o.value === value ? 'primary' : 'textPrimary'}
+                    style={{ fontWeight: o.value === value ? '700' : '500' }}
+                  >
+                    {o.label}
+                  </AppText>
+                  {o.value === value ? (
+                    <Icon name={Icons.checkmark} size={16} color={colors.primary} />
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </>
+  );
+};
 
 const styles = StyleSheet.create({
   // Header
@@ -1194,30 +1892,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
-  // Review modal
-  reviewModal: {
-    borderTopLeftRadius: borderRadius.xl + 4,
-    borderTopRightRadius: borderRadius.xl + 4,
-    maxHeight: '85%',
-  },
-  starRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  star: {
-    fontSize: 28,
-  },
-
-  reviewInput: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    padding: spacing.md,
-    fontSize: 14,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
+  // Review modal — moved to shared `RatingSheet` component (src/components/common).
+  // The history screen now reuses the shared sheet for booking-level rating.
 
   // Rebook modal
   rebookModal: {
@@ -1236,5 +1912,125 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg + 20,
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
+  },
+  
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.screenPadding,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: 4,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Week view
+  weekDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  weekDayBadge: {
+    width: 50,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  statPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+
+  // List dropdown filters
+  dropdownFilters: {
+    paddingHorizontal: spacing.screenPadding,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    fontSize: 14,
+    padding: 0,
+  },
+  dropdownScroll: {
+    gap: spacing.sm,
+  },
+  dropdownWrap: {
+    minWidth: 130,
+  },
+  dateRangeWrap: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dateInput: {
+    height: 44,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    fontSize: 12,
+    minWidth: 88,
+  },
+  clearFilterBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  pickerField: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    height: 56,
+    justifyContent: 'center',
+  },
+  pickerModal: {
+    marginHorizontal: spacing.lg,
+    marginTop: 'auto',
+    marginBottom: 'auto',
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    maxHeight: '70%',
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+
+  // Pagination
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.screenPadding,
+  },
+  paginationBtn: {
+    minWidth: 96,
   },
 });

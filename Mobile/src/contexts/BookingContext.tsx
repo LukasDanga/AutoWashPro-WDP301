@@ -115,7 +115,14 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
   const [selectedBranch, setSelectedBranchState] = useState<Branch | null>(null);
   const [selectedPackage, setSelectedPackageState] = useState<Package | null>(null);
   const [selectedVehicle, setSelectedVehicleState] = useState<Vehicle | null>(null);
-  const [selectedDate, setSelectedDateState] = useState<string | null>(null);
+  const [selectedDate, setSelectedDateState] = useState<string | null>(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const y = tomorrow.getFullYear();
+    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const d = String(tomorrow.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [selectedTime, setSelectedTimeState] = useState<string | null>(null);
   const [voucher, setVoucherState] = useState<VoucherState | null>(null);
 

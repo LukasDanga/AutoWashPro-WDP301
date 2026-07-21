@@ -70,7 +70,7 @@ export default function VoucherDetailScreen() {
     if (!voucher?.code) return;
     try {
       await Share.share({
-        message: `Mã voucher AutoWashPro: ${voucher.code}\nGiảm ${voucher.discountType === 'percent' ? `${voucher.discountValue}%` : formatCurrency(voucher.discountValue)}\nHết hạn: ${formatDate(voucher.expiresAt)}\n\nÁp dụng tại: autowashpro://`,
+        message: `Mã voucher AutoWashPro: ${voucher.code}\nGiảm ${voucher.type === 'percentage' ? `${voucher.value}%` : formatCurrency(voucher.value)}\nHết hạn: ${formatDate(voucher.endDate)}\n\nÁp dụng tại: autowashpro://`,
         title: 'Chia sẻ voucher AutoWashPro',
       });
     } catch (error) {
@@ -98,9 +98,9 @@ export default function VoucherDetailScreen() {
   };
 
   const isExpired = () => {
-    if (!voucher?.expiresAt) return false;
+    if (!voucher?.endDate) return false;
     try {
-      const expiryDate = parseISO(voucher.expiresAt);
+      const expiryDate = parseISO(voucher.endDate);
       return !isValid(expiryDate) || expiryDate < new Date();
     } catch {
       return false;
@@ -125,9 +125,9 @@ export default function VoucherDetailScreen() {
     );
   }
 
-  const discountDisplay = voucher.discountType === 'percent' 
-    ? `${voucher.discountValue}%`
-    : formatCurrency(voucher.discountValue);
+  const discountDisplay = voucher.type === 'percentage' 
+    ? `${voucher.value}%` 
+    : formatCurrency(voucher.value);
   
   const maxDiscountDisplay = voucher.maxDiscount 
     ? ` (tối đa ${formatCurrency(voucher.maxDiscount)})`
@@ -166,7 +166,7 @@ export default function VoucherDetailScreen() {
           <View style={styles.discountSection}>
             <Text style={styles.discountValue}>{discountDisplay}</Text>
             <Text style={styles.discountLabel}>
-              {voucher.discountType === 'percent' ? 'GIẢM GIÁ' : 'GIẢM TRỰC TIẾP'}
+              {voucher.type === 'percentage' ? 'GIẢM GIÁ' : 'GIẢM TRỰC TIẾP'}
               {maxDiscountDisplay}
             </Text>
           </View>
@@ -188,7 +188,7 @@ export default function VoucherDetailScreen() {
             <Icon name="document-text-outline" size={20} color={colors.textSecondary} style={styles.detailIcon} />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Tên voucher</Text>
-              <Text style={styles.detailValue}>{voucher.title || voucher.code}</Text>
+              <Text style={styles.detailValue}>{voucher.name || voucher.code}</Text>
             </View>
           </View>
 
@@ -204,15 +204,15 @@ export default function VoucherDetailScreen() {
           )}
 
           {/* Minimum Order */}
-          {voucher.minOrderValue && (
+          {voucher.minOrder && voucher.minOrder > 0 ? (
             <View style={styles.detailRow}>
               <Icon name="cart-outline" size={20} color={colors.textSecondary} style={styles.detailIcon} />
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Đơn tối thiểu</Text>
-                <Text style={styles.detailValue}>{formatCurrency(voucher.minOrderValue)}</Text>
+                <Text style={styles.detailValue}>{formatCurrency(voucher.minOrder)}</Text>
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Expiry */}
           <View style={[styles.detailRow, styles.lastRow]}>
@@ -220,7 +220,7 @@ export default function VoucherDetailScreen() {
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Hạn sử dụng</Text>
               <Text style={[styles.detailValue, isExpired() && styles.expiredText]}>
-                {formatDate(voucher.expiresAt)}
+                {formatDate(voucher.endDate)}
                 {isExpired() && ' (Đã hết hạn)'}
               </Text>
             </View>
@@ -233,7 +233,7 @@ export default function VoucherDetailScreen() {
           <Text style={styles.termText}>
             • Voucher chỉ có giá trị sử dụng một lần{'\n'}
             • Không áp dụng đồng thời với các voucher khác{'\n'}
-            • Áp dụng cho đơn hàng từ {voucher.minOrderValue ? formatCurrency(voucher.minOrderValue) : '0đ'} trở lên{'\n'}
+            • Áp dụng cho đơn hàng từ {voucher.minOrder ? formatCurrency(voucher.minOrder) : '0đ'} trở lên{'\n'}
             • Chỉ có thể sử dụng tại chi nhánh AutoWashPro{'\n'}
             • Không quy đổi thành tiền mặt
           </Text>

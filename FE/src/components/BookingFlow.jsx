@@ -437,7 +437,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                       onClick={() => setSelectedVehicle(vehicleKey)}>
                       <div className="aw-option-head"><strong>{vehicleName}</strong></div>
                       <p>{item.plate || item.licensePlate}</p>
-                      <small>{item.type || item.vehicleType || 'Xe máy'}</small>
+                      <small>{item.type || item.vehicleType || 'Xe ô tô'}</small>
                     </button>
                     );
                   }) : (

@@ -11,6 +11,11 @@ exports.login = catchAsync(async (req, res) => {
   success(res, result, 'Login successful');
 });
 
+exports.loginWithGoogle = catchAsync(async (req, res) => {
+  const result = await authService.loginWithGoogle(req.body.idToken);
+  success(res, result, 'Google login successful');
+});
+
 exports.refreshToken = catchAsync(async (req, res) => {
   const token = req.body.refreshToken || req.cookies?.refreshToken;
   if (!token) return res.status(401).json({ success: false, message: 'Refresh token required' });
@@ -46,6 +51,21 @@ exports.updateProfile = catchAsync(async (req, res) => {
 exports.changePassword = catchAsync(async (req, res) => {
   const tokens = await authService.changePassword(req.userId, req.body);
   success(res, tokens, 'Password changed successfully');
+});
+
+exports.forgotPassword = catchAsync(async (req, res) => {
+  await authService.forgotPassword(req.body.email);
+  success(res, null, 'OTP sent to email');
+});
+
+exports.verifyOtp = catchAsync(async (req, res) => {
+  const result = await authService.verifyOtp(req.body.email, req.body.otp);
+  success(res, result, 'OTP verified');
+});
+
+exports.resetPassword = catchAsync(async (req, res) => {
+  const result = await authService.resetPassword(req.body.email, req.body.otp, req.body.newPassword);
+  success(res, result, 'Password reset successful');
 });
 
 exports.createUser = catchAsync(async (req, res) => {

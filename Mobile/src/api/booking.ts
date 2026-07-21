@@ -26,6 +26,21 @@ export const createRecurringBooking = async (
   return response.data as RecurringBookingResult;
 };
 
+// Check recurring booking conflicts
+export const checkRecurringConflicts = async (
+  data: {
+    branchId: string;
+    packageId: string;
+    vehicleId: string;
+    weekdays: number[];
+    startTime: string;
+    weeks: number;
+  }
+): Promise<any> => {
+  const response = await apiClient.post('/bookings/recurring/check-conflicts', data);
+  return response.data;
+};
+
 // Cancel recurring booking group
 export const cancelRecurringGroup = async (groupId: string): Promise<{ message: string }> => {
   const response = await apiClient.post(`/bookings/recurring/${groupId}/cancel`);
@@ -66,8 +81,10 @@ export const getBooking = async (id: string): Promise<Booking> => {
 };
 
 // Cancel booking
-export const cancelBooking = async (id: string, reason?: string): Promise<Booking> => {
-  const response = await apiClient.post(`/bookings/${id}/cancel`, { reason });
+// BE controller reads req.body.cancellationReason (NOT `reason`).
+// Sending `reason` would be silently dropped by the validator/service.
+export const cancelBooking = async (id: string, cancellationReason?: string): Promise<Booking> => {
+  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason });
   return response.data;
 };
 
@@ -89,8 +106,16 @@ export const rebookBooking = async (
   return response.data;
 };
 
+// Update booking (e.g. quick reschedule)
+export const updateBooking = async (id: string, data: { startTime?: string; bookingDate?: string }) => {
+  const response = await apiClient.put(`/bookings/${id}`, data);
+  return response.data;
+};
+
 // Get booking QR code
-export const getBookingQR = async (id: string): Promise<{ qrCode: string }> => {
+// BE returns { qrDataUrl, bookingId } — base64 PNG of the QR.
+// (Previously typed as `qrCode` which is undefined → QR rendering broken.)
+export const getBookingQR = async (id: string): Promise<{ qrDataUrl: string; bookingId: string }> => {
   const response = await apiClient.get(`/bookings/${id}/qr`);
   return response.data;
 };
@@ -99,6 +124,7 @@ export const getBookingQR = async (id: string): Promise<{ qrCode: string }> => {
 export const bookingApi = {
   createBooking,
   createRecurringBooking,
+  checkRecurringConflicts,
   cancelRecurringGroup,
   getMyBookings,
   getAvailableSlots,
@@ -106,6 +132,7 @@ export const bookingApi = {
   cancelBooking,
   submitFeedback,
   rebookBooking,
+  updateBooking,
   getBookingQR,
 };
 

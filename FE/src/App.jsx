@@ -174,6 +174,17 @@ export default function App() {
     }
   }
 
+  async function handleGoogleLoginSuccess(accessToken, refreshToken) {
+    applySession(accessToken, refreshToken);
+    const profile = await loadSession(accessToken);
+    
+    if (profile?.role === 'admin' || profile?.role === 'manager') {
+      redirectByRole(profile);
+    } else {
+      navigate('/');
+    }
+  }
+
   async function handleLogout() {
     try {
       if (token) {
@@ -203,7 +214,7 @@ export default function App() {
   const path = location.pathname;
 
   if (path === '/auth') {
-    return <AuthScreen authLoading={authLoading} onLogin={loginWithCredentials} onRegister={registerUser} onBack={() => navigate('/')} />;
+    return <AuthScreen authLoading={authLoading} onLogin={loginWithCredentials} onRegister={registerUser} onGoogleLoginSuccess={handleGoogleLoginSuccess} onBack={() => navigate('/')} />;
   }
 
   if (path === '/profile' && token && user) {

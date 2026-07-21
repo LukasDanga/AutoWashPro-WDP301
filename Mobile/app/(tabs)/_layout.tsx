@@ -43,8 +43,8 @@ export default function TabLayout() {
         tabBarStyle: [
           styles.tabBar,
           {
-            height: 64 + insets.bottom,
-            paddingBottom: insets.bottom,
+            height: 68 + insets.bottom,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
           },
         ],
         tabBarActiveTintColor: colors.primary,
@@ -62,7 +62,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.home : Icons.homeOutline}
-              size={focused ? 26 : 24}
+              size={24}
               color={color as string}
             />
           ),
@@ -77,7 +77,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.calendar : Icons.calendarOutline}
-              size={focused ? 26 : 24}
+              size={24}
               color={color as string}
             />
           ),
@@ -92,7 +92,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.qrCode : Icons.qrCodeOutline}
-              size={focused ? 26 : 24}
+              size={24}
               color={color as string}
             />
           ),
@@ -107,7 +107,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.gift : Icons.giftOutline}
-              size={focused ? 26 : 24}
+              size={24}
               color={color as string}
             />
           ),
@@ -122,7 +122,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.person : Icons.personOutline}
-              size={focused ? 26 : 24}
+              size={24}
               color={color as string}
             />
           ),
@@ -144,9 +144,9 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 0,
-    paddingTop: 8,
+    paddingTop: 12,
     elevation: 0,
     position: 'absolute',
     bottom: 0,
@@ -155,14 +155,14 @@ const styles = StyleSheet.create({
     // Subtle top border via shadow
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
+        shadowColor: '#1A1A1A',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
       },
       android: {
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: colors.divider,
+        borderTopColor: '#E5E7EB',
       },
       default: {},
     }),
@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
   tabBarLabel: {
     ...typography.caption,
     fontWeight: '500',
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: 4,
+    fontSize: 12,
   },
   tabBarItem: {
     // Touch target handled by Tabs (>=48dp)

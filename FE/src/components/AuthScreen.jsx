@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
 import { useLocation } from 'react-router-dom';
 import {
   LockKey,
@@ -11,7 +12,9 @@ import {
 import Label from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-export default function AuthScreen({ authLoading, onLogin, onRegister, onBack }) {
+import { getApiBaseUrl } from '@/lib/authStorage';
+
+export default function AuthScreen({ authLoading, onLogin, onRegister, onBack, onGoogleLoginSuccess }) {
   const location = useLocation();
   const [authMode, setAuthMode] = useState('login');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -25,6 +28,12 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
   const [regName, setRegName] = useState('');
   const [regPass, setRegPass] = useState('');
   const [showRegPass, setShowRegPass] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   async function handleLogin(event) {
     if (event) event.preventDefault();
@@ -42,6 +51,84 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
       setStatusMessage('Đăng ký thành công, đang mở luồng đặt lịch.');
     } catch (error) { setAuthError(error.message || 'Đăng ký thất bại'); }
     finally { setRegisterLoading(false); }
+  }
+
+  async function handleGoogleSuccess(credentialResponse) {
+    setLoginLoading(true); setAuthError(''); setStatusMessage('');
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: credentialResponse.credential })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Google login failed');
+      
+      setStatusMessage('Đăng nhập bằng Google thành công.');
+      if (onGoogleLoginSuccess) {
+        onGoogleLoginSuccess(data.data.accessToken, data.data.refreshToken);
+      }
+    } catch (error) {
+      setAuthError(error.message || 'Đăng nhập Google thất bại');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
+  async function handleForgotPassword(event) {
+    event.preventDefault();
+    setForgotLoading(true); setAuthError(''); setStatusMessage('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi gửi yêu cầu');
+      setStatusMessage('Mã OTP đã được gửi đến email của bạn.');
+      setForgotStep(2);
+    } catch (error) { setAuthError(error.message); }
+    finally { setForgotLoading(false); }
+  }
+
+  async function handleVerifyOtp(event) {
+    event.preventDefault();
+    setForgotLoading(true); setAuthError(''); setStatusMessage('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'OTP không hợp lệ');
+      setStatusMessage('Mã OTP hợp lệ. Vui lòng nhập mật khẩu mới.');
+      setForgotStep(3);
+    } catch (error) { setAuthError(error.message); }
+    finally { setForgotLoading(false); }
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+    setForgotLoading(true); setAuthError(''); setStatusMessage('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi đổi mật khẩu');
+      setStatusMessage('Đổi mật khẩu thành công. Vui lòng đăng nhập.');
+      setAuthMode('login');
+      setForgotStep(1);
+      setForgotEmail('');
+      setForgotOtp('');
+      setNewPassword('');
+    } catch (error) { setAuthError(error.message); }
+    finally { setForgotLoading(false); }
   }
 
   if (authLoading) {
@@ -149,39 +236,41 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
             )}
 
             <h2 className="text-3xl font-black text-slate-800 tracking-tight">
-              Chào mừng
+              {authMode === 'forgot' ? 'Khôi phục' : 'Chào mừng'}
             </h2>
             <p className="mt-2 text-sm text-slate-400">
-              {authMode === 'login' ? 'Vui lòng đăng nhập để tiếp tục.' : 'Tạo tài khoản mới để bắt đầu.'}
+              {authMode === 'login' ? 'Vui lòng đăng nhập để tiếp tục.' : authMode === 'register' ? 'Tạo tài khoản mới để bắt đầu.' : 'Lấy lại mật khẩu của bạn.'}
             </p>
 
             {/* Toggle Tabs */}
-            <div className="my-5 flex rounded-2xl bg-slate-100/80 p-1.5">
-              <button
-                type="button"
-                className={cn(
-                  'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
-                  authMode === 'login'
-                    ? 'bg-white text-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
-                    : 'text-slate-400 hover:text-slate-600'
-                )}
-                onClick={() => { setAuthMode('login'); setAuthError(''); setStatusMessage(''); }}
-              >
-                Đăng nhập
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
-                  authMode === 'register'
-                    ? 'bg-white text-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
-                    : 'text-slate-400 hover:text-slate-600'
-                )}
-                onClick={() => { setAuthMode('register'); setAuthError(''); setStatusMessage(''); }}
-              >
-                Đăng ký
-              </button>
-            </div>
+            {authMode !== 'forgot' && (
+              <div className="my-5 flex rounded-2xl bg-slate-100/80 p-1.5">
+                <button
+                  type="button"
+                  className={cn(
+                    'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
+                    authMode === 'login'
+                      ? 'bg-white text-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                      : 'text-slate-400 hover:text-slate-600'
+                  )}
+                  onClick={() => { setAuthMode('login'); setAuthError(''); setStatusMessage(''); }}
+                >
+                  Đăng nhập
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex-1 rounded-xl py-2.5 text-sm font-bold transition-all duration-300',
+                    authMode === 'register'
+                      ? 'bg-white text-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                      : 'text-slate-400 hover:text-slate-600'
+                  )}
+                  onClick={() => { setAuthMode('register'); setAuthError(''); setStatusMessage(''); }}
+                >
+                  Đăng ký
+                </button>
+              </div>
+            )}
 
             {location.state?.adminAuthError && (
               <div className="mb-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs md:text-sm text-red-555 font-semibold">{location.state.adminAuthError}</div>
@@ -248,7 +337,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                   </label>
                   <a
                     href="#"
-                    onClick={(e) => e.preventDefault()}
+                    onClick={(e) => { e.preventDefault(); setAuthMode('forgot'); setAuthError(''); setStatusMessage(''); setForgotStep(1); }}
                     className="text-xs md:text-sm font-bold text-emerald-600 hover:text-emerald-500 transition-colors"
                   >
                     Quên mật khẩu?
@@ -264,7 +353,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                   {!loginLoading && <ArrowRight size={18} weight="bold" />}
                 </button>
               </form>
-            ) : (
+            ) : authMode === 'register' ? (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="reg-name" className="text-xs font-bold text-slate-600">
@@ -337,6 +426,140 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack })
                   {!registerLoading && <ArrowRight size={18} weight="bold" />}
                 </button>
               </form>
+            ) : (
+              <div className="space-y-4">
+                {forgotStep === 1 && (
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="forgot-email" className="text-xs font-bold text-slate-600">
+                        Email đã đăng ký
+                      </Label>
+                      <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                        <div className="w-6 h-6 rounded-full bg-slate-200/50 flex items-center justify-center text-slate-500 text-xs font-bold mr-3 select-none">
+                          @
+                        </div>
+                        <input
+                          id="forgot-email"
+                          type="email"
+                          placeholder="khachhang@mail.com"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+                    >
+                      {forgotLoading ? 'ĐANG GỬI...' : 'GỬI MÃ OTP'}
+                      {!forgotLoading && <ArrowRight size={18} weight="bold" />}
+                    </button>
+                  </form>
+                )}
+
+                {forgotStep === 2 && (
+                  <form onSubmit={handleVerifyOtp} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="forgot-otp" className="text-xs font-bold text-slate-600">
+                        Mã xác nhận (OTP)
+                      </Label>
+                      <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                        <LockKey size={18} className="text-slate-400 mr-3" />
+                        <input
+                          id="forgot-otp"
+                          type="text"
+                          placeholder="Nhập 6 số OTP"
+                          value={forgotOtp}
+                          onChange={(e) => setForgotOtp(e.target.value)}
+                          className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+                    >
+                      {forgotLoading ? 'ĐANG XÁC NHẬN...' : 'XÁC NHẬN OTP'}
+                      {!forgotLoading && <ArrowRight size={18} weight="bold" />}
+                    </button>
+                  </form>
+                )}
+
+                {forgotStep === 3 && (
+                  <form onSubmit={handleResetPassword} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-password" className="text-xs font-bold text-slate-600">
+                        Mật khẩu mới
+                      </Label>
+                      <div className="relative flex items-center bg-slate-100/70 border border-transparent rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-emerald-500/10 focus-within:bg-white focus-within:border-emerald-500/20 transition-all duration-300">
+                        <LockKey size={18} className="text-slate-400 mr-3" />
+                        <input
+                          id="new-password"
+                          type={showNewPassword ? 'text' : 'password'}
+                          placeholder="Tạo mật khẩu mới"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="bg-transparent border-none outline-none w-full text-slate-800 text-sm placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none ml-2"
+                        >
+                          {showNewPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl py-3 px-6 shadow-lg shadow-emerald-500/15 hover:shadow-emerald-500/25 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+                    >
+                      {forgotLoading ? 'ĐANG LƯU...' : 'ĐỔI MẬT KHẨU'}
+                      {!forgotLoading && <ArrowRight size={18} weight="bold" />}
+                    </button>
+                  </form>
+                )}
+
+                <div className="mt-4 text-center">
+                  <a
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); setAuthMode('login'); setAuthError(''); setStatusMessage(''); }}
+                    className="text-xs md:text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    Quay lại đăng nhập
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {authMode !== 'forgot' && (
+              <>
+                <div className="mt-5 flex items-center justify-center">
+                  <div className="h-px bg-slate-200 flex-1"></div>
+                  <span className="px-4 text-xs font-semibold text-slate-400">HOẶC</span>
+                  <div className="h-px bg-slate-200 flex-1"></div>
+                </div>
+
+                <div className="mt-5 flex justify-center">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => {
+                      setAuthError('Đăng nhập Google không thành công');
+                    }}
+                    theme="outline"
+                    size="large"
+                    shape="rectangular"
+                    width="100%"
+                  />
+                </div>
+              </>
             )}
 
             {/* Footer links */}

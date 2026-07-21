@@ -92,6 +92,16 @@ export default function VehicleScreen() {
     }
   };
 
+  const getVehicleTypeLabel = (type: string): string => {
+    switch (type) {
+      case 'sedan': return 'Sedan';
+      case 'suv': return 'SUV';
+      case 'pickup': return 'Pickup';
+      case 'van': return 'Van';
+      default: return 'Sedan';
+    }
+  };
+
   const renderVehicleCard = ({ item }: { item: Vehicle }) => (
     <Card style={styles.vehicleCard}>
       <View style={styles.cardContent}>
@@ -115,13 +125,13 @@ export default function VehicleScreen() {
             {item.brand} {item.model && `• ${item.model}`}
           </AppText>
           <AppText variant="caption" color="textTertiary">
-            {item.color} • {item.vehicleType}
+            {item.color} • {getVehicleTypeLabel(item.vehicleType)}
           </AppText>
         </View>
         <View style={styles.cardActions}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => router.push(`/vehicle/edit?id=${item._id}`)}
+            onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
             accessibilityLabel="Sửa phương tiện"
             accessibilityRole="button"
           >
@@ -129,8 +139,7 @@ export default function VehicleScreen() {
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => handleDelete(item)}
-            disabled={isDeleting === item._id}
+            onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
             accessibilityLabel="Xóa phương tiện"
             accessibilityRole="button"
           >
@@ -155,7 +164,7 @@ export default function VehicleScreen() {
         title="Quản lý xe" 
         rightAction={
           <TouchableOpacity 
-            onPress={() => router.push('/vehicle/add')}
+            onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
             style={styles.addButton}
             accessibilityLabel="Thêm phương tiện mới"
             accessibilityRole="button"
@@ -184,7 +193,7 @@ export default function VehicleScreen() {
             title="Chưa có phương tiện"
             message="Thêm phương tiện để đặt lịch rửa xe nhanh hơn"
             actionLabel="Thêm xe"
-            onAction={() => router.push('/vehicle/add')}
+            onAction={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
           />
         }
       />
@@ -192,7 +201,7 @@ export default function VehicleScreen() {
       <View style={styles.bottomAction}>
         <Button
           title="+ Thêm phương tiện mới"
-          onPress={() => router.push('/vehicle/add')}
+          onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
           fullWidth
         />
       </View>

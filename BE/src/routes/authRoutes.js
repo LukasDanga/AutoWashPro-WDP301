@@ -67,6 +67,42 @@ router.post('/login', authValidators.login, validate, authController.login);
 
 /**
  * @swagger
+ * /api/auth/google:
+ *   post:
+ *     summary: Login or register with Google
+ *     tags: [Auth]
+ */
+router.post('/google', authValidators.googleLogin, validate, authController.loginWithGoogle);
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Request password reset OTP
+ *     tags: [Auth]
+ */
+router.post('/forgot-password', authValidators.forgotPassword, validate, authController.forgotPassword);
+
+/**
+ * @swagger
+ * /api/auth/verify-otp:
+ *   post:
+ *     summary: Verify password reset OTP
+ *     tags: [Auth]
+ */
+router.post('/verify-otp', authValidators.verifyOtp, validate, authController.verifyOtp);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with OTP
+ *     tags: [Auth]
+ */
+router.post('/reset-password', authValidators.resetPassword, validate, authController.resetPassword);
+
+/**
+ * @swagger
  * /api/auth/refresh-token:
  *   post:
  *     summary: Refresh access token
