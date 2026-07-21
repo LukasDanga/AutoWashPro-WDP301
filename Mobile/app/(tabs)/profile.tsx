@@ -35,7 +35,7 @@ import {
 import { useTheme, useColors } from '../../src/theme/ThemeContext';
 import { toGradientColors, getGradients } from '../../src/theme/gradients';
 import { typography } from '../../src/theme/typography';
-import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
+import { spacing, borderRadius, shadows, layout } from '../../src/theme/spacing';
 
 interface MenuItemProps {
   icon: string;
@@ -139,8 +139,8 @@ const createMenuStyles = (colors: any) =>
       alignItems: 'center',
     },
     menuBadgeText: {
+      fontFamily: 'Outfit_700Bold',
       fontSize: 11,
-      fontWeight: '700',
       color: colors.textPrimary,
     },
     destructiveText: {
@@ -249,7 +249,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScreenContainer scroll background="subtle">
+    <ScreenContainer scroll background="subtle" bottomPadding={90}>
       {/* Gradient profile header */}
       <LinearGradient
         colors={toGradientColors(gradients.profile)}
@@ -485,12 +485,13 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginBottom: spacing.md,
   },
   guestTitle: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 24,
-    fontWeight: '800',
     color: colors.textInverse,
     marginBottom: spacing.xs,
   },
   guestSubtitle: {
+    fontFamily: 'Outfit_400Regular',
     fontSize: 14,
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
@@ -521,16 +522,17 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginBottom: spacing.md,
   },
   avatarText: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 40,
-    fontWeight: '700',
     color: colors.textInverse,
   },
   userName: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 22,
-    fontWeight: '800',
     color: colors.textInverse,
   },
   userEmail: {
+    fontFamily: 'Outfit_400Regular',
     fontSize: 14,
     color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
@@ -545,9 +547,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
   },
   progressText: {
+    fontFamily: 'Outfit_600SemiBold',
     color: 'rgba(255,255,255,0.9)',
     fontSize: 13,
-    fontWeight: '600',
     marginBottom: spacing.xs,
   },
   progressBarBg: {
@@ -569,6 +571,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   statsCard: {
     ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   statsRow: {
     flexDirection: 'row',
@@ -594,6 +598,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   // Section
   sectionTitle: {
+    fontFamily: 'Outfit_600SemiBold',
     marginLeft: spacing.lg,
     marginTop: spacing.lg,
     marginBottom: spacing.xs,
@@ -602,9 +607,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   menuSection: {
     marginHorizontal: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: layout.cardRadius,
     overflow: 'hidden',
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    ...shadows.md,
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
@@ -621,13 +628,20 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginTop: spacing.lg,
     backgroundColor: colors.errorLight,
     borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: `${colors.error}33`,
     minHeight: 48,
+    shadowColor: colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 2,
   },
   logoutIcon: {
     marginRight: spacing.sm,
   },
   logoutText: {
-    fontWeight: '700',
+    fontFamily: 'Outfit_700Bold',
   },
   destructiveText: {
     color: colors.error,

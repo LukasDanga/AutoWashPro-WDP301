@@ -148,27 +148,28 @@ export const PaymentStatusBadge: React.FC<{ status: string }> = ({ status }) => 
   );
 };
 
+import { getTierTheme } from '../../utils/tierHelper';
+import { Ionicons } from '@expo/vector-icons';
+
 // Tier badge helper
 export const TierBadge: React.FC<{ tier: string }> = ({ tier }) => {
-  const getTierConfig = () => {
-    const tierMap: Record<string, { variant: BadgeVariant; label: string }> = {
-      bronze: { variant: 'warning', label: 'Bronze' },
-      silver: { variant: 'info', label: 'Silver' },
-      gold: { variant: 'warning', label: 'Gold' },
-      diamond: { variant: 'primary', label: 'Diamond' },
-    };
+  const theme = getTierTheme(tier);
 
-    return tierMap[tier.toLowerCase()] || { variant: 'default', label: tier };
-  };
-
-  const config = getTierConfig();
   return (
-    <Badge
-      label={config.label}
-      variant={config.variant}
-      size="small"
-      accessibilityLabel={`Hạng thành viên: ${config.label}`}
-    />
+    <View
+      style={[
+        styles.container,
+        styles.containerSmall,
+        { backgroundColor: theme.bgColor, borderColor: theme.borderColor, borderWidth: 1 },
+      ]}
+      accessibilityLabel={`Hạng thành viên: ${theme.label}`}
+      accessibilityRole="text"
+    >
+      <Ionicons name={theme.iconName as any} size={12} color={theme.textColor} />
+      <Text style={[styles.textSmall, { color: theme.textColor, fontWeight: '700' }]}>
+        {theme.label}
+      </Text>
+    </View>
   );
 };
 

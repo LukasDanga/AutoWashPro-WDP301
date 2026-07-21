@@ -10,6 +10,7 @@ import {
   AppState,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useBooking } from '../../src/contexts/BookingContext';
@@ -62,12 +63,32 @@ function formatBookingDate(iso?: string): string {
   }
 }
 
+const WEEKDAYS_MAP: Record<number, string> = {
+  1: 'T2',
+  2: 'T3',
+  3: 'T4',
+  4: 'T5',
+  5: 'T6',
+  6: 'T7',
+  0: 'CN',
+};
+
 export default function PaymentCheckoutScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { isAuthenticated } = useAuth();
   const colors = useColors();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
+
+  const bottomActionStyle = [
+    styles.bottomAction,
+    {
+      backgroundColor: colors.background,
+      borderTopColor: colors.border,
+      paddingBottom: Math.max(insets.bottom, 12) + 12,
+    },
+  ];
 
   const rawBookingId = params.bookingId;
   const bookingId = Array.isArray(rawBookingId) ? rawBookingId[0] : (rawBookingId || '');
@@ -230,9 +251,16 @@ export default function PaymentCheckoutScreen() {
   }, [paymentMode, totalAmount, depositAmount]);
 
   const checkPaid = useCallback(async (): Promise<boolean> => {
-    if (!bookingId) return false;
     try {
-      const p = await paymentApi.getPaymentByBooking(bookingId);
+      let p: any;
+      if (bookingId) {
+        p = await paymentApi.getPaymentByBooking(bookingId);
+      } else if (payment?._id) {
+        p = await paymentApi.getPayment(payment._id);
+      } else {
+        return false;
+      }
+
       if (p?.status === 'paid' || (p as any)?.status === 'completed') {
         setPayment(p);
         setStep('success');
@@ -242,7 +270,7 @@ export default function PaymentCheckoutScreen() {
       /* ignore poll errors */
     }
     return false;
-  }, [bookingId]);
+  }, [bookingId, payment]);
 
   // Create booking from draft (provisional mode only)
   const createBookingFromDraft = useCallback(async (): Promise<string> => {
@@ -377,20 +405,21 @@ export default function PaymentCheckoutScreen() {
     if (!payment) return;
     setIsProcessing(true);
     try {
-      // Simulate provisional payment
-      await paymentApi.simulatePayment({
-        transactionId: payment.transactionId,
-        gatewayTransactionId: `SIM${Date.now()}`,
-        success: true,
-      });
-      // In provisional mode: create booking + link payment after provisional payment succeeds
+      const isPaid = await checkPaid();
+      if (!isPaid) {
+        toast.error('Chưa nhận được thanh toán', 'Vui lòng chờ giây lát hoặc kiểm tra lại sau khi đã chuyển khoản.');
+        return;
+      }
+      
+      // If paid and in provisional mode, we need to create booking (but since checkPaid requires bookingId, 
+      // provisional payments can't be checked this way without backend support for transaction ID polling).
+      // For now, it will just say not paid.
       if (isProvisional) {
         const payType = paymentMode === 'full' ? 'full' : 'deposit';
         const newBookingId = await createBookingFromDraft();
         if (newBookingId) {
           setCreatedBookingId(newBookingId);
           await linkPaymentToBooking(newBookingId, payType);
-          // Clear AsyncStorage draft if recurring
           if (isRecurringType) {
             await AsyncStorage.removeItem('aw_recurring_draft');
           }
@@ -431,9 +460,27 @@ export default function PaymentCheckoutScreen() {
     setPollCount(0);
   };
 
-  const branchName = nameOf(booking?.branchId as Branch | string | undefined);
-  const packageName = nameOf(booking?.packageId as Package | string | undefined);
-  const vehiclePlate = plateOf(booking?.vehicleId as Vehicle | string | undefined);
+  const branchName = booking?.branchId 
+    ? nameOf(booking.branchId) 
+    : (isRecurringType ? recurringDraft?.branchName : bookingCtx?.selectedBranch?.name) || '—';
+
+  const packageName = booking?.packageId
+    ? nameOf(booking.packageId)
+    : (isRecurringType ? recurringDraft?.packageName : bookingCtx?.selectedPackage?.name) || '—';
+
+  const vehiclePlate = booking?.vehicleId
+    ? plateOf(booking.vehicleId)
+    : (isRecurringType ? recurringDraft?.vehiclePlate : bookingCtx?.selectedVehicle?.licensePlate) || '—';
+
+  const displayDate = booking?.bookingDate
+    ? formatBookingDate(booking.bookingDate)
+    : (isRecurringType 
+        ? (recurringDraft?.weekdays?.length > 0 ? recurringDraft.weekdays.map((w: number) => WEEKDAYS_MAP[w]).join(', ') + ' hàng tuần' : '—') 
+        : formatBookingDate(bookingCtx?.selectedDate || ''));
+
+  const displayTime = booking?.startTime 
+    ? booking.startTime 
+    : (isRecurringType ? recurringDraft?.startTime : bookingCtx?.selectedTime) || '—';
 
   if (!isAuthenticated) {
     return (
@@ -502,7 +549,7 @@ export default function PaymentCheckoutScreen() {
             </AppText>
           </Card>
         </View>
-        <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <View style={bottomActionStyle}>
           {viewingBookingId ? (
             <Button
               title="Xem đặt lịch"
@@ -545,93 +592,97 @@ export default function PaymentCheckoutScreen() {
             </AppText>
           </View>
 
-          <View style={styles.qrImageWrap}>
-            <View style={[styles.qrImageBorder, { borderColor: colors.border }]}>
-              <Image source={{ uri: payment.qrCode }} style={styles.qrImage} resizeMode="contain" />
+          <View style={{ alignItems: 'center', marginBottom: spacing.md }}>
+            <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 0, padding: 6, borderRadius: 24 }]}>
+              <View style={styles.doubleBezelInner}>
+                <Image source={{ uri: payment.qrCode }} style={styles.qrImage} resizeMode="contain" />
+              </View>
             </View>
           </View>
 
           {/* Bank transfer details */}
-          <Card style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.surface }}>
-            <View style={styles.summaryRow}>
-              <AppText variant="body" color="textSecondary">
-                Số tiền cần chuyển
-              </AppText>
-              <AppText variant="h2" color="primary">
-                {formatCurrency(amount)}
-              </AppText>
-            </View>
-
-            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-
-            <View style={styles.bankDetailRow}>
-              <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Ngân hàng</AppText>
-              <AppText variant="body" style={{ flex: 1, fontWeight: '500' }}>
-                {payment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}
-              </AppText>
-            </View>
-            <View style={styles.bankDetailRow}>
-              <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Số tài khoản</AppText>
-              <AppText variant="body" style={{ flex: 1, fontWeight: '500' }}>
-                {payment.bankInfo?.accountNumber || '9796688888'}
-              </AppText>
-            </View>
-            <View style={styles.bankDetailRow}>
-              <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Chủ tài khoản</AppText>
-              <AppText variant="body" style={{ flex: 1, fontWeight: '500' }}>
-                {payment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}
-              </AppText>
-            </View>
-
-            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-
-            <View style={styles.bankDetailRow}>
-              <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Nội dung CK</AppText>
-              <AppText variant="body" style={{ flex: 1, fontWeight: '600', color: colors.primary }}>
-                {payment.bankInfo?.transferContent || `${paymentMode === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId || ''}`}
-              </AppText>
-            </View>
-            {payment.transactionId ? (
-              <View style={styles.bankDetailRow}>
-                <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Mã giao dịch</AppText>
-                <AppText variant="body" style={{ flex: 1 }}>
-                  {payment.transactionId}
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.doubleBezelInner}>
+              <View style={styles.summaryRow}>
+                <AppText variant="body" color="textSecondary">
+                  Số tiền cần chuyển
+                </AppText>
+                <AppText variant="h2" color="primary" style={{ fontWeight: '700' }}>
+                  {formatCurrency(amount)}
                 </AppText>
               </View>
-            ) : null}
 
-            {remainingAmount > 0 && (
-              <>
-                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-                <View style={styles.summaryRow}>
-                  <AppText variant="body" color="textSecondary">
-                    Còn lại (thanh toán sau)
-                  </AppText>
-                  <AppText variant="body" color="textTertiary">
-                    {formatCurrency(remainingAmount)}
+              <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+
+              <View style={styles.bankDetailRow}>
+                <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Ngân hàng</AppText>
+                <AppText variant="body" style={{ flex: 1, fontWeight: '500', color: colors.textPrimary }}>
+                  {payment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}
+                </AppText>
+              </View>
+              <View style={styles.bankDetailRow}>
+                <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Số tài khoản</AppText>
+                <AppText variant="body" style={{ flex: 1, fontWeight: '500', color: colors.textPrimary }}>
+                  {payment.bankInfo?.accountNumber || '9796688888'}
+                </AppText>
+              </View>
+              <View style={styles.bankDetailRow}>
+                <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Chủ tài khoản</AppText>
+                <AppText variant="body" style={{ flex: 1, fontWeight: '500', color: colors.textPrimary }}>
+                  {payment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}
+                </AppText>
+              </View>
+
+              <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+
+              <View style={styles.bankDetailRow}>
+                <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Nội dung CK</AppText>
+                <AppText variant="body" style={{ flex: 1, fontWeight: '600', color: colors.primary }}>
+                  {payment.bankInfo?.transferContent || `${paymentMode === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId || ''}`}
+                </AppText>
+              </View>
+              {payment.transactionId ? (
+                <View style={styles.bankDetailRow}>
+                  <AppText variant="caption" color="textSecondary" style={{ width: 110 }}>Mã giao dịch</AppText>
+                  <AppText variant="body" style={{ flex: 1, color: colors.textPrimary }}>
+                    {payment.transactionId}
                   </AppText>
                 </View>
-              </>
-            )}
-          </Card>
+              ) : null}
+
+              {remainingAmount > 0 && (
+                <>
+                  <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                  <View style={styles.summaryRow}>
+                    <AppText variant="body" color="textSecondary">
+                      Còn lại (thanh toán sau)
+                    </AppText>
+                    <AppText variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
+                      {formatCurrency(remainingAmount)}
+                    </AppText>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
 
           <AppText variant="caption" color="textTertiary" style={styles.pollingText}>
             Đang kiểm tra thanh toán... ({pollCount})
           </AppText>
         </ScrollView>
 
-        <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <View style={bottomActionStyle}>
           <Button
             title="Đã chuyển khoản"
             onPress={handleConfirmTransfer}
             loading={isProcessing}
             fullWidth
             size="large"
-            style={{ backgroundColor: '#10b981' }}
+            variant="primary"
           />
           <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
-            <AppText variant="body" color="textSecondary">
-              Quay lại chọn phương thức
+            <AppText variant="body" color="primary" style={{ fontWeight: '600' }}>
+              Quay lại chọn phương thức khác
             </AppText>
           </TouchableOpacity>
         </View>
@@ -657,29 +708,31 @@ export default function PaymentCheckoutScreen() {
             </AppText>
           </View>
 
-          <Card style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.surface }}>
-            <View style={styles.summaryRow}>
-              <AppText variant="body" color="textSecondary">
-                Số tiền cần thanh toán
-              </AppText>
-              <AppText variant="h2" color="primary">
-                {formatCurrency(amount)}
-              </AppText>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.doubleBezelInner}>
+              <View style={styles.summaryRow}>
+                <AppText variant="body" color="textSecondary">
+                  Số tiền cần thanh toán
+                </AppText>
+                <AppText variant="h2" color="primary" style={{ fontWeight: '700' }}>
+                  {formatCurrency(amount)}
+                </AppText>
+              </View>
+              {remainingAmount > 0 && (
+                <>
+                  <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                  <View style={styles.summaryRow}>
+                    <AppText variant="body" color="textSecondary">
+                      Còn lại (thanh toán sau)
+                    </AppText>
+                    <AppText variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
+                      {formatCurrency(remainingAmount)}
+                    </AppText>
+                  </View>
+                </>
+              )}
             </View>
-            {remainingAmount > 0 && (
-              <>
-                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-                <View style={styles.summaryRow}>
-                  <AppText variant="body" color="textSecondary">
-                    Còn lại (thanh toán sau)
-                  </AppText>
-                  <AppText variant="body" color="textTertiary">
-                    {formatCurrency(remainingAmount)}
-                  </AppText>
-                </View>
-              </>
-            )}
-          </Card>
+          </View>
 
           <View style={[styles.center, { paddingVertical: spacing.lg }]}>
             <ActivityIndicator color={colors.primary} size="large" />
@@ -689,26 +742,29 @@ export default function PaymentCheckoutScreen() {
             Đang kiểm tra thanh toán... ({pollCount})
           </AppText>
 
-          <Card style={[styles.hintCard, { backgroundColor: colors.warningLight }]}>
-            <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-              Nếu sau khi OTP xong trình duyệt báo lỗi (ngrok offline), hãy quay lại app.
-              Thanh toán vẫn có thể được xác nhận khi BE nhận IPN/return. Bấm "Kiểm tra lại" bên dưới.
-            </AppText>
-          </Card>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningSubtle || colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
+            <View style={styles.doubleBezelInner}>
+              <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center', lineHeight: 16 }}>
+                Nếu sau khi OTP xong trình duyệt báo lỗi (ngrok offline), hãy quay lại app.
+                Thanh toán vẫn có thể được xác nhận khi BE nhận IPN/return. Bấm "Kiểm tra lại" bên dưới.
+              </AppText>
+            </View>
+          </View>
         </ScrollView>
 
-        <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <View style={bottomActionStyle}>
           <Button title="Kiểm tra lại" onPress={() => checkPaid()} fullWidth size="large" />
           <Button
             title="Mở lại VNPay"
             variant="outline"
             onPress={handleReopenVnpay}
             fullWidth
+            size="large"
             style={{ marginTop: spacing.sm }}
           />
           <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
-            <AppText variant="body" color="textSecondary">
-              Quay lại chọn phương thức
+            <AppText variant="body" color="primary" style={{ fontWeight: '600' }}>
+              Quay lại chọn phương thức khác
             </AppText>
           </TouchableOpacity>
         </View>
@@ -749,101 +805,105 @@ export default function PaymentCheckoutScreen() {
         ) : null}
 
         {/* Booking detail — mirrors landing page summary */}
-        <Card style={[styles.detailCard, { backgroundColor: colors.surface }]}>
-          <AppText variant="label" color="textSecondary" style={styles.sectionLabel}>
-            CHI TIẾT ĐẶT LỊCH
-          </AppText>
-          <DetailRow icon={Icons.locationOutline} label="Chi nhánh" value={branchName} />
-          <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-          <DetailRow icon={Icons.sparkle} label="Gói dịch vụ" value={packageName} />
-          <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-          <DetailRow icon={Icons.carOutline} label="Phương tiện" value={vehiclePlate} />
-          <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-          <DetailRow
-            icon={Icons.calendarOutline}
-            label="Ngày"
-            value={formatBookingDate(booking?.bookingDate)}
-          />
-          <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-          <DetailRow icon={Icons.timeOutline} label="Giờ" value={booking?.startTime || '—'} />
-          {booking?.isRecurring || booking?.recurringGroupId ? (
-            <>
-              <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-              <DetailRow
-                icon={Icons.refreshOutline}
-                label="Loại"
-                value={
-                  booking?.recurringTotal
-                    ? `Định kỳ · ${booking.recurringTotal} buổi`
-                    : 'Định kỳ'
-                }
-              />
-            </>
-          ) : null}
-        </Card>
+        <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.doubleBezelInner}>
+            <AppText variant="label" color="textSecondary" style={styles.sectionLabel}>
+              CHI TIẾT ĐẶT LỊCH
+            </AppText>
+            <DetailRow icon={Icons.locationOutline} label="Chi nhánh" value={branchName} />
+            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+            <DetailRow icon={Icons.sparkle} label="Gói dịch vụ" value={packageName} />
+            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+            <DetailRow icon={Icons.carOutline} label="Phương tiện" value={vehiclePlate} />
+            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+            <DetailRow
+              icon={Icons.calendarOutline}
+              label="Ngày"
+              value={displayDate}
+            />
+            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+            <DetailRow icon={Icons.timeOutline} label="Giờ" value={displayTime} />
+            {booking?.isRecurring || booking?.recurringGroupId ? (
+              <>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <DetailRow
+                  icon={Icons.refreshOutline}
+                  label="Loại"
+                  value={
+                    booking?.recurringTotal
+                      ? `Định kỳ · ${booking.recurringTotal} buổi`
+                      : 'Định kỳ'
+                  }
+                />
+              </>
+            ) : null}
+          </View>
+        </View>
 
         {/* Price breakdown */}
-        <Card style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
-          <View style={styles.summaryRow}>
-            <AppText variant="body" color="textSecondary">
-              Tổng dịch vụ
-            </AppText>
-            <AppText variant="body" style={styles.summaryValue}>
-              {formatCurrency(totalAmount)}
-            </AppText>
+        <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.doubleBezelInner}>
+            <View style={styles.summaryRow}>
+              <AppText variant="body" color="textSecondary">
+                Tổng dịch vụ
+              </AppText>
+              <AppText variant="body" style={styles.summaryValue}>
+                {formatCurrency(totalAmount)}
+              </AppText>
+            </View>
+            {paymentMode === 'deposit' ? (
+              <>
+                <View style={styles.summaryRow}>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="body" style={{ color: '#d97706', fontWeight: '600' }}>
+                      Đặt cọc (30%)
+                    </AppText>
+                    <AppText variant="caption" color="textTertiary">
+                      30% × {formatCurrency(totalAmount)}
+                    </AppText>
+                  </View>
+                  <AppText variant="h3" style={{ color: '#d97706' }}>
+                    {formatCurrency(depositAmount)}
+                  </AppText>
+                </View>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" color="textSecondary">
+                    Còn lại (thanh toán sau)
+                  </AppText>
+                  <AppText variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
+                    {formatCurrency(remainingAmount)}
+                  </AppText>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.summaryRow}>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="body" style={{ color: '#10b981', fontWeight: '600' }}>
+                      Thanh toán (100%)
+                    </AppText>
+                    <AppText variant="caption" color="textTertiary">
+                      Thanh toán toàn bộ hóa đơn
+                    </AppText>
+                  </View>
+                  <AppText variant="h3" style={{ color: '#10b981' }}>
+                    {formatCurrency(totalAmount)}
+                  </AppText>
+                </View>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" color="textSecondary">
+                    Còn lại (thanh toán sau)
+                  </AppText>
+                  <AppText variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
+                    0đ
+                  </AppText>
+                </View>
+              </>
+            )}
           </View>
-          {paymentMode === 'deposit' ? (
-            <>
-              <View style={styles.summaryRow}>
-                <View style={{ flex: 1 }}>
-                  <AppText variant="body" style={{ color: '#d97706', fontWeight: '600' }}>
-                    Đặt cọc (30%)
-                  </AppText>
-                  <AppText variant="caption" color="textTertiary">
-                    30% × {formatCurrency(totalAmount)}
-                  </AppText>
-                </View>
-                <AppText variant="h3" style={{ color: '#d97706' }}>
-                  {formatCurrency(depositAmount)}
-                </AppText>
-              </View>
-              <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-              <View style={styles.summaryRow}>
-                <AppText variant="body" color="textSecondary">
-                  Còn lại (thanh toán sau)
-                </AppText>
-                <AppText variant="body" color="textTertiary">
-                  {formatCurrency(remainingAmount)}
-                </AppText>
-              </View>
-            </>
-          ) : (
-            <>
-              <View style={styles.summaryRow}>
-                <View style={{ flex: 1 }}>
-                  <AppText variant="body" style={{ color: '#10b981', fontWeight: '600' }}>
-                    Thanh toán (100%)
-                  </AppText>
-                  <AppText variant="caption" color="textTertiary">
-                    Thanh toán toàn bộ hóa đơn
-                  </AppText>
-                </View>
-                <AppText variant="h3" style={{ color: '#10b981' }}>
-                  {formatCurrency(totalAmount)}
-                </AppText>
-              </View>
-              <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-              <View style={styles.summaryRow}>
-                <AppText variant="body" color="textSecondary">
-                  Còn lại (thanh toán sau)
-                </AppText>
-                <AppText variant="body" color="textTertiary">
-                  0đ
-                </AppText>
-              </View>
-            </>
-          )}
-        </Card>
+        </View>
 
         <AppText variant="label" color="textSecondary" style={styles.amountSectionLabel}>
           SỐ TIỀN CẦN THANH TOÁN
@@ -851,146 +911,187 @@ export default function PaymentCheckoutScreen() {
 
         <View style={styles.modeRow}>
           <TouchableOpacity
-            style={[
-              styles.modeBtn,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-              paymentMode === 'deposit' && { borderColor: '#d97706', backgroundColor: '#fffbeb' },
-            ]}
+            style={{ flex: 1 }}
             onPress={() => setPaymentMode('deposit')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <AppText
-              variant="body"
+            <View
               style={[
-                styles.modeLabel,
-                { color: paymentMode === 'deposit' ? '#d97706' : colors.textSecondary },
+                styles.doubleBezelOuter,
+                {
+                  backgroundColor: paymentMode === 'deposit' ? colors.primarySubtle : colors.surface,
+                  borderColor: paymentMode === 'deposit' ? colors.primary : colors.border,
+                  marginBottom: 0,
+                },
               ]}
             >
-              Thanh toán cọc 30%
-            </AppText>
-            <AppText
-              variant="h3"
-              style={[
-                styles.modeAmount,
-                { color: paymentMode === 'deposit' ? '#d97706' : colors.textPrimary },
-              ]}
-            >
-              {formatCurrency(depositAmount)}
-            </AppText>
+              <View
+                style={[
+                  styles.doubleBezelInner,
+                  {
+                    padding: spacing.sm,
+                    alignItems: 'center',
+                  }
+                ]}
+              >
+                <AppText
+                  variant="caption"
+                  color={paymentMode === 'deposit' ? 'primary' : 'textSecondary'}
+                  style={{ fontWeight: '600', marginBottom: 4 }}
+                >
+                  Đặt cọc 30%
+                </AppText>
+                <AppText
+                  variant="body"
+                  color={paymentMode === 'deposit' ? 'primary' : 'textPrimary'}
+                  style={{ fontWeight: '700' }}
+                >
+                  {formatCurrency(depositAmount)}
+                </AppText>
+              </View>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.modeBtn,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-              paymentMode === 'full' && { borderColor: '#10b981', backgroundColor: '#ecfdf5' },
-            ]}
+            style={{ flex: 1 }}
             onPress={() => setPaymentMode('full')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <AppText
-              variant="body"
+            <View
               style={[
-                styles.modeLabel,
-                { color: paymentMode === 'full' ? '#10b981' : colors.textSecondary },
+                styles.doubleBezelOuter,
+                {
+                  backgroundColor: paymentMode === 'full' ? colors.primarySubtle : colors.surface,
+                  borderColor: paymentMode === 'full' ? colors.primary : colors.border,
+                  marginBottom: 0,
+                },
               ]}
             >
-              Thanh toán 100%
-            </AppText>
-            <AppText
-              variant="h3"
-              style={[
-                styles.modeAmount,
-                { color: paymentMode === 'full' ? '#10b981' : colors.textPrimary },
-              ]}
-            >
-              {formatCurrency(totalAmount)}
-            </AppText>
+              <View
+                style={[
+                  styles.doubleBezelInner,
+                  {
+                    padding: spacing.sm,
+                    alignItems: 'center',
+                  }
+                ]}
+              >
+                <AppText
+                  variant="caption"
+                  color={paymentMode === 'full' ? 'primary' : 'textSecondary'}
+                  style={{ fontWeight: '600', marginBottom: 4 }}
+                >
+                  Thanh toán 100%
+                </AppText>
+                <AppText
+                  variant="body"
+                  color={paymentMode === 'full' ? 'primary' : 'textPrimary'}
+                  style={{ fontWeight: '700' }}
+                >
+                  {formatCurrency(totalAmount)}
+                </AppText>
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
 
-        <Card style={[styles.methodCard, { backgroundColor: colors.surface }]}>
-          <AppText variant="label" color="textSecondary" style={styles.methodLabel}>
-            PHƯƠNG THỨC THANH TOÁN
-          </AppText>
+        <AppText variant="label" color="textSecondary" style={[styles.methodLabel, { marginTop: spacing.md, marginBottom: spacing.sm }]}>
+          PHƯƠNG THỨC THANH TOÁN
+        </AppText>
 
-          <TouchableOpacity
-            onPress={() => setPaymentMethod('bank')}
-            activeOpacity={0.7}
+        <TouchableOpacity
+          onPress={() => setPaymentMethod('bank')}
+          activeOpacity={0.8}
+        >
+          <View
             style={[
-              styles.methodOption,
-              { borderColor: colors.border, backgroundColor: colors.background },
-              paymentMethod === 'bank' && { borderColor: '#10b981', backgroundColor: '#ecfdf5' },
+              styles.doubleBezelOuter,
+              {
+                backgroundColor: paymentMethod === 'bank' ? colors.primarySubtle : colors.surface,
+                borderColor: paymentMethod === 'bank' ? colors.primary : colors.border,
+              },
             ]}
           >
-            <View style={[styles.methodIconWrap, { backgroundColor: '#10b981' }]}>
-              <AppText style={styles.methodIconText}>🏦</AppText>
-            </View>
-            <View style={{ flex: 1 }}>
-              <AppText variant="body" style={styles.methodName}>
-                Ngân hàng
-              </AppText>
-              <AppText variant="caption" color="textTertiary">
-                Chuyển khoản qua mã QR
-              </AppText>
-            </View>
-            {paymentMethod === 'bank' ? (
-              <View style={[styles.radio, { borderColor: '#10b981' }]}>
-                <View style={[styles.radioInner, { backgroundColor: '#10b981' }]} />
+            <View
+              style={styles.doubleBezelInner}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={[styles.methodIconWrap, { backgroundColor: colors.primarySubtle }]}>
+                  <AppText style={styles.methodIconText}>🏦</AppText>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" style={styles.methodName}>
+                    Ngân hàng
+                  </AppText>
+                  <AppText variant="caption" color="textSecondary">
+                    Chuyển khoản qua mã QR
+                  </AppText>
+                </View>
+                {paymentMethod === 'bank' ? (
+                  <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
+                    <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>
+                  </View>
+                ) : (
+                  <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
+                )}
               </View>
-            ) : (
-              <View style={[styles.radio, { borderColor: colors.border }]} />
-            )}
-          </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setPaymentMethod('vnpay')}
-            activeOpacity={0.7}
+        <TouchableOpacity
+          onPress={() => setPaymentMethod('vnpay')}
+          activeOpacity={0.8}
+        >
+          <View
             style={[
-              styles.methodOption,
-              { borderColor: colors.border, backgroundColor: colors.background, marginBottom: 0 },
-              paymentMethod === 'vnpay' && { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+              styles.doubleBezelOuter,
+              {
+                backgroundColor: paymentMethod === 'vnpay' ? colors.primarySubtle : colors.surface,
+                borderColor: paymentMethod === 'vnpay' ? colors.primary : colors.border,
+                marginBottom: 0,
+              },
             ]}
           >
-            <View style={[styles.methodIconWrap, { backgroundColor: '#2563eb' }]}>
-              <AppText style={styles.methodIconText}>🌐</AppText>
-            </View>
-            <View style={{ flex: 1 }}>
-              <AppText variant="body" style={styles.methodName}>
-                VNPay
-              </AppText>
-              <AppText variant="caption" color="textTertiary">
-                Cổng thanh toán VNPay
-              </AppText>
-            </View>
-            {paymentMethod === 'vnpay' ? (
-              <View style={[styles.radio, { borderColor: '#2563eb' }]}>
-                <View style={[styles.radioInner, { backgroundColor: '#2563eb' }]} />
+            <View
+              style={styles.doubleBezelInner}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={[styles.methodIconWrap, { backgroundColor: colors.primarySubtle }]}>
+                  <AppText style={styles.methodIconText}>🌐</AppText>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" style={styles.methodName}>
+                    VNPay
+                  </AppText>
+                  <AppText variant="caption" color="textSecondary">
+                    Cổng thanh toán VNPay
+                  </AppText>
+                </View>
+                {paymentMethod === 'vnpay' ? (
+                  <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
+                    <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>
+                  </View>
+                ) : (
+                  <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
+                )}
               </View>
-            ) : (
-              <View style={[styles.radio, { borderColor: colors.border }]} />
-            )}
-          </TouchableOpacity>
-        </Card>
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* Spacer so last content isn't hidden under sticky bottom bar */}
         <View style={{ height: spacing.xl }} />
       </ScrollView>
 
-      <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={bottomActionStyle}>
         <View style={styles.bottomRow}>
           <View style={styles.bottomBack}>
-            <Button title="Quay lại" variant="outline" onPress={() => router.back()} fullWidth />
+            <Button title="Quay lại" variant="outline" onPress={() => router.back()} fullWidth size="large" />
           </View>
           <View style={styles.bottomPay}>
             <Button
-              title={
-                paymentMethod === 'vnpay'
-                  ? `VNPay ${formatCurrency(amount)}`
-                  : paymentMode === 'full'
-                    ? `Thanh toán ${formatCurrency(amount)}`
-                    : `Đặt cọc ${formatCurrency(amount)}`
-              }
+              title={paymentMode === 'full' ? 'Thanh toán' : 'Đặt cọc'}
               onPress={handleCreatePayment}
               loading={isProcessing}
               disabled={amount <= 0}
@@ -1031,6 +1132,37 @@ function DetailRow({
 
 const styles = StyleSheet.create({
   // contentContainerStyle — NO flex:1 (that blocks scroll when content is tall)
+  doubleBezelOuter: {
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  doubleBezelInner: {
+    backgroundColor: 'transparent',
+  },
+  optionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  optionCheckEmpty: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginLeft: spacing.sm,
+  },
   scrollContent: {
     padding: spacing.md,
     paddingBottom: spacing.xxl,
@@ -1094,6 +1226,8 @@ const styles = StyleSheet.create({
   summaryCard: {
     marginBottom: spacing.md,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1137,6 +1271,8 @@ const styles = StyleSheet.create({
   methodCard: {
     marginBottom: spacing.md,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
   },
   methodLabel: {
     marginBottom: spacing.sm,
@@ -1296,7 +1432,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomPay: {
-    flex: 2,
+    flex: 1,
   },
   cancelBtn: {
     alignItems: 'center',

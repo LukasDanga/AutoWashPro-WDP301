@@ -57,10 +57,6 @@ const determineTier = (lifetimePoints) => {
   return 'bronze';
 };
 
-// Hàm lấy cấu hình hạng
-exports.getTierConfig = () => {
-  return Object.values(TIER_CONFIG).sort((a, b) => a.minPoints - b.minPoints);
-};
 
 /**
  * Xử lý khi thanh toán thành công: cộng điểm, ghi log, thăng hạng
@@ -74,7 +70,7 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
 
   user.loyaltyPoints += pointsEarned;
   user.lifetimePoints += pointsEarned;
-  
+
   // Gia hạn điểm 6 tháng
   const sixMonthsLater = new Date();
   sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);

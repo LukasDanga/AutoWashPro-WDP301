@@ -143,6 +143,12 @@ exports.getPaymentByBooking = catchAsync(async (req, res) => {
   success(res, payment, 'Payment retrieved');
 });
 
+exports.getPaymentById = catchAsync(async (req, res) => {
+  const payment = await paymentService.getPaymentById(req.params.id, req.userId, req.user.role);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
+  success(res, payment, 'Payment retrieved');
+});
+
 exports.getAllPayments = catchAsync(async (req, res) => {
   const result = await paymentService.getAllPayments(req.query, req.user.role, req.userId);
   success(res, result.data, 'Payments retrieved', 200, result.pagination);

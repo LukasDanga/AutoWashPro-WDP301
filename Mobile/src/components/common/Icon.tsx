@@ -245,6 +245,14 @@ export const Icons = {
   barcode: 'barcode',
   barcodeOutline: 'barcode-outline',
 
+  // Missing or legacy icons used in codebase
+  checkmarkDoneCircleOutline: 'checkmark-done-circle-outline',
+  informationCircleOutline: 'information-circle-outline',
+  closeCircleOutline: 'close-circle-outline',
+  shareOutline: 'share-outline',
+  chevronForward: 'chevron-forward',
+  helpCircleOutline: 'help-circle-outline',
+
   // Brand logos
   logoApple: 'logo-apple',
   logoFacebook: 'logo-facebook',

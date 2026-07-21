@@ -66,6 +66,9 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
   const [reviewNote, setReviewNote] = useState('');
   const st = STATUS_MAP[request.status] || { label: request.status, cls: 'bg-slate-100 text-slate-500' };
   const booking = request.bookingId || {};
+  const isDepositOnly = booking.paymentStatus === 'deposit_paid' || (booking.depositPaid && booking.paymentStatus !== 'paid');
+  const actualDeposit = booking.depositAmount || booking.deposit;
+  const refundAmount = isDepositOnly && actualDeposit ? actualDeposit : (booking.finalPrice ?? request.amount ?? request.refundAmount);
 
   return (
     <Modal title="Chi tiết yêu cầu hoàn tiền" onClose={onClose}>
@@ -76,7 +79,7 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
           </div>
           <div>
             <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              {formatCurrency(booking.finalPrice)}
+              {formatCurrency(refundAmount)}
               <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
             </h4>
             <p className="text-xs text-slate-500 mt-0.5">Gửi lúc {formatDateTime(request.createdAt)}</p>
@@ -280,6 +283,9 @@ export default function RefundRequests() {
               {requests.map((r) => {
                 const st = STATUS_MAP[r.status] || { label: r.status, cls: 'bg-slate-100 text-slate-500' };
                 const booking = r.bookingId || {};
+                const isDepositOnly = booking.paymentStatus === 'deposit_paid' || (booking.depositPaid && booking.paymentStatus !== 'paid');
+                const actualDeposit = booking.depositAmount || booking.deposit;
+                const refundAmount = isDepositOnly && actualDeposit ? actualDeposit : (booking.finalPrice ?? r.amount ?? r.refundAmount);
                 return (
                   <tr key={r._id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-3">
@@ -287,7 +293,7 @@ export default function RefundRequests() {
                       <div className="text-xs text-slate-400">{r.userId?.email || ''}</div>
                     </td>
                     <td className="px-4 py-3 max-w-xs truncate" title={r.reason}>{r.reason}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-emerald-600">{formatCurrency(booking.finalPrice)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-emerald-600">{formatCurrency(refundAmount)}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                     </td>

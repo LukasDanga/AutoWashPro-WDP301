@@ -13,13 +13,16 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useNotifications } from '../../src/contexts/NotificationContext';
 import { publicApi, branchApi, packageApi } from '../../src/api';
 import { Icon, Icons } from '../../src/components/common';
 import { formatCurrency } from '../../src/utils';
+import { getTierTheme } from '../../src/utils/tierHelper';
+import { shadows, layout } from '../../src/theme/spacing';
 import type { Branch, Package } from '../../src/types';
 
 const COLORS = {
@@ -57,19 +60,67 @@ const COLORS = {
   roseLight: '#fff1f2',
 };
 
-const TIER_LABELS: Record<string, string> = {
-  bronze: 'Đồng',
-  silver: 'Bạc',
-  gold: 'Vàng',
-  diamond: 'Kim cương',
-};
-
 const SPACING = {
   xs: 4,
   sm: 12,
   md: 16,
   lg: 24,
   xl: 32,
+};
+
+// ─── Loyalty Card — Premium tier-aware pill ─────────────────────────────────────
+interface LoyaltyCardProps {
+  icon: string;
+  label: string;
+  value: string;
+  textColor: string;
+  iconBgColor: string;
+  borderColor: string;
+  gradientHint: string;
+  accentBg: string;
+  onPress?: () => void;
+}
+
+const LoyaltyCard: React.FC<LoyaltyCardProps> = ({
+  icon, label, value, textColor, iconBgColor, borderColor, gradientHint, accentBg, onPress,
+}) => {
+  return (
+    <TouchableOpacity
+      style={[styles.loyaltyCard, { borderColor }]}
+      onPress={onPress}
+      activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+    >
+      <LinearGradient
+        colors={['#FFFFFF', gradientHint] as const}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.loyaltyGradient}
+      >
+        {/* Decorative accent blob for depth */}
+        <View style={[styles.loyaltyBlob, { backgroundColor: accentBg }]} />
+
+        {/* Tier-tinted icon container */}
+        <View style={[styles.loyaltyIcon, { backgroundColor: iconBgColor }]}>
+          <Icon name={icon as any} size={26} color={textColor} />
+        </View>
+
+        {/* Text column */}
+        <View style={styles.loyaltyTextCol}>
+          <Text style={styles.loyaltyLabel} numberOfLines={1}>{label}</Text>
+          <Text
+            style={[styles.loyaltyValue, { color: textColor }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {value}
+          </Text>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
 };
 
 export default function HomeScreen() {
@@ -80,6 +131,7 @@ export default function HomeScreen() {
   const [packages, setPackages] = useState<Package[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -98,6 +150,30 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const checkPending = async () => {
+        try {
+          const [extras, recurring] = await Promise.all([
+            AsyncStorage.getItem('aw_checkout_extras'),
+            AsyncStorage.getItem('aw_recurring_draft')
+          ]);
+          if (cancelled) return;
+          if (recurring) {
+            setPendingCheckoutUrl('/payment/checkout?type=recurring');
+          } else if (extras) {
+            setPendingCheckoutUrl('/payment/checkout');
+          } else {
+            setPendingCheckoutUrl(null);
+          }
+        } catch (e) {}
+      };
+      checkPending();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -118,6 +194,10 @@ export default function HomeScreen() {
       </SafeAreaView>
     );
   }
+
+  // Tier-aware theme — drives color, icon, and gradient for the rank card so
+  // Bronze renders in copper, Silver in slate, Gold in royal gold, Diamond in cyan.
+  const tierTheme = getTierTheme(user?.tier);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -164,12 +244,30 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Pending Checkout Banner */}
+        {pendingCheckoutUrl && (
+          <TouchableOpacity 
+            style={[styles.promoCard, { backgroundColor: COLORS.warningLight, borderColor: COLORS.warning, marginTop: SPACING.sm, marginBottom: 0 }]}
+            onPress={() => router.push(pendingCheckoutUrl as any)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.promoContent}>
+              <View style={[styles.promoTag, { backgroundColor: COLORS.warning }]}>
+                <Text style={[styles.promoTagText, { color: '#000' }]}>Chưa hoàn tất</Text>
+              </View>
+              <Text style={[styles.promoTitle, { color: COLORS.onSurface }]}>Tiếp tục thanh toán 💳</Text>
+              <Text style={[styles.promoSubtitle, { color: COLORS.onSurfaceVariant }]}>Bạn có một giao dịch thanh toán đang dở dang.</Text>
+            </View>
+            <Icon name={Icons.chevronRight} size={24} color={COLORS.onSurface} />
+          </TouchableOpacity>
+        )}
+
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <LinearGradient
-            colors={['#0066ff', '#00ccf9']}
+            colors={['#0050cb', '#0ea5e9']}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            end={{ x: 1, y: 1.2 }}
             style={styles.heroGradient}
           >
             <View style={styles.heroContent}>
@@ -195,34 +293,31 @@ export default function HomeScreen() {
           </LinearGradient>
         </View>
 
-        {/* Loyalty Cards */}
+        {/* Loyalty Cards — Premium tier-aware design */}
         {isAuthenticated && user ? (
           <View style={styles.loyaltyRow}>
-            {/* Points Card */}
-            <View style={styles.loyaltyCard}>
-              <View style={[styles.loyaltyIcon, { backgroundColor: COLORS.primaryFixedDim + '40' }]}>
-                <Icon name={Icons.sparkle} size={24} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.loyaltyLabel}>Điểm tích lũy</Text>
-                <Text style={[styles.loyaltyValue, { color: COLORS.primary }]}>
-                  {user.loyaltyPoints || 0}
-                </Text>
-              </View>
-            </View>
-
-            {/* Rank Card */}
-            <View style={styles.loyaltyCard}>
-              <View style={[styles.loyaltyIcon, { backgroundColor: COLORS.secondaryFixed + '40' }]}>
-                <Icon name={Icons.star} size={24} color={COLORS.secondary} />
-              </View>
-              <View>
-                <Text style={styles.loyaltyLabel}>Hạng</Text>
-                <Text style={[styles.loyaltyValue, { color: COLORS.secondary, textTransform: 'uppercase' }]}>
-                  {TIER_LABELS[user.tier?.toLowerCase()] || user.tier || 'Đồng'}
-                </Text>
-              </View>
-            </View>
+            <LoyaltyCard
+              icon={Icons.sparkle}
+              label="ĐIỂM TÍCH LŨY"
+              value={(user.loyaltyPoints || 0).toLocaleString('vi-VN')}
+              textColor={COLORS.primary}
+              iconBgColor={`${COLORS.primary}1A`}
+              borderColor={`${COLORS.primary}33`}
+              gradientHint="#EFF6FF"
+              accentBg={`${COLORS.primary}10`}
+              onPress={() => router.push('/(tabs)/rewards' as any)}
+            />
+            <LoyaltyCard
+              icon={tierTheme.iconName as any}
+              label="HẠNG THÀNH VIÊN"
+              value={tierTheme.label}
+              textColor={tierTheme.textColor}
+              iconBgColor={`${tierTheme.textColor}1A`}
+              borderColor={tierTheme.borderColor}
+              gradientHint={tierTheme.bgColor}
+              accentBg={`${tierTheme.textColor}10`}
+              onPress={() => router.push('/(tabs)/rewards' as any)}
+            />
           </View>
         ) : null}
 
@@ -232,9 +327,6 @@ export default function HomeScreen() {
             <Text style={styles.sectionTitle}>Dịch vụ nhanh</Text>
             <Text style={styles.sectionSubtitle}>Truy cập nhanh các tính năng</Text>
           </View>
-          <TouchableOpacity>
-            <Text style={styles.sectionAction}>Tất cả</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.servicesGrid}>
@@ -309,12 +401,35 @@ interface QuickServiceProps {
 }
 
 const QuickService: React.FC<QuickServiceProps> = ({ icon, label, bgColor, iconColor, onPress }) => {
+  // Derive a slightly darker tint for the gradient hint and a very subtle
+  // border that picks up the icon color, mirroring the loyalty card pattern.
+  const tintedBorder = `${iconColor}33`;
+  const blobBg = `${iconColor}12`;
+
   return (
-    <TouchableOpacity style={styles.serviceCard} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.serviceIcon, { backgroundColor: bgColor }]}>
-        <Icon name={icon} size={28} color={iconColor} />
-      </View>
-      <Text style={styles.serviceLabel}>{label}</Text>
+    <TouchableOpacity
+      style={[styles.serviceCard, { borderColor: tintedBorder }]}
+      onPress={onPress}
+      activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <LinearGradient
+        colors={['#FFFFFF', bgColor] as const}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.serviceGradient}
+      >
+        {/* Decorative accent blob for depth */}
+        <View style={[styles.serviceBlob, { backgroundColor: blobBg }]} />
+
+        {/* Icon container with tinted background */}
+        <View style={[styles.serviceIcon, { backgroundColor: `${iconColor}1A` }]}>
+          <Icon name={icon as any} size={26} color={iconColor} />
+        </View>
+
+        <Text style={styles.serviceLabel}>{label}</Text>
+      </LinearGradient>
     </TouchableOpacity>
   );
 };
@@ -374,8 +489,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 18,
     color: COLORS.primary,
   },
   notificationBtn: {
@@ -407,8 +522,9 @@ const styles = StyleSheet.create({
   heroCard: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.md,
-    borderRadius: 12,
+    borderRadius: layout.cardRadius,
     overflow: 'hidden',
+    ...shadows.md,
   },
   heroGradient: {
     minHeight: 180,
@@ -423,15 +539,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 22,
     color: COLORS.onPrimaryContainer,
-    lineHeight: 26,
+    lineHeight: 28,
   },
   heroSubtitle: {
-    fontSize: 13,
+    fontFamily: 'Outfit_400Regular',
+    fontSize: 14,
     color: 'rgba(255,255,255,0.9)',
-    lineHeight: 18,
+    lineHeight: 20,
   },
   heroBtn: {
     flexDirection: 'row',
@@ -445,8 +562,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   heroBtnText: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: COLORS.primary,
   },
   heroImageSection: {
@@ -472,30 +589,51 @@ const styles = StyleSheet.create({
   },
   loyaltyCard: {
     flex: 1,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  loyaltyGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceContainerLowest,
-    padding: SPACING.sm,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    gap: 10,
+    padding: 14,
+    gap: 12,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  loyaltyBlob: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    top: -28,
+    right: -28,
   },
   loyaltyIcon: {
     width: 48,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  loyaltyTextCol: {
+    flex: 1,
+    minWidth: 0,
+    zIndex: 1,
+  },
   loyaltyLabel: {
-    fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 10,
+    color: '#64748B',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   loyaltyValue: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 20,
-    fontWeight: '700',
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
 
   // Section Header
@@ -508,18 +646,19 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   sectionTitle: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 20,
-    fontWeight: '600',
     color: COLORS.onSurface,
   },
   sectionSubtitle: {
-    fontSize: 12,
+    fontFamily: 'Outfit_400Regular',
+    fontSize: 13,
     color: COLORS.onSurfaceVariant,
     marginTop: 2,
   },
   sectionAction: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: COLORS.primary,
   },
 
@@ -532,27 +671,41 @@ const styles = StyleSheet.create({
   },
   serviceCard: {
     width: '31%',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceContainerLowest,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
+    borderRadius: layout.cardRadius,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    marginBottom: SPACING.sm,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    ...shadows.md,
+  },
+  serviceGradient: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  serviceBlob: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    top: -24,
+    right: -22,
   },
   serviceIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
   },
   serviceLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 13,
     color: COLORS.onSurface,
     textAlign: 'center',
+    letterSpacing: 0.1,
   },
 
   // Promo Banner
@@ -562,11 +715,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.secondaryContainer + '15',
     borderWidth: 1,
     borderColor: COLORS.secondaryContainer + '30',
-    borderRadius: 12,
+    borderRadius: layout.cardRadius,
     padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    ...shadows.sm,
   },
   promoContent: {
     flex: 1,
@@ -580,19 +734,23 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   promoTagText: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 11,
-    fontWeight: '500',
     color: COLORS.onSecondaryContainer,
   },
   promoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 18,
     color: COLORS.onSecondaryContainer,
     marginTop: 8,
   },
   promoSubtitle: {
+    fontFamily: 'Outfit_400Regular',
     fontSize: 13,
-    color: COLORS.onSecondary,
+    // Default sits on the light cyan promoCard tint; onSurfaceVariant (#424656)
+    // gives a clean WCAG-AA contrast instead of washing out like onSecondary white.
+    color: COLORS.onSurfaceVariant,
+    marginTop: 2,
   },
   promoImageSection: {
     width: 80,

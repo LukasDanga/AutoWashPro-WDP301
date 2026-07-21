@@ -10,13 +10,18 @@
  *   - 100% semantic theme tokens (no hardcoded hex)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
-  FlatList,
+  SectionList,
   StyleSheet,
   RefreshControl,
   Text,
+  Pressable,
+  Animated,
+  PanResponder,
+  FlatList,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -34,10 +39,13 @@ import {
   ScreenContainer,
   AlertDialog,
   useToast,
+  BottomSheet,
+  Button,
 } from '../../src/components/common';
-import { useColors } from '../../src/theme/ThemeContext';
+import { useColors, useTheme } from '../../src/theme/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 import { typography } from '../../src/theme/typography';
-import { spacing, borderRadius } from '../../src/theme/spacing';
+import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import type { Notification, NotificationType } from '../../src/types';
 
 type NotificationVisual = {
@@ -68,6 +76,7 @@ const VISUALS: Record<NotificationType, NotificationVisual> = {
 export default function NotificationsScreen() {
   const router = useRouter();
   const colors = useColors();
+  const { isDark } = useTheme();
   const styles = createStyles(colors);
   const { isAuthenticated } = useAuth();
   const { markAsRead: contextMarkAsRead, markAllAsRead: contextMarkAllAsRead } =
@@ -78,6 +87,15 @@ export default function NotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+
+  const cardRefs = useRef<Record<string, NotificationCardRef | null>>({});
+
+  const closeAllSwipeables = useCallback(() => {
+    Object.values(cardRefs.current).forEach((cardRef) => {
+      cardRef?.close();
+    });
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -99,7 +117,10 @@ export default function NotificationsScreen() {
   useFocusEffect(
     useCallback(() => {
       if (isAuthenticated) fetchNotifications();
-    }, [isAuthenticated, fetchNotifications]),
+      return () => {
+        closeAllSwipeables();
+      };
+    }, [isAuthenticated, fetchNotifications, closeAllSwipeables]),
   );
 
   const onRefresh = useCallback(() => {
@@ -131,7 +152,7 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleDelete = (notification: Notification) => {
+  const handleDelete = (notification: Notification, onCancel?: () => void) => {
     AlertDialog.confirm(
       'Xóa thông báo',
       'Bạn có chắc chắn muốn xóa thông báo này? Hành động này không thể hoàn tác.',
@@ -142,17 +163,44 @@ export default function NotificationsScreen() {
           toast.success('Đã xóa', 'Thông báo đã được xóa khỏi danh sách');
         } catch (error: any) {
           AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể xóa');
+          onCancel?.();
         }
       },
-      undefined,
+      onCancel,
       'Xóa',
       'Hủy',
     );
   };
 
+  const handleDeleteAll = () => {
+    AlertDialog.confirm(
+      'Xóa tất cả',
+      'Bạn có chắc chắn muốn xóa toàn bộ thông báo không? Hành động này không thể hoàn tác.',
+      async () => {
+        try {
+          await notificationApi.deleteAllNotifications();
+          setNotifications([]);
+          toast.success('Thành công', 'Đã xóa tất cả thông báo');
+        } catch (error: any) {
+          AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể xóa thông báo');
+        }
+      },
+      undefined,
+      'Xóa tất cả',
+      'Hủy'
+    );
+  };
+
   const handleNotificationPress = async (notification: Notification) => {
+    closeAllSwipeables();
     await handleMarkAsRead(notification);
-    const data = notification.data || {};
+    setSelectedNotification(notification);
+  };
+
+  const handleDeepLink = () => {
+    if (!selectedNotification) return;
+    const data = selectedNotification.data || {};
+    setSelectedNotification(null);
     if (data.bookingId) {
       router.push(`/booking/${data.bookingId}` as any);
     } else if (data.voucherId) {
@@ -177,6 +225,39 @@ export default function NotificationsScreen() {
     if (days < 7) return `${days} ngày trước`;
     return date.toLocaleDateString('vi-VN');
   };
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const groupedNotifications = useMemo(() => {
+    const groups: { title: string; data: Notification[] }[] = [];
+    const map = new Map<string, Notification[]>();
+    
+    notifications.forEach(n => {
+      const d = new Date(n.createdAt);
+      const now = new Date();
+      
+      let key = d.toLocaleDateString('vi-VN');
+      
+      if (d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+        key = 'Hôm nay';
+      } else {
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth() && d.getFullYear() === yesterday.getFullYear()) {
+          key = 'Hôm qua';
+        }
+      }
+      
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(n);
+    });
+    
+    map.forEach((data, title) => {
+      groups.push({ title, data });
+    });
+    
+    return groups;
+  }, [notifications]);
 
   if (!isAuthenticated) {
     return (
@@ -208,49 +289,77 @@ export default function NotificationsScreen() {
     );
   }
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
 
   return (
     <ScreenContainer background="subtle">
       <Header
         showBack
         title="Thông báo"
-        subtitle={unreadCount > 0 ? `${unreadCount} chưa đọc` : undefined}
+        subtitle={unreadCount > 0 ? `● ${unreadCount} thông báo chưa đọc` : undefined}
         rightAction={
-          unreadCount > 0 ? (
-            <PressableScale
-              onPress={handleMarkAllRead}
-              disabled={isMarkingAllRead}
-              style={styles.markAllButton}
-              accessibilityLabel="Đánh dấu tất cả đã đọc"
-            >
-              <AppText
-                variant="bodySmall"
-                style={[
-                  styles.markAllText,
-                  isMarkingAllRead && { color: colors.textTertiary },
-                ]}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {unreadCount > 0 && (
+              <PressableScale
+                onPress={handleMarkAllRead}
+                disabled={isMarkingAllRead}
+                accessibilityLabel="Đánh dấu tất cả đã đọc"
               >
-                {isMarkingAllRead ? 'Đang xử lý…' : 'Đã đọc tất cả'}
-              </AppText>
-            </PressableScale>
-          ) : null
+                <Icon
+                  name={Icons.checkmarkDoneCircleOutline}
+                  size={24}
+                  color={isMarkingAllRead ? colors.textTertiary : colors.primary}
+                />
+              </PressableScale>
+            )}
+            {notifications.length > 0 && (
+              <PressableScale
+                onPress={() => toast.info('Nhấn giữ', 'Hãy nhấn giữ biểu tượng để xóa tất cả thông báo')}
+                onLongPress={handleDeleteAll}
+                accessibilityLabel="Nhấn giữ để xóa tất cả thông báo"
+              >
+                <Icon
+                  name={Icons.trashOutline}
+                  size={24}
+                  color={colors.error}
+                />
+              </PressableScale>
+            )}
+          </View>
         }
       />
 
       <FlatList
-        data={notifications}
-        renderItem={({ item }) => (
-          <NotificationCard
-            notification={item}
-            colors={colors}
-            styles={styles}
-            onPress={() => handleNotificationPress(item)}
-            onLongPress={() => handleDelete(item)}
-            formatTime={formatTime}
-          />
+        data={groupedNotifications}
+        keyExtractor={(item) => item.title}
+        onScrollBeginDrag={closeAllSwipeables}
+        renderItem={({ item: section }) => (
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>{section.title}</AppText>
+            </View>
+            <View style={styles.sectionCardList}>
+              {section.data.map((notification) => (
+                <NotificationCard
+                  key={notification._id}
+                  ref={(ref) => {
+                    if (ref) {
+                      cardRefs.current[notification._id] = ref;
+                    } else {
+                      delete cardRefs.current[notification._id];
+                    }
+                  }}
+                  notification={notification}
+                  colors={colors}
+                  styles={styles}
+                  onPress={() => handleNotificationPress(notification)}
+                  onDelete={(onCancel) => handleDelete(notification, onCancel)}
+                  formatTime={formatTime}
+                />
+              ))}
+            </View>
+          </View>
         )}
-        keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -261,17 +370,173 @@ export default function NotificationsScreen() {
             tintColor={colors.primary}
           />
         }
-        ItemSeparatorComponent={() => <View style={{ height: spacing.xs }} />}
         ListEmptyComponent={
           <EmptyState
             iconName={Icons.notificationsOutline}
-            title="Không có thông báo"
-            message="Bạn chưa có thông báo nào"
+            title="Chưa có thông báo"
+            message="Các thông báo về đặt lịch, thanh toán và check-in sẽ hiển thị tại đây."
           />
         }
       />
+
+      <BottomSheet
+        visible={!!selectedNotification}
+        onClose={() => setSelectedNotification(null)}
+        showCloseButton={false}
+        snapPoints={[0.6]}
+      >
+        {selectedNotification && (() => {
+          const visual = VISUALS[selectedNotification.type] || {
+            icon: Icons.notificationsOutline,
+            bg: 'primarySubtle',
+            fg: 'primary',
+          };
+          const hasLink = selectedNotification.data && (selectedNotification.data.bookingId || selectedNotification.data.voucherId || selectedNotification.data.paymentId || selectedNotification.data.url);
+          
+          const isLight = !isDark;
+          let gradientColors: string[] = isLight ? ['#F0F9FF', 'rgba(59, 130, 246, 0.1)'] : ['rgba(59, 130, 246, 0.15)', 'rgba(59, 130, 246, 0.05)'];
+          let iconBorderColor = isLight ? '#BAE6FD' : 'rgba(59, 130, 246, 0.4)';
+          let iconBg = isLight ? '#FFFFFF' : 'rgba(59, 130, 246, 0.2)';
+          let subtitleColor = isLight ? '#075985' : 'rgba(59, 130, 246, 0.9)';
+
+          if (visual.fg === 'success') {
+            gradientColors = isLight ? ['#F0FDF4', 'rgba(34, 197, 94, 0.1)'] : ['rgba(34, 197, 94, 0.15)', 'rgba(34, 197, 94, 0.05)'];
+            iconBorderColor = isLight ? '#BBF7D0' : 'rgba(34, 197, 94, 0.4)';
+            iconBg = isLight ? '#FFFFFF' : 'rgba(34, 197, 94, 0.2)';
+            subtitleColor = isLight ? '#166534' : 'rgba(34, 197, 94, 0.9)';
+          } else if (visual.fg === 'error') {
+            gradientColors = isLight ? ['#FEF2F2', 'rgba(239, 68, 68, 0.1)'] : ['rgba(239, 68, 68, 0.15)', 'rgba(239, 68, 68, 0.05)'];
+            iconBorderColor = isLight ? '#FECACA' : 'rgba(239, 68, 68, 0.4)';
+            iconBg = isLight ? '#FFFFFF' : 'rgba(239, 68, 68, 0.2)';
+            subtitleColor = isLight ? '#991B1B' : 'rgba(239, 68, 68, 0.9)';
+          } else if (visual.fg === 'warning') {
+            gradientColors = isLight ? ['#FFFBEB', 'rgba(245, 158, 11, 0.1)'] : ['rgba(245, 158, 11, 0.15)', 'rgba(245, 158, 11, 0.05)'];
+            iconBorderColor = isLight ? '#FDE68A' : 'rgba(245, 158, 11, 0.4)';
+            iconBg = isLight ? '#FFFFFF' : 'rgba(245, 158, 11, 0.2)';
+            subtitleColor = isLight ? '#92400E' : 'rgba(245, 158, 11, 0.9)';
+          }
+
+          return (
+            <View style={{ marginHorizontal: -20, marginTop: -8, paddingBottom: 16 }}>
+              {/* Premium Header */}
+              <LinearGradient
+                colors={gradientColors as any}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                  paddingVertical: 16,
+                  gap: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                }}
+              >
+                {/* Left Icon circle */}
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    backgroundColor: iconBg,
+                    borderColor: iconBorderColor,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name={visual.icon} size={22} color={(colors as any)[visual.fg]} />
+                </View>
+
+                {/* Title & Subtitle */}
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: 'Outfit_700Bold',
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: colors.textPrimary,
+                      marginBottom: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {selectedNotification.title}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: 'Outfit_500Medium',
+                      fontSize: 12,
+                      fontWeight: '500',
+                      color: subtitleColor,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {formatTime(selectedNotification.createdAt)}
+                  </Text>
+                </View>
+
+                {/* Right Close Button */}
+                <TouchableOpacity
+                  onPress={() => setSelectedNotification(null)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  accessibilityLabel="Đóng"
+                  accessibilityRole="button"
+                >
+                  <Icon name={Icons.close} size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </LinearGradient>
+
+              {/* Body Content */}
+              <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 16 }}>
+                <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.borderLight || '#F1F5F9' }}>
+                  <AppText variant="body" color="textSecondary" style={{ lineHeight: 22 }}>
+                    {selectedNotification.message}
+                  </AppText>
+                </View>
+
+                <View style={{ gap: 12, marginTop: 48 }}>
+                  {hasLink && (
+                    <Button
+                      variant="primary"
+                      title="Xem chi tiết"
+                      size="large"
+                      onPress={handleDeepLink}
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    title="Xóa thông báo"
+                    size="large"
+                    style={{ borderColor: colors.error }}
+                    textStyle={{ color: colors.error }}
+                    onPress={() => {
+                      handleDelete(selectedNotification);
+                      setSelectedNotification(null);
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+          );
+        })()}
+      </BottomSheet>
     </ScreenContainer>
   );
+}
+
+export interface NotificationCardRef {
+  close: () => void;
 }
 
 interface NotificationCardProps {
@@ -279,73 +544,188 @@ interface NotificationCardProps {
   colors: any;
   styles: any;
   onPress: () => void;
-  onLongPress: () => void;
+  onDelete: (onCancel?: () => void) => void;
   formatTime: (s: string) => string;
 }
 
-const NotificationCard: React.FC<NotificationCardProps> = ({
-  notification,
-  colors,
-  styles,
-  onPress,
-  onLongPress,
-  formatTime,
-}) => {
-  const visual = VISUALS[notification.type] || {
-    icon: Icons.notificationsOutline,
-    bg: 'primarySubtle',
-    fg: 'primary',
-  };
-  return (
-    <PressableScale
-      onPress={onPress}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${notification.title}. ${notification.message}`}
-      accessibilityHint={
-        notification.isRead ? 'Đã đọc, nhấn để xem chi tiết' : 'Chưa đọc, nhấn để xem chi tiết'
-      }
-    >
-      <View
-        style={[
-          styles.notificationCard,
-          !notification.isRead && {
-            backgroundColor: colors.primarySubtle,
-            borderLeftWidth: 3,
-            borderLeftColor: colors.primary,
-          },
-        ]}
-      >
-        <View style={[styles.notificationIcon, { backgroundColor: (colors as any)[visual.bg] }]}>
-          <Icon name={visual.icon} size={22} color={(colors as any)[visual.fg]} />
-        </View>
-        <View style={styles.notificationContent}>
-          <View style={styles.notificationHeader}>
-            <Text
-              style={[
-                styles.notificationTitle,
-                notification.isRead
-                  ? styles.notificationTitleRead
-                  : styles.notificationTitleUnread,
-              ]}
-              numberOfLines={2}
-            >
-              {notification.title}
-            </Text>
-            {!notification.isRead ? <View style={styles.unreadDot} /> : null}
-          </View>
-          <Text style={styles.notificationMessage} numberOfLines={2}>
-            {notification.message}
-          </Text>
-          <View style={styles.notificationFooter}>
-            <Icon name={Icons.timeOutline} size={11} color={colors.textTertiary} />
-            <Text style={styles.notificationTime}>{formatTime(notification.createdAt)}</Text>
-          </View>
-        </View>
-      </View>
-    </PressableScale>
-  );
-};
+const NotificationCard = React.forwardRef<NotificationCardRef, NotificationCardProps>(
+  ({ notification, colors, styles, onPress, onDelete, formatTime }, ref) => {
+    const [showDelete, setShowDelete] = useState(false);
+    const pan = useRef(new Animated.Value(0)).current;
+    const opacity = useRef(new Animated.Value(1)).current;
+    
+    const close = useCallback(() => {
+      Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start(() => {
+        setShowDelete(false);
+      });
+    }, [pan]);
+
+    React.useImperativeHandle(ref, () => ({
+      close,
+    }));
+
+    const latestProps = useRef({ onDelete, showDelete });
+    latestProps.current = { onDelete, showDelete };
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => 
+          Math.abs(gesture.dx) > 20 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onPanResponderMove: (_, gesture) => {
+          if (gesture.dx < 0) {
+            pan.setValue(gesture.dx);
+            if (!latestProps.current.showDelete && gesture.dx < -5) {
+              setShowDelete(true);
+            }
+          }
+        },
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx < -80 || gesture.vx < -1.5) {
+            Animated.parallel([
+              Animated.timing(pan, { toValue: -500, duration: 200, useNativeDriver: true }),
+              Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true })
+            ]).start(() => {
+              latestProps.current.onDelete(() => {
+                Animated.parallel([
+                  Animated.timing(pan, { toValue: 0, duration: 200, useNativeDriver: true }),
+                  Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true })
+                ]).start(() => {
+                  setShowDelete(false);
+                });
+              });
+            });
+          } else {
+            Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start(() => {
+              setShowDelete(false);
+            });
+          }
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start(() => {
+            setShowDelete(false);
+          });
+        },
+        onPanResponderTerminationRequest: () => true,
+      })
+    ).current;
+
+    const visual = VISUALS[notification.type] || {
+      icon: Icons.notificationsOutline,
+      bg: 'primarySubtle',
+      fg: 'primary',
+    };
+
+    const hasLink = !!(
+      notification.data &&
+      (notification.data.bookingId ||
+        notification.data.voucherId ||
+        notification.data.paymentId ||
+        notification.data.url)
+    );
+
+    return (
+      <Animated.View style={[styles.notificationCardContainer, { opacity }]}>
+        {showDelete && (
+          <Animated.View
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 80,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: colors.error,
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: 20,
+              opacity: pan.interpolate({
+                inputRange: [-30, -5, 0],
+                outputRange: [1, 0, 0],
+                extrapolate: 'clamp',
+              }),
+            }}
+          >
+            <Icon name={Icons.trashOutline} size={24} color="#fff" />
+          </Animated.View>
+        )}
+        <Animated.View style={{ transform: [{ translateX: pan }] }} {...panResponder.panHandlers}>
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`${notification.title}. ${notification.message}`}
+            accessibilityHint={
+              notification.isRead ? 'Đã đọc, nhấn để xem chi tiết' : 'Chưa đọc, nhấn để xem chi tiết'
+            }
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.notificationCardInner,
+                  pressed && {
+                    backgroundColor: colors.surfaceDark,
+                  },
+                  !notification.isRead && {
+                    backgroundColor: colors.primarySubtle,
+                  },
+                  pressed && !notification.isRead && {
+                    backgroundColor: colors.border,
+                  },
+                ]}
+              >
+                {/* Left vertical border indicator for unread state */}
+                {!notification.isRead && <View style={styles.unreadSideBar} />}
+
+                <View style={[styles.notificationIcon, { backgroundColor: (colors as any)[visual.bg] }]}>
+                  <Icon name={visual.icon} size={22} color={(colors as any)[visual.fg]} />
+                </View>
+
+                <View style={styles.notificationContent}>
+                  <View style={styles.notificationHeaderRow}>
+                    <Text
+                      style={[
+                        styles.notificationTitle,
+                        notification.isRead
+                          ? styles.notificationTitleRead
+                          : styles.notificationTitleUnread,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {notification.title}
+                    </Text>
+                    <Text style={styles.notificationTime}>
+                      {formatTime(notification.createdAt)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.notificationMessage} numberOfLines={2}>
+                    {notification.message}
+                  </Text>
+
+                  <View style={styles.notificationFooterRow}>
+                    {hasLink ? (
+                      <View style={styles.actionPill}>
+                        <Text style={styles.actionPillText}>Xem ngay</Text>
+                        <Icon name={Icons.chevronRight || 'chevron-forward'} size={12} color={colors.primary} />
+                      </View>
+                    ) : (
+                      <View />
+                    )}
+
+                    {!notification.isRead && (
+                      <View style={styles.unreadTag}>
+                        <Text style={styles.unreadTagText}>Mới</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
+          </Pressable>
+        </Animated.View>
+      </Animated.View>
+    );
+  }
+);
 
 const createStyles = (colors: any) =>
   StyleSheet.create({
@@ -361,44 +741,88 @@ const createStyles = (colors: any) =>
       fontWeight: '600',
     },
     listContent: {
-      padding: spacing.md,
+      paddingHorizontal: 16,
+      paddingTop: 8,
       paddingBottom: spacing.xxl,
     },
+    sectionContainer: {
+      marginBottom: 24,
+    },
+    sectionHeader: {
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    sectionCardList: {
+      gap: 0,
+    },
+    // Keep legacy styles as empty to avoid compile/runtime issues if used externally
+    sectionCard: {},
+    separator: {},
+    
     skeletonList: {
       padding: spacing.md,
     },
     skeletonCard: {
       backgroundColor: colors.surface,
-      marginBottom: spacing.xs,
-      borderRadius: borderRadius.lg,
+      marginBottom: 12,
+      borderRadius: 16,
     },
-    notificationCard: {
+    notificationCardContainer: {
+      marginBottom: 12,
+      borderRadius: 20,
+      backgroundColor: colors.borderLight, // outer bezel
+      padding: 1, // bezel line thickness
+      ...shadows.sm,
+    },
+    notificationCardInner: {
+      borderRadius: 19,
+      backgroundColor: colors.background, // inner core
+      paddingVertical: 14,
+      paddingHorizontal: 16,
       flexDirection: 'row',
-      backgroundColor: colors.surface,
-      borderRadius: borderRadius.lg,
-      padding: spacing.md,
+      alignItems: 'flex-start',
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    unreadSideBar: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 4,
+      backgroundColor: colors.primary,
+      borderTopLeftRadius: 19,
+      borderBottomLeftRadius: 19,
     },
     notificationIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: spacing.md,
+      marginRight: 12,
+      marginTop: 2,
     },
     notificationContent: {
       flex: 1,
     },
-    notificationHeader: {
+    notificationHeaderRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
       justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: 4,
-      gap: spacing.xs,
     },
     notificationTitle: {
-      fontSize: 14,
+      fontSize: 15,
       flex: 1,
+      marginRight: 8,
     },
     notificationTitleRead: {
       color: colors.textPrimary,
@@ -408,26 +832,47 @@ const createStyles = (colors: any) =>
       color: colors.textPrimary,
       fontWeight: '700',
     },
-    unreadDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: colors.primary,
-      marginTop: 6,
-    },
     notificationMessage: {
       fontSize: 13,
       color: colors.textSecondary,
-      marginBottom: spacing.xs,
       lineHeight: 18,
+      marginBottom: 6,
     },
-    notificationFooter: {
+    notificationFooterRow: {
       flexDirection: 'row',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      gap: 4,
+      marginTop: 2,
     },
     notificationTime: {
-      fontSize: 12,
+      fontSize: 11,
       color: colors.textTertiary,
+    },
+    actionPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.primarySubtle,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+    },
+    actionPillText: {
+      fontSize: 11,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    unreadTag: {
+      backgroundColor: colors.primary,
+      paddingVertical: 2,
+      paddingHorizontal: 6,
+      borderRadius: 8,
+    },
+    unreadTagText: {
+      fontSize: 10,
+      color: colors.textInverse,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
   });

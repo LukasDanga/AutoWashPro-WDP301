@@ -43,4 +43,6 @@ export { IconButton } from './IconButton';
 export { ListItem } from './ListItem';
 export { SegmentedControl } from './SegmentedControl';
 export { RatingSheet } from './RatingSheet';
+export { RefundStatusCard } from './RefundStatusCard';
 export { BottomNavBar } from './BottomNavBar';
+export { GoogleLogo } from './GoogleLogo';

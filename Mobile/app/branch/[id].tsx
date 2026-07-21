@@ -37,6 +37,8 @@ import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
+import { InAppDirectionsModal } from '../../src/components/common/InAppDirectionsModal';
+import { DirectionsOptionModal } from '../../src/components/common/DirectionsOptionModal';
 import type { Branch, Package } from '../../src/types';
 
 export default function BranchDetailScreen() {
@@ -49,6 +51,8 @@ export default function BranchDetailScreen() {
   const [packages, setPackages] = useState<Package[]>([]);
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showOptionModal, setShowOptionModal] = useState(false);
+  const [showInAppModal, setShowInAppModal] = useState(false);
 
   useEffect(() => {
     if (id) fetchBranchData();
@@ -65,8 +69,6 @@ export default function BranchDetailScreen() {
       ]);
       setBranch(branchData);
       setPackages(packagesData);
-      // voucherApi.getAvailableVouchers() now returns the normalised
-      // { tierExclusive, public, redeemable } shape (see src/api/voucher.ts).
       const voucherLists = vouchersData;
       const flat = [
         ...(voucherLists?.public        || []),
@@ -75,7 +77,7 @@ export default function BranchDetailScreen() {
       ];
       setVouchers(flat);
     } catch (error) {
-      console.error('Error fetching branch:', error);
+      console.error('Failed to fetch branch details:', error);
     } finally {
       setIsLoading(false);
     }
@@ -86,10 +88,7 @@ export default function BranchDetailScreen() {
   };
 
   const handleDirections = () => {
-    if (branch?.address) {
-      const query = encodeURIComponent(branch.address);
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-    }
+    setShowOptionModal(true);
   };
 
   const handleShare = async () => {
@@ -389,6 +388,21 @@ export default function BranchDetailScreen() {
           icon={<Icon name={Icons.add} size={20} color={colors.textInverse} />}
         />
       </View>
+
+      {/* Directions Option Selection Modal (Google Maps vs In-App) */}
+      <DirectionsOptionModal
+        visible={showOptionModal}
+        branch={branch}
+        onClose={() => setShowOptionModal(false)}
+        onSelectInApp={() => setShowInAppModal(true)}
+      />
+
+      {/* In-App Directions Navigation Modal */}
+      <InAppDirectionsModal
+        visible={showInAppModal}
+        branch={branch}
+        onClose={() => setShowInAppModal(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -574,6 +588,11 @@ const createStyles = (colors: any) =>
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: spacing.md,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 1,
     },
     infoContent: {
       flex: 1,
@@ -609,6 +628,11 @@ const createStyles = (colors: any) =>
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: spacing.md,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 1,
     },
     packageInfo: {
       flex: 1,
