@@ -6,22 +6,71 @@
 import { apiClient } from './client';
 import type { Voucher, UserVoucher, ValidateVoucherRequest, ReserveVoucherRequest } from '../types';
 
-// Get my vouchers (used vouchers)
-export const getMyVouchers = async (): Promise<UserVoucher[]> => {
-  const response = await apiClient.get('/vouchers/me');
-  return response.data;
-};
+// ────────────────────────────────────────────────────────────────────────────────
+// Response shapes
+// ────────────────────────────────────────────────────────────────────────────────
 
-// Get available vouchers for user (optionally filtered by branch)
-export const getAvailableVouchers = async (params?: {
-  branchId?: string;
-}): Promise<{
+/**
+ * Shape of `GET /api/vouchers/available` when NO `type` query param is sent.
+ * Backend returns snake_case keys: tier_exclusive / public / redeemable.
+ * The mobile code historically expected camelCase, which made the rewards tab
+ * silently empty. Normalise to camelCase in `getAvailableVouchers` below.
+ */
+export interface AvailableVouchersResponse {
+  user?: {
+    tier?: 'bronze' | 'silver' | 'gold' | 'diamond';
+    loyaltyPoints?: number;
+    lifetimePoints?: number;
+  };
+  tier_exclusive?: Voucher[];
+  public?: Voucher[];
+  redeemable?: Voucher[];
+}
+
+export interface AvailableVouchersNormalized {
   tierExclusive: Voucher[];
   public: Voucher[];
   redeemable: Voucher[];
-}> => {
+}
+
+/**
+ * Shape of `GET /api/vouchers/available?type=...` (paginated).
+ */
+export interface PaginatedVouchersResponse {
+  user?: AvailableVouchersResponse['user'];
+  data?: Voucher[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Get my vouchers (used vouchers — VoucherUsage history)
+export const getMyVouchers = async (params?: {
+  status?: string;
+  page?: number;
+  limit?: number;
+}): Promise<UserVoucher[]> => {
+  const response = await apiClient.get('/vouchers/me', { params });
+  // Backend may return either an array directly or { data, pagination }.
+  const payload = response.data as UserVoucher[] | { data?: UserVoucher[] };
+  return Array.isArray(payload) ? payload : payload.data || [];
+};
+
+// Get available vouchers for user (optionally filtered by branch).
+// Returns the normalized camelCase shape consumed by the UI.
+export const getAvailableVouchers = async (params?: {
+  branchId?: string;
+}): Promise<AvailableVouchersNormalized> => {
   const response = await apiClient.get('/vouchers/available', { params });
-  return response.data;
+  const data = (response.data || {}) as AvailableVouchersResponse;
+  return {
+    tierExclusive: data.tier_exclusive || [],
+    public:        data.public        || [],
+    redeemable:    data.redeemable    || [],
+  };
 };
 
 // Get voucher by ID

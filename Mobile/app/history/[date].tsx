@@ -6,6 +6,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { format, parseISO } from 'date-fns';
@@ -13,12 +15,14 @@ import { bookingApi } from '../../src/api';
 import {
   Text as AppText,
   Card,
+  Button,
   EmptyState,
   Icon,
   Icons,
   ScreenContainer,
   BookingStatusBadge,
   useToast,
+  PressableScale,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
@@ -55,6 +59,49 @@ export default function HistoryDayScreen() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Recurring group state — mirrors the history.tsx modal. Tapping a
+  // recurring row in the day view opens this modal directly instead of the
+  // single-booking detail screen so the user sees the whole recurring series
+  // (matching the FE HistoryPage behavior).
+  const [recurringGroupBookings, setRecurringGroupBookings] = useState<Booking[]>([]);
+  const [recurringGroupId, setRecurringGroupId] = useState<string | null>(null);
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [recurringLoading, setRecurringLoading] = useState(false);
+  const [recurringCancelLoading, setRecurringCancelLoading] = useState(false);
+
+  const loadRecurringGroup = useCallback(
+    async (groupId: string) => {
+      setRecurringGroupId(groupId);
+      setShowRecurringModal(true);
+      setRecurringLoading(true);
+      try {
+        const result = await bookingApi.getMyBookings({ recurringGroupId: groupId } as any);
+        setRecurringGroupBookings(result.data || []);
+      } catch {
+        toast.error('Không thể tải nhóm định kỳ');
+      } finally {
+        setRecurringLoading(false);
+      }
+    },
+    [toast],
+  );
+
+  const handleCancelRecurringGroup = useCallback(
+    async (groupId: string) => {
+      setRecurringCancelLoading(true);
+      try {
+        await bookingApi.cancelRecurringGroup(groupId);
+        toast.success('Đã hủy toàn bộ nhóm định kỳ');
+        setShowRecurringModal(false);
+      } catch {
+        toast.error('Hủy nhóm thất bại');
+      } finally {
+        setRecurringCancelLoading(false);
+      }
+    },
+    [toast],
+  );
 
   const fetchBookings = useCallback(async () => {
     try {
@@ -94,9 +141,25 @@ export default function HistoryDayScreen() {
     const packageName = typeof item.packageId === 'object' ? (item.packageId as any).name : 'Dịch vụ';
     const vehiclePlate = typeof item.vehicleId === 'object' ? (item.vehicleId as any).licensePlate : '';
 
+    // "ĐỊNH KỲ" badge — visual parity with the history list. The left border
+    // accent also flips to purple so the user can scan the day for recurring
+    // bookings quickly.
+    const isRecurring = !!(item as any).isRecurring || !!(item as any).recurringGroupId;
+
     return (
-      <TouchableOpacity activeOpacity={0.7} onPress={() => router.push(`/booking/${item._id}` as any)}>
-        <Card style={styles.card}>
+      <PressableScale
+        activeOpacity={0.7}
+        onPress={() => {
+          // Recurring rows auto-open the group modal (matches FE
+          // HistoryPage behavior). Single bookings navigate to detail.
+          if (isRecurring && (item as any).recurringGroupId) {
+            loadRecurringGroup((item as any).recurringGroupId);
+            return;
+          }
+          router.push(`/booking/${item._id}` as any);
+        }}
+      >
+        <Card style={[styles.card, isRecurring && { borderLeftWidth: 3, borderLeftColor: '#8B5CF6' }]}>
           {/* Top: package + status */}
           <View style={styles.cardTop}>
             <View style={styles.packageRow}>
@@ -106,6 +169,11 @@ export default function HistoryDayScreen() {
               <AppText variant="bodySmall" color="textPrimary" style={styles.packageName} numberOfLines={1}>
                 {packageName}
               </AppText>
+              {isRecurring ? (
+                <View style={{ backgroundColor: '#8B5CF6', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <AppText style={{ fontSize: 9, color: '#FFF', fontWeight: '900', letterSpacing: 0.5 }}>ĐỊNH KỲ</AppText>
+                </View>
+              ) : null}
             </View>
             <BookingStatusBadge status={item.status} />
           </View>
@@ -140,7 +208,7 @@ export default function HistoryDayScreen() {
             </AppText>
           </View>
         </Card>
-      </TouchableOpacity>
+      </PressableScale>
     );
   };
 
@@ -184,6 +252,53 @@ export default function HistoryDayScreen() {
           }
         />
       )}
+
+      {/* ═══ RECURRING GROUP MODAL ═══ */}
+      <Modal visible={showRecurringModal} transparent animationType="slide" onRequestClose={() => setShowRecurringModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowRecurringModal(false)}>
+          <TouchableOpacity style={[styles.modalContent, { backgroundColor: colors.background }]} activeOpacity={1}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+              <View>
+                <AppText variant="h4" color="textPrimary">Nhóm định kỳ</AppText>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+                  {recurringGroupBookings.length} lịch trong nhóm
+                </AppText>
+              </View>
+              <TouchableOpacity onPress={() => setShowRecurringModal(false)} style={[styles.modalCloseBtn, { backgroundColor: colors.surfaceDark }]} activeOpacity={0.7}>
+                <Icon name={Icons.close} size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.modalBody, { maxHeight: 400 }]}>
+              {recurringLoading ? (
+                <ActivityIndicator size="large" color={colors.primary} />
+              ) : (
+                <ScrollView>
+                  {recurringGroupBookings.map((b, i) => (
+                    <View key={b._id} style={styles.recurringRow}>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="bodySmall" color="textPrimary">
+                          Lần {i + 1}: {new Date(b.bookingDate).toLocaleDateString('vi-VN')} {b.startTime}
+                        </AppText>
+                      </View>
+                      <BookingStatusBadge status={b.status} />
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+            <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+              <Button
+                title={recurringCancelLoading ? 'Đang hủy...' : 'Hủy toàn bộ'}
+                onPress={() => recurringGroupId && handleCancelRecurringGroup(recurringGroupId)}
+                disabled={recurringCancelLoading}
+                style={{ backgroundColor: colors.error, marginBottom: spacing.sm }}
+                textStyle={{ color: '#FFF' }}
+              />
+              <Button title="Đóng" variant="outline" onPress={() => setShowRecurringModal(false)} />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -272,5 +387,47 @@ const styles = StyleSheet.create({
   price: {
     fontWeight: '800',
     fontSize: 15,
+  },
+  // Recurring group modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: borderRadius.xl + 4,
+    borderTopRightRadius: borderRadius.xl + 4,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    padding: spacing.lg,
+  },
+  modalFooter: {
+    padding: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: spacing.sm,
+  },
+  recurringRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
 });

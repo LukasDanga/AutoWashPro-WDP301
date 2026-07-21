@@ -15,3 +15,7 @@ export { slotPackApi } from './slotPack';
 export { notificationApi } from './notification';
 export { publicApi } from './public';
 export { chatbotApi } from './chatbot';
+export { feedbackApi } from './feedback';
+export type { FeedbackType, FeedbackPayload, FeedbackResponse } from './feedback';
+export { giftApi } from './gift';
+export { refundApi } from './refund';

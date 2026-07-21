@@ -34,12 +34,20 @@ import type { Notification, NotificationType } from '../../src/types';
 const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   booking_created: Icons.calendarOutline,
   booking_confirmed: 'checkmark-circle-outline',
-  booking_reminder: Icons.timeOutline,
+  booking_cancelled: 'close-circle-outline',
   booking_completed: 'sparkles-outline',
+  booking_reminder: Icons.timeOutline,
+  booking_at_risk: 'warning-outline',
+  booking_grace_extended: 'hourglass-outline',
+  payment_received: Icons.walletOutline,
+  payment_confirmed: 'checkmark-done-circle-outline',
   payment_success: Icons.walletOutline,
+  refund: 'cash-outline',
+  voucher: 'pricetag-outline',
   voucher_expiring: 'pricetag-outline',
   points_earned: Icons.star,
   promotion: 'sparkles-outline',
+  system: 'information-circle-outline',
 };
 
 export default function NotificationDetailScreen() {
@@ -143,12 +151,20 @@ export default function NotificationDetailScreen() {
     const labels: Record<NotificationType, string> = {
       booking_created: 'Đặt lịch mới',
       booking_confirmed: 'Xác nhận đặt lịch',
-      booking_reminder: 'Nhắc nhở đặt lịch',
+      booking_cancelled: 'Đã hủy đặt lịch',
       booking_completed: 'Hoàn thành dịch vụ',
+      booking_reminder: 'Nhắc nhở đặt lịch',
+      booking_at_risk: 'Nguy cơ hủy lịch',
+      booking_grace_extended: 'Gia hạn thời gian',
+      payment_received: 'Đã nhận thanh toán',
+      payment_confirmed: 'Xác nhận thanh toán',
       payment_success: 'Thanh toán thành công',
+      refund: 'Hoàn tiền',
+      voucher: 'Voucher mới',
       voucher_expiring: 'Voucher sắp hết hạn',
       points_earned: 'Tích điểm',
       promotion: 'Khuyến mãi',
+      system: 'Hệ thống',
     };
     return labels[type] || 'Thông báo';
   };

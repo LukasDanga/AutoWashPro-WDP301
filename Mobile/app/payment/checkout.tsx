@@ -140,7 +140,7 @@ export default function PaymentCheckoutScreen() {
     const interval = setInterval(async () => {
       try {
         const p = await paymentApi.getPaymentByBooking(bookingId);
-        if (p?.status === 'completed' || (p as any)?.status === 'paid') {
+        if (p?.status === 'paid' || (p as any)?.status === 'completed') {
           clearInterval(interval);
           setStep('success');
         }

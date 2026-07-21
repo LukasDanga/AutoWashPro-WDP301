@@ -1,6 +1,11 @@
 /**
  * AutoWashPro Feedback Screen
- * App feedback form with vector icons
+ * App feedback form with vector icons.
+ *
+ * Submits to `POST /api/feedbacks` (see `src/api/feedback.ts`). While the
+ * backend endpoint is missing the request will fail with 404; we surface that
+ * via AlertDialog.error instead of the previous `setTimeout` mock that
+ * silently pretended the submission succeeded.
  */
 
 import React, { useState } from 'react';
@@ -13,6 +18,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { feedbackApi, type FeedbackType } from '../../src/api';
 import {
   Text as AppText,
   Card,
@@ -22,16 +28,17 @@ import {
   ScreenContainer,
   Header,
   Input,
+  AlertDialog,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing } from '../../src/theme/spacing';
 
-const FEEDBACK_TYPES = [
-  { id: 'bug', icon: 'bug-outline' as const, label: 'Báo lỗi' },
-  { id: 'suggestion', icon: 'bulb-outline' as const, label: 'Đề xuất' },
-  { id: 'complaint', icon: 'sad-outline' as const, label: 'Khiếu nại' },
-  { id: 'praise', icon: 'happy-outline' as const, label: 'Khen ngợi' },
-  { id: 'other', icon: 'chatbubbles-outline' as const, label: 'Khác' },
+const FEEDBACK_TYPES: { id: FeedbackType; icon: keyof typeof Icons; label: string }[] = [
+  { id: 'bug',        icon: 'bugOutline',    label: 'Báo lỗi' },
+  { id: 'suggestion', icon: 'bulbOutline',   label: 'Đề xuất' },
+  { id: 'complaint',  icon: 'sadOutline',    label: 'Khiếu nại' },
+  { id: 'praise',     icon: 'happyOutline',  label: 'Khen ngợi' },
+  { id: 'other',      icon: 'chatOutline',   label: 'Khác' },
 ];
 
 export default function FeedbackScreen() {
@@ -39,7 +46,7 @@ export default function FeedbackScreen() {
   const colors = useColors();
   const { user, isAuthenticated } = useAuth();
 
-  const [feedbackType, setFeedbackType] = useState<string | null>(null);
+  const [feedbackType, setFeedbackType] = useState<FeedbackType | null>(null);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [contactPermission, setContactPermission] = useState(false);
@@ -47,17 +54,34 @@ export default function FeedbackScreen() {
   const [rating, setRating] = useState(0);
 
   const handleSubmit = async () => {
-    if (!feedbackType) {
-      return;
-    }
-    if (!message.trim()) {
-      return;
-    }
+    if (!feedbackType) return;
+    if (!message.trim()) return;
+
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      await feedbackApi.submit({
+        type: feedbackType,
+        subject: subject.trim() || undefined,
+        message: message.trim(),
+        rating: rating > 0 ? rating : undefined,
+        contactPermission,
+      });
+      AlertDialog.show({
+        title: 'Cảm ơn bạn!',
+        message: 'Phản hồi của bạn đã được gửi đến đội ngũ AutoWashPro.',
+        variant: 'success',
+        actions: [{ text: 'Đóng', onPress: () => router.back() }],
+      });
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const fallback =
+        status === 404
+          ? 'Tính năng đang phát triển. Vui lòng thử lại sau.'
+          : 'Không thể gửi phản hồi. Vui lòng thử lại.';
+      AlertDialog.error('Lỗi', error?.response?.data?.message || fallback);
+    } finally {
       setIsSubmitting(false);
-      router.back();
-    }, 1500);
+    }
   };
 
   return (

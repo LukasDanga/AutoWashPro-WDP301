@@ -1,7 +1,17 @@
 const mongoose = require('mongoose');
 const { Vehicle } = require('../models');
+const { VEHICLE_TYPE } = require('../config/constants');
+
+const SUPPORTED_TYPES = Object.values(VEHICLE_TYPE);
 
 exports.addVehicle = async (userId, data) => {
+  if (!SUPPORTED_TYPES.includes(data.vehicleType)) {
+    throw Object.assign(
+      new Error(`vehicleType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
+      { statusCode: 400, code: 'INVALID_VEHICLE_TYPE' }
+    );
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -42,6 +52,13 @@ exports.getVehicleById = async (vehicleId, userId) => {
 };
 
 exports.updateVehicle = async (vehicleId, userId, updates) => {
+  if (updates.vehicleType !== undefined && !SUPPORTED_TYPES.includes(updates.vehicleType)) {
+    throw Object.assign(
+      new Error(`vehicleType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
+      { statusCode: 400, code: 'INVALID_VEHICLE_TYPE' }
+    );
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 

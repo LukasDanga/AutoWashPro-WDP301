@@ -22,6 +22,7 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (identifier: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -111,6 +112,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    setState((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      const result = await authApi.loginWithGoogle(idToken);
+      const { accessToken, refreshToken, user } = result;
+
+      await storeTokens(accessToken, refreshToken);
+
+      setState({
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+        isInitialized: true,
+      });
+
+      router.replace('/(tabs)');
+    } catch (error) {
+      setState((prev) => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  }, []);
+
   const register = useCallback(async (data: RegisterRequest) => {
     setState((prev) => ({ ...prev, isLoading: true }));
 
@@ -173,8 +197,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       return true;
-    } catch (error) {
-      console.error('Token refresh error:', error);
+    } catch (error: any) {
+      console.warn('Token refresh error:', error.message || error);
       return false;
     }
   }, []);
@@ -182,6 +206,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const value: AuthContextType = {
     ...state,
     login,
+    loginWithGoogle,
     register,
     logout,
     updateProfile,

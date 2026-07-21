@@ -7,6 +7,8 @@ import {
   Text,
   ActivityIndicator,
   SectionList,
+  Alert,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { voucherApi } from '../../src/api';
@@ -34,9 +36,9 @@ type VoucherItem = {
   value?: number;
   maxDiscount?: number;
   minOrder?: number;
-  expiresAt?: string;
-  validTo?: string;
-  tierExclusive?: string;
+  startDate?: string;
+  endDate?: string;
+  applicableTiers?: string[];
   requiredPoints?: number;
 };
 
@@ -55,6 +57,9 @@ export default function VoucherPickerScreen() {
   const [redeemableVouchers, setRedeemableVouchers] = useState<VoucherItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState('');
+  const [manualMsg, setManualMsg] = useState('');
+  const [manualLoading, setManualLoading] = useState(false);
 
   useEffect(() => {
     loadVouchers();
@@ -63,13 +68,14 @@ export default function VoucherPickerScreen() {
   const loadVouchers = async () => {
     setIsLoading(true);
     try {
+      // voucherApi.getAvailableVouchers() now normalises backend snake_case
+      // (`tier_exclusive` / `public` / `redeemable`) into camelCase keys.
       const res = await voucherApi.getAvailableVouchers(
         branchId ? { branchId } : undefined,
       );
-      const data = res as any;
-      setPublicVouchers(data?.public || []);
-      setTierVouchers(data?.tier_exclusive || []);
-      setRedeemableVouchers(data?.redeemable || []);
+      setPublicVouchers(res.public || []);
+      setTierVouchers(res.tierExclusive || []);
+      setRedeemableVouchers(res.redeemable || []);
     } catch {
       setPublicVouchers([]);
       setTierVouchers([]);
@@ -83,9 +89,66 @@ export default function VoucherPickerScreen() {
     const savings = item.type === 'percentage'
       ? Math.min(Math.floor(orderAmount * item.value! / 100), item.maxDiscount || Infinity)
       : Math.min(item.value || 0, orderAmount);
-    setSelectedCode(item.code);
-    setPendingVoucher({ code: item.code, name: item.name || item.code, discount: savings });
-    setTimeout(() => router.back(), 150);
+
+    const applyVoucher = () => {
+      setSelectedCode(item.code);
+      setPendingVoucher({ code: item.code, name: item.name || item.code, discount: savings });
+      setTimeout(() => router.back(), 150);
+    };
+
+    if (item.requiredPoints && item.requiredPoints > 0) {
+      Alert.alert(
+        'Đổi điểm',
+        `Bạn muốn đổi ${item.requiredPoints} điểm lấy voucher này?`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Đổi điểm',
+            onPress: async () => {
+              setIsLoading(true);
+              try {
+                await voucherApi.redeemPoints(item._id);
+                applyVoucher();
+              } catch (error) {
+                Alert.alert('Lỗi', 'Đổi điểm thất bại hoặc không đủ điểm.');
+              } finally {
+                setIsLoading(false);
+              }
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    applyVoucher();
+  };
+
+  const applyManualCode = async () => {
+    const code = manualCode.trim().toUpperCase();
+    if (!code) {
+      setManualMsg('Nhập mã coupon để áp dụng.');
+      return;
+    }
+    setManualLoading(true);
+    setManualMsg('');
+    try {
+      const voucher = await voucherApi.getVoucherByCode(code);
+      if (!voucher) throw new Error('Mã không hợp lệ');
+      // Calculate savings the same way as handleSelect
+      const savings = voucher.type === 'percentage'
+        ? Math.min(Math.floor(orderAmount * (voucher.value || 0) / 100), voucher.maxDiscount || Infinity)
+        : Math.min(voucher.value || 0, orderAmount);
+      setSelectedCode(voucher.code);
+      setPendingVoucher({ code: voucher.code, name: voucher.name || voucher.code, discount: savings });
+      setManualMsg('✓ Đã áp dụng mã coupon!');
+      setManualCode('');
+      setTimeout(() => router.back(), 500);
+    } catch (error: any) {
+      setManualMsg(error?.response?.data?.message || error?.message || 'Mã không hợp lệ');
+    } finally {
+      setManualLoading(false);
+    }
   };
 
   const sections = useMemo(() => {
@@ -108,8 +171,8 @@ export default function VoucherPickerScreen() {
     const savings = item.type === 'percentage'
       ? Math.min(Math.floor(orderAmount * item.value! / 100), item.maxDiscount || Infinity)
       : Math.min(item.value || 0, orderAmount);
-    const expiryText = item.expiresAt || item.validTo
-      ? `HSD: ${new Date(item.expiresAt || item.validTo!).toLocaleDateString('vi-VN')}`
+    const expiryText = item.endDate
+      ? `HSD: ${new Date(item.endDate).toLocaleDateString('vi-VN')}`
       : null;
 
     return (
@@ -197,6 +260,48 @@ export default function VoucherPickerScreen() {
           message="Chi nhánh này hiện chưa có voucher khả dụng cho bạn"
         />
       ) : (
+        <>
+        {/* Manual coupon code input — web parity (VoucherPicker.jsx:316-351) */}
+        <View style={styles.manualCodeRow}>
+          <TextInput
+            value={manualCode}
+            onChangeText={(t) => { setManualCode(t.toUpperCase()); setManualMsg(''); }}
+            placeholder="NHẬP MÃ COUPON..."
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="characters"
+            returnKeyType="go"
+            onSubmitEditing={applyManualCode}
+            style={[
+              styles.manualCodeInput,
+              { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary },
+            ]}
+          />
+          <TouchableOpacity
+            onPress={applyManualCode}
+            disabled={manualLoading}
+            style={[styles.manualCodeBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.manualCodeBtnText}>
+              {manualLoading ? '...' : 'Áp dụng'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {manualMsg ? (
+          <View style={[
+            styles.manualMsgBox,
+            {
+              backgroundColor: manualMsg.startsWith('✓') ? '#dcfce7' : '#fef2f2',
+              borderColor: manualMsg.startsWith('✓') ? '#bbf7d0' : '#fecaca',
+            },
+          ]}>
+            <Text style={[
+              styles.manualMsgText,
+              { color: manualMsg.startsWith('✓') ? '#16a34a' : '#dc2626' },
+            ]}>
+              {manualMsg}
+            </Text>
+          </View>
+        ) : null}
         <SectionList
           sections={sections}
           keyExtractor={(item) => item._id}
@@ -209,12 +314,53 @@ export default function VoucherPickerScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
+        </>
       )}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  manualCodeRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  manualCodeInput: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  manualCodeBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  manualCodeBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  manualMsgBox: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  manualMsgText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

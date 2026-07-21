@@ -18,7 +18,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { voucherApi } from '../../src/api';
+import { voucherApi, giftApi } from '../../src/api';
 import {
   Text as AppText,
   Card,
@@ -36,7 +36,7 @@ import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
-import type { Voucher, UserVoucher, UserTier } from '../../src/types';
+import type { Voucher, UserVoucher, UserTier, Gift } from '../../src/types';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 type TabKey = 'available' | 'my';
@@ -265,7 +265,8 @@ const RewardHeroCard: React.FC<{
   points: number;
   pointsToNext: ReturnType<typeof computePointsToNext>;
   onRedeem: () => void;
-}> = ({ tier, points, pointsToNext, onRedeem }) => {
+  onSpin: () => void;
+}> = ({ tier, points, pointsToNext, onRedeem, onSpin }) => {
   const colors = useColors();
   return (
     <LinearGradient
@@ -313,6 +314,17 @@ const RewardHeroCard: React.FC<{
         <Icon name={Icons.refreshOutline} size={18} color={colors.primary} />
         <Text style={[hero.redeemText, { color: colors.primary }]}>Đổi điểm lấy voucher</Text>
         <Icon name={Icons.forward} size={16} color={colors.primary} />
+      </PressableScale>
+
+      {/* Spin CTA — opens the lucky wheel (mirrors Web GiftStorePage "Vòng quay") */}
+      <PressableScale
+        style={[hero.redeemBtn, hero.spinBtn]}
+        onPress={onSpin}
+        accessibilityLabel="Vòng quay may mắn"
+      >
+        <Icon name={Icons.sparkle} size={18} color="#FFFFFF" />
+        <Text style={[hero.redeemText, hero.spinBtnText]}>Vòng quay may mắn</Text>
+        <Icon name={Icons.forward} size={16} color="#FFFFFF" />
       </PressableScale>
     </LinearGradient>
   );
@@ -409,6 +421,15 @@ const hero = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  spinBtn: {
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  spinBtnText: {
+    color: '#FFFFFF',
+  },
 });
 
 // ─── Section Header ────────────────────────────────────────────────────────────
@@ -462,9 +483,9 @@ const VoucherCard: React.FC<{
         >
           <View style={vc.discountBlob} />
           <Text style={vc.discountValue}>
-            {voucher.discountType === 'percent'
-              ? `${voucher.discountValue}%`
-              : formatCurrency(voucher.discountValue)}
+            {voucher.type === 'percentage'
+              ? `${voucher.value}%`
+              : formatCurrency(voucher.value)}
           </Text>
           <Text style={vc.discountLabel}>GIẢM</Text>
           {/* Perforation notches */}
@@ -478,19 +499,19 @@ const VoucherCard: React.FC<{
         {/* Right: details */}
         <View style={vc.infoSection}>
           <Text style={vc.voucherName} numberOfLines={1}>
-            {voucher.title || voucher.code}
+            {voucher.name || voucher.code}
           </Text>
           <Text style={vc.description} numberOfLines={2}>
             {voucher.description || `Mã: ${voucher.code}`}
           </Text>
 
           {/* Meta row */}
-          {(voucher.minOrderValue && voucher.minOrderValue > 0) || voucher.maxDiscount ? (
+          {(voucher.minOrder && voucher.minOrder > 0) || voucher.maxDiscount ? (
             <View style={vc.metaRow}>
-              {voucher.minOrderValue && voucher.minOrderValue > 0 ? (
+              {voucher.minOrder && voucher.minOrder > 0 ? (
                 <View style={vc.metaItem}>
                   <Icon name={Icons.cartOutline} size={12} color="#94A3B8" />
-                  <Text style={vc.metaText}>Tối thiểu {formatCurrency(voucher.minOrderValue)}</Text>
+                  <Text style={vc.metaText}>Tối thiểu {formatCurrency(voucher.minOrder)}</Text>
                 </View>
               ) : null}
               {voucher.maxDiscount ? (
@@ -506,7 +527,7 @@ const VoucherCard: React.FC<{
           <View style={vc.footer}>
             <View style={vc.expiryRow}>
               <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
-              <Text style={vc.expiry}>HSD: {formatDate(voucher.expiresAt)}</Text>
+              <Text style={vc.expiry}>HSD: {formatDate(voucher.endDate)}</Text>
             </View>
             {isRedeemable && voucher.requiredPoints ? (
               <Badge label={`${voucher.requiredPoints} điểm`} variant="warning" size="small" />
@@ -536,9 +557,9 @@ const MyVoucherCard: React.FC<{
           ]}
         >
           <Text style={vc.discountValue}>
-            {voucher.discountType === 'percent'
-              ? `${voucher.discountValue}%`
-              : formatCurrency(voucher.discountValue)}
+            {voucher.type === 'percentage'
+              ? `${voucher.value}%`
+              : formatCurrency(voucher.value)}
           </Text>
           <Text style={vc.discountLabel}>{isUsed ? 'ĐÃ DÙNG' : 'GIẢM'}</Text>
           <View style={[vc.notchTop, { backgroundColor: colors.background }]} />
@@ -550,7 +571,7 @@ const MyVoucherCard: React.FC<{
         {/* Right: details */}
         <View style={vc.infoSection}>
           <View style={vc.myVoucherHeader}>
-            <Text style={vc.voucherName} numberOfLines={1}>{voucher.title || voucher.code}</Text>
+            <Text style={vc.voucherName} numberOfLines={1}>{voucher.name || voucher.code}</Text>
             <Badge label={isUsed ? 'Đã dùng' : 'Còn hạn'} variant={isUsed ? 'default' : 'success'} size="small" />
           </View>
           <Text style={vc.description} numberOfLines={1}>Mã: {voucher.code}</Text>
@@ -559,7 +580,7 @@ const MyVoucherCard: React.FC<{
           ) : null}
           <View style={vc.expiryRow}>
             <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
-            <Text style={vc.expiry}>HSD: {formatDate(voucher.expiresAt)}</Text>
+            <Text style={vc.expiry}>HSD: {formatDate(voucher.endDate)}</Text>
           </View>
         </View>
       </View>
@@ -708,18 +729,24 @@ export default function RewardsScreen() {
     redeemable: Voucher[];
   } | null>(null);
   const [myVouchers, setMyVouchers]   = useState<UserVoucher[]>([]);
+  const [gifts, setGifts]             = useState<Gift[]>([]);
   const [isLoading, setIsLoading]     = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) { setIsLoading(false); return; }
     try {
-      const [availableRes, myRes] = await Promise.all([
+      const [availableRes, myRes, giftsRes] = await Promise.all([
         voucherApi.getAvailableVouchers(),
         voucherApi.getMyVouchers(),
+        // Public gifts power the "Phần thưởng vòng quay" preview strip below.
+        // Endpoint is unauthenticated; safe to call even if the user is a
+        // guest (response is empty in that case anyway).
+        giftApi.getPublicGifts().catch(() => [] as Gift[]),
       ]);
       setAvailableVouchers(availableRes);
       setMyVouchers(myRes);
+      setGifts(Array.isArray(giftsRes) ? giftsRes : []);
     } catch (error) {
       console.error('Error fetching vouchers:', error);
     } finally {
@@ -813,11 +840,82 @@ export default function RewardsScreen() {
           points={points}
           pointsToNext={pointsToNext}
           onRedeem={() => setActiveTab('available')}
+          onSpin={() => router.push('/gifts/spin' as any)}
         />
 
         {/* ── Tier Selector ── */}
         <SectionHeader title="Hạng thành viên" subtitle="Tích điểm để nâng hạng đặc quyền" />
         <TierSelector currentTier={tier} />
+
+        {/* ── Prize Preview — shows the gifts the user can win on the wheel.
+              Mirrors FE GiftStoreSection "Vòng quay" tab: each gift becomes a
+              card with a probability pill so the user knows what's at stake
+              before tapping "Vòng quay may mắn". Skips render if the BE
+              returned no active gifts. ── */}
+        {gifts.length > 0 && (
+          <>
+            <SectionHeader
+              title="Phần thưởng vòng quay"
+              subtitle={`${gifts.length} giải đang chờ bạn`}
+              action={
+                <PressableScale
+                  onPress={() => router.push('/gifts/spin' as any)}
+                  style={styles.viewAllBtn}
+                  accessibilityLabel="Mở vòng quay may mắn"
+                >
+                  <Text style={[styles.viewAllText, { color: colors.primary }]}>Quay ngay</Text>
+                  <Icon name={Icons.forward} size={14} color={colors.primary} />
+                </PressableScale>
+              }
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.prizeScroll}
+            >
+              {gifts.map((g) => {
+                const isFixed = g.type === 'fixed';
+                const isPercent = g.type === 'percentage';
+                const labelText =
+                  g.type === 'none'
+                    ? (g.name || 'May mắn')
+                    : isPercent
+                      ? `Giảm ${g.value}%`
+                      : isFixed
+                        ? `Giảm ${formatCurrency(g.value ?? 0)}`
+                        : (g.name || 'Phần thưởng');
+                const probability = typeof g.probability === 'number' ? g.probability : null;
+                const accent = g.color || colors.primary;
+                return (
+                  <View
+                    key={g._id || g.id}
+                    style={[styles.prizeCard, { borderColor: colors.border, backgroundColor: colors.background }]}
+                  >
+                    <View style={[styles.prizeAccent, { backgroundColor: accent }]} />
+                    <View style={styles.prizeBody}>
+                      <AppText variant="label" color="textTertiary" style={styles.prizeLabel}>
+                        Phần thưởng
+                      </AppText>
+                      <AppText variant="h4" color="textPrimary" numberOfLines={1} style={styles.prizeTitle}>
+                        {labelText}
+                      </AppText>
+                      {g.description ? (
+                        <AppText variant="caption" color="textSecondary" numberOfLines={2} style={styles.prizeDesc}>
+                          {g.description}
+                        </AppText>
+                      ) : null}
+                      {probability !== null ? (
+                        <View style={[styles.probPill, { backgroundColor: `${accent}22` }]}>
+                          <Text style={[styles.probText, { color: accent }]}>Tỉ lệ {probability}%</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
 
         {/* ── Coupon Section ── */}
         <SectionHeader
@@ -941,4 +1039,51 @@ const styles = StyleSheet.create({
   skeletonHeader: { padding: 20 },
   skeletonList:   { paddingHorizontal: 20 },
   skeletonCard:   { marginBottom: 12, borderRadius: 16 },
+
+  // Prize preview (gifts/spin wheel)
+  prizeScroll: {
+    paddingHorizontal: 20,
+    gap: spacing.sm,
+    paddingBottom: 4,
+  },
+  prizeCard: {
+    width: 200,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    ...shadows.sm,
+  },
+  prizeAccent: {
+    width: 6,
+  },
+  prizeBody: {
+    flex: 1,
+    padding: 12,
+    gap: 4,
+  },
+  prizeLabel: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  prizeTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  prizeDesc: {
+    lineHeight: 16,
+  },
+  probPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 6,
+  },
+  probText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });

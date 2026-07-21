@@ -49,12 +49,20 @@ type NotificationVisual = {
 const VISUALS: Record<NotificationType, NotificationVisual> = {
   booking_created: { icon: Icons.calendarOutline, bg: 'primarySubtle', fg: 'primary' },
   booking_confirmed: { icon: Icons.checkmark, bg: 'successLight', fg: 'success' },
-  booking_reminder: { icon: Icons.timeOutline, bg: 'warningLight', fg: 'warning' },
+  booking_cancelled: { icon: Icons.closeCircleOutline || 'close-circle-outline', bg: 'errorLight', fg: 'error' },
   booking_completed: { icon: Icons.sparkle, bg: 'successLight', fg: 'success' },
+  booking_reminder: { icon: Icons.timeOutline, bg: 'warningLight', fg: 'warning' },
+  booking_at_risk: { icon: Icons.warningOutline || 'warning-outline', bg: 'errorLight', fg: 'error' },
+  booking_grace_extended: { icon: Icons.timeOutline, bg: 'warningLight', fg: 'warning' },
+  payment_received: { icon: Icons.walletOutline || 'wallet-outline', bg: 'successLight', fg: 'success' },
+  payment_confirmed: { icon: Icons.checkmarkDoneCircleOutline || 'checkmark-done-circle-outline', bg: 'successLight', fg: 'success' },
   payment_success: { icon: Icons.cardOutline, bg: 'successLight', fg: 'success' },
+  refund: { icon: Icons.cashOutline || 'cash-outline', bg: 'infoLight', fg: 'info' },
+  voucher: { icon: Icons.voucherOutline || 'pricetag-outline', bg: 'primarySubtle', fg: 'primary' },
   voucher_expiring: { icon: Icons.voucherOutline, bg: 'warningLight', fg: 'warning' },
   points_earned: { icon: Icons.star, bg: 'warningLight', fg: 'warning' },
   promotion: { icon: Icons.sparkle, bg: 'infoLight', fg: 'info' },
+  system: { icon: Icons.informationCircleOutline || 'information-circle-outline', bg: 'surfaceDark', fg: 'textSecondary' },
 };
 
 export default function NotificationsScreen() {

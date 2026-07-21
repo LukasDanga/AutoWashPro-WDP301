@@ -77,6 +77,12 @@ const PAYMENT_OPTIONS: PaymentOption[] = [
     icon: 'cash-outline',
     description: 'Đến chi nhánh và thanh toán trực tiếp',
   },
+  {
+    id: 'bank',
+    name: 'Chuyển khoản ngân hàng',
+    icon: 'business-outline',
+    description: 'Quét mã QR để chuyển khoản ngân hàng',
+  },
 ];
 
 const TYPE_LABEL: Record<PayableType, string> = {
@@ -280,7 +286,7 @@ export default function PaymentSelectScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Card style={[styles.qrCard, { backgroundColor: colors.surface }]}>
             <AppText variant="h4" style={styles.cardTitle}>
-              {TYPE_LABEL[payableType]} — {selectedMethod === 'momo' ? 'MoMo' : 'VNPay'}
+              {TYPE_LABEL[payableType]} — {selectedMethod === 'momo' ? 'MoMo' : selectedMethod === 'vnpay' ? 'VNPay' : 'Ngân hàng'}
             </AppText>
             <AppText variant="body" color="textSecondary" style={styles.qrCaption}>
               Mở app {selectedMethod === 'momo' ? 'MoMo' : 'ngân hàng'} và quét mã bên dưới

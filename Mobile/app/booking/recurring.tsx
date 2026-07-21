@@ -16,6 +16,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Text,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -98,6 +99,7 @@ export default function RecurringBookingScreen() {
     null,
   );
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [selectedSubServices, setSelectedSubServices] = useState<any[]>([]);
 
   // Recurrence config
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([6]); // default: every Saturday
@@ -411,7 +413,51 @@ export default function RecurringBookingScreen() {
     if (effectiveWeeks < 1 || effectiveWeeks > 12) return;
 
     setIsSubmitting(true);
+
     try {
+      const checkConflicts = async (data: any) => {
+        const { apiClient } = require('../../src/api/client');
+        const response = await apiClient.post('/bookings/recurring/check-conflicts', data);
+        return response.data;
+      };
+      
+      const conflictsRes = await checkConflicts({
+        branchId: selectedBranch._id,
+        packageId: selectedPackage._id,
+        vehicleId: selectedVehicle._id,
+        weekdays: selectedWeekdays,
+        startTime: selectedTime,
+        weeks: effectiveWeeks,
+      });
+
+      if (conflictsRes?.conflicts && conflictsRes.conflicts.length > 0) {
+        const proceed = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Phát hiện trùng lịch',
+            `Có ${conflictsRes.conflicts.length} buổi bị trùng:\n` +
+              conflictsRes.conflicts.slice(0, 5).map((c: any) => `- ${c.date} lúc ${c.startTime}`).join('\n') +
+              (conflictsRes.conflicts.length > 5 ? `\n... và ${conflictsRes.conflicts.length - 5} buổi khác` : '') +
+              '\n\nBạn có muốn tiếp tục tạo các buổi còn lại không?',
+            [
+              { text: 'Hủy', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Tiếp tục', style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
+        if (!proceed) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Check conflicts error:', err);
+    }
+
+    try {
+      const subServicesNote = selectedSubServices.length > 0 
+        ? `\n\n[Dịch vụ thêm]: ${selectedSubServices.map(s => s.name).join(', ')}`
+        : '';
+
       const result: RecurringBookingResult = await bookingApi.createRecurringBooking(
         {
           branchId: selectedBranch._id,
@@ -421,23 +467,38 @@ export default function RecurringBookingScreen() {
           startTime: selectedTime,
           weeks: effectiveWeeks,
           voucherCode: voucherCode.trim() || undefined,
-          note: note.trim() || undefined,
-        },
+          note: (note.trim() + subServicesNote).trim() || undefined,
+          subServices: selectedSubServices.map(s => s._id),
+        } as any,
       );
 
-      // Navigate to payment checkout with the first deposit booking
-      const depositBooking = result.created.find(
-        (b: any) => (b.depositAmount ?? 0) > 0,
-      ) as any;
-      const depositBookingId = depositBooking?._id ?? result.created[0]?._id;
+      Alert.alert(
+        'Kết quả đặt lịch định kỳ',
+        `Tạo thành công: ${result.totalCreated ?? result.created?.length ?? 0} buổi\n` +
+          `Thất bại: ${result.totalFailed ?? result.failed?.length ?? 0} buổi\n` +
+          ((result.failed && result.failed.length > 0) 
+            ? `\nChi tiết thất bại:\n` + result.failed.map((f: any) => `- ${f.date}: ${f.reason}`).join('\n') 
+            : ''),
+        [
+          {
+            text: 'Đóng',
+            onPress: () => {
+              const depositBooking = result.created?.find(
+                (b: any) => (b.depositAmount ?? 0) > 0,
+              ) as any;
+              const depositBookingId = depositBooking?._id ?? result.created?.[0]?._id;
 
-      if (depositBookingId) {
-        router.replace(
-          `/payment/checkout?bookingId=${depositBookingId}&type=deposit` as any,
-        );
-      } else {
-        router.replace('/(tabs)/history');
-      }
+              if (depositBookingId) {
+                router.replace(
+                  `/payment/checkout?bookingId=${depositBookingId}&type=deposit` as any,
+                );
+              } else {
+                router.replace('/(tabs)/history');
+              }
+            }
+          }
+        ]
+      );
     } catch (error: any) {
       const apiMessage =
         error?.response?.data?.message || error?.message || 'Không thể tạo lịch định kỳ';
@@ -494,6 +555,7 @@ export default function RecurringBookingScreen() {
             if (selectedBranch?._id === branch._id) return;
             setSelectedBranch(branch);
             setSelectedPackage(null);
+            setSelectedSubServices([]);
             // Time slots are branch-specific; clear so the user re-picks them
             // at the recurrence step instead of silently keeping the old slot.
             setSelectedTime('');
@@ -553,6 +615,7 @@ export default function RecurringBookingScreen() {
           onPress={() => {
             if (selectedPackage?._id === pkg._id) return;
             setSelectedPackage(pkg);
+            setSelectedSubServices([]);
             // Slot duration depends on the package; clear the picked time so
             // it doesn't survive into the recurrence step.
             setSelectedTime('');
@@ -592,6 +655,39 @@ export default function RecurringBookingScreen() {
           </Card>
         </TouchableOpacity>
       ))
+      )}
+      {selectedPackage?.subServices && selectedPackage.subServices.some((s: any) => s.isOptional) && (
+        <View style={{ marginTop: spacing.md }}>
+          <AppText variant="h4" style={{ marginBottom: spacing.sm }}>
+            Dịch vụ thêm (Tùy chọn)
+          </AppText>
+          {selectedPackage.subServices.filter((s: any) => s.isOptional).map((sub: any) => {
+            const isSelected = selectedSubServices.some(s => s._id === sub._id);
+            return (
+              <TouchableOpacity
+                key={sub._id}
+                style={[
+                  styles.optionCard,
+                  { flexDirection: 'row', alignItems: 'center', padding: spacing.md, backgroundColor: colors.surface, borderRadius: 8, marginBottom: spacing.sm },
+                  isSelected && { borderWidth: 1, borderColor: colors.primary }
+                ]}
+                onPress={() => {
+                  setSelectedSubServices(prev =>
+                    isSelected ? prev.filter(s => s._id !== sub._id) : [...prev, sub]
+                  );
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" style={{ fontWeight: '600' }}>{sub.name}</AppText>
+                  <AppText variant="caption" color="primary">{formatCurrency(sub.price)}</AppText>
+                </View>
+                <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: isSelected ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? colors.primary : 'transparent' }}>
+                  {isSelected && <Text style={{ color: 'white', fontSize: 12 }}>✓</Text>}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       )}
     </View>
   );
@@ -881,7 +977,9 @@ export default function RecurringBookingScreen() {
   const renderConfirmStep = () => {
     const effectiveWeeks = getEffectiveWeeks();
     const totalSessions = selectedWeekdays.length * effectiveWeeks;
-    const pricePerSession = selectedPackage?.price || 0;
+    const basePrice = selectedPackage?.price || 0;
+    const subServicesPrice = selectedSubServices.reduce((sum, s) => sum + (s.price || 0), 0);
+    const pricePerSession = basePrice + subServicesPrice;
     const totalEstimate = totalSessions * pricePerSession;
     const finalEstimate = Math.max(0, totalEstimate - voucherSavings);
     // Cọc 30% × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
@@ -913,6 +1011,14 @@ export default function RecurringBookingScreen() {
             <Text style={styles.summaryLabel}>Gói dịch vụ</Text>
             <Text style={styles.summaryValue}>{selectedPackage?.name}</Text>
           </View>
+          {selectedSubServices.length > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Dịch vụ thêm</Text>
+              <Text style={styles.summaryValue}>
+                {selectedSubServices.map(s => s.name).join(', ')}
+              </Text>
+            </View>
+          )}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Phương tiện</Text>
             <Text style={styles.summaryValue}>{selectedVehicle?.licensePlate}</Text>

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { AlertDialog } from '../../src/components/common';
 
@@ -33,7 +34,7 @@ const C = {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading } = useAuth();
+  const { login, loginWithGoogle, isLoading } = useAuth();
 
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -82,6 +83,22 @@ export default function LoginScreen() {
       case 429: return 'Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.';
       case 500: case 502: case 503: return 'Máy chủ đang bận. Vui lòng thử lại sau ít phút.';
       default: return data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
+      if (idToken) {
+        await loginWithGoogle(idToken);
+      }
+    } catch (error: any) {
+      console.log('Google login error:', error);
+      if (error.code !== 'ASYNC_OP_IN_PROGRESS' && error.code !== 'SIGN_IN_CANCELLED') {
+        AlertDialog.error('Đăng nhập thất bại', 'Không thể kết nối với Google. Vui lòng thử lại.');
+      }
     }
   };
 
@@ -157,11 +174,13 @@ export default function LoginScreen() {
             </View>
           </StableField>
 
-          <Link href="/(auth)/forgot-password" asChild>
-            <TouchableOpacity style={s.forgot} activeOpacity={0.7}>
-              <Text style={s.forgotText}>Quên mật khẩu?</Text>
-            </TouchableOpacity>
-          </Link>
+          <TouchableOpacity 
+            style={s.forgot} 
+            activeOpacity={0.7}
+            onPress={() => router.push('/(auth)/forgot-password')}
+          >
+            <Text style={s.forgotText}>Quên mật khẩu?</Text>
+          </TouchableOpacity>
 
           {/* Actions */}
           <View style={s.actions}>
@@ -175,6 +194,24 @@ export default function LoginScreen() {
                 ? <ActivityIndicator color="#FFF" />
                 : <Text style={s.ctaText}>Đăng nhập</Text>
               }
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+              <Text style={{ marginHorizontal: 10, color: C.textMuted, fontSize: 13, fontWeight: '600' }}>HOẶC</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+            </View>
+
+            <TouchableOpacity
+              style={[s.cta, { backgroundColor: '#FFF', borderWidth: 1, borderColor: C.border }, isLoading && s.ctaDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="logo-google" size={18} color="#EA4335" style={{ marginRight: 8 }} />
+                <Text style={[s.ctaText, { color: C.textLabel }]}>Đăng nhập bằng Google</Text>
+              </View>
             </TouchableOpacity>
 
             <Text style={s.footerNote}>

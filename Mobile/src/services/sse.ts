@@ -120,7 +120,7 @@ class SSEService {
         /\/api$/,
         '',
       );
-    const url = `${baseUrl}/api/sse?token=${encodeURIComponent(token)}`;
+    const url = `${baseUrl}/api/sse`;
 
     this.abortController = new AbortController();
 
@@ -130,6 +130,10 @@ class SSEService {
         headers: {
           Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
+          // Pass token via header rather than `?token=` query string to avoid
+          // logging it in reverse-proxy access logs and browser history. The
+          // backend SSE controller reads `req.headers.authorization`.
+          Authorization: `Bearer ${token}`,
         },
         signal: this.abortController.signal,
       });

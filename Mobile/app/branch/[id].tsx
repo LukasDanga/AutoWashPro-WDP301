@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { branchApi } from '../../src/api';
+import { branchApi, voucherApi } from '../../src/api';
 import {
   Text as AppText,
   Card,
@@ -47,6 +47,7 @@ export default function BranchDetailScreen() {
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [packages, setPackages] = useState<Package[]>([]);
+  const [vouchers, setVouchers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -57,12 +58,22 @@ export default function BranchDetailScreen() {
   const fetchBranchData = async () => {
     try {
       setIsLoading(true);
-      const [branchData, packagesData] = await Promise.all([
+      const [branchData, packagesData, vouchersData] = await Promise.all([
         branchApi.getBranch(id!),
         branchApi.getBranchPackages(id!),
+        voucherApi.getAvailableVouchers({ branchId: id }),
       ]);
       setBranch(branchData);
       setPackages(packagesData);
+      // voucherApi.getAvailableVouchers() now returns the normalised
+      // { tierExclusive, public, redeemable } shape (see src/api/voucher.ts).
+      const voucherLists = vouchersData;
+      const flat = [
+        ...(voucherLists?.public        || []),
+        ...(voucherLists?.tierExclusive || []),
+        ...(voucherLists?.redeemable    || []),
+      ];
+      setVouchers(flat);
     } catch (error) {
       console.error('Error fetching branch:', error);
     } finally {
@@ -307,6 +318,60 @@ export default function BranchDetailScreen() {
             ))}
           </>
         ) : null}
+
+        {/* Vouchers */}
+        <View style={styles.sectionHeader}>
+          <AppText variant="h4">Ưu đãi tại chi nhánh</AppText>
+        </View>
+        {vouchers.length > 0 ? (
+          vouchers.map((v) => (
+            <Card key={v._id} style={styles.packageCard}>
+              <View style={styles.packageRow}>
+                <View style={[styles.packageIcon, { backgroundColor: colors.successLight }]}>
+                  <Icon name={Icons.voucherOutline} size={24} color={colors.success} />
+                </View>
+                <View style={styles.packageInfo}>
+                  <AppText variant="body" style={styles.packageName} numberOfLines={1}>
+                    Giảm {v.type === 'percentage' ? `${v.value}%` : formatCurrency(v.value)}
+                  </AppText>
+                  <View style={styles.packageMeta}>
+                    <View style={styles.metaItem}>
+                      <Icon name={Icons.cardOutline} size={12} color={colors.textSecondary} />
+                      <AppText variant="caption" color="textSecondary">
+                        Mã: {v.code}
+                      </AppText>
+                    </View>
+                  </View>
+                  {v.minOrder ? (
+                    <View style={[styles.packageMeta, { marginTop: 2 }]}>
+                      <View style={styles.metaItem}>
+                        <AppText variant="caption" color="textSecondary">
+                          Đơn tối thiểu: {formatCurrency(v.minOrder)}
+                        </AppText>
+                      </View>
+                    </View>
+                  ) : null}
+                  {v.expiryDate || v.endDate ? (
+                    <View style={[styles.packageMeta, { marginTop: 2 }]}>
+                      <View style={styles.metaItem}>
+                        <Icon name={Icons.timeOutline} size={12} color={colors.textSecondary} />
+                        <AppText variant="caption" color="textSecondary">
+                          HSD: {new Date(v.expiryDate || v.endDate).toLocaleDateString('vi-VN')}
+                        </AppText>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </Card>
+          ))
+        ) : (
+          <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
+            <AppText variant="body" color="textSecondary" style={{ textAlign: 'center', fontStyle: 'italic' }}>
+              Chưa có ưu đãi tại chi nhánh này
+            </AppText>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sticky CTA */}

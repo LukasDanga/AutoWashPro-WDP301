@@ -42,7 +42,7 @@ import {
   type BookingStep,
   type VoucherState,
 } from '../../src/contexts/BookingContext';
-import { branchApi, packageApi, vehicleApi, bookingApi } from '../../src/api';
+import { branchApi, packageApi, vehicleApi, bookingApi, slotPackApi } from '../../src/api';
 import {
   Text as AppText,
   Card,
@@ -68,6 +68,7 @@ import type {
   Package,
   Vehicle,
   AvailableSlot,
+  SlotPack,
 } from '../../src/types';
 
 const STEP_META: { key: BookingStep; label: string }[] = [
@@ -86,10 +87,27 @@ const STEP_ICONS: Record<BookingStep, string> = {
   confirm: Icons.checkmark,
 };
 
+const getVehicleTypeLabel = (type: string) => {
+  switch (type) {
+    case 'sedan': return 'Sedan';
+    case 'suv': return 'SUV';
+    case 'pickup': return 'Pickup';
+    case 'van': return 'Van';
+    default: return 'Sedan';
+  }
+};
+
+const FALLBACK_TIME_SLOTS = [
+  '08:00 - 08:30', '08:30 - 09:00', '09:00 - 09:30', '09:30 - 10:00',
+  '10:00 - 10:30', '10:30 - 11:00', '11:00 - 11:30',
+  '13:00 - 13:30', '13:30 - 14:00', '14:00 - 14:30', '14:30 - 15:00',
+  '15:00 - 15:30', '15:30 - 16:00', '16:00 - 16:30', '16:30 - 17:00', '17:00 - 17:30',
+];
+
 export default function BookingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const colors = useColors();
   const toast = useToast();
 
@@ -128,8 +146,16 @@ export default function BookingScreen() {
   // below to know when it is safe to decide there is *no* swap candidate.
   const [branchPackagesAttempted, setBranchPackagesAttempted] = useState<string | null>(null);
 
+  const [selectedSubServices, setSelectedSubServices] = useState<string[]>([]);
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherDiscount, setVoucherDiscount] = useState(0);
+
+  // Slot packs: load the user's active packs once authenticated, and let the
+  // user apply one in the confirm step. Packs whose (branch, package, vehicle)
+  // match the current selection are surfaced as `validPacks` below — same
+  // logic as the web landing BookingFlow.
+  const [mySlotPacks, setMySlotPacks] = useState<SlotPack[]>([]);
+  const [selectedSlotPackId, setSelectedSlotPackId] = useState<string | null>(null);
 
   // True while we're navigating to an internal sub-screen (voucher-picker,
   // vehicle/add, login) and expect to come BACK to a still-in-progress
@@ -144,10 +170,33 @@ export default function BookingScreen() {
 
   const dateOptions = useMemo(() => generateDateOptions(), []);
 
+  useEffect(() => {
+    setSelectedSubServices([]);
+  }, [selectedPackage?._id]);
+
   // Reset the draft if the user is no longer authenticated.
   useEffect(() => {
     if (isHydrated && !isAuthenticated) resetAll();
   }, [isHydrated, isAuthenticated, resetAll]);
+
+  // Load the authenticated user's slot packs once (used in the confirm step).
+  // Mirrors the web BookingFlow's `/slot-packs/my` call so the customer can
+  // pay with a pack instead of a voucher.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const packs = await slotPackApi.getMySlotPacks();
+        if (!cancelled && Array.isArray(packs)) setMySlotPacks(packs);
+      } catch {
+        /* slot packs are optional — fail silently */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   // Initial catalog load + deep-link prefill.
   useEffect(() => {
@@ -282,6 +331,20 @@ export default function BookingScreen() {
     }
     return dedupePackages(list, selectedBranch?._id ?? null);
   }, [packages, selectedBranch?._id]);
+
+  // Map of branchId → number of active packages (used to badge disabled
+  // branches in the step-1 branch picker).
+  const branchPackageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const pkg of packages) {
+      if (pkg.status !== 'active') continue;
+      const bid = typeof pkg.branchId === 'object' && pkg.branchId !== null
+        ? (pkg.branchId as any)._id
+        : pkg.branchId;
+      if (bid) counts[String(bid)] = (counts[String(bid)] || 0) + 1;
+    }
+    return counts;
+  }, [packages]);
 
   // Fetch branch-specific packages once a branch is picked and merge them
   // into the catalog. The global `getPackages` endpoint does not always
@@ -521,30 +584,107 @@ export default function BookingScreen() {
 
   const voucherSavings = voucherDiscount;
 
-  const handleSubmit = async () => {
+  // Slot packs compatible with the current branch/package/vehicle selection.
+  // A pack is only valid when it has remaining slots, is active, and matches
+  // all three of the user's current picks (any constraints stored on the pack).
+  const validPacks = useMemo(() => {
+    if (!selectedBranch || !selectedPackage || !selectedVehicle) return [];
+    return mySlotPacks.filter((p) => {
+      if (p.status !== 'active' || p.remainingSlots <= 0) return false;
+      const pPkgId =
+        typeof p.packageId === 'object' && p.packageId !== null
+          ? (p.packageId as any)._id
+          : (p.packageId as string);
+      if (pPkgId && pPkgId !== selectedPackage._id) return false;
+      const pBranchId =
+        typeof p.branchId === 'object' && p.branchId !== null
+          ? (p.branchId as any)._id
+          : (p.branchId as string);
+      if (pBranchId && pBranchId !== selectedBranch._id) return false;
+      const pVehicleId =
+        typeof p.vehicleId === 'object' && p.vehicleId !== null
+          ? (p.vehicleId as any)._id
+          : (p.vehicleId as string);
+      if (pVehicleId && pVehicleId !== selectedVehicle._id) return false;
+      return true;
+    });
+  }, [mySlotPacks, selectedBranch?._id, selectedPackage?._id, selectedVehicle?._id]);
+
+  // Drop a selected pack if it's no longer in the valid set (user changed
+  // selections).
+  useEffect(() => {
     if (
-      !selectedBranch ||
-      !selectedPackage ||
-      !selectedVehicle ||
-      !selectedDate ||
-      !selectedTime
+      selectedSlotPackId &&
+      !validPacks.find((p) => p._id === selectedSlotPackId)
     ) {
+      setSelectedSlotPackId(null);
+    }
+  }, [validPacks, selectedSlotPackId]);
+
+  const selectedSlotPack = useMemo(
+    () => validPacks.find((p) => p._id === selectedSlotPackId) ?? null,
+    [validPacks, selectedSlotPackId],
+  );
+
+  // Loyalty tier multiplier — same factor table as the web BookingFlow:
+  //   diamond -> 2.0, gold -> 1.5, silver -> 1.2, everyone else -> 1.
+  let pointMultiplier = 1;
+  if (user?.tier === 'diamond') pointMultiplier = 2.0;
+  else if (user?.tier === 'gold') pointMultiplier = 1.5;
+  else if (user?.tier === 'silver') pointMultiplier = 1.2;
+
+  const isPayingWithPack = !!selectedSlotPack;
+
+  const handleSubmit = async () => {
+    // Web parity (BookingFlow.jsx:201-203): show specific validation messages
+    // instead of silently returning.
+    if (!selectedTime) {
+      toast.warning('Chưa chọn giờ', 'Vui lòng chọn khung giờ trước khi xác nhận đặt chỗ.');
+      return;
+    }
+    if (!selectedVehicle) {
+      toast.warning('Chưa chọn xe', 'Vui lòng chọn xe trước khi đặt lịch.');
+      return;
+    }
+    if (!selectedBranch || !selectedPackage || !selectedDate) {
+      toast.warning('Thiếu thông tin', 'Vui lòng hoàn tất tất cả các bước trước khi đặt lịch.');
       return;
     }
     setIsSubmitting(true);
     try {
+      // Slot pack and voucher are mutually exclusive in the web flow — the
+      // pack already pre-paid for the slot, so the voucher would be double
+      // discounting. The BE ignores voucherCode when slotPackId is present
+      // anyway, but we strip it client-side to keep the confirmation modal
+      // honest ("Thanh toán bằng Gói Lượt").
+      const voucherToSend = isPayingWithPack ? undefined : voucherCode || undefined;
+
       const response = await bookingApi.createBooking({
         branchId: selectedBranch._id,
         packageId: selectedPackage._id,
         vehicleId: selectedVehicle._id,
         bookingDate: selectedDate,
         startTime: selectedTime,
-        voucherCode: voucherCode || undefined,
+        voucherCode: voucherToSend,
+        selectedSubServices: selectedSubServices,
+        slotPackId: selectedSlotPackId || undefined,
+        note: '',
       });
       resetAll();
-      router.replace(
-        `/payment/checkout?bookingId=${response._id}&type=deposit` as any,
-      );
+      // Web parity: only redirect to payment if a deposit is actually owed.
+      // Slot-pack bookings have depositAmount=0, so they skip the payment step
+      // and show a simple success toast instead. (BookingFlow.jsx:229-234)
+      if ((response.depositAmount || 0) > 0 && !response.depositPaid) {
+        router.replace(
+          `/payment/checkout?bookingId=${response._id}&type=deposit` as any,
+        );
+      } else {
+        toast.success(
+          'Đặt lịch thành công!',
+          `Đã giữ chỗ ${selectedPackage?.name || 'Dịch vụ'} lúc ${selectedTime}.`,
+        );
+        router.replace('/(tabs)/history' as any);
+      }
     } catch (error: any) {
       toast.error(
         'Đặt lịch thất bại',
@@ -577,7 +717,16 @@ export default function BookingScreen() {
   if (isLoading) return <Loading fullScreen message="Đang tải..." />;
 
   const basePrice = selectedPackage?.price ?? 0;
-  const finalPrice = Math.max(0, basePrice - voucherSavings);
+  const subServicesTotal = selectedSubServices.reduce((total, subName) => {
+    // @ts-ignore - subServices exists on package but type might not be fully updated
+    const sub = (selectedPackage as any)?.subServices?.find((s: any) => s.name === subName);
+    return total + (sub?.price ?? 0);
+  }, 0);
+  const totalBase = basePrice + subServicesTotal;
+  const finalPrice = isPayingWithPack ? 0 : Math.max(0, totalBase - voucherSavings);
+  const depositAmount = finalPrice * 0.3;
+  // Web uses 5% earn rate × tier multiplier, floored to an integer.
+  const pointsEarned = Math.floor((isPayingWithPack ? totalBase : finalPrice) * 0.05 * pointMultiplier);
 
   const stepsForIndicator = STEP_META.map((s) => ({
     key: s.key,
@@ -612,13 +761,18 @@ export default function BookingScreen() {
                 message="Hiện tại không có chi nhánh nào hoạt động"
               />
             ) : (
-              branches.map((branch) => (
+              branches.map((branch) => {
+                const pkgCount = branchPackageCounts[branch._id] || 0;
+                const disabled = pkgCount === 0;
+                return (
                 <SelectableCard
                   key={branch._id}
                   selected={selectedBranch?._id === branch._id}
-                  onPress={() => setSelectedBranch(branch)}
+                  onPress={() => !disabled && setSelectedBranch(branch)}
                   icon={Icons.locationOutline}
                   title={branch.name}
+                  disabled={disabled}
+                  disabledLabel="Chưa có gói dịch vụ"
                   subtitle={
                     <View>
                       <AppText variant="caption" color="textSecondary" numberOfLines={1}>
@@ -633,7 +787,8 @@ export default function BookingScreen() {
                     </View>
                   }
                 />
-              ))
+              );
+            })
             )}
           </StepLayout>
         )}
@@ -683,6 +838,61 @@ export default function BookingScreen() {
                 />
               ))
             )}
+
+            {/* Sub-services Selection */}
+            {selectedPackage && (selectedPackage as any).subServices?.some((s: any) => s.isOptional) && (
+              <View style={{ marginTop: spacing.lg }}>
+                <AppText variant="h4" style={{ marginBottom: spacing.sm }}>
+                  Dịch vụ thêm (Tuỳ chọn)
+                </AppText>
+                {(selectedPackage as any).subServices
+                  .filter((s: any) => s.isOptional)
+                  .map((sub: any) => {
+                    const isSelected = selectedSubServices.includes(sub.name);
+                    return (
+                      <PressableScale
+                        key={sub.name}
+                        onPress={() => {
+                          setSelectedSubServices(prev =>
+                            isSelected
+                              ? prev.filter(name => name !== sub.name)
+                              : [...prev, sub.name]
+                          );
+                        }}
+                      >
+                        <Card
+                          style={[
+                            styles.optionCard,
+                            isSelected && {
+                              borderWidth: 2,
+                              borderColor: colors.primary,
+                              backgroundColor: colors.primarySubtle,
+                            },
+                          ]}
+                        >
+                          <View style={styles.optionRow}>
+                            <View style={styles.optionInfo}>
+                              <AppText variant="body" style={styles.optionTitle}>
+                                {sub.name}
+                              </AppText>
+                              <AppText variant="caption" color="textSecondary">
+                                +{sub.duration} phút • <AppText variant="caption" color="primary">+{formatCurrency(sub.price)}</AppText>
+                              </AppText>
+                            </View>
+                            {isSelected ? (
+                              <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
+                                <Icon name={Icons.checkmark} size={16} color={colors.textInverse} />
+                              </View>
+                            ) : (
+                              <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
+                            )}
+                          </View>
+                        </Card>
+                      </PressableScale>
+                    );
+                  })}
+              </View>
+            )}
           </StepLayout>
         )}
 
@@ -727,7 +937,7 @@ export default function BookingScreen() {
                         {vehicle.model ? ` • ${vehicle.model}` : ''}
                       </AppText>
                       <AppText variant="caption" color="textTertiary">
-                        {vehicle.color} • {vehicle.vehicleType}
+                        {vehicle.color} • {getVehicleTypeLabel(vehicle.vehicleType)}
                       </AppText>
                     </View>
                   }
@@ -922,26 +1132,57 @@ export default function BookingScreen() {
                     ))}
                   </View>
                 ) : (dateSlots[selectedDate] || []).length === 0 ? (
-                  <Card style={{ backgroundColor: colors.warningLight }}>
-                    <View style={styles.inlineRow}>
-                      <Icon name={Icons.warning} size={20} color={colors.warning} />
-                      <AppText variant="body" color="textPrimary" style={styles.inlineRowText}>
-                        Không có khung giờ trống cho ngày này. Hãy chọn ngày khác.
-                      </AppText>
-                    </View>
-                  </Card>
+                  <View style={styles.timeGrid}>
+                    {FALLBACK_TIME_SLOTS.map((slot, idx) => {
+                      const isSelected = selectedTime === slot;
+                      return (
+                        <PressableScale
+                          key={`fallback-${slot}-${idx}`}
+                          onPress={() => setSelectedDateTime(selectedDate, slot)}
+                          accessibilityLabel={
+                            `${slot}` +
+                            (isSelected ? ', đang chọn' : '')
+                          }
+                          accessibilityState={{ selected: isSelected }}
+                        >
+                          <View
+                            style={[
+                              styles.timeCard,
+                              {
+                                backgroundColor: isSelected ? colors.primary : colors.surface,
+                                borderColor: isSelected ? colors.primary : colors.border,
+                              }
+                            ]}
+                          >
+                            <RNText
+                              style={[
+                                styles.timeText,
+                                {
+                                  color: isSelected ? colors.textInverse : colors.textPrimary,
+                                  fontWeight: isSelected ? '700' : '500',
+                                },
+                              ]}
+                            >
+                              {slot}
+                            </RNText>
+                          </View>
+                        </PressableScale>
+                      );
+                    })}
+                  </View>
                 ) : (
                   <View style={styles.timeGrid}>
                     {(dateSlots[selectedDate] || []).map((slot, idx) => {
                       const isSelected = selectedTime === slot.startTime;
-                      // Slot styling mirrors the landing page exactly: a slot
-                      // is struck through / disabled *iff* the BE marks it
-                      // `available: false` (capacity reached, or the slot is
-                      // in the past for today). VIP-only slots and the user's
-                      // own bookings are left bookable — same as landing —
-                      // and the BE has the final say at submit time.
+                      // Web parity (BookingFlow.jsx:510-522): VIP-only slots
+                      // are locked for users below gold/diamond tier. The BE
+                      // enforces this too, but we grey them out client-side
+                      // with a "Chỉ VIP" / 👑 label, same as the Web does.
+                      const isVipOnly = !!slot.vipOnly;
+                      const canBookVip = user?.tier === 'gold' || user?.tier === 'diamond';
+                      const lockVip = isVipOnly && !canBookVip;
                       const isUnavailable = !slot.available;
-                      const canBook = slot.available;
+                      const canBook = slot.available && !lockVip;
                       return (
                         <PressableScale
                           key={`${slot.startTime}-${idx}`}
@@ -976,7 +1217,11 @@ export default function BookingScreen() {
                             >
                               {slot.startTime}
                             </RNText>
-                            {isUnavailable ? (
+                            {isVipOnly ? (
+                              <RNText style={[styles.timeSlotFull, { color: '#eab308', fontWeight: '700' }]}>
+                                👑 Chỉ VIP
+                              </RNText>
+                            ) : isUnavailable ? (
                               <RNText style={[styles.timeSlotFull, { color: colors.error }]}>
                                 Kín lịch
                               </RNText>
@@ -1024,41 +1269,157 @@ export default function BookingScreen() {
               <SummaryRow icon={Icons.timeOutline} label="Giờ" value={selectedTime ?? undefined} />
             </Card>
 
-            {/* Voucher Picker — navigates to dedicated screen */}
-            <TouchableOpacity
-              style={[styles.voucherButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => {
-                returningFromSubScreen.current = true;
-                router.push(
-                  `/booking/voucher-picker?branchId=${selectedBranch?._id || ''}&orderAmount=${finalPrice}`,
-                );
-              }}
-            >
-              <View style={styles.voucherButtonContent}>
-                <Text style={{ fontSize: 20, marginRight: spacing.sm }}>🏷️</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, letterSpacing: 0.5 }}>VOUCHER & ƯU ĐÃI</Text>
-                  {voucherCode ? (
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary, marginTop: 2 }}>
-                      {voucherCode}
+            {/* Slot Pack picker — shown only when at least one usable pack
+                matches the current branch/package/vehicle selection. The web
+                flow renders the exact same dropdown with a "Không sử dụng
+                gói lượt" default option. */}
+            {validPacks.length > 0 ? (
+              <View
+                style={[
+                  styles.voucherButton,
+                  {
+                    backgroundColor: isPayingWithPack
+                      ? colors.primarySubtle
+                      : colors.surface,
+                    borderColor: isPayingWithPack ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.voucherButtonContent}>
+                  <Text style={{ fontSize: 20, marginRight: spacing.sm }}>🎫</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '600',
+                        color: colors.textSecondary,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      GÓI LƯỢT CỦA BẠN
                     </Text>
-                  ) : (
-                    <Text style={{ fontSize: 14, color: colors.textTertiary, marginTop: 2 }}>Chọn voucher để tiết kiệm thêm</Text>
-                  )}
-                </View>
-                {voucherCode ? (
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: isPayingWithPack ? colors.primary : colors.textTertiary,
+                        marginTop: 2,
+                        fontWeight: isPayingWithPack ? '600' : '400',
+                      }}
+                    >
+                      {isPayingWithPack
+                        ? `Đang dùng gói lượt (còn ${selectedSlotPack!.remainingSlots} lần)`
+                        : `${validPacks.length} gói lượt khả dụng`}
+                    </Text>
+                  </View>
                   <TouchableOpacity
-                    onPress={() => { setVoucherCode(''); setVoucherDiscount(0); }}
+                    onPress={() => {
+                      if (isPayingWithPack) {
+                        setSelectedSlotPackId(null);
+                      } else if (validPacks.length === 1) {
+                        setSelectedSlotPackId(validPacks[0]._id);
+                        setVoucherCode('');
+                        setVoucherDiscount(0);
+                      } else {
+                        // Cycle through packs (or off) so the UX stays
+                        // tappable without a real picker.
+                        setSelectedSlotPackId(validPacks[0]._id);
+                        setVoucherCode('');
+                        setVoucherDiscount(0);
+                      }
+                    }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{ marginLeft: spacing.sm }}
+                    accessibilityLabel={isPayingWithPack ? 'Bỏ chọn gói lượt' : 'Chọn gói lượt'}
                   >
-                    <Text style={{ fontSize: 20, color: colors.textTertiary }}>✕</Text>
+                    <Text style={{ fontSize: 20, color: colors.textTertiary }}>
+                      {isPayingWithPack ? '✕' : '›'}
+                    </Text>
                   </TouchableOpacity>
-                ) : (
-                  <Text style={{ fontSize: 22, color: colors.textTertiary, marginLeft: spacing.sm }}>›</Text>
-                )}
+                </View>
+                {validPacks.length > 1 ? (
+                  <View style={{ marginTop: spacing.sm, gap: 6 }}>
+                    {validPacks.map((p) => {
+                      const isSelected = selectedSlotPackId === p._id;
+                      return (
+                        <TouchableOpacity
+                          key={p._id}
+                          onPress={() => {
+                            if (isSelected) {
+                              setSelectedSlotPackId(null);
+                            } else {
+                              setSelectedSlotPackId(p._id);
+                              setVoucherCode('');
+                              setVoucherDiscount(0);
+                            }
+                          }}
+                          style={{
+                            paddingVertical: spacing.xs,
+                            paddingHorizontal: spacing.sm,
+                            borderRadius: borderRadius.sm,
+                            backgroundColor: isSelected
+                              ? colors.primary
+                              : colors.background,
+                            borderWidth: 1,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: isSelected ? colors.textInverse : colors.textPrimary,
+                              fontWeight: isSelected ? '700' : '500',
+                            }}
+                          >
+                            {p.packCode || p._id} — còn {p.remainingSlots} lần
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : null}
               </View>
-            </TouchableOpacity>
+            ) : null}
+
+            {/* Voucher Picker — navigates to dedicated screen. Hidden when a
+                slot pack is being applied, since pack and voucher are
+                mutually exclusive (web mirrors this with a v-if on
+                `!isPayingWithPack`). */}
+            {!isPayingWithPack ? (
+              <TouchableOpacity
+                style={[styles.voucherButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => {
+                  returningFromSubScreen.current = true;
+                  router.push(
+                    `/booking/voucher-picker?branchId=${selectedBranch?._id || ''}&orderAmount=${totalBase}`,
+                  );
+                }}
+              >
+                <View style={styles.voucherButtonContent}>
+                  <Text style={{ fontSize: 20, marginRight: spacing.sm }}>🏷️</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, letterSpacing: 0.5 }}>VOUCHER & ƯU ĐÃI</Text>
+                    {voucherCode ? (
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary, marginTop: 2 }}>
+                        {voucherCode}
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: 14, color: colors.textTertiary, marginTop: 2 }}>Chọn voucher để tiết kiệm thêm</Text>
+                    )}
+                  </View>
+                  {voucherCode ? (
+                    <TouchableOpacity
+                      onPress={() => { setVoucherCode(''); setVoucherDiscount(0); }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ marginLeft: spacing.sm }}
+                    >
+                      <Text style={{ fontSize: 20, color: colors.textTertiary }}>✕</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={{ fontSize: 22, color: colors.textTertiary, marginLeft: spacing.sm }}>›</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ) : null}
 
             <Card style={styles.priceCard}>
               <View style={styles.priceRow}>
@@ -1066,13 +1427,23 @@ export default function BookingScreen() {
                   Giá gốc
                 </AppText>
                 <AppText variant="body" color="textPrimary">
-                  {formatCurrency(basePrice)}
+                  {formatCurrency(totalBase)}
                 </AppText>
               </View>
-              {voucherSavings > 0 ? (
+              {isPayingWithPack ? (
                 <View style={styles.priceRow}>
                   <AppText variant="body" color="textSecondary">
-                    Giảm giá
+                    Thanh toán bằng gói lượt
+                  </AppText>
+                  <AppText variant="body" color="success">
+                    -{formatCurrency(totalBase)}
+                  </AppText>
+                </View>
+              ) : null}
+              {voucherSavings > 0 && !isPayingWithPack ? (
+                <View style={styles.priceRow}>
+                  <AppText variant="body" color="textSecondary">
+                    Khuyến mãi từ voucher
                   </AppText>
                   <AppText variant="body" color="success">
                     -{formatCurrency(voucherSavings)}
@@ -1081,9 +1452,48 @@ export default function BookingScreen() {
               ) : null}
               <View style={[styles.priceDivider, { backgroundColor: colors.divider }]} />
               <View style={styles.priceRow}>
-                <AppText variant="h4">Tổng thanh toán</AppText>
+                <AppText variant="body" color="textSecondary">
+                  Thực thu tại tiệm
+                </AppText>
                 <AppText variant="h3" color="primary">
                   {formatCurrency(finalPrice)}
+                </AppText>
+              </View>
+              {!isPayingWithPack && finalPrice > 0 ? (
+                <View style={[styles.priceRow, { marginTop: spacing.xs }]}>
+                  <AppText variant="body" color="textSecondary">
+                    Tiền cọc (30%)
+                  </AppText>
+                  <AppText variant="body" style={{ color: colors.warning, fontWeight: '600' }}>
+                    {formatCurrency(depositAmount)}
+                  </AppText>
+                </View>
+              ) : null}
+              <View
+                style={[
+                  styles.priceRow,
+                  {
+                    marginTop: spacing.sm,
+                    paddingTop: spacing.sm,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: colors.divider,
+                  },
+                ]}
+              >
+                <AppText variant="body" color="textSecondary">
+                  Tích điểm
+                </AppText>
+                <AppText variant="body" style={{ color: colors.primary, fontWeight: '600' }}>
+                  +{pointsEarned} điểm
+                  {pointMultiplier > 1 ? (
+                    <AppText
+                      variant="caption"
+                      color="primary"
+                      style={{ marginLeft: 4 }}
+                    >
+                      (x{pointMultiplier})
+                    </AppText>
+                  ) : null}
                 </AppText>
               </View>
             </Card>
@@ -1219,7 +1629,7 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
     </PressableScale>
   );
 };
-
+  
 const SummaryDivider: React.FC = () => {
   const colors = useColors();
   return (

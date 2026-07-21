@@ -36,6 +36,11 @@ export const sendMessage = async (message: string, sessionId: string): Promise<C
  * Send a message with streaming (SSE).
  * Calls onEvent for each token as it arrives.
  * Returns the full reply text when done.
+ *
+ * Token handling: the SSE connection uses a long-lived fetch, which sidesteps
+ * the axios 401-refresh interceptor. We therefore implement a minimal retry:
+ * if the initial request returns 401 we trigger a refresh via axios (so the
+ * SecureStore tokens get updated) and retry once with the new access token.
  */
 export const sendMessageStream = async (
   message: string,
@@ -44,21 +49,34 @@ export const sendMessageStream = async (
 ): Promise<string> => {
   const STREAM_URL = `${API_BASE_URL}/chat/stream`;
 
-  // Get auth token from secure store (same key as client.ts)
-  let authHeader = '';
-  try {
-    const token = await SecureStore.getItemAsync('aw_accessToken');
-    if (token) authHeader = `Bearer ${token}`;
-  } catch {}
+  const attempt = async (tokenOverride?: string): Promise<Response> => {
+    let token = tokenOverride;
+    if (!token) {
+      try { token = (await SecureStore.getItemAsync('aw_accessToken')) ?? undefined; } catch {}
+    }
+    return fetch(STREAM_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message, sessionId }),
+    });
+  };
 
-  const response = await fetch(STREAM_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authHeader ? { Authorization: authHeader } : {}),
-    },
-    body: JSON.stringify({ message, sessionId }),
-  });
+  let response = await attempt();
+
+  // 401 → refresh via the axios interceptor (which updates SecureStore) and retry once.
+  if (response.status === 401) {
+    try {
+      await apiClient.post('/auth/refresh-token', {
+        refreshToken: await SecureStore.getItemAsync('aw_refreshToken'),
+      });
+    } catch {
+      // refresh failed — fall through with the 401 response below.
+    }
+    response = await attempt();
+  }
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);

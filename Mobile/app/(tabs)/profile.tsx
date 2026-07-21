@@ -170,6 +170,35 @@ export default function ProfileScreen() {
       .catch(() => setBookingCount(0));
   }, [isAuthenticated]);
 
+  const getTierProgress = () => {
+    const lifetime = user?.lifetimePoints || 0;
+    const tier = user?.tier || 'bronze';
+    
+    let threshold = 500;
+    let nextTierLabel = 'Bạc';
+    let isMax = false;
+    
+    if (tier === 'diamond') {
+      isMax = true;
+      threshold = 10000;
+    } else if (tier === 'gold') {
+      threshold = 5000;
+      nextTierLabel = 'Kim cương';
+    } else if (tier === 'silver') {
+      threshold = 2000;
+      nextTierLabel = 'Vàng';
+    } else {
+      threshold = 500;
+      nextTierLabel = 'Bạc';
+    }
+    
+    const progress = Math.min((lifetime / threshold) * 100, 100);
+    
+    return { threshold, nextTierLabel, isMax, progress, lifetime };
+  };
+
+  const { threshold, nextTierLabel, isMax, progress, lifetime } = getTierProgress();
+
   const handleLogout = () => {
     AlertDialog.confirm(
       'Đăng xuất',
@@ -246,6 +275,19 @@ onPress={() => router.push('/profile/edit' as any)}
         <Text style={styles.userEmail}>{user?.email}</Text>
         <View style={styles.tierBadgeWrap}>
           <TierBadge tier={user?.tier || 'bronze'} />
+        </View>
+
+        <View style={styles.progressContainer}>
+          {isMax ? (
+            <Text style={styles.progressText}>Bạn đang ở hạng cao nhất</Text>
+          ) : (
+            <Text style={styles.progressText}>
+              Lên hạng {nextTierLabel}: {lifetime} / {threshold} điểm
+            </Text>
+          )}
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
+          </View>
         </View>
       </LinearGradient>
 
@@ -336,52 +378,6 @@ onPress={() => router.push('/profile/edit' as any)}
           onPress={() => router.push('/slot-packs' as any)}
         />
       </View>
-
-      {/* Admin / Manager section */}
-      {(user?.role === 'admin' || user?.role === 'manager') && (
-        <>
-          <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
-            Quản lý
-          </AppText>
-          <View style={styles.menuSection}>
-            <MenuItem
-              icon={Icons.sparkle}
-              title="Dashboard"
-              subtitle="Xem thống kê và báo cáo"
-              onPress={() => router.push('/admin/dashboard' as any)}
-              badgeVariant="primary"
-            />
-            <View style={styles.menuDivider} />
-            <MenuItem
-              icon={Icons.calendarOutline}
-              title="Quản lý đặt lịch"
-              subtitle="Duyệt và quản lý booking"
-              onPress={() => router.push('/admin/bookings' as any)}
-            />
-            <View style={styles.menuDivider} />
-            <MenuItem
-              icon={Icons.personOutline}
-              title="Quản lý khách hàng"
-              subtitle="Xem danh sách khách hàng"
-              onPress={() => router.push('/admin/customers' as any)}
-            />
-            <View style={styles.menuDivider} />
-            <MenuItem
-              icon={Icons.locationOutline}
-              title="Quản lý chi nhánh"
-              subtitle="Thêm, sửa chi nhánh"
-              onPress={() => router.push('/admin/branches' as any)}
-            />
-            <View style={styles.menuDivider} />
-            <MenuItem
-              icon={Icons.documentOutline}
-              title="Quản lý dịch vụ"
-              subtitle="Quản lý gói dịch vụ"
-              onPress={() => router.push('/admin/packages' as any)}
-            />
-          </View>
-        </>
-      )}
 
       {/* Settings */}
       <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
@@ -541,6 +537,30 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   tierBadgeWrap: {
     marginTop: spacing.sm,
+  },
+  progressContainer: {
+    width: '100%',
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    alignItems: 'center',
+  },
+  progressText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  progressBarBg: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.textInverse,
+    borderRadius: borderRadius.full,
   },
   // Stats
   statsWrap: {

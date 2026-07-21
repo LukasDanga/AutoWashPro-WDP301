@@ -44,6 +44,12 @@ export const cancelSlotPack = async (id: string): Promise<SlotPack> => {
   return response.data;
 };
 
+// Create payment for slot pack
+export const paySlotPack = async (id: string, method: string): Promise<any> => {
+  const response = await apiClient.post(`/slot-packs/${id}/pay`, { method });
+  return response.data;
+};
+
 // Export all slot pack API functions
 export const slotPackApi = {
   previewDiscount,
@@ -51,6 +57,7 @@ export const slotPackApi = {
   getMySlotPacks,
   getSlotPack,
   cancelSlotPack,
+  paySlotPack,
 };
 
 export default slotPackApi;

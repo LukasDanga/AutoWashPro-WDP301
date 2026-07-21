@@ -99,7 +99,7 @@ export default function VehicleDetailScreen() {
       case 'suv': return 'SUV';
       case 'pickup': return 'Pickup';
       case 'van': return 'Van';
-      default: return type;
+      default: return 'Sedan';
     }
   };
 
@@ -263,7 +263,7 @@ export default function VehicleDetailScreen() {
         )}
 
         {/* Quick Book */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.bookButton}
           onPress={() => router.push({
             pathname: '/booking',
