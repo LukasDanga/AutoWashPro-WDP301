@@ -223,6 +223,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [cancelPackLoading, setCancelPackLoading] = useState(null);
   const [branches, setBranches] = useState([]);
   const [qbBranchId, setQbBranchId] = useState('');
+  const [qbVoucherCode, setQbVoucherCode] = useState('');
+  const [qbVoucherDiscount, setQbVoucherDiscount] = useState(0);
+  const [qbApplyingVoucher, setQbApplyingVoucher] = useState(false);
+  const [qbShowPayment, setQbShowPayment] = useState(false);
+  const [qbCreatedBooking, setQbCreatedBooking] = useState(null);
+  const [qbSimulating, setQbSimulating] = useState(false);
 
   const debounceRef = useRef(null);
 
@@ -474,6 +480,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQbSlots([]);
     setQbTime('');
     setQbError('');
+    setQbVoucherCode('');
+    setQbVoucherDiscount(0);
+    setQbShowPayment(false);
+    setQbCreatedBooking(null);
     setShowQuickBookModal(true);
   }
 
@@ -485,6 +495,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQbSlots([]);
     setQbTime('');
     setQbError('');
+    setQbVoucherCode('');
+    setQbVoucherDiscount(0);
+    setQbShowPayment(false);
+    setQbCreatedBooking(null);
     setShowQuickBookModal(true);
   }
 
@@ -511,8 +525,46 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       .finally(() => setQbSlotsLoading(false));
   }, [qbDate, quickBookPack, quickBookPrefill, apiBase, token]);
 
+  function getQbBasePrice() {
+    const pkg = quickBookPack?.packageId || quickBookPrefill?.packageId;
+    return pkg?.price || pkg?.totalPrice || 0;
+  }
+
+  function getQbDeposit() {
+    const base = getQbBasePrice();
+    const discounted = Math.max(0, base - qbVoucherDiscount);
+    if (quickBookPack) return 0; // slot pack → đã thanh toán 100%
+    return Math.round(discounted * 0.3 / 1000) * 1000;
+  }
+
+  async function applyQbVoucher() {
+    if (!qbVoucherCode.trim()) { setQbError('Nhập mã voucher'); return; }
+    const branchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id
+      || qbBranchId
+      || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
+    const base = getQbBasePrice();
+    setQbApplyingVoucher(true);
+    setQbError('');
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/vouchers/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: qbVoucherCode.trim(), branchId, amount: base, packageId: quickBookPack?.packageId?._id || quickBookPack?.packageId?.id || quickBookPrefill?.packageId?._id || quickBookPrefill?.packageId?.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Mã không hợp lệ');
+      const discount = data?.data?.savings || data?.data?.discountAmount || 0;
+      setQbVoucherDiscount(discount);
+      showToastMsg(`Áp dụng voucher giảm ${discount.toLocaleString('vi-VN')}đ`);
+    } catch (e) {
+      setQbVoucherDiscount(0);
+      setQbError(e.message);
+    } finally {
+      setQbApplyingVoucher(false);
+    }
+  }
+
   async function confirmQuickBook() {
-    // Validate pack vẫn còn lượt
     if (quickBookPack && quickBookPack.remainingSlots <= 0) {
       setQbError('Gói lượt này đã hết lượt sử dụng');
       return;
@@ -524,7 +576,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
     const pkgId = quickBookPack?.packageId?._id || quickBookPack?.packageId?.id || quickBookPrefill?.packageId?._id || quickBookPrefill?.packageId?.id;
     if (!branchId) { setQbError('Vui lòng chọn chi nhánh'); return; }
-    // Nếu pack có branchId thì validate branch chọn phải khớp
     const packBranchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id;
     if (packBranchId && packBranchId !== branchId) {
       setQbError('Chi nhánh không khớp với gói lượt. Vui lòng chọn đúng chi nhánh của gói.');
@@ -544,6 +595,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           vehicleId,
           bookingDate: qbDate,
           startTime: qbTime,
+          voucherCode: qbVoucherCode.trim() || undefined,
           slotPackId: quickBookPack ? (quickBookPack._id || quickBookPack.id) : undefined,
           selectedSubServices: [],
           note: '',
@@ -552,20 +604,63 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       const data = await res.json();
       if (!res.ok) {
         const serverMsg = data.message || data.error || '';
-        // Nếu pack hết lượt / hết hạn / không còn hiệu lực → thông báo rõ
         if (serverMsg.toLowerCase().includes('slot') || serverMsg.toLowerCase().includes('hết lượt') || serverMsg.includes('remain')) {
           throw new Error('Gói lượt đã hết hoặc không còn hiệu lực. Vui lòng kiểm tra lại.');
         }
         throw new Error(serverMsg || 'Đặt lịch thất bại');
       }
-      showToastMsg(quickBookPack ? 'Đã đặt lịch từ gói lượt!' : 'Đặt lịch thành công!');
-      setShowQuickBookModal(false);
+      if (quickBookPack) {
+        // Gói slot → đã thanh toán 100%
+        showToastMsg('Đã đặt lịch từ gói lượt!');
+        setShowQuickBookModal(false);
+      } else {
+        // Không dùng gói → cần thanh toán cọc
+        setQbCreatedBooking(data?.data);
+        setQbShowPayment(true);
+      }
       fetchSlotPacks();
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (e) {
       setQbError(e.message);
     } finally {
       setQbSubmitting(false);
+    }
+  }
+
+  async function handleQbPayment(method) {
+    if (!qbCreatedBooking) return;
+    const booking = qbCreatedBooking;
+    const bookingId = booking._id || booking.id;
+    const deposit = getQbDeposit();
+    if (deposit <= 0) return;
+    setQbSimulating(true);
+    setQbError('');
+    try {
+      // Tạo payment record
+      const payRes = await fetch(`${apiBase || API_BASE}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId, method, paymentType: 'deposit', amount: deposit }),
+      });
+      const payData = await payRes.json();
+      if (!payRes.ok) throw new Error(payData.message || payData.error || 'Tạo payment thất bại');
+      // Simulate thanh toán (demo)
+      const simRes = await fetch(`${apiBase || API_BASE}/payments/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          transactionId: payData?.data?.transactionId,
+          gatewayTransactionId: `SIM_${Date.now()}`,
+        }),
+      });
+      const simData = await simRes.json();
+      if (!simRes.ok) throw new Error(simData.message || 'Xác nhận thanh toán thất bại');
+      showToastMsg('Đặt lịch và thanh toán thành công!');
+      setShowQuickBookModal(false);
+    } catch (e) {
+      setQbError(e.message);
+    } finally {
+      setQbSimulating(false);
     }
   }
 
@@ -1827,6 +1922,47 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const prefill = quickBookPrefill;
         const branchName = pack?.branchId?.name || prefill?.branchName || prefill?.branchId?.name || '';
         const pkgName = pack?.packageId?.name || prefill?.packageName || prefill?.packageId?.name || '';
+        const basePrice = getQbBasePrice();
+        const deposit = getQbDeposit();
+        if (qbShowPayment) {
+          return (
+          <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowQuickBookModal(false)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-6 py-5 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900">Thanh toán</h3>
+              </div>
+              <div className="px-6 py-5 space-y-5">
+                <div className="rounded-xl bg-sky-50 border border-sky-200 p-4 text-center">
+                  <div className="text-xs text-sky-700 font-semibold uppercase tracking-wider">Tiền cọc</div>
+                  <div className="text-2xl font-extrabold text-slate-900 mt-1">{deposit.toLocaleString('vi-VN')}đ</div>
+                  <div className="text-xs text-slate-500 mt-1">(30% — {Math.max(0, basePrice - qbVoucherDiscount).toLocaleString('vi-VN')}đ)</div>
+                </div>
+                {qbVoucherDiscount > 0 && (
+                  <div className="text-xs text-emerald-600 text-center">Đã giảm {qbVoucherDiscount.toLocaleString('vi-VN')}đ từ voucher</div>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={() => handleQbPayment('vnpay')} disabled={qbSimulating}
+                    className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-500 disabled:opacity-40 transition-all">
+                    {qbSimulating ? 'Đang xử lý...' : 'Thanh toán VNPay'}
+                  </button>
+                  <button onClick={() => handleQbPayment('bank')} disabled={qbSimulating}
+                    className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 transition-all">
+                    {qbSimulating ? 'Đang xử lý...' : 'Chuyển khoản'}
+                  </button>
+                </div>
+                {qbError && (
+                  <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{qbError}</div>
+                )}
+                <button onClick={() => { setShowQuickBookModal(false); setQbShowPayment(false); }}
+                  className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all">
+                  Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+          );
+        }
         return (
         <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setShowQuickBookModal(false)}>
@@ -1844,6 +1980,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   <div className="text-sm font-bold text-slate-900 mt-1">{pack.packCode} — {pkgName}</div>
                   <div className="text-xs text-slate-500 mt-0.5">📍 {branchName}</div>
                   <SlotMeter total={pack.totalSlots} remaining={pack.remainingSlots} />
+                  <div className="mt-2 inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold">
+                    Đã thanh toán 100% từ gói lượt
+                  </div>
                 </div>
               )}
               {prefill && (
@@ -1885,7 +2024,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 <input type="date" value={qbDate}
                   min={new Date().toISOString().split('T')[0]}
                   onChange={e => setQbDate(e.target.value)}
-                  // Khi pack không khóa chi nhánh mà chưa chọn chi nhánh → disable
                   disabled={!!(pack && !(pack.branchId?._id || pack.branchId?.id) && !qbBranchId)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed" />
               </div>
@@ -1916,13 +2054,55 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 </div>
               )}
 
+              {!pack && (
+                <>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 block mb-1.5 uppercase tracking-wider">Mã giảm giá</label>
+                    <div className="flex gap-2">
+                      <input type="text" value={qbVoucherCode} onChange={e => setQbVoucherCode(e.target.value)}
+                        placeholder="Nhập mã voucher..."
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400" />
+                      <button onClick={applyQbVoucher} disabled={qbApplyingVoucher || !qbVoucherCode.trim()}
+                        className="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 disabled:opacity-40 transition-all">
+                        {qbApplyingVoucher ? '...' : 'Áp dụng'}
+                      </button>
+                    </div>
+                    {qbVoucherDiscount > 0 && (
+                      <div className="mt-1.5 text-xs text-emerald-600 font-medium">
+                        Giảm {qbVoucherDiscount.toLocaleString('vi-VN')}đ
+                        <button onClick={() => { setQbVoucherCode(''); setQbVoucherDiscount(0); }} className="ml-2 text-red-500 underline">Hủy</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {basePrice > 0 && (
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Giá dịch vụ</span>
+                        <span className="font-semibold text-slate-900">{basePrice.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                      {qbVoucherDiscount > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Giảm giá</span>
+                          <span className="font-semibold text-emerald-600">-{qbVoucherDiscount.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm pt-1.5 border-t border-slate-200">
+                        <span className="text-slate-500">Tiền cọc (30%)</span>
+                        <span className="font-bold text-slate-900">{deposit.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {qbError && (
                 <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{qbError}</div>
               )}
 
               <button onClick={confirmQuickBook} disabled={qbSubmitting || !qbDate || !qbTime}
                 className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                {qbSubmitting ? 'Đang đặt...' : 'Xác nhận đặt lịch'}
+                {qbSubmitting ? 'Đang đặt...' : pack ? 'Đặt lịch (miễn phí)' : `Đặt cọc ${deposit.toLocaleString('vi-VN')}đ`}
               </button>
             </div>
           </div>
