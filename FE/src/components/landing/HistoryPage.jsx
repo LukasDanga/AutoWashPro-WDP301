@@ -226,6 +226,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [qbVoucherCode, setQbVoucherCode] = useState('');
   const [qbVoucherDiscount, setQbVoucherDiscount] = useState(0);
   const [qbApplyingVoucher, setQbApplyingVoucher] = useState(false);
+  const [qbAvailableVouchers, setQbAvailableVouchers] = useState([]);
+  const [qbVouchersLoading, setQbVouchersLoading] = useState(false);
   const [qbShowPayment, setQbShowPayment] = useState(false);
   const [qbCreatedBooking, setQbCreatedBooking] = useState(null);
   const [qbSimulating, setQbSimulating] = useState(false);
@@ -497,6 +499,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQbError('');
     setQbVoucherCode('');
     setQbVoucherDiscount(0);
+    setQbAvailableVouchers([]);
     setQbShowPayment(false);
     setQbCreatedBooking(null);
     setShowQuickBookModal(true);
@@ -563,6 +566,24 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       setQbApplyingVoucher(false);
     }
   }
+
+  // Fetch available vouchers khi modal mở cho rebook
+  useEffect(() => {
+    if (!showQuickBookModal || quickBookPack) return;
+    const branchId = quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
+    if (!branchId) return;
+    setQbVouchersLoading(true);
+    fetch(`${apiBase || API_BASE}/vouchers/available?branchId=${branchId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(payload => {
+        const data = payload?.data || payload;
+        setQbAvailableVouchers(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setQbAvailableVouchers([]))
+      .finally(() => setQbVouchersLoading(false));
+  }, [showQuickBookModal, quickBookPack, quickBookPrefill, apiBase, token]);
 
   async function confirmQuickBook() {
     if (quickBookPack && quickBookPack.remainingSlots <= 0) {
@@ -1928,11 +1949,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           return (
           <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowQuickBookModal(false)}>
-            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="px-6 py-5 border-b border-slate-100">
+            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+              <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0">
                 <h3 className="text-lg font-bold text-slate-900">Thanh toán</h3>
               </div>
-              <div className="px-6 py-5 space-y-5">
+              <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
                 <div className="rounded-xl bg-sky-50 border border-sky-200 p-4 text-center">
                   <div className="text-xs text-sky-700 font-semibold uppercase tracking-wider">Tiền cọc</div>
                   <div className="text-2xl font-extrabold text-slate-900 mt-1">{deposit.toLocaleString('vi-VN')}đ</div>
@@ -1966,14 +1987,14 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         return (
         <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setShowQuickBookModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
               <h3 className="text-lg font-bold text-slate-900">Đặt lịch nhanh</h3>
               <button onClick={() => setShowQuickBookModal(false)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
               {pack && (
                 <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
                   <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Gói lượt</div>
@@ -2072,6 +2093,30 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                         Giảm {qbVoucherDiscount.toLocaleString('vi-VN')}đ
                         <button onClick={() => { setQbVoucherCode(''); setQbVoucherDiscount(0); }} className="ml-2 text-red-500 underline">Hủy</button>
                       </div>
+                    )}
+                    {qbAvailableVouchers.length > 0 && !qbVoucherDiscount && (
+                      <div className="mt-3">
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1.5 uppercase tracking-wider">Hoặc chọn voucher có sẵn</label>
+                        <div className="max-h-36 overflow-y-auto space-y-2">
+                          {qbAvailableVouchers.map(v => {
+                            const vId = v._id || v.id;
+                            const savings = v.savings || (v.type === 'percentage' ? Math.round(basePrice * v.value / 100) : v.value) || 0;
+                            return (
+                              <button key={vId} onClick={() => { setQbVoucherCode(v.code); applyQbVoucher(); }}
+                                className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all">
+                                <div className="text-sm font-bold text-slate-900">{v.code}</div>
+                                <div className="text-xs text-slate-500 mt-0.5">
+                                  Giảm {savings.toLocaleString('vi-VN')}đ
+                                  {v.description ? ` — ${v.description}` : ''}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {qbVouchersLoading && (
+                      <div className="text-xs text-slate-400 mt-2">Đang tải voucher...</div>
                     )}
                   </div>
 
