@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo, Fragment } from 'react';
 import {
   ArrowClockwise,
   CalendarCheck,
   CaretDown,
+  CaretRight,
   MagnifyingGlass,
   X,
   CheckCircle,
@@ -23,10 +24,16 @@ import {
   CurrencyCircleDollar,
   Printer,
   CaretLeft,
-  CaretRight,
   CalendarBlank,
   Table as TableIcon,
   Rows,
+  Package,
+  Buildings,
+  CreditCard,
+  Tag,
+  Lock,
+  Wallet,
+  Bank,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
 import TierBadge from '@/components/ui/TierBadge';
@@ -159,7 +166,7 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
           <CaretDown size={10} className="opacity-70" />
         </button>
         {open && (
-          <div className="absolute right-0 top-7 z-20 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          <div className="absolute right-0 top-7 z-[9999] min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
             {nexts.map((s) => (
               <button key={s} onClick={() => update(s)}
                 className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 transition-colors">
@@ -736,6 +743,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [showQR, setShowQR] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
   const [confirmCash, setConfirmCash] = useState(false);
+  const [managerPayMethod, setManagerPayMethod] = useState(null);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'confirmed', label: 'Đã xác nhận' },
@@ -772,14 +780,15 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const handleCashPayment = async () => {
     setConfirmCash(false);
     setBusy(true);
+    const method = managerPayMethod || 'cash';
     try {
       const res = await api(`/payments`, {
         method: 'POST',
-        body: JSON.stringify({ bookingId: booking._id, method: 'cash', paymentType: booking.depositPaid ? 'remaining' : 'full' }),
+        body: JSON.stringify({ bookingId: booking._id, method, paymentType: booking.depositPaid ? 'remaining' : 'full' }),
       });
       if (!res.ok) throw new Error(await readErr(res));
-      onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: 'cash' });
-      notify('Xác nhận thu tiền mặt thành công!');
+      onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: method });
+      notify(`Xác nhận thanh toán ${method === 'cash' ? 'tiền mặt' : method === 'bank' ? 'chuyển khoản' : 'VNPay'} thành công!`, 'success');
     } catch (err) {
       notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
     } finally { setBusy(false); }
@@ -901,102 +910,109 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
               </span>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Customer + Vehicle row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Khách hàng</p>
-                  <p className="font-semibold text-slate-800">{booking.userId?.name || '—'}</p>
-                  <p className="text-xs text-slate-500">{booking.userId?.phone || ''}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
-                    <Car size={10} /> Phương tiện
-                  </p>
-                  <p className="font-mono font-semibold text-slate-800">{booking.vehicleId?.licensePlate || '—'}</p>
-                  <p className="text-xs text-slate-500 capitalize">{booking.vehicleId?.vehicleType} · {booking.vehicleId?.brand} {booking.vehicleId?.color}</p>
-                </div>
-              </div>
-
-              {/* Time row */}
-              <div className="grid grid-cols-2 gap-4 rounded-xl bg-white border border-emerald-100 p-3">
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
-                    <Clock size={10} /> Giờ vào
-                  </p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {booking.checkInTime
-                      ? new Date(booking.checkInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                      : booking.startTime || '—'}
-                  </p>
-                  <p className="text-xs text-slate-400">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
-                    <Clock size={10} /> Giờ ra
-                  </p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {booking.checkOutTime
-                      ? new Date(booking.checkOutTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                      : booking.endTime || '—'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Price breakdown */}
-              <div className="space-y-1.5 border-t border-emerald-200 pt-3">
-                <div className="flex justify-between text-sm text-slate-600">
-                  <span>{booking.packageId?.name || 'Dịch vụ'}</span>
-                  <span>{Number(booking.packageId?.price || booking.finalPrice || 0).toLocaleString('vi-VN')}₫</span>
-                </div>
-                {(booking.discountAmount > 0) && (
-                  <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Voucher {booking.voucherCode ? `(${booking.voucherCode})` : ''}</span>
-                    <span>-{Number(booking.discountAmount).toLocaleString('vi-VN')}₫</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center border-t border-emerald-200 pt-2 mt-1">
-                  <span className="font-bold text-slate-800">Thành tiền</span>
-                  <span className="text-lg font-bold text-emerald-700">
-                    {Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫
+            <div className="p-5 bg-white space-y-1">
+              {/* Info rows with phosphor icons */}
+              {([
+                { icon: <Package size={14} weight="fill" className="text-emerald-600 shrink-0" />, label: 'Dịch vụ', value: booking.packageName || booking.packageId?.name || '—' },
+                { icon: <CalendarBlank size={14} weight="fill" className="text-blue-500 shrink-0" />, label: 'Ngày', value: new Date(booking.bookingDate).toLocaleDateString('vi-VN') },
+                { icon: <Clock size={14} weight="fill" className="text-indigo-500 shrink-0" />, label: 'Giờ', value: booking.startTime || '—' },
+                { icon: <Buildings size={14} weight="fill" className="text-slate-500 shrink-0" />, label: 'Chi nhánh', value: booking.branchName || booking.branchId?.name || '—' },
+                { icon: <Car size={14} weight="fill" className="text-cyan-600 shrink-0" />, label: 'Biển số', value: booking.vehiclePlate || booking.vehicleId?.licensePlate || '—' },
+                { icon: <CurrencyCircleDollar size={14} weight="fill" className="text-emerald-600 shrink-0" />, label: 'Thành tiền', value: Number(booking.totalAmount || booking.finalPrice || 0).toLocaleString('vi-VN') + 'đ' },
+                { icon: <CreditCard size={14} weight="fill" className="text-violet-500 shrink-0" />, label: 'Phương thức', value: booking.paymentMethod ? (
+                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                    booking.paymentMethod === 'cash' ? 'bg-violet-100 text-violet-700' :
+                    booking.paymentMethod === 'bank' ? 'bg-blue-100 text-blue-700' :
+                    'bg-indigo-100 text-indigo-700'
+                  }`}>
+                    {booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'bank' ? 'Chuyển khoản' : 'VNPay'}
                   </span>
+                ) : '—' },
+                { icon: <CheckCircle size={14} weight="fill" className={(booking.paymentStatus === 'paid' || booking.paymentStatus === 'deposit_paid') ? 'text-emerald-600 shrink-0' : 'text-amber-500 shrink-0'} />, label: 'Thanh toán', value: (
+                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                    booking.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 
+                    booking.paymentStatus === 'deposit_paid' ? 'bg-emerald-50 text-emerald-600' : 
+                    'bg-amber-100 text-amber-700'
+                  }`}>
+                    {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'deposit_paid' ? 'Đã đặt cọc' : 'Chưa thanh toán'}
+                  </span>
+                )},
+                { icon: <Tag size={14} weight="fill" className="text-orange-500 shrink-0" />, label: 'Loại đặt', value: booking.bookingType === 'recurring' ? 'Định kỳ' : booking.bookingType === 'slot_pack_usage' ? 'Gói lượt' : '1 lần' },
+              ]).map(({ icon, label, value }) => (
+                <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-100 last:border-0 gap-2">
+                  <span className="flex items-center gap-2 text-[13px] text-slate-500">{icon}{label}</span>
+                  <span className="text-[13px] font-semibold text-slate-900 text-right max-w-[55%]">{value}</span>
                 </div>
-              </div>
+              ))}
 
-              {/* Payment status */}
-              <div className="flex items-center justify-between rounded-xl bg-white border border-emerald-100 px-4 py-2.5">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CurrencyCircleDollar size={16} className="text-emerald-600" weight="fill" />
-                  <span>Thanh toán</span>
-                  {booking.paymentMethod && (
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 capitalize">
-                      {booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'bank' ? 'Chuyển khoản' : booking.paymentMethod}
+              {booking.depositAmount > 0 && (
+                <>
+                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] font-semibold text-amber-600">
+                      <Lock size={14} weight="fill" className="text-amber-500 shrink-0" />
+                      Đặt cọc {Math.round((booking.depositAmount || 0) / ((booking.totalAmount || booking.finalPrice || 1)) * 100)}%
                     </span>
+                    <span className="text-[13px] font-bold text-amber-600">
+                      {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                      <ClockCounterClockwise size={14} weight="fill" className="text-slate-400 shrink-0" />
+                      Còn lại (thanh toán sau)
+                    </span>
+                    <span className="text-[13px] font-semibold text-slate-500">
+                      {booking.paymentStatus === 'paid' ? '0đ' : `${Number(Math.max(0, (booking.totalAmount || booking.finalPrice || 0) - (booking.depositAmount || 0))).toLocaleString('vi-VN')}đ`}
+                    </span>
+                  </div>
+                  {booking.depositPaid && (
+                    <div className="mt-2 text-center pb-2 border-b border-slate-100">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                        <CheckCircle size={13} weight="fill" /> Đã đặt cọc {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
                   )}
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${
-                  booking.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
-                </span>
-              </div>
-
-              {/* Confirm cash if not yet paid */}
-              {booking.paymentStatus !== 'paid' && (
-                <button disabled={busy} onClick={() => setConfirmCash(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                  <CurrencyCircleDollar size={15} weight="fill" />
-                  Xác nhận thu tiền mặt
-                </button>
+                </>
               )}
 
-              {/* Invoice action buttons — đặt lại lịch chỉ dành cho khách hàng */}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowPrint(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
-                  <Printer size={15} />
-                  In hóa đơn
-                </button>
+              <div className="pt-3 space-y-2">
+                {/* Payment method selection for manager (only when not yet paid) */}
+                {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'vnpay',icon:<CreditCard size={16}/>,label:'VNPay'}].map(m => (
+                        <button key={m.id} type="button"
+                          onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
+                          className={`flex flex-col items-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
+                            managerPayMethod === m.id
+                              ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          }`}>
+                          {m.icon}{m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Confirm cash if not yet paid */}
+                {booking.paymentStatus !== 'paid' && (
+                  <button disabled={busy} onClick={() => setConfirmCash(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                    <CurrencyCircleDollar size={15} weight="fill" />
+                    {booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền'}
+                  </button>
+                )}
+
+                {/* Invoice action buttons */}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setShowPrint(true)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                    <Printer size={15} />
+                    In hóa đơn
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1053,9 +1069,9 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
       <ConfirmDialog
         open={confirmCash}
-        title="Xác nhận thu tiền mặt"
-        message="Xác nhận khách hàng đã thanh toán bằng tiền mặt?"
-        confirmLabel="Xác nhận thu tiền"
+        title={`Xác nhận thu tiền (${managerPayMethod === 'bank' ? 'Chuyển khoản' : managerPayMethod === 'vnpay' ? 'VNPay' : 'Tiền mặt'})`}
+        message={`Xác nhận khách hàng đã thanh toán bằng ${managerPayMethod === 'bank' ? 'chuyển khoản' : managerPayMethod === 'vnpay' ? 'VNPay' : 'tiền mặt'}?`}
+        confirmLabel="Xác nhận"
         onConfirm={handleCashPayment}
         onCancel={() => setConfirmCash(false)}
       />
@@ -1267,7 +1283,47 @@ export default function ManagerBookings() {
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [qrBooking, setQrBooking] = useState(null); // booking đang hiển thị QR check-in nhanh
+  const [expandedGroups, setExpandedGroups] = useState({});
   const debounce = useRef(null);
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const tableData = useMemo(() => {
+    const groups = {};
+    const result = [];
+    bookings.forEach(b => {
+      if (b.bookingType === 'recurring' && b.recurringGroupId) {
+        if (!groups[b.recurringGroupId]) {
+          const groupItem = {
+            isGroup: true,
+            groupId: b.recurringGroupId,
+            children: [],
+          };
+          groups[b.recurringGroupId] = groupItem;
+          result.push(groupItem);
+        }
+        groups[b.recurringGroupId].children.push(b);
+      } else {
+        result.push(b);
+      }
+    });
+
+    result.forEach(item => {
+      if (item.isGroup) {
+        item.children.sort((a, b) => new Date(a.bookingDate) - new Date(b.bookingDate));
+        const first = item.children[0];
+        item.userId = first.userId;
+        item.packageId = first.packageId;
+        item.bookingType = 'recurring_group';
+        item.bookingDate = first.bookingDate;
+        item.startTime = first.startTime;
+        item._id = `group_${item.groupId}`;
+      }
+    });
+    return result;
+  }, [bookings]);
 
   const notify = showToast;
 
@@ -1485,76 +1541,192 @@ export default function ManagerBookings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {bookings.map((b) => (
-                <tr key={b._id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
-                      {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
-                      {isNewBooking(b) && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400">{b.userId?.phone ?? ''}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
-                    {b.bookingType && (
-                      <div className="mt-1">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[b.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>
-                          {TYPE_MAP[b.bookingType]?.label || b.bookingType}
-                        </span>
+              {tableData.map((b) => {
+                if (b.isGroup) {
+                  const isExpanded = expandedGroups[b.groupId];
+                  return (
+                    <Fragment key={b._id}>
+                      <tr className="hover:bg-slate-50 transition-colors cursor-pointer bg-indigo-50/30" onClick={() => toggleGroup(b.groupId)}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-indigo-500">
+                              {isExpanded ? <CaretDown size={16} weight="bold" /> : <CaretRight size={16} weight="bold" />}
+                            </span>
+                            <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
+                            {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
+                          </div>
+                          <p className="text-[11px] text-slate-400 pl-6">{b.userId?.phone ?? ''}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
+                          <div className="mt-1">
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                              Nhóm định kỳ ({b.children.length} đơn)
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-slate-700">
+                            {b.children.length > 0
+                              ? `${new Date(b.children[0].bookingDate).toLocaleDateString('vi-VN')} → ${new Date(b.children[b.children.length - 1].bookingDate).toLocaleDateString('vi-VN')}`
+                              : ''}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-slate-500 italic">Xem chi tiết ở đơn lẻ</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-slate-500 italic">Xem chi tiết ở đơn lẻ</span>
+                        </td>
+                        <td className="px-4 py-3 text-center"></td>
+                        <td className="px-4 py-3 text-right"></td>
+                      </tr>
+                      {isExpanded && b.children.map(child => (
+                        <tr key={child._id} className="hover:bg-slate-50 transition-colors bg-slate-50/50">
+                          <td className="px-4 py-3 pl-10 relative">
+                            <div className="absolute left-6 top-0 bottom-0 w-px bg-indigo-100"></div>
+                            <div className="absolute left-6 top-1/2 w-3 h-px bg-indigo-100"></div>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <p className="font-medium text-slate-800">{child.userId?.name ?? '—'}</p>
+                              {child.userId?.tier && <TierBadge tier={child.userId.tier} />}
+                              {isNewBooking(child) && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400">{child.userId?.phone ?? ''}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-slate-600">{child.packageId?.name ?? '—'}</span>
+                            <div className="mt-1">
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[child.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>
+                                {TYPE_MAP[child.bookingType]?.label || child.bookingType} (Lần {child.recurringPosition}/{child.recurringTotal})
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-slate-700">{new Date(child.bookingDate).toLocaleDateString('vi-VN')}</p>
+                            <p className="text-[11px] text-slate-400">{child.startTime}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${child.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
+                              {child.paymentStatus === 'paid' ? 'Đã thanh toán' : child.paymentStatus ?? 'Chưa TT'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusMenu bookingId={child._id} current={child.status} onUpdated={handleUpdated} notify={notify} />
+                            <AtRiskNotice booking={child} onUpdated={handleUpdated} notify={notify} />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {(() => {
+                              const m = getQrMode(child);
+                              if (!m) return <span className="text-slate-300">—</span>;
+                              const cls = m === 'active' ? 'text-blue-600 hover:bg-blue-50'
+                                : m === 'checked_in' ? 'text-emerald-600 hover:bg-emerald-50'
+                                : 'text-red-500 hover:bg-red-50';
+                              const title = m === 'active' ? 'Hiển thị QR để khách check-in'
+                                : m === 'checked_in' ? 'Đã check-in — xem QR' : 'Mã đã hết hạn';
+                              return (
+                                <button onClick={() => setQrBooking(child)} title={title}
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${cls}`}>
+                                  <QrCode size={18} weight="duotone" />
+                                </button>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button onClick={() => setSelectedBooking(child)}
+                                className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
+                                Xem đơn
+                              </button>
+                              {child.status !== 'cancelled' && child.status !== 'completed' && (
+                                <button onClick={() => setConfirmCancelId(child._id)}
+                                  className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
+                                  Hủy
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                }
+
+                // Normal row
+                return (
+                  <tr key={b._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
+                        {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
+                        {isNewBooking(b) && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-slate-700">{new Date(b.bookingDate).toLocaleDateString('vi-VN')}</p>
-                    <p className="text-[11px] text-slate-400">{b.startTime}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
-                      {b.paymentStatus === 'paid' ? 'Đã thanh toán' : b.paymentStatus ?? 'Chưa TT'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
-                    <AtRiskNotice booking={b} onUpdated={handleUpdated} notify={notify} />
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {(() => {
-                      const m = getQrMode(b);
-                      if (!m) return <span className="text-slate-300">—</span>;
-                      const cls = m === 'active' ? 'text-blue-600 hover:bg-blue-50'
-                        : m === 'checked_in' ? 'text-emerald-600 hover:bg-emerald-50'
-                        : 'text-red-500 hover:bg-red-50';
-                      const title = m === 'active' ? 'Hiển thị QR để khách check-in'
-                        : m === 'checked_in' ? 'Đã check-in — xem QR' : 'Mã đã hết hạn';
-                      return (
-                        <button onClick={() => setQrBooking(b)} title={title}
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${cls}`}>
-                          <QrCode size={18} weight="duotone" />
-                        </button>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setSelectedBooking(b)}
-                        className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
-                        Xem đơn
-                      </button>
-                      {b.status !== 'cancelled' && b.status !== 'completed' && (
-                        <button onClick={() => setConfirmCancelId(b._id)}
-                          className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
-                          Hủy
-                        </button>
+                      <p className="text-[11px] text-slate-400">{b.userId?.phone ?? ''}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
+                      {b.bookingType && (
+                        <div className="mt-1">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[b.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>
+                            {TYPE_MAP[b.bookingType]?.label || b.bookingType}
+                          </span>
+                        </div>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-slate-700">{new Date(b.bookingDate).toLocaleDateString('vi-VN')}</p>
+                      <p className="text-[11px] text-slate-400">{b.startTime}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
+                        {b.paymentStatus === 'paid' ? 'Đã thanh toán' : b.paymentStatus ?? 'Chưa TT'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusMenu bookingId={b._id} current={b.status} onUpdated={handleUpdated} notify={notify} />
+                      <AtRiskNotice booking={b} onUpdated={handleUpdated} notify={notify} />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {(() => {
+                        const m = getQrMode(b);
+                        if (!m) return <span className="text-slate-300">—</span>;
+                        const cls = m === 'active' ? 'text-blue-600 hover:bg-blue-50'
+                          : m === 'checked_in' ? 'text-emerald-600 hover:bg-emerald-50'
+                          : 'text-red-500 hover:bg-red-50';
+                        const title = m === 'active' ? 'Hiển thị QR để khách check-in'
+                          : m === 'checked_in' ? 'Đã check-in — xem QR' : 'Mã đã hết hạn';
+                        return (
+                          <button onClick={() => setQrBooking(b)} title={title}
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${cls}`}>
+                            <QrCode size={18} weight="duotone" />
+                          </button>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setSelectedBooking(b)}
+                          className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
+                          Xem đơn
+                        </button>
+                        {b.status !== 'cancelled' && b.status !== 'completed' && (
+                          <button onClick={() => setConfirmCancelId(b._id)}
+                            className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
+                            Hủy
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
