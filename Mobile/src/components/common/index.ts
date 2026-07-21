@@ -43,3 +43,4 @@ export { IconButton } from './IconButton';
 export { ListItem } from './ListItem';
 export { SegmentedControl } from './SegmentedControl';
 export { RatingSheet } from './RatingSheet';
+export { BottomNavBar } from './BottomNavBar';

@@ -19,7 +19,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import * as Haptics from 'expo-haptics';
@@ -38,6 +38,7 @@ import {
   PressableScale,
   Header,
   ScreenContainer,
+  BottomNavBar,
   AlertDialog,
   useToast,
   Input,
@@ -54,6 +55,7 @@ export default function BookingDetailScreen() {
   const { isAuthenticated } = useAuth();
   const colors = useColors();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -67,6 +69,10 @@ export default function BookingDetailScreen() {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundReason, setRefundReason] = useState('');
   const [isRefunding, setIsRefunding] = useState(false);
+
+  // Cancel UI state — BE requires a cancellationReason on POST /bookings/:id/cancel.
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   useEffect(() => {
     if (id) fetchBooking();
@@ -106,30 +112,32 @@ export default function BookingDetailScreen() {
 
   const handleCancel = () => {
     if (!booking) return;
-    AlertDialog.confirm(
-      'Hủy đặt lịch',
-      `Bạn có chắc chắn muốn hủy đơn #${booking._id.slice(-8).toUpperCase()}? Hành động này không thể hoàn tác.`,
-      async () => {
-        if (!id) return;
-        setIsCancelling(true);
-        try {
-          await bookingApi.cancelBooking(id);
-          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-          toast.success('Đã hủy đặt lịch', 'Đơn của bạn đã được hủy thành công');
-          await fetchBooking();
-        } catch (error: any) {
-          AlertDialog.error(
-            'Không thể hủy',
-            error.response?.data?.message || 'Đã xảy ra lỗi khi hủy đặt lịch. Vui lòng thử lại.',
-          );
-        } finally {
-          setIsCancelling(false);
-        }
-      },
-      undefined,
-      'Hủy đặt lịch',
-      'Không',
-    );
+    setCancelReason('');
+    setShowCancelModal(true);
+  };
+
+  const submitCancel = async () => {
+    if (!id) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      AlertDialog.error('Thiếu lý do', 'Vui lòng nhập lý do hủy đặt lịch.');
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      await bookingApi.cancelBooking(id, reason);
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      setShowCancelModal(false);
+      toast.success('Đã hủy đặt lịch', 'Đơn của bạn đã được hủy thành công');
+      await fetchBooking();
+    } catch (error: any) {
+      AlertDialog.error(
+        'Không thể hủy',
+        error.response?.data?.message || 'Đã xảy ra lỗi khi hủy đặt lịch. Vui lòng thử lại.',
+      );
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const handleRebook = async () => {
@@ -155,11 +163,6 @@ export default function BookingDetailScreen() {
     } finally {
       setIsRebooking(false);
     }
-  };
-
-  const handlePayDeposit = () => {
-    if (!booking) return;
-    router.push(`/payment/select?bookingId=${booking._id}&type=deposit` as any);
   };
 
   const handlePayRemaining = () => {
@@ -220,12 +223,6 @@ export default function BookingDetailScreen() {
   const canShowQR = ['confirmed', 'checked_in'].includes(booking.status);
 
   // Logic payment actions — match BE booking.service.js.
-  // Cọc (deposit): booking có depositAmount > 0 và chưa depositPaid.
-  const hasDeposit =
-    (booking.depositAmount ?? 0) > 0 && !booking.depositPaid;
-  // Trạng thái cho phép thanh toán cọc: pending, confirmed.
-  const canPayDeposit =
-    hasDeposit && ['pending', 'confirmed'].includes(booking.status);
   // Thanh toán phần còn lại: đã cọc, dịch vụ đã hoàn thành (completed) hoặc
   // đang thực hiện. Manager thường đòi khách trả nốt sau khi xe sẵn sàng.
   const canPayRemaining =
@@ -238,6 +235,9 @@ export default function BookingDetailScreen() {
     booking.status === 'cancelled' &&
     (booking.depositPaid || booking.paymentStatus === 'paid') &&
     !refundRequestData;
+
+  const hasBottomActions =
+    canCancel || canRebook || canPayRemaining || canRequestRefund;
 
   return (
     <ScreenContainer edges={['top']} background="subtle">
@@ -446,7 +446,7 @@ export default function BookingDetailScreen() {
           {booking.voucherCode ? (
             <RowBetween label="Voucher" value={booking.voucherCode} />
           ) : null}
-          {(booking.depositAmount ?? 0) > 0 ? (
+          {(booking.depositAmount ?? 0) > 0 && booking.paymentStatus !== 'paid' ? (
             <>
               <RowBetween
                 label={`Cọc (30%)`}
@@ -579,26 +579,19 @@ export default function BookingDetailScreen() {
         ) : null}
       </ScrollView>
 
-      {/* Bottom actions */}
-      <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background }}>
-        <View
-          style={[
-            styles.bottomAction,
-            { borderTopColor: colors.border },
-          ]}
-        >
+      {/* Bottom actions — nằm phía trên thanh điều hướng dưới cùng */}
+      {hasBottomActions ? (
+        <View style={{ backgroundColor: colors.background, marginBottom: 68 + insets.bottom }}>
+          <View
+            style={[
+              styles.bottomAction,
+              { borderTopColor: colors.border },
+            ]}
+          >
           {(() => {
-            // Thứ tự ưu tiên nút: payment > cancel/rebook.
-            // Tránh hiển thị cùng lúc "Đặt cọc" + "Hủy" trên cùng hàng vì quá chật.
-            const primaryPaymentAction = canPayDeposit ? (
-              <Button
-                title={`Đặt cọc ${formatCurrency(booking.depositAmount ?? 0)}`}
-                size="medium"
-                icon={<Icon name={Icons.walletOutline} size={18} color={colors.textInverse} />}
-                onPress={handlePayDeposit}
-                style={styles.actionFlex}
-              />
-            ) : canPayRemaining ? (
+            // Nút thanh toán: chỉ còn "Thanh toán phần còn lại".
+            // Nút "Đặt cọc" đã được gỡ bỏ theo yêu cầu (thanh toán cọc xử lý ở luồng đặt lịch).
+            const primaryPaymentAction = canPayRemaining ? (
               <Button
                 title="Thanh toán phần còn lại"
                 size="medium"
@@ -696,8 +689,58 @@ export default function BookingDetailScreen() {
             }
             return null;
           })()}
+          </View>
         </View>
-      </SafeAreaView>
+      ) : null}
+
+      <BottomNavBar />
+
+      {/* Cancel Confirmation Modal — nhập lý do hủy (BE yêu cầu cancellationReason) */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <AppText variant="h4">Xác nhận hủy đặt lịch</AppText>
+              <TouchableOpacity onPress={() => setShowCancelModal(false)}>
+                <Icon name={Icons.close} size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <AppText variant="body" color="textSecondary" style={{ marginBottom: spacing.md }}>
+              Bạn có chắc chắn muốn hủy đơn này? Vui lòng cho chúng tôi biết lý do hủy.
+              Hành động này không thể hoàn tác.
+            </AppText>
+            <Input
+              label="Lý do hủy"
+              placeholder="Nhập lý do hủy đặt lịch..."
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              multiline
+              numberOfLines={3}
+              inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
+              <Button
+                title="Quay lại"
+                variant="outline"
+                onPress={() => setShowCancelModal(false)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Xác nhận hủy"
+                variant="danger"
+                onPress={submitCancel}
+                loading={isCancelling}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Refund Request Modal */}
       <Modal
