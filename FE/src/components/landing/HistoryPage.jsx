@@ -469,9 +469,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQuickBookPack(pack);
     setQuickBookPrefill(null);
     setQbBranchId('');
-    // Nếu pack có vehicleId thì prefill luôn xe đó
-    const vid = pack.vehicleId?._id || pack.vehicleId?.id || '';
-    setQbVehicleId(vid);
+    setQbVehicleId('');
     setQbDate('');
     setQbSlots([]);
     setQbTime('');
@@ -526,6 +524,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       || quickBookPrefill?.branchId?._id || quickBookPrefill?.branchId?.id;
     const pkgId = quickBookPack?.packageId?._id || quickBookPack?.packageId?.id || quickBookPrefill?.packageId?._id || quickBookPrefill?.packageId?.id;
     if (!branchId) { setQbError('Vui lòng chọn chi nhánh'); return; }
+    // Nếu pack có branchId thì validate branch chọn phải khớp
+    const packBranchId = quickBookPack?.branchId?._id || quickBookPack?.branchId?.id;
+    if (packBranchId && packBranchId !== branchId) {
+      setQbError('Chi nhánh không khớp với gói lượt. Vui lòng chọn đúng chi nhánh của gói.');
+      return;
+    }
     const vehicleId = qbVehicleId || quickBookPrefill?.vehicleId?._id || quickBookPrefill?.vehicleId?.id;
     if (!vehicleId) { setQbError('Vui lòng chọn xe'); return; }
     setQbSubmitting(true);
@@ -565,16 +569,14 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }
 
-  // Auto-select first vehicle cho quick book (chỉ khi pack không khóa xe)
+  // Auto-select first vehicle cho quick book
   useEffect(() => {
     if (!showQuickBookModal) return;
     if (quickBookPrefill?.vehicleId?._id || quickBookPrefill?.vehicleId?.id) return;
-    // Nếu pack đã khóa xe, không auto-select
-    if (quickBookPack?.vehicleId?._id || quickBookPack?.vehicleId?.id) return;
     if (!qbVehicleId && userVehicles.length > 0) {
       setQbVehicleId(userVehicles[0]._id || userVehicles[0].id);
     }
-  }, [showQuickBookModal, quickBookPrefill, quickBookPack, userVehicles, qbVehicleId]);
+  }, [showQuickBookModal, quickBookPrefill, userVehicles, qbVehicleId]);
 
   async function handleCancelPack(packId) {
     if (!confirm('Bạn có chắc muốn hủy gói lượt này?')) return;
@@ -1869,17 +1871,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1.5 uppercase tracking-wider">Chọn xe</label>
                 <select value={qbVehicleId} onChange={e => setQbVehicleId(e.target.value)}
-                  disabled={!!(quickBookPack?.vehicleId?._id || quickBookPack?.vehicleId?.id)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400">
                   {userVehicles.map(v => (
                     <option key={v._id || v.id} value={v._id || v.id}>
                       {v.licensePlate || v.name} {v.brand ? `(${v.brand})` : ''}
                     </option>
                   ))}
                 </select>
-                {(quickBookPack?.vehicleId?._id || quickBookPack?.vehicleId?.id) && (
-                  <p className="text-[11px] text-slate-400 mt-1">Gói này chỉ áp dụng cho xe đã chọn</p>
-                )}
               </div>
 
               <div>
