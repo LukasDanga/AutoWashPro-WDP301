@@ -1685,8 +1685,19 @@ export default function ManagerBookings() {
                       <p className="text-[11px] text-slate-400">{b.startTime}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
-                        {b.paymentStatus === 'paid' ? 'Đã thanh toán' : b.paymentStatus ?? 'Chưa TT'}
+                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        b.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                        b.paymentStatus === 'deposit_paid' ? 'bg-teal-50 text-teal-700' :
+                        b.paymentStatus === 'refunded' ? 'bg-slate-100 text-slate-500' :
+                        'bg-amber-50 text-amber-700'
+                      }`}>
+                        {
+                          b.paymentStatus === 'paid' ? 'Đã thanh toán' :
+                          b.paymentStatus === 'deposit_paid' ? 'Đã cọc' :
+                          b.paymentStatus === 'refunded' ? 'Đã hoàn tiền' :
+                          b.paymentStatus === 'failed' ? 'Thất bại' :
+                          'Chưa thanh toán'
+                        }
                       </span>
                     </td>
                     <td className="px-4 py-3">

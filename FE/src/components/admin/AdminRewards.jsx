@@ -262,7 +262,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
       const res = await api(`/vouchers/usage/${voucherId}?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load usage');
+      if (!res.ok) throw new Error('Không thể tải lịch sử sử dụng');
       const p = await res.json();
       setUsages(p?.data ?? []);
       if (p?.pagination) setPagination(p.pagination);
@@ -384,7 +384,7 @@ function VoucherUsageReportTab() {
   useEffect(() => {
     let mounted = true;
     api('/vouchers/usage-report')
-      .then(res => { if (!res.ok) throw new Error('Failed to load report'); return res.json(); })
+      .then(res => { if (!res.ok) throw new Error('Không thể tải báo cáo sử dụng'); return res.json(); })
       .then(p => { if (mounted) { setReport(p?.data ?? []); setLoading(false); } })
       .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
     return () => { mounted = false; };

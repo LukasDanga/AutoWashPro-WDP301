@@ -3,10 +3,10 @@ import { confirmDialog } from '@/lib/confirm';
 import useSSE from '@/hooks/useSSE';
 
 const TIER_META = {
-  bronze:  { icon: '🥉', label: 'Bronze',  color: '#cd7f32', bg: 'rgba(205,127,50,0.10)',  ring: 'rgba(205,127,50,0.25)' },
-  silver:  { icon: '🥈', label: 'Silver',  color: '#6b7280', bg: 'rgba(107,114,128,0.10)', ring: 'rgba(107,114,128,0.25)' },
-  gold:    { icon: '🥇', label: 'Gold',    color: '#d97706', bg: 'rgba(217,119,6,0.10)',   ring: 'rgba(217,119,6,0.25)' },
-  diamond: { icon: '💎', label: 'Diamond', color: '#0ea5e9', bg: 'rgba(14,165,233,0.10)',  ring: 'rgba(14,165,233,0.25)' },
+  bronze:  { icon: '🥉', label: 'Đồng',  color: '#cd7f32', bg: 'rgba(205,127,50,0.10)',  ring: 'rgba(205,127,50,0.25)' },
+  silver:  { icon: '🥈', label: 'Bạc',   color: '#6b7280', bg: 'rgba(107,114,128,0.10)', ring: 'rgba(107,114,128,0.25)' },
+  gold:    { icon: '🥇', label: 'Vàng',  color: '#d97706', bg: 'rgba(217,119,6,0.10)',   ring: 'rgba(217,119,6,0.25)' },
+  diamond: { icon: '💎', label: 'Kim Cương', color: '#0ea5e9', bg: 'rgba(14,165,233,0.10)',  ring: 'rgba(14,165,233,0.25)' },
 };
 
 function formatCurrency(v) {

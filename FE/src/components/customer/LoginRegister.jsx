@@ -33,9 +33,9 @@ export default function LoginRegister() {
     async function readError(response) {
         try {
             const payload = await response.json();
-            return payload?.message || payload?.error || 'Request failed';
+            return payload?.message || payload?.error || 'Yêu cầu thất bại';
         } catch {
-            return 'Request failed';
+            return 'Yêu cầu thất bại';
         }
     }
 
