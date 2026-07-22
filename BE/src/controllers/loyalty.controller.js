@@ -1,6 +1,5 @@
 const loyaltyService = require('../services/loyalty.service');
-const { catchAsync } = require('../utils/catchAsync');
-const AppError = require('../utils/AppError');
+const { catchAsync } = require('../utils/helpers');
 
 exports.getTiers = catchAsync(async (req, res, next) => {
   const tiers = loyaltyService.getTierConfig();
