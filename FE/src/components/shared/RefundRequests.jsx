@@ -114,11 +114,28 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
           </div>
           <div>
             <span className="block text-xs text-slate-400 font-medium">Trạng thái booking</span>
-            <span className="font-semibold text-slate-700 mt-0.5">{booking.status || '—'}</span>
+            <span className="font-semibold text-slate-700 mt-0.5">
+              {
+                booking.status === 'confirmed' ? 'Đã xác nhận' :
+                booking.status === 'pending' ? 'Chờ xác nhận' :
+                booking.status === 'checked_in' ? 'Đã check-in' :
+                booking.status === 'in_progress' ? 'Đang thực hiện' :
+                booking.status === 'completed' ? 'Hoàn thành' :
+                booking.status === 'cancelled' ? 'Đã hủy' : booking.status || '—'
+              }
+            </span>
           </div>
           <div>
             <span className="block text-xs text-slate-400 font-medium">Thanh toán</span>
-            <span className="font-semibold text-slate-700 mt-0.5">{booking.paymentStatus || '—'}</span>
+            <span className="font-semibold text-slate-700 mt-0.5">
+              {
+                booking.paymentStatus === 'paid' ? 'Đã thanh toán' :
+                booking.paymentStatus === 'deposit_paid' ? 'Đã cọc' :
+                booking.paymentStatus === 'refunded' ? 'Đã hoàn tiền' :
+                booking.paymentStatus === 'failed' ? 'Thất bại' :
+                booking.paymentStatus === 'unpaid' ? 'Chưa thanh toán' : booking.paymentStatus || 'Chưa thanh toán'
+              }
+            </span>
           </div>
         </div>
 

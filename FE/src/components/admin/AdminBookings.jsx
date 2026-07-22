@@ -341,7 +341,7 @@ export default function AdminBookings() {
                 ['Ngày', fmtDate(selected.bookingDate)],
                 ['Giờ', `${selected.startTime} – ${selected.endTime}`],
                 ['Tổng tiền', fmtMoney(selected.finalPrice)],
-                ['Thanh toán', selected.paymentStatus],
+                ['Thanh toán', selected.paymentStatus === 'paid' ? 'Đã thanh toán' : selected.paymentStatus === 'deposit_paid' ? 'Đã cọc' : selected.paymentStatus === 'unpaid' ? 'Chưa thanh toán' : selected.paymentStatus === 'refunded' ? 'Đã hoàn tiền' : selected.paymentStatus === 'failed' ? 'Thất bại' : selected.paymentStatus || 'Chưa thanh toán'],
                 ['Ghi chú', selected.note],
                 ['Lý do hủy', selected.cancellationReason],
               ].map(([k, v]) => v ? (

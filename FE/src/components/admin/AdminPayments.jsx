@@ -56,10 +56,13 @@ function formatDateTime(d) {
 }
 
 const STATUS_MAP = {
-  pending:  { label: 'Chờ thanh toán', cls: 'bg-amber-50 text-amber-700', icon: Clock },
-  paid:     { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700', icon: CheckCircle },
-  failed:   { label: 'Thất bại',      cls: 'bg-red-50 text-red-600',      icon: XCircle },
-  refunded: { label: 'Đã hoàn tiền',  cls: 'bg-slate-100 text-slate-500',  icon: ArrowUUpLeft },
+  unpaid:         { label: 'Chưa thanh toán', cls: 'bg-rose-50 text-rose-700', icon: Clock },
+  pending:        { label: 'Chờ thanh toán', cls: 'bg-amber-50 text-amber-700', icon: Clock },
+  deposit_paid:   { label: 'Đã cọc', cls: 'bg-teal-50 text-teal-700', icon: CheckCircle },
+  partially_paid: { label: 'Thanh toán một phần', cls: 'bg-blue-50 text-blue-700', icon: CheckCircle },
+  paid:           { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700', icon: CheckCircle },
+  failed:         { label: 'Thất bại',      cls: 'bg-red-50 text-red-600',      icon: XCircle },
+  refunded:       { label: 'Đã hoàn tiền',  cls: 'bg-slate-100 text-slate-500',  icon: ArrowUUpLeft },
 };
 
 const METHOD_MAP = {
