@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
+import QuickBookModal from '../customer/QuickBookModal.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -80,17 +81,20 @@ function SlotMeter({ total, remaining }) {
   );
 }
 
-function PackCard({ pack }) {
+function PackCard({ pack, onQuickBook, onCancelPack }) {
   const st = PACK_STATUS_MAP[pack.status] || { label: pack.status, color: '#6b7280', bg: '#f9fafb' };
   const pkg = pack.packageId;
   const branch = pack.branchId;
+  const canQuickBook = pack.status === 'active' && pack.remainingSlots > 0 && pack.paymentStatus === 'paid';
+  const canCancel = pack.status === 'active';
+
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md ${pack.status !== 'active' ? 'opacity-60' : ''}`}>
       <div className="flex justify-between items-start mb-3">
         <div>
           <div className="font-mono text-xs font-bold text-slate-900 tracking-wider">{pack.packCode}</div>
           <div className="text-sm font-bold text-slate-900 mt-1">{pkg?.name || 'Gói dịch vụ'}</div>
-          <div className="text-xs text-slate-400 mt-0.5">📍 {branch?.name || ''}</div>
+          <div className="text-xs text-slate-400 mt-0.5">📍 {branch?.name || 'Áp dụng toàn hệ thống'}</div>
         </div>
         <div className="flex items-center gap-2">
           {pack.discountPercent > 0 && (
@@ -122,6 +126,28 @@ function PackCard({ pack }) {
           🏷 {pack.voucherCode} — tiết kiệm thêm {formatCurrency(pack.voucherDiscount)}
         </div>
       )}
+      {(canQuickBook || canCancel) && (
+        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          {canCancel && onCancelPack && (
+            <button
+              type="button"
+              onClick={() => onCancelPack(pack)}
+              className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-colors"
+            >
+              Hủy gói
+            </button>
+          )}
+          {canQuickBook && onQuickBook && (
+            <button
+              type="button"
+              onClick={() => onQuickBook(pack)}
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 active:scale-[0.98]"
+            >
+              ⚡ Đặt lịch nhanh
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -142,6 +168,9 @@ export default function HistoryPage({ onBack, apiBase, token }) {
   const [viewMode, setViewMode] = useState('list');
   const [slotPacks, setSlotPacks] = useState([]);
   const [slotPacksLoading, setSlotPacksLoading] = useState(false);
+  const [userVehicles, setUserVehicles] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [quickBookPack, setQuickBookPack] = useState(null);
 
   const now = new Date();
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -240,6 +269,34 @@ export default function HistoryPage({ onBack, apiBase, token }) {
       })
       .finally(() => setSlotPacksLoading(false));
   }, [apiBase, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${apiBase || API_BASE}/vehicles/my`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setUserVehicles(Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []))
+      .catch(() => {});
+    fetch(`${apiBase || API_BASE}/branches`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setBranches(Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [apiBase, token]);
+
+  const handleCancelPack = async (pack) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy gói lượt ${pack.packCode}?`)) return;
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/slot-packs/${pack._id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Không thể hủy gói lượt');
+      showToast('Đã hủy gói lượt thành công', 'success');
+      fetchSlotPacks();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
 
   useEffect(() => {
     if (viewMode === 'slot_packs') {
@@ -1084,7 +1141,14 @@ export default function HistoryPage({ onBack, apiBase, token }) {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {slotPacks.map(p => <PackCard key={p._id} pack={p} />)}
+                {slotPacks.map(p => (
+                  <PackCard
+                    key={p._id}
+                    pack={p}
+                    onQuickBook={setQuickBookPack}
+                    onCancelPack={handleCancelPack}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -1630,6 +1694,21 @@ export default function HistoryPage({ onBack, apiBase, token }) {
             </button>
           </div>
         </div>
+      )}
+      {/* Quick Booking Modal */}
+      {quickBookPack && (
+        <QuickBookModal
+          pack={quickBookPack}
+          userVehicles={userVehicles}
+          branches={branches}
+          apiBase={apiBase || API_BASE}
+          token={token}
+          onClose={() => setQuickBookPack(null)}
+          onSuccess={() => {
+            fetchSlotPacks();
+            doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, true);
+          }}
+        />
       )}
     </div>
   );

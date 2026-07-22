@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
+import QuickBookModal from './QuickBookModal.jsx';
+import { showToast } from '@/lib/toast';
 
 const DISCOUNT_TIERS = [
   { min: 1, max: 4, pct: 0, label: 'Giá gốc' },
@@ -38,17 +40,20 @@ function SlotMeter({ total, remaining }) {
   );
 }
 
-function PackCard({ pack }) {
+function PackCard({ pack, onQuickBook, onCancelPack }) {
   const st = STATUS_MAP[pack.status] || { label: pack.status, color: '#6b7280', bg: '#f9fafb' };
   const pkg = pack.packageId;
   const branch = pack.branchId;
+  const canQuickBook = pack.status === 'active' && pack.remainingSlots > 0 && pack.paymentStatus === 'paid';
+  const canCancel = pack.status === 'active';
+
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md ${pack.status !== 'active' ? 'opacity-60' : ''}`}>
       <div className="flex justify-between items-start mb-3">
         <div>
           <div className="font-mono text-xs font-bold text-slate-900 tracking-wider">{pack.packCode}</div>
           <div className="text-sm font-bold text-slate-900 mt-1">{pkg?.name || 'Gói dịch vụ'}</div>
-          <div className="text-xs text-slate-400 mt-0.5">📍 {branch?.name || ''}</div>
+          <div className="text-xs text-slate-400 mt-0.5">📍 {branch?.name || 'Áp dụng toàn hệ thống'}</div>
         </div>
         <div className="flex items-center gap-2">
           {pack.discountPercent > 0 && (
@@ -78,6 +83,28 @@ function PackCard({ pack }) {
       {pack.voucherCode && (
         <div className="mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
           🏷 {pack.voucherCode} — tiết kiệm thêm {formatCurrency(pack.voucherDiscount)}
+        </div>
+      )}
+      {(canQuickBook || canCancel) && (
+        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          {canCancel && onCancelPack && (
+            <button
+              type="button"
+              onClick={() => onCancelPack(pack)}
+              className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-colors"
+            >
+              Hủy gói
+            </button>
+          )}
+          {canQuickBook && onQuickBook && (
+            <button
+              type="button"
+              onClick={() => onQuickBook(pack)}
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 active:scale-[0.98]"
+            >
+              ⚡ Đặt lịch nhanh
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -110,6 +137,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const [myPacks, setMyPacks] = useState([]);
   const [packsLoading, setPacksLoading] = useState(false);
   const [showMyPacks, setShowMyPacks] = useState(false);
+  const [quickBookPack, setQuickBookPack] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -150,6 +178,22 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
     } catch (e) { console.error(e); }
     finally { setPacksLoading(false); }
   }, [apiBase, token]);
+
+  const handleCancelPack = async (pack) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy gói lượt ${pack.packCode}?`)) return;
+    try {
+      const res = await fetch(`${apiBase}/slot-packs/${pack._id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Không thể hủy gói lượt');
+      showToast('Đã hủy gói lượt thành công', 'success');
+      loadMyPacks();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
 
   useEffect(() => { if (showMyPacks) loadMyPacks(); }, [showMyPacks, loadMyPacks]);
 
@@ -246,6 +290,29 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
     } catch (e) { /* ignore */ }
     setPayPollCount(c => c + 1);
   }, [buyResult, slotPackPayment, apiBase, token]);
+
+  // Giả lập thanh toán (demo/test)
+  const simulatePaymentConfirm = async () => {
+    if (!buyResult?._id || !slotPackPayment) return;
+    try {
+      const res = await fetch(`${apiBase}/payments/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ transactionId: slotPackPayment.transactionId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBuyResult(prev => prev ? { ...prev, paymentStatus: 'paid' } : prev);
+        setShowQrModal(false);
+        setSlotPackPayment(null);
+        setShowSuccessModal(true);
+      } else {
+        setBuyError(data.message || 'Lỗi giả lập thanh toán');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Poll every 10s when QR is shown
   useEffect(() => {
@@ -575,7 +642,14 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   <div className="text-center py-8 text-slate-400">Đang tải...</div>
                 ) : myPacks.length === 0 ? (
                   <div className="text-center py-8 text-slate-400">Chưa có gói slot nào</div>
-                ) : myPacks.map(p => <PackCard key={p._id} pack={p} />)}
+                ) : myPacks.map(p => (
+                  <PackCard
+                    key={p._id}
+                    pack={p}
+                    onQuickBook={setQuickBookPack}
+                    onCancelPack={handleCancelPack}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -709,9 +783,13 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   Đang kiểm tra thanh toán...
                 </div>
                 <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2 mt-4 -mx-6 -mb-6 rounded-b-[1.5rem]">
+                  <button type="button" onClick={() => simulatePaymentConfirm()}
+                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
+                    Giả lập thanh toán (Test)
+                  </button>
                   <button type="button" onClick={() => checkSlotPackPayment()}
                     className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
-                    Đã chuyển khoản
+                    Đã chuyển khoản (Kiểm tra)
                   </button>
                   <button type="button" onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
                     className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
@@ -759,6 +837,21 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           )}
         </AnimatePresence>,
         document.body
+      )}
+      {/* Quick Booking Modal */}
+      {quickBookPack && (
+        <QuickBookModal
+          pack={quickBookPack}
+          userVehicles={userVehicles}
+          branches={branches}
+          apiBase={apiBase}
+          token={token}
+          onClose={() => setQuickBookPack(null)}
+          onSuccess={() => {
+            loadMyPacks();
+            if (onGoToHistory) onGoToHistory();
+          }}
+        />
       )}
     </div>
   );
