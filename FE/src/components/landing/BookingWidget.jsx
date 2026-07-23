@@ -8,6 +8,7 @@ import {
 import VoucherPicker from '../VoucherPicker.jsx';
 import SlotPackFlow from '../customer/SlotPackFlow.jsx';
 import useSSE from '../../hooks/useSSE.js';
+import { storageKeys } from '../../lib/authStorage.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -50,6 +51,11 @@ const VEHICLE_TYPES = [
   { value: 'pickup', label: 'Pickup' },
   { value: 'van', label: 'Van' },
 ];
+
+function authHeader(token) {
+  const t = token || localStorage.getItem(storageKeys.accessToken) || '';
+  return t ? `Bearer ${t}` : '';
+}
 
 export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab }) {
   const isLoggedIn = !!user && !!token;
@@ -514,6 +520,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   async function payWithVnpay() {
     if (!pendingDeposit) return;
+    if (!authHeader(token)) { storePendingAndAuth(); return; }
     setVnpayLoading(true);
     setError('');
     try {
@@ -551,7 +558,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         // Gọi provisional VNPay
         const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
           body: JSON.stringify({ amount: actualAmount }),
         });
         const data = await res.json();
@@ -585,7 +592,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
         const res = await fetch(`${apiBase}/payments/vnpay-create`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
           body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: paymentMode, amount: actualAmount }),
         });
         const data = await res.json();
@@ -640,6 +647,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const parsed = JSON.parse(decodeURIComponent(vnpayResult));
         const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
         if (success) {
+          if (!authHeader(token)) {
+            setError('Bạn cần đăng nhập lại để hoàn tất đặt lịch');
+            return;
+          }
           // Tạo booking từ draft data đã lưu (provisional VNPay)
           createBookingAfterPayment();
         } else {
@@ -656,7 +667,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       url.searchParams.delete('vnpay_result');
       window.history.replaceState({}, '', url);
     }
-  }, []);
+  }, [token]);
 
   // Tạo booking sau khi VNPay/Bank payment thành công
   async function createBookingAfterPayment(isBank = false, pendingData = null, skipSuccessModal = false) {
@@ -672,7 +683,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const bBody = isRec
         ? { branchId: draft.branchId, packageId: draft.packageId, vehicleId: draft.vehicleId, weekdays: draft.weekdays, startTime: draft.startTime, weeks: draft.weeks, voucherCode: draft.voucherCode || undefined, selectedSubServices: draft.selectedSubServices || [], note: '' }
         : { branchId: draft.branchId, packageId: draft.packageId, vehicleId: draft.vehicleId, bookingDate: draft.bookingDate, startTime: draft.startTime, voucherCode: draft.voucherCode || undefined, selectedSubServices: draft.selectedSubServices || [], note: '' };
-      const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
+      const ah = authHeader(token);
+      const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: ah }, body: JSON.stringify(bBody) });
       const bd = await br.json();
       if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
       const newBk = bd?.data || bd;
@@ -684,7 +696,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const method = isBank ? 'bank' : 'vnpay';
       const payRes = await fetch(`${apiBase}/payments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: ah },
         body: JSON.stringify({ bookingId: bkId, method, paymentType: draft.paymentMode, amount: actualAmount }),
       });
       const payData = await payRes.json();
@@ -694,7 +706,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       // Confirm payment
       await fetch(`${apiBase}/payments/simulate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: ah },
         body: JSON.stringify({
           transactionId: payment.transactionId,
           gatewayTransactionId: method === 'bank' ? `SIM${Date.now()}` : 'VNPAY',
