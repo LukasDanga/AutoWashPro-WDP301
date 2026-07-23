@@ -513,23 +513,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return () => clearInterval(interval);
   }, [depositQrStep, depositPayment, checkPaymentStatus]);
 
-  function openVnpayPopup(url) {
-    const width = 600;
-    const height = 720;
-    const left = Math.max(0, window.screenX + (window.innerWidth - width) / 2);
-    const top = Math.max(0, window.screenY + (window.innerHeight - height) / 2);
-    const popup = window.open(
-      url,
-      'vnpay_payment_popup',
-      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=no,toolbar=no,menubar=no,location=no`
-    );
-    if (popup) {
-      popup.focus();
-    } else {
-      window.location.href = url;
-    }
-  }
-
   async function payWithVnpay() {
     if (!pendingDeposit) return;
     setVnpayLoading(true);
@@ -597,7 +580,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         };
         sessionStorage.setItem('aw_lastBooking', JSON.stringify(lastBk));
         setPendingDeposit(null);
-        openVnpayPopup(paymentUrl);
+        setVnpayModalUrl(paymentUrl);
       } else {
         // Booking đã tồn tại — tạo VNPay payment bình thường
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
@@ -632,7 +615,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         };
         sessionStorage.setItem('aw_lastBooking', JSON.stringify(lastBk));
         setPendingDeposit(null);
-        openVnpayPopup(paymentUrl);
+        setVnpayModalUrl(paymentUrl);
       }
     } catch (e) {
       setError(e.message || 'Thanh toán VNPay thất bại');
@@ -640,7 +623,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }
 
-  // Xử lý VNPay return callback (cả redirect và Popup postMessage)
+  // Xử lý VNPay return callback (cả redirect và iFrame postMessage)
   useEffect(() => {
     function processVnpayResult(vnpayResult) {
       if (sessionStorage.getItem('aw_lastSlotPack')) {
@@ -669,12 +652,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     const params = new URLSearchParams(window.location.search);
     const vnpayResult = params.get('vnpay_result');
     if (vnpayResult) {
-      if (window.opener && window.opener !== window) {
+      if (window.self !== window.top) {
         try {
-          window.opener.postMessage({ type: 'VNPAY_DONE', vnpayResult }, '*');
+          window.parent.postMessage({ type: 'VNPAY_DONE', vnpayResult }, '*');
         } catch (e) { /* ignore */ }
-        window.close();
-        return;
       } else {
         processVnpayResult(vnpayResult);
         const url = new URL(window.location);
@@ -2406,6 +2387,68 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 >
                   Lịch sử đặt
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* VNPay iFrame Modal Popup */}
+      <AnimatePresence>
+        {vnpayModalUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+            onClick={() => {
+              if (window.confirm('Bạn có chắc chắn muốn đóng cổng thanh toán VNPay?')) {
+                setVnpayModalUrl(null);
+                setVnpayLoading(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="bg-white rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-sm">
+                    VNP
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base tracking-wide flex items-center gap-2">
+                      Cổng thanh toán VNPay
+                      <span className="text-[10px] font-semibold bg-emerald-400 text-slate-900 px-2 py-0.5 rounded-full uppercase tracking-widest">Bảo mật 256-bit</span>
+                    </h3>
+                    <p className="text-xs text-blue-100/90 mt-0.5">Hoàn tất giao dịch ngay trong trang Web AutoWashPro</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Bạn có chắc chắn muốn đóng cổng thanh toán VNPay?')) {
+                      setVnpayModalUrl(null);
+                      setVnpayLoading(false);
+                    }
+                  }}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white font-bold text-sm transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex-1 bg-slate-50 relative">
+                <iframe
+                  src={vnpayModalUrl}
+                  title="VNPay Payment Portal"
+                  className="w-full h-full border-0"
+                />
               </div>
             </motion.div>
           </motion.div>
