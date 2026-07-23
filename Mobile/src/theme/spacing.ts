@@ -51,10 +51,10 @@ export const shadows = {
   },
   md: {
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowRadius: 14,
+    elevation: 4,
   },
   lg: {
     shadowColor: '#0F172A',
@@ -76,7 +76,7 @@ export const layout = {
   // Minimum touch target per Apple HIG / Material
   minTouchTarget: 44,
   // Common component radii (semantic shortcuts)
-  cardRadius: 16,
+  cardRadius: 24,
   buttonRadius: 12,
   inputRadius: 12,
   chipRadius: 999,

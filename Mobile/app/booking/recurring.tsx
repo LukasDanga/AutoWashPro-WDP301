@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   Text,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,12 +38,21 @@ import {
   Input,
   AlertDialog,
   useToast,
+  StepIndicator,
+  Icon,
+  Icons,
+  PressableScale,
+  ScreenContainer,
+  Header,
 } from '../../src/components/common';
+import { useColors } from '../../src/theme/ThemeContext';
 import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
 import {
   spacing,
   borderRadius,
+  layout,
+  shadows,
 } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
 import { consumePendingVoucher } from '../../src/utils/voucherStore';
@@ -56,12 +66,12 @@ import type {
 
 type Step = 'branch' | 'package' | 'vehicle' | 'recurrence' | 'confirm';
 
-const STEPS: { key: Step; label: string }[] = [
-  { key: 'branch', label: 'Chi nhánh' },
-  { key: 'package', label: 'Gói' },
-  { key: 'vehicle', label: 'Xe' },
-  { key: 'recurrence', label: 'Lịch' },
-  { key: 'confirm', label: 'Xác nhận' },
+const STEPS: { key: Step; label: string; icon: string }[] = [
+  { key: 'branch', label: 'Chi nhánh', icon: 'location-outline' },
+  { key: 'package', label: 'Gói', icon: 'sparkles-outline' },
+  { key: 'vehicle', label: 'Xe', icon: 'car-outline' },
+  { key: 'recurrence', label: 'Lịch', icon: 'calendar-outline' },
+  { key: 'confirm', label: 'Xác nhận', icon: 'checkmark-outline' },
 ];
 
 const WEEKDAY_OPTIONS = [
@@ -99,9 +109,23 @@ export default function RecurringBookingScreen() {
   const isVip = userTier === 'gold' || userTier === 'diamond';
 
   const [step, setStep] = useState<Step>('branch');
+
+  useEffect(() => {
+    const onBackPress = () => {
+      const idx = STEPS.findIndex(s => s.key === step);
+      if (idx > 0) {
+        setStep(STEPS[idx - 1].key);
+        return true;
+      }
+      return false; // let default back action occur if at step 0
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [step]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [packages, setPackages] = useState<ServicePackage[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [branchPackageCounts, setBranchPackageCounts] = useState<{ counts: Record<string, number>; globalCount: number }>({ counts: {}, globalCount: 0 });
 
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(
@@ -111,7 +135,7 @@ export default function RecurringBookingScreen() {
   const [selectedSubServices, setSelectedSubServices] = useState<any[]>([]);
 
   // Recurrence config
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([6]); // default: every Saturday
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]); // default empty
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [weeks, setWeeks] = useState<number>(4);
 
@@ -132,6 +156,8 @@ export default function RecurringBookingScreen() {
   const [userBookedSlotKeys, setUserBookedSlotKeys] = useState<Set<string>>(
     () => new Set(),
   );
+
+  const [validSessionsCount, setValidSessionsCount] = useState<number | null>(null);
 
   const filteredPackages = useMemo(
     () =>
@@ -180,7 +206,7 @@ export default function RecurringBookingScreen() {
     if (step !== 'recurrence') return;
     if (!selectedBranch?._id || !selectedPackage?._id) return;
     if (selectedWeekdays.length === 0) return;
-    fetchSlotsForFirstWeekday();
+    fetchAllSlotsForWeekdays();
     fetchUserBookedSlotsForWeekdays();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, selectedBranch?._id, selectedPackage?._id, selectedWeekdays.join(',')]);
@@ -203,7 +229,10 @@ export default function RecurringBookingScreen() {
       const cursor = new Date(today);
       while (cursor <= lastCandidate) {
         if (selectedWeekdays.includes(cursor.getDay())) {
-          candidateDates.push(cursor.toISOString().split('T')[0]);
+          const y = cursor.getFullYear();
+          const m = String(cursor.getMonth() + 1).padStart(2, '0');
+          const d = String(cursor.getDate()).padStart(2, '0');
+          candidateDates.push(`${y}-${m}-${d}`);
         }
         cursor.setDate(cursor.getDate() + 1);
       }
@@ -249,6 +278,22 @@ export default function RecurringBookingScreen() {
         packageApi.getPackages({ status: 'active', limit: 'all' }),
       ]);
       setBranches(branchesRes);
+      
+      const counts: Record<string, number> = {};
+      let globalCount = 0;
+      for (const pkg of (packagesRes || [])) {
+        if (pkg.status !== 'active') continue;
+        const bid = typeof pkg.branchId === 'object' && pkg.branchId !== null
+          ? (pkg.branchId as any)._id || (pkg.branchId as any).id
+          : pkg.branchId;
+        if (bid) {
+          counts[String(bid)] = (counts[String(bid)] || 0) + 1;
+        } else {
+          globalCount++;
+        }
+      }
+      setBranchPackageCounts({ counts, globalCount });
+
       setPackages(packagesRes || []);
       if (isAuthenticated) {
         const vehiclesRes = await vehicleApi.getVehicles();
@@ -261,35 +306,67 @@ export default function RecurringBookingScreen() {
     }
   };
 
-  const fetchSlotsForFirstWeekday = useCallback(async () => {
+  const fetchAllSlotsForWeekdays = useCallback(async () => {
     if (!selectedBranch?._id || !selectedPackage?._id) return;
     if (selectedWeekdays.length === 0) return;
 
     setIsLoadingSlots(true);
     try {
-      // Pick the first upcoming date matching one of the selected weekdays
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      let candidate = new Date(today);
-      candidate.setDate(today.getDate() + 1); // tomorrow onwards
-      for (let i = 0; i < 7; i++) {
-        if (selectedWeekdays.includes(candidate.getDay())) break;
-        candidate.setDate(candidate.getDate() + 1);
+      const lastCandidate = new Date(today);
+      lastCandidate.setDate(lastCandidate.getDate() + getEffectiveWeeks() * 7);
+
+      const candidateDates: string[] = [];
+      const cursor = new Date(today);
+      cursor.setDate(today.getDate() + 1); // tomorrow onwards
+      while (cursor <= lastCandidate) {
+        if (selectedWeekdays.includes(cursor.getDay())) {
+          const y = cursor.getFullYear();
+          const m = String(cursor.getMonth() + 1).padStart(2, '0');
+          const d = String(cursor.getDate()).padStart(2, '0');
+          candidateDates.push(`${y}-${m}-${d}`);
+        }
+        cursor.setDate(cursor.getDate() + 1);
       }
-      const dateStr = candidate.toISOString().split('T')[0];
-      const response = await bookingApi.getAvailableSlots({
-        branchId: selectedBranch._id,
-        date: dateStr,
-        packageId: selectedPackage._id,
-      });
-      setDaySlots(response);
+
+      if (candidateDates.length === 0) {
+        setDaySlots([]);
+        setIsLoadingSlots(false);
+        return;
+      }
+
+      const allSlotsRes = await Promise.all(
+        candidateDates.map((dateStr) =>
+          bookingApi.getAvailableSlots({
+            branchId: selectedBranch._id,
+            date: dateStr,
+            packageId: selectedPackage._id,
+          })
+        )
+      );
+
+      const slotsMap = new Map<string, AvailableSlot>();
+      if (allSlotsRes.length > 0 && allSlotsRes[0]) {
+        allSlotsRes[0].forEach((slot) => slotsMap.set(slot.startTime, { ...slot }));
+        for (let i = 1; i < allSlotsRes.length; i++) {
+          if (!allSlotsRes[i]) continue;
+          allSlotsRes[i].forEach((slot) => {
+            const existing = slotsMap.get(slot.startTime);
+            if (existing && !slot.isAvailable) {
+              existing.isAvailable = false;
+            }
+          });
+        }
+      }
+      setDaySlots(Array.from(slotsMap.values()));
     } catch (error) {
       console.error('Error fetching slots:', error);
       setDaySlots([]);
     } finally {
       setIsLoadingSlots(false);
     }
-  }, [selectedBranch?._id, selectedPackage?._id, selectedWeekdays]);
+  }, [selectedBranch?._id, selectedPackage?._id, selectedWeekdays, weeks]);
 
   const getStepIndex = (): number => STEPS.findIndex(s => s.key === step);
 
@@ -357,6 +434,35 @@ export default function RecurringBookingScreen() {
     () => buildPreviewDates(selectedWeekdays, getEffectiveWeeks()),
     [selectedWeekdays, getEffectiveWeeks()]
   );
+
+  useEffect(() => {
+    if (!selectedBranch || !selectedPackage || !selectedVehicle || selectedWeekdays.length === 0 || !selectedTime) {
+      setValidSessionsCount(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchConflicts = async () => {
+      try {
+        const { apiClient } = require('../../src/api/client');
+        const response = await apiClient.post('/bookings/recurring/check-conflicts', {
+          branchId: selectedBranch._id,
+          packageId: selectedPackage._id,
+          vehicleId: selectedVehicle._id,
+          weekdays: selectedWeekdays,
+          startTime: selectedTime,
+          weeks: getEffectiveWeeks(),
+        });
+        if (!cancelled) {
+          const conflicts = response.data?.conflicts || [];
+          setValidSessionsCount(Math.max(0, previewDates.length - conflicts.length));
+        }
+      } catch (err) {
+        if (!cancelled) setValidSessionsCount(previewDates.length);
+      }
+    };
+    fetchConflicts();
+    return () => { cancelled = true; };
+  }, [selectedBranch, selectedPackage, selectedVehicle, selectedWeekdays, selectedTime, weeks, previewDates.length]);
 
   // Returns the effective weeks value (always clamped to 1..12).
   function getEffectiveWeeks(): number {
@@ -450,8 +556,11 @@ export default function RecurringBookingScreen() {
 
       const recurringDraft = {
         branchId: selectedBranch._id,
+        branchName: selectedBranch.name,
         packageId: selectedPackage._id,
+        packageName: selectedPackage.name,
         vehicleId: selectedVehicle._id,
+        vehiclePlate: selectedVehicle.licensePlate || selectedVehicle.plate,
         weekdays: selectedWeekdays,
         startTime: selectedTime,
         weeks: effectiveWeeks,
@@ -477,104 +586,51 @@ export default function RecurringBookingScreen() {
 
   // ---------- Render helpers ----------
 
-  const renderProgressBar = () => (
-    <View style={styles.progressContainer}>
-      {STEPS.map((s, index) => {
-        const isCurrentOrPast = index <= getStepIndex();
-        return (
-          <TouchableOpacity
-            key={s.key}
-            style={styles.progressStep}
-            onPress={() => {
-              if (index < getStepIndex()) setStep(STEPS[index].key);
-            }}
-            disabled={index >= getStepIndex()}
-            activeOpacity={0.7}
-          >
-            <View
-              style={[
-                styles.progressDot,
-                isCurrentOrPast && styles.progressDotActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.progressDotText,
-                  isCurrentOrPast && styles.progressDotTextActive,
-                ]}
-              >
-                {index + 1}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.progressLabel,
-                isCurrentOrPast && styles.progressLabelActive,
-              ]}
-            >
-              {s.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
+
 
   const renderBranchStep = () => (
-    <View>
-      <AppText variant="h3" style={styles.stepTitle}>
-        Chọn chi nhánh
-      </AppText>
-      {branches.map(branch => (
-        <TouchableOpacity
-          key={branch._id}
-          onPress={() => {
-            if (selectedBranch?._id === branch._id) return;
-            setSelectedBranch(branch);
-            setSelectedPackage(null);
-            setSelectedSubServices([]);
-            // Time slots are branch-specific; clear so the user re-picks them
-            // at the recurrence step instead of silently keeping the old slot.
-            setSelectedTime('');
-            setDaySlots([]);
-          }}
-        >
-          <Card
-            style={[
-              styles.optionCard,
-              selectedBranch?._id === branch._id && styles.optionCardSelected,
-            ]}
-          >
-            <View style={styles.optionContent}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.optionEmoji}>📍</Text>
+    <StepLayout
+      title="Chi nhánh"
+      subtitle="Chọn chi nhánh bạn muốn đặt lịch"
+      icon={Icons.locationOutline}
+    >
+      {branches.map(branch => {
+        const count = (branchPackageCounts.counts[branch._id] || 0) + branchPackageCounts.globalCount;
+        const hasPackages = count > 0;
+        return (
+          <SelectableCard
+            key={branch._id}
+            title={branch.name}
+            subtitle={
+              <View>
+                <AppText variant="caption" color="textSecondary">{branch.address}</AppText>
+                <AppText variant="caption" color="textTertiary">{branch.openingTime} - {branch.closingTime}</AppText>
               </View>
-              <View style={styles.optionInfo}>
-                <AppText variant="body" style={styles.optionTitle}>
-                  {branch.name}
-                </AppText>
-                <AppText variant="caption" color="textSecondary">
-                  {branch.address}
-                </AppText>
-                <AppText variant="caption" color="textTertiary">
-                  {branch.openingTime} - {branch.closingTime}
-                </AppText>
-              </View>
-              {selectedBranch?._id === branch._id && (
-                <Text style={styles.checkIcon}>✓</Text>
-              )}
-            </View>
-          </Card>
-        </TouchableOpacity>
-      ))}
-    </View>
+            }
+            icon={Icons.locationOutline}
+            selected={selectedBranch?._id === branch._id}
+            disabled={!hasPackages}
+            disabledLabel="Chi nhánh này hiện chưa có gói dịch vụ nào"
+            onPress={() => {
+              if (selectedBranch?._id === branch._id) return;
+              setSelectedBranch(branch);
+              setSelectedPackage(null);
+              setSelectedSubServices([]);
+              setSelectedTime('');
+              setDaySlots([]);
+            }}
+          />
+        );
+      })}
+    </StepLayout>
   );
 
   const renderPackageStep = () => (
-    <View>
-      <AppText variant="h3" style={styles.stepTitle}>
-        Chọn gói dịch vụ
-      </AppText>
+    <StepLayout
+      title="Gói dịch vụ"
+      subtitle="Chọn gói rửa xe phù hợp với nhu cầu"
+      icon={Icons.sparkle}
+    >
       {filteredPackages.length === 0 ? (
         <EmptyState
           icon={<Text style={styles.optionEmoji}>✨</Text>}
@@ -587,32 +643,11 @@ export default function RecurringBookingScreen() {
         />
       ) : (
         filteredPackages.map(pkg => (
-        <TouchableOpacity
-          key={pkg._id}
-          onPress={() => {
-            if (selectedPackage?._id === pkg._id) return;
-            setSelectedPackage(pkg);
-            setSelectedSubServices([]);
-            // Slot duration depends on the package; clear the picked time so
-            // it doesn't survive into the recurrence step.
-            setSelectedTime('');
-            setDaySlots([]);
-          }}
-        >
-          <Card
-            style={[
-              styles.optionCard,
-              selectedPackage?._id === pkg._id && styles.optionCardSelected,
-            ]}
-          >
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: colors.primaryLight }]}>
-                <Text style={styles.optionEmoji}>✨</Text>
-              </View>
-              <View style={styles.optionInfo}>
-                <AppText variant="body" style={styles.optionTitle}>
-                  {pkg.name}
-                </AppText>
+          <SelectableCard
+            key={pkg._id}
+            title={pkg.name}
+            subtitle={
+              <View>
                 <AppText variant="caption" color="textSecondary">
                   {pkg.duration} phút •{' '}
                   {pkg.category === 'full'
@@ -625,13 +660,18 @@ export default function RecurringBookingScreen() {
                   {formatCurrency(pkg.price)}
                 </AppText>
               </View>
-              {selectedPackage?._id === pkg._id && (
-                <Text style={styles.checkIcon}>✓</Text>
-              )}
-            </View>
-          </Card>
-        </TouchableOpacity>
-      ))
+            }
+            icon={Icons.sparkle}
+            selected={selectedPackage?._id === pkg._id}
+            onPress={() => {
+              if (selectedPackage?._id === pkg._id) return;
+              setSelectedPackage(pkg);
+              setSelectedSubServices([]);
+              setSelectedTime('');
+              setDaySlots([]);
+            }}
+          />
+        ))
       )}
       {selectedPackage?.subServices && selectedPackage.subServices.some((s: any) => s.isOptional) && (
         <View style={{ marginTop: spacing.md }}>
@@ -666,14 +706,15 @@ export default function RecurringBookingScreen() {
           })}
         </View>
       )}
-    </View>
+    </StepLayout>
   );
 
   const renderVehicleStep = () => (
-    <View>
-      <AppText variant="h3" style={styles.stepTitle}>
-        Chọn phương tiện
-      </AppText>
+    <StepLayout
+      title="Phương tiện"
+      subtitle="Chọn xe bạn sẽ sử dụng dịch vụ"
+      icon={Icons.carOutline}
+    >
       {vehicles.length === 0 ? (
         <EmptyState
           title="Chưa có phương tiện"
@@ -683,37 +724,23 @@ export default function RecurringBookingScreen() {
         />
       ) : (
         vehicles.map(vehicle => (
-          <TouchableOpacity
+          <SelectableCard
             key={vehicle._id}
-            onPress={() => setSelectedVehicle(vehicle)}
-          >
-            <Card
-              style={[
-                styles.optionCard,
-                selectedVehicle?._id === vehicle._id && styles.optionCardSelected,
-              ]}
-            >
-              <View style={styles.optionContent}>
-                <View style={styles.optionIcon}>
-                  <Text style={styles.optionEmoji}>🚗</Text>
-                </View>
-                <View style={styles.optionInfo}>
-                  <AppText variant="body" style={styles.optionTitle}>
-                    {vehicle.licensePlate}
-                  </AppText>
-                  <AppText variant="caption" color="textSecondary">
-                    {vehicle.brand} {vehicle.model && `• ${vehicle.model}`}
-                  </AppText>
-                  <AppText variant="caption" color="textTertiary">
-                    {vehicle.color} • {vehicle.vehicleType}
-                  </AppText>
-                </View>
-                {selectedVehicle?._id === vehicle._id && (
-                  <Text style={styles.checkIcon}>✓</Text>
-                )}
+            title={vehicle.licensePlate}
+            subtitle={
+              <View>
+                <AppText variant="caption" color="textSecondary">
+                  {vehicle.brand} {vehicle.model && `• ${vehicle.model}`}
+                </AppText>
+                <AppText variant="caption" color="textTertiary">
+                  {vehicle.color} • {vehicle.vehicleType}
+                </AppText>
               </View>
-            </Card>
-          </TouchableOpacity>
+            }
+            icon={Icons.carOutline}
+            selected={selectedVehicle?._id === vehicle._id}
+            onPress={() => setSelectedVehicle(vehicle)}
+          />
         ))
       )}
       <Button
@@ -722,15 +749,15 @@ export default function RecurringBookingScreen() {
         onPress={() => router.push('/vehicle/add')}
         style={styles.addButton}
       />
-    </View>
+    </StepLayout>
   );
 
   const renderRecurrenceStep = () => (
-    <View>
-      <AppText variant="h3" style={styles.stepTitle}>
-        Cấu hình lịch định kỳ
-      </AppText>
-
+    <StepLayout
+      title="Lịch hẹn"
+      subtitle="Chọn thứ, giờ và số tuần đặt lịch"
+      icon={Icons.calendarOutline}
+    >
       {/* Weekday picker */}
       <AppText variant="label" style={styles.sectionLabel}>
         Chọn thứ trong tuần
@@ -810,7 +837,10 @@ export default function RecurringBookingScreen() {
                     if (selectedWeekdays.includes(candidate.getDay())) break;
                     candidate.setDate(candidate.getDate() + 1);
                   }
-                  const slotDateStr = candidate.toISOString().split('T')[0];
+                  const yy = candidate.getFullYear();
+                  const mm = String(candidate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(candidate.getDate()).padStart(2, '0');
+                  const slotDateStr = `${yy}-${mm}-${dd}`;
                   const userHasThisSlot = userBookedSlotKeys.has(
                     `${slotDateStr}|${slot.startTime}`,
                   );
@@ -921,9 +951,14 @@ export default function RecurringBookingScreen() {
           Tổng số buổi ước tính
         </AppText>
         <AppText variant="h2" color="primary">
-          {previewDates.length} buổi
+          {validSessionsCount !== null ? validSessionsCount : previewDates.length} buổi hợp lệ
         </AppText>
-        <AppText variant="caption" color="textTertiary">
+        {validSessionsCount !== null && validSessionsCount < previewDates.length && (
+           <AppText variant="caption" color="error">
+             (Bỏ qua {previewDates.length - validSessionsCount} buổi do kín lịch)
+           </AppText>
+        )}
+        <AppText variant="caption" color="textTertiary" style={{ marginTop: 4 }}>
           {selectedWeekdays.length} thứ × {getEffectiveWeeks()} tuần
           {selectedTime ? ` • lúc ${selectedTime}` : ''}
         </AppText>
@@ -961,15 +996,19 @@ export default function RecurringBookingScreen() {
           )}
         </Card>
       )}
-    </View>
+    </StepLayout>
   );
 
   const renderConfirmStep = () => {
+    if (!selectedBranch || !selectedPackage || !selectedVehicle || selectedWeekdays.length === 0 || !selectedTime) {
+      return null;
+    }
+
     const effectiveWeeks = getEffectiveWeeks();
-    // Prefer actual preview dates (skips past days) over naive multiplication.
-    const totalSessions = previewDates.length > 0
-      ? previewDates.length
-      : selectedWeekdays.length * effectiveWeeks;
+    // Use validSessionsCount if available, otherwise fallback
+    const totalSessions = validSessionsCount !== null 
+      ? validSessionsCount 
+      : (previewDates.length > 0 ? previewDates.length : selectedWeekdays.length * effectiveWeeks);
     const basePrice = selectedPackage?.price || 0;
     const subServicesPrice = selectedSubServices.reduce((sum, s) => sum + (s.price || 0), 0);
     const pricePerSession = basePrice + subServicesPrice;
@@ -992,11 +1031,11 @@ export default function RecurringBookingScreen() {
       .join(', ');
 
     return (
-      <View>
-        <AppText variant="h3" style={styles.stepTitle}>
-          Xác nhận đặt lịch định kỳ
-        </AppText>
-
+      <StepLayout
+        title="Xác nhận"
+        subtitle="Vui lòng kiểm tra lại thông tin và chọn hình thức thanh toán"
+        icon={Icons.checkmark}
+      >
         <Card style={styles.summaryCard}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Chi nhánh</Text>
@@ -1037,7 +1076,7 @@ export default function RecurringBookingScreen() {
             <Text style={styles.summaryValue}>{effectiveWeeks} tuần</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Tổng buổi</Text>
+            <Text style={styles.summaryLabel}>Tổng buổi hợp lệ</Text>
             <Text style={styles.summaryValue}>{totalSessions} buổi</Text>
           </View>
 
@@ -1237,7 +1276,7 @@ export default function RecurringBookingScreen() {
           numberOfLines={3}
           containerStyle={styles.voucherInput}
         />
-      </View>
+      </StepLayout>
     );
   };
 
@@ -1261,18 +1300,20 @@ export default function RecurringBookingScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack}>
-          <Text style={styles.backButton}>←</Text>
-        </TouchableOpacity>
-        <AppText variant="h4">Đặt lịch định kỳ</AppText>
-        <View style={{ width: 24 }} />
-      </View>
-
-      {renderProgressBar()}
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <ScreenContainer>
+      <Header title="Đặt lịch định kỳ" showBack onBackPress={handleBack} />
+      <StepIndicator
+        steps={STEPS}
+        currentIndex={getStepIndex()}
+        onStepPress={(idx: number) => {
+          if (idx < getStepIndex()) setStep(STEPS[idx].key);
+        }}
+      />
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxxl }}
+        showsVerticalScrollIndicator={false}
+      >
         {step === 'branch' && renderBranchStep()}
         {step === 'package' && renderPackageStep()}
         {step === 'vehicle' && renderVehicleStep()}
@@ -1281,16 +1322,24 @@ export default function RecurringBookingScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <View style={styles.bottomAction}>
-        <Button
-          title={step === 'confirm' ? 'Xác nhận đặt lịch định kỳ' : 'Tiếp tục'}
-          onPress={step === 'confirm' ? handleSubmit : handleNext}
-          disabled={!canGoNext()}
-          loading={isSubmitting}
-          fullWidth
-        />
+      <View style={[styles.bottomAction, { backgroundColor: 'transparent' }]}>
+        {getStepIndex() > 0 ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <Button title="Quay lại" variant="outline" onPress={handleBack} fullWidth />
+          </View>
+        ) : null}
+        <View>
+          <Button
+            title={step === 'confirm' ? 'Xác nhận đặt lịch định kỳ' : 'Tiếp tục'}
+            onPress={step === 'confirm' ? handleSubmit : handleNext}
+            disabled={!canGoNext()}
+            loading={isSubmitting}
+            fullWidth
+            accessibilityLabel={step === 'confirm' ? 'Xác nhận đặt lịch định kỳ' : 'Tiếp tục bước tiếp theo'}
+          />
+        </View>
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -1333,6 +1382,11 @@ const styles = StyleSheet.create({
   },
   progressDotActive: {
     backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28,
+    shadowRadius: 6,
+    elevation: 3,
   },
   progressDotText: {
     ...typography.caption,
@@ -1349,7 +1403,27 @@ const styles = StyleSheet.create({
   },
   progressLabelActive: {
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  stepHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  stepHeaderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  stepHeaderText: {
+    flex: 1,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   content: {
     flex: 1,
@@ -1365,12 +1439,47 @@ const styles = StyleSheet.create({
   helperText: {
     marginTop: spacing.xs,
   },
+  doubleBezelOuter: {
+    padding: 6,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  doubleBezelInner: {
+    borderRadius: 18,
+    padding: spacing.md,
+  },
+  optionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  optionCheckEmpty: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginLeft: spacing.sm,
+  },
   optionCard: {
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: layout.cardRadius,
+    ...shadows.md,
   },
   optionCardSelected: {
     borderWidth: 2,
     borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 3,
   },
   optionContent: {
     flexDirection: 'row',
@@ -1379,11 +1488,16 @@ const styles = StyleSheet.create({
   optionIcon: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
   optionEmoji: {
     fontSize: 24,
@@ -1419,10 +1533,20 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   weekdayChipActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 3,
   },
   weekdayChipText: {
     ...typography.body,
@@ -1441,9 +1565,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     minWidth: 72,
     alignItems: 'center',
+    ...shadows.sm,
   },
   timeCardDisabled: {
     opacity: 0.5,
@@ -1473,7 +1598,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surfaceDark,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     minWidth: 72,
     alignItems: 'center',
     opacity: 0.5,
@@ -1523,14 +1648,15 @@ const styles = StyleSheet.create({
   paymentOptionCard: {
     flex: 1,
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    ...shadows.sm,
   },
   paymentOptionCardActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primary,
   },
   paymentOptionTitle: {
     ...typography.caption,
@@ -1539,7 +1665,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   paymentOptionTitleActive: {
-    color: colors.primary,
+    color: colors.textInverse,
   },
   paymentOptionAmount: {
     ...typography.h4,
@@ -1548,7 +1674,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   paymentOptionAmountActive: {
-    color: colors.primary,
+    color: colors.textInverse,
   },
   paymentOptionHint: {
     ...typography.caption,
@@ -1556,22 +1682,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   paymentOptionHintActive: {
-    color: colors.textSecondary,
+    color: colors.textInverse,
+    opacity: 0.9,
   },
   payNowCard: {
     marginBottom: spacing.md,
     padding: spacing.md,
     backgroundColor: colors.infoLight,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    borderColor: '#BAE6FD', // colors.infoLight hex; tint slightly stronger
+    ...shadows.md,
   },
   previewCard: {
     marginTop: spacing.lg,
     padding: spacing.md,
     backgroundColor: colors.infoLight,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    ...shadows.md,
   },
   previewDatesCard: {
     marginTop: spacing.sm,
     padding: spacing.md,
     backgroundColor: colors.surfaceDark,
+    borderRadius: layout.cardRadius,
   },
   previewDatesList: {
     marginTop: spacing.sm,
@@ -1602,6 +1738,10 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: layout.cardRadius,
+    ...shadows.md,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1686,7 +1826,6 @@ const styles = StyleSheet.create({
   },
   voucherButtonContent: {
     flexDirection: 'row',
-    alignItems: 'center',
   },
   voucherButtonLabel: {
     fontSize: 12,
@@ -1699,3 +1838,116 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+interface StepLayoutProps {
+  title: string;
+  subtitle?: string;
+  icon: string;
+  children: React.ReactNode;
+}
+
+const StepLayout: React.FC<StepLayoutProps> = ({ title, subtitle, icon, children }) => {
+  const colors = useColors();
+  return (
+    <View style={{ paddingTop: spacing.xl, paddingBottom: spacing.xxl }}>
+      <View style={styles.stepHeader}>
+        <View style={[styles.stepHeaderIcon, { backgroundColor: colors.primarySubtle }]}>
+          <Icon name={icon} size={24} color={colors.primary} />
+        </View>
+        <View style={styles.stepHeaderText}>
+          <AppText variant="h2" style={{ fontWeight: '700' }}>{title}</AppText>
+          {subtitle ? (
+            <AppText variant="body" color="textSecondary" style={{ marginTop: 4 }}>
+              {subtitle}
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+};
+
+interface SelectableCardProps {
+  selected: boolean;
+  onPress: () => void;
+  icon: string;
+  title: string;
+  subtitle: React.ReactNode;
+  disabled?: boolean;
+  disabledLabel?: string;
+}
+
+const SelectableCard: React.FC<SelectableCardProps> = ({
+  selected,
+  onPress,
+  icon,
+  title,
+  subtitle,
+  disabled,
+  disabledLabel,
+}) => {
+  const colors = useColors();
+  return (
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      accessibilityLabel={title}
+    >
+      <Card
+        style={[
+          styles.optionCard,
+          {
+            backgroundColor: selected ? colors.primarySubtle : colors.surface,
+            borderColor: selected ? colors.primary : colors.borderLight,
+            opacity: disabled ? 0.6 : 1,
+            marginBottom: spacing.md,
+            padding: spacing.lg,
+          },
+        ]}
+      >
+        <View style={styles.optionRow}>
+          <View
+            style={[
+              styles.optionIcon,
+              { backgroundColor: selected ? colors.primary : colors.background },
+              disabled && { elevation: 0, shadowOpacity: 0 }
+            ]}
+          >
+            <Icon
+              name={icon}
+              size={22}
+              color={selected ? colors.textInverse : colors.primary}
+            />
+          </View>
+          <View style={styles.optionInfo}>
+            <AppText variant="body" style={styles.optionTitle} numberOfLines={1}>
+              {title}
+            </AppText>
+            {subtitle}
+            {disabled && disabledLabel ? (
+              <AppText
+                variant="caption"
+                color="error"
+                style={{ marginTop: spacing.xs, fontWeight: '500' }}
+              >
+                {disabledLabel}
+              </AppText>
+            ) : null}
+          </View>
+          <View style={[
+            selected ? styles.optionCheck : styles.optionCheckEmpty,
+            {
+              backgroundColor: selected ? colors.primary : 'transparent',
+              borderColor: selected ? colors.primary : colors.textTertiary,
+            }
+          ]}>
+            {selected && <Icon name={Icons.check} size={14} color={colors.textInverse} />}
+          </View>
+        </View>
+      </Card>
+    </PressableScale>
+  );
+};

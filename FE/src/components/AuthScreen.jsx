@@ -63,7 +63,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack, o
         body: JSON.stringify({ idToken: credentialResponse.credential })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Google login failed');
+      if (!res.ok) throw new Error(data.message || 'Đăng nhập Google thất bại');
       
       setStatusMessage('Đăng nhập bằng Google thành công.');
       if (onGoogleLoginSuccess) {

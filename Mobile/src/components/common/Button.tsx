@@ -162,14 +162,71 @@ export const Button: React.FC<ButtonProps> = ({
     }
   })();
 
+  const flattenedStyle = (StyleSheet.flatten(style) || {}) as ViewStyle;
+  const {
+    flex,
+    flexGrow,
+    flexShrink,
+    flexBasis,
+    alignSelf,
+    margin,
+    marginTop,
+    marginBottom,
+    marginLeft,
+    marginRight,
+    marginHorizontal,
+    marginVertical,
+    width,
+    minWidth,
+    maxWidth,
+    height,
+    minHeight,
+    maxHeight,
+    position,
+    top,
+    bottom,
+    left,
+    right,
+    zIndex,
+    ...innerStyle
+  } = flattenedStyle;
+
+  const wrapperStyle: ViewStyle = {
+    transform: [{ scale: scaleAnim }],
+    width: fullWidth ? '100%' : width,
+    flex,
+    flexGrow,
+    flexShrink,
+    flexBasis,
+    alignSelf,
+    margin,
+    marginTop,
+    marginBottom,
+    marginLeft,
+    marginRight,
+    marginHorizontal,
+    marginVertical,
+    minWidth,
+    maxWidth,
+    height,
+    minHeight,
+    maxHeight,
+    position,
+    top,
+    bottom,
+    left,
+    right,
+    zIndex,
+  };
+
   const containerStyles: (ViewStyle | false)[] = [
     styles.container as ViewStyle,
     sizeContainer as ViewStyle,
     variantStyles.container as ViewStyle,
     iconOnly ? (styles.containerIconOnly as ViewStyle) : false,
-    fullWidth ? (styles.fullWidth as ViewStyle) : false,
+    (fullWidth || flex !== undefined || width !== undefined) ? (styles.fullWidth as ViewStyle) : false,
     isDisabled ? (styles.containerDisabled as ViewStyle) : false,
-    style as ViewStyle,
+    innerStyle as ViewStyle,
   ];
 
   const textStyles: (TextStyle | false)[] = [
@@ -215,9 +272,7 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   return (
-    <Animated.View
-      style={{ transform: [{ scale: scaleAnim }], width: fullWidth ? '100%' : undefined }}
-    >
+    <Animated.View style={wrapperStyle}>
       <Pressable
         onPress={handlePress}
         onPressIn={handlePressIn}
@@ -227,6 +282,10 @@ export const Button: React.FC<ButtonProps> = ({
         accessibilityLabel={accessibilityLabel || title}
         accessibilityState={{ disabled: !!isDisabled, busy: loading }}
         testID={props.testID}
+        style={{
+          width: (fullWidth || flex !== undefined || width !== undefined) ? '100%' : undefined,
+          flex: flex !== undefined ? 1 : undefined,
+        }}
         {...props}
       >
         <View style={containerStyles}>{renderContent()}</View>

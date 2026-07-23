@@ -529,7 +529,7 @@ export default function HistoryScreen() {
               <View style={[styles.visIconCircle, { backgroundColor: getStatusBg(b.status, colors) }]}>
                 <Icon name={Icons.carOutline} size={13} color={getStatusFg(b.status, colors)} />
               </View>
-              <AppText variant="bodySmall" color="textPrimary" style={styles.visPackageName} numberOfLines={1}>
+              <AppText variant="body" color="textPrimary" style={styles.visPackageName} numberOfLines={1}>
                 {packageName}
               </AppText>
               {isNew ? (
@@ -548,16 +548,16 @@ export default function HistoryScreen() {
 
           {/* Branch */}
           <View style={styles.visInfoLine}>
-            <Icon name={Icons.locationOutline} size={11} color={colors.textTertiary} />
-            <AppText variant="caption" color="textSecondary" numberOfLines={1} style={styles.visInfoText}>
+            <Icon name={Icons.locationOutline} size={14} color={colors.textTertiary} />
+            <AppText variant="bodySmall" color="textSecondary" numberOfLines={1} style={styles.visInfoText}>
               {branchName}
             </AppText>
           </View>
 
           {/* Time + date */}
           <View style={styles.visInfoLine}>
-            <Icon name={Icons.timeOutline} size={11} color={colors.textTertiary} />
-            <AppText variant="caption" color="textSecondary" style={styles.visInfoText}>
+            <Icon name={Icons.timeOutline} size={14} color={colors.textTertiary} />
+            <AppText variant="bodySmall" color="textSecondary" style={styles.visInfoText}>
               {b.startTime} · {format(parseISO(b.bookingDate), 'dd/MM/yyyy')}
             </AppText>
           </View>
@@ -584,7 +584,7 @@ export default function HistoryScreen() {
                 </View>
               ) : null}
             </View>
-            <AppText variant="bodySmall" color="primary" style={styles.visPrice}>
+            <AppText variant="body" color="primary" style={styles.visPrice}>
               {formatCurrency(b.finalPrice)}
             </AppText>
           </View>
@@ -1041,7 +1041,7 @@ export default function HistoryScreen() {
                           onChangeText={(v) => { setDateFrom(v); setPage(1); }}
                           placeholder="Từ ngày"
                           placeholderTextColor={colors.textTertiary}
-                          style={[styles.dateInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                          style={[styles.dateInput, { backgroundColor: dateFrom ? 'rgba(59, 130, 246, 0.08)' : colors.surface, borderColor: dateFrom ? colors.primary : colors.border, color: dateFrom ? colors.primary : colors.textPrimary }]}
                           accessibilityLabel="Từ ngày"
                         />
                         <TextInput
@@ -1049,7 +1049,7 @@ export default function HistoryScreen() {
                           onChangeText={(v) => { setDateTo(v); setPage(1); }}
                           placeholder="Đến ngày"
                           placeholderTextColor={colors.textTertiary}
-                          style={[styles.dateInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                          style={[styles.dateInput, { backgroundColor: dateTo ? 'rgba(59, 130, 246, 0.08)' : colors.surface, borderColor: dateTo ? colors.primary : colors.border, color: dateTo ? colors.primary : colors.textPrimary }]}
                           accessibilityLabel="Đến ngày"
                         />
                       </View>
@@ -1089,7 +1089,7 @@ export default function HistoryScreen() {
                           ]}
                           activeOpacity={0.7}
                         >
-                          <AppText variant="labelSmall" style={{ color: filter === f.key ? '#FFF' : colors.textSecondary }}>
+                          <AppText variant="bodySmall" style={{ color: filter === f.key ? '#FFF' : colors.textSecondary, fontWeight: filter === f.key ? '700' : '500' }}>
                             {f.label}
                           </AppText>
                         </TouchableOpacity>
@@ -1535,6 +1535,9 @@ interface PickerFieldProps {
 const PickerField: React.FC<PickerFieldProps> = ({ label, value, options, onChange, colors }) => {
   const [open, setOpen] = useState(false);
   const selectedLabel = options.find((o) => o.value === value)?.label || options[0]?.label || '';
+  
+  const isActive = value !== '' && value !== '-createdAt';
+
   return (
     <>
       <TouchableOpacity
@@ -1542,12 +1545,12 @@ const PickerField: React.FC<PickerFieldProps> = ({ label, value, options, onChan
         activeOpacity={0.7}
         style={[
           styles.pickerField,
-          { backgroundColor: colors.surface, borderColor: colors.border },
+          { backgroundColor: isActive ? 'rgba(59, 130, 246, 0.08)' : colors.surface, borderColor: isActive ? colors.primary : colors.border },
         ]}
         accessibilityLabel={label}
       >
-        <AppText variant="caption" color="textTertiary">{label}</AppText>
-        <AppText variant="bodySmall" color="textPrimary" numberOfLines={1} style={{ fontWeight: '600' }}>
+        <AppText variant="bodySmall" color={isActive ? "primary" : "textTertiary"}>{label}</AppText>
+        <AppText variant="body" color={isActive ? "primary" : "textPrimary"} numberOfLines={1} style={{ fontWeight: '600', marginTop: 2 }}>
           {selectedLabel}
         </AppText>
       </TouchableOpacity>
@@ -1784,7 +1787,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   visInfoText: {
-    fontSize: 11,
+    fontSize: 13,
   },
   visCardBottom: {
     flexDirection: 'row',
@@ -1804,11 +1807,11 @@ const styles = StyleSheet.create({
   visPlateText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 10,
+    fontSize: 12,
   },
   visPrice: {
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 16,
   },
 
   // Modal base
@@ -1967,8 +1970,8 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 40,
-    fontSize: 14,
+    height: 48,
+    fontSize: 15,
     padding: 0,
   },
   dropdownScroll: {
@@ -1982,12 +1985,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   dateInput: {
-    height: 44,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.sm,
-    fontSize: 12,
-    minWidth: 88,
+    height: 60,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    paddingHorizontal: spacing.md,
+    fontSize: 14,
+    minWidth: 110,
   },
   clearFilterBtn: {
     alignSelf: 'flex-start',
@@ -1997,11 +2000,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pickerField: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.sm,
-    height: 56,
+    borderWidth: 1.5,
+    borderRadius: borderRadius.lg,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    height: 60,
     justifyContent: 'center',
   },
   pickerModal: {

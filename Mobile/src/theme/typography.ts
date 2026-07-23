@@ -6,11 +6,17 @@
 
 import { TextStyle, Platform } from 'react-native';
 
-const fontFamily = Platform.select({
-  ios: 'System',
-  android: 'Roboto',
-  default: 'System',
-});
+// Font families mapped to weights
+const fonts = {
+  regular: 'Outfit_400Regular',
+  medium: 'Outfit_500Medium',
+  semibold: 'Outfit_600SemiBold',
+  bold: 'Outfit_700Bold',
+  displayRegular: 'Outfit_400Regular',
+  displayMedium: 'Outfit_500Medium',
+  displaySemiBold: 'Outfit_600SemiBold',
+  displayBold: 'Outfit_700Bold',
+};
 
 // Tabular-nums helper for stable number rendering (prices, timers)
 const tabular: TextStyle = {
@@ -20,7 +26,7 @@ const tabular: TextStyle = {
 export const typography = {
   // Display (for hero numbers, large balances)
   display: {
-    fontFamily,
+    fontFamily: fonts.displayBold,
     fontSize: 36,
     fontWeight: '700',
     lineHeight: 44,
@@ -28,7 +34,7 @@ export const typography = {
   } as TextStyle,
 
   displaySm: {
-    fontFamily,
+    fontFamily: fonts.displayBold,
     fontSize: 30,
     fontWeight: '700',
     lineHeight: 38,
@@ -37,7 +43,7 @@ export const typography = {
 
   // Headings
   h1: {
-    fontFamily,
+    fontFamily: fonts.displayBold,
     fontSize: 28,
     fontWeight: '700',
     lineHeight: 36,
@@ -45,7 +51,7 @@ export const typography = {
   } as TextStyle,
 
   h2: {
-    fontFamily,
+    fontFamily: fonts.displaySemiBold,
     fontSize: 24,
     fontWeight: '600',
     lineHeight: 32,
@@ -53,7 +59,7 @@ export const typography = {
   } as TextStyle,
 
   h3: {
-    fontFamily,
+    fontFamily: fonts.displaySemiBold,
     fontSize: 20,
     fontWeight: '600',
     lineHeight: 28,
@@ -61,7 +67,7 @@ export const typography = {
   } as TextStyle,
 
   h4: {
-    fontFamily,
+    fontFamily: fonts.displaySemiBold,
     fontSize: 18,
     fontWeight: '600',
     lineHeight: 24,
@@ -69,21 +75,21 @@ export const typography = {
 
   // Body
   bodyLarge: {
-    fontFamily,
+    fontFamily: fonts.regular,
     fontSize: 18,
     fontWeight: '400',
     lineHeight: 26,
   } as TextStyle,
 
   body: {
-    fontFamily,
+    fontFamily: fonts.regular,
     fontSize: 16,
     fontWeight: '400',
     lineHeight: 24,
   } as TextStyle,
 
   bodySmall: {
-    fontFamily,
+    fontFamily: fonts.regular,
     fontSize: 14,
     fontWeight: '400',
     lineHeight: 20,
@@ -91,7 +97,7 @@ export const typography = {
 
   // Caption
   caption: {
-    fontFamily,
+    fontFamily: fonts.regular,
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
@@ -99,7 +105,7 @@ export const typography = {
 
   // Button
   button: {
-    fontFamily,
+    fontFamily: fonts.displaySemiBold,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 24,
@@ -107,7 +113,7 @@ export const typography = {
   } as TextStyle,
 
   buttonSmall: {
-    fontFamily,
+    fontFamily: fonts.displaySemiBold,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
@@ -116,14 +122,14 @@ export const typography = {
 
   // Label
   label: {
-    fontFamily,
+    fontFamily: fonts.displayMedium,
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 20,
   } as TextStyle,
 
   labelSmall: {
-    fontFamily,
+    fontFamily: fonts.displayMedium,
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 16,
@@ -131,7 +137,7 @@ export const typography = {
 
   // Overline
   overline: {
-    fontFamily,
+    fontFamily: fonts.semibold,
     fontSize: 11,
     fontWeight: '600',
     lineHeight: 14,
@@ -141,7 +147,7 @@ export const typography = {
 
   // Numeric / price (uses tabular-nums to prevent layout shift)
   price: {
-    fontFamily,
+    fontFamily: fonts.displayBold,
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 28,
@@ -150,7 +156,7 @@ export const typography = {
   } as TextStyle,
 
   priceLarge: {
-    fontFamily,
+    fontFamily: fonts.displayBold,
     fontSize: 28,
     fontWeight: '700',
     lineHeight: 36,
@@ -159,7 +165,7 @@ export const typography = {
   } as TextStyle,
 
   priceSmall: {
-    fontFamily,
+    fontFamily: fonts.semibold,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
