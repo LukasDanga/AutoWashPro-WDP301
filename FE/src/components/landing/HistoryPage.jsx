@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { RefreshCw, Copy, Check } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
 
@@ -233,6 +235,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [qbDraft, setQbDraft] = useState(null);
   const [qbQrPollCount, setQbQrPollCount] = useState(0);
   const [qbQrLoading, setQbQrLoading] = useState(false);
+  const [qbBookingResult, setQbBookingResult] = useState(null);
   const qbPollRef = useRef(null);
 
   // Cleanup poll khi modal đóng
@@ -730,11 +733,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setQbSubmitting(true);
     setQbError('');
     try {
+      const branchId = d.branchId;
+      const packageId = d.packageId;
       const res = await fetch(`${apiBase || API_BASE}/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          branchId: d.branchId, packageId: d.packageId, vehicleId: d.vehicleId,
+          branchId, packageId, vehicleId: d.vehicleId,
           bookingDate: qbDate, startTime: qbTime,
           voucherCode: qbVoucherCode.trim() || undefined,
           selectedSubServices: [], note: '',
@@ -760,8 +765,26 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           gatewayTransactionId: `SIM${Date.now()}`,
         }),
       });
-      showToastMsg('Đặt lịch và thanh toán thành công!');
-      setShowQuickBookModal(false);
+      // Store booking result and show success step
+      const bkName = quickBookPack?.packageId?.name || quickBookPrefill?.packageName || quickBookPrefill?.packageId?.name || '';
+      const bkBranchName = quickBookPack?.branchId?.name || quickBookPrefill?.branchName || quickBookPrefill?.branchId?.name || '';
+      const vehicleLabel = userVehicles.find(v => (v._id || v.id) === d.vehicleId);
+      const basePriceVal = getQbBasePrice();
+      const depositVal = getQbDeposit();
+      setQbBookingResult({
+        bookingCode: bk.bookingCode || bk.code || `#${String(bk._id || bk.id).slice(-6)}`,
+        branch: { name: bkBranchName },
+        vehicle: vehicleLabel ? { licensePlate: vehicleLabel.licensePlate || vehicleLabel.name } : null,
+        pkg: { name: bkName },
+        date: qbDate,
+        time: qbTime,
+        total: basePriceVal,
+        discount: qbVoucherDiscount,
+        depositAmount: depositVal,
+        depositPaid: true,
+        paymentMode: 'deposit',
+      });
+      setQbQrStep('success');
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (e) {
       setQbError(e.message);
@@ -2058,48 +2081,174 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           const pay = qbDepositPayment;
           const qrCodeUrl = pay?.qrCode || '';
           return (
-          <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => { setQbQrStep('form'); setQbDepositPayment(null); if (qbPollRef.current) clearInterval(qbPollRef.current); }}>
-            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-              <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-slate-900">Thanh toán cọc</h3>
-                <button onClick={() => { setQbQrStep('form'); setQbDepositPayment(null); if (qbPollRef.current) clearInterval(qbPollRef.current); }}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100/80"
+              onClick={e => e.stopPropagation()}>
+              <div className="pt-4 pb-2 text-center px-6">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-1 bg-emerald-50 border-2 border-emerald-100">
+                  <svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">Chuyển khoản ngân hàng</h3>
+                <p className="text-slate-400 text-[11px] mt-0.5">Quét mã QR hoặc chuyển khoản thủ công</p>
               </div>
-              <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1 text-center">
-                <div className="rounded-xl bg-sky-50 border border-sky-200 p-4">
-                  <div className="text-xs text-sky-700 font-semibold uppercase tracking-wider">Tiền cọc</div>
-                  <div className="text-2xl font-extrabold text-slate-900 mt-1">{deposit.toLocaleString('vi-VN')}đ</div>
-                  <div className="text-xs text-slate-500 mt-1">(30% — {Math.max(0, basePrice - qbVoucherDiscount).toLocaleString('vi-VN')}đ)</div>
-                </div>
-                {qrCodeUrl && (
-                  <div className="flex justify-center">
-                    <img src={qrCodeUrl} alt="QR thanh toán" className="w-56 h-56 rounded-xl border border-slate-200 shadow-sm" />
+              {qrCodeUrl && (
+                <div className="px-6 pb-1 flex justify-center">
+                  <div className="bg-white rounded-xl border-2 border-slate-100 p-2.5 shadow-sm">
+                    <img src={qrCodeUrl} alt="QR code" className="w-32 h-32" />
                   </div>
-                )}
-                <div className="text-xs text-slate-500 space-y-1">
-                  <p>Quét mã QR bằng app ngân hàng</p>
-                  <p>hoặc chuyển khoản tới tài khoản bên dưới</p>
                 </div>
-                {pay?._id && (
-                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-left text-xs space-y-1.5">
-                    <div className="flex justify-between"><span className="text-slate-500">Mã giao dịch:</span><span className="font-mono font-bold text-slate-800">{pay.transactionId}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Số tiền:</span><span className="font-bold text-slate-800">{deposit.toLocaleString('vi-VN')}đ</span></div>
+              )}
+              <div className="px-5 py-1 space-y-2">
+                <div className="bg-slate-50 rounded-xl p-2 text-center">
+                  <div className="text-xs text-slate-400 mb-1">Số tiền cần chuyển</div>
+                  <div className="text-2xl font-black text-emerald-600">{deposit.toLocaleString('vi-VN')}đ</div>
+                  <div className="text-[11px] text-slate-400 mt-1">
+                    Đặt cọc 30% · Còn lại {Math.max(0, basePrice - qbVoucherDiscount - deposit).toLocaleString('vi-VN')}đ (thanh toán sau)
                   </div>
-                )}
-                <button onClick={simulateQbPayment} disabled={qbQrLoading}
-                  className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 transition-all">
-                  {qbQrLoading ? 'Đang xử lý...' : 'Tôi đã chuyển khoản'}
+                </div>
+                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">Ngân hàng</span>
+                    <span className="text-xs font-bold text-slate-700">{pay?.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
+                  </div>
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">Số tài khoản</span>
+                    <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{pay?.bankInfo?.accountNumber || '97966888888'}</span>
+                  </div>
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">Chủ tài khoản</span>
+                    <span className="text-xs font-bold text-slate-700">{pay?.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
+                  </div>
+                  <div className="px-3 py-1.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] text-slate-400 font-semibold">Nội dung chuyển khoản</span>
+                      <button type="button" onClick={() => { navigator.clipboard.writeText(pay?.bankInfo?.transferContent || `DAT COC ${pay?.transactionId}`); }}
+                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider">
+                        <Copy className="w-3 h-3 inline mr-0.5" />Copy
+                      </button>
+                    </div>
+                    <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
+                      {pay?.bankInfo?.transferContent || `DAT COC ${pay?.transactionId}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 font-semibold">Mã giao dịch</span>
+                  <span className="text-xs font-bold text-slate-700 font-mono">{pay?.transactionId}</span>
+                </div>
+                <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400 pt-0.5">
+                  <RefreshCw className={`w-3 h-3 ${qbQrPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
+                  Đang kiểm tra thanh toán...
+                </div>
+              </div>
+              <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2">
+                <button type="button" onClick={simulateQbPayment} disabled={qbQrLoading || qbSubmitting}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98] disabled:opacity-40">
+                  {qbQrLoading || qbSubmitting ? 'Đang xử lý...' : 'Đã chuyển khoản'}
                 </button>
-                <p className="text-[11px] text-slate-400">(Nếu bạn đã chuyển khoản, hãy bấm vào nút trên để xác nhận)</p>
+                <button type="button" onClick={() => { setQbQrStep('form'); setQbDepositPayment(null); if (qbPollRef.current) clearInterval(qbPollRef.current); }}
+                  className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                  Hủy
+                </button>
                 {qbError && (
                   <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{qbError}</div>
                 )}
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
+          );
+        }
+        if (qbQrStep === 'success') {
+          const result = qbBookingResult;
+          const doneCB = () => { setShowQuickBookModal(false); setQbQrStep('form'); setQbDepositPayment(null); setQbBookingResult(null); if (qbPollRef.current) clearInterval(qbPollRef.current); };
+          return (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={doneCB}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100/80 max-h-[90vh] flex flex-col overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+              <div className="pt-8 pb-4 text-center px-6 bg-white border-b border-slate-50">
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                  className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-3">
+                  <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
+                </motion.div>
+                <h3 className="text-xl font-bold text-slate-800">Đặt cọc thành công</h3>
+                <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  Đã đặt cọc {result?.depositAmount?.toLocaleString('vi-VN') || 0}đ — Lịch hẹn đã được xác nhận
+                </p>
+              </div>
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                <div className="text-center bg-gradient-to-br from-emerald-50 to-emerald-100/60 border-2 border-emerald-200/70 p-5 rounded-2xl shadow-sm">
+                  <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wider block">Mã đặt lịch của bạn</span>
+                  <span className="block mt-2 text-2xl font-black text-emerald-700 tracking-[0.15em] font-mono">
+                    {result?.bookingCode || ''}
+                  </span>
+                </div>
+                <div className="divide-y divide-slate-100 text-sm">
+                  <div className="flex justify-between py-3">
+                    <span className="text-slate-400 text-xs font-semibold">Chi nhánh</span>
+                    <span className="font-bold text-slate-700 text-sm">{result?.branch?.name || ''}</span>
+                  </div>
+                  {result?.vehicle && (
+                    <div className="flex justify-between py-3">
+                      <span className="text-slate-400 text-xs font-semibold">Xe</span>
+                      <span className="font-bold text-slate-700 text-sm">{result.vehicle.licensePlate || ''}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-3">
+                    <span className="text-slate-400 text-xs font-semibold">Thời gian hẹn</span>
+                    <span className="font-bold text-slate-700 text-sm">{result?.date || ''} {result?.time || ''}</span>
+                  </div>
+                  <div className="bg-slate-50/60 -mx-6 px-6 py-4 space-y-2.5 mt-2">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIẾT THANH TOÁN</div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600 text-sm">{result?.pkg?.name || ''}</span>
+                      <span className="font-bold text-slate-800 text-sm">{(result?.total || 0).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    {(result?.discount || 0) > 0 && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-emerald-600 font-semibold">Giảm giá</span>
+                        <span className="font-bold text-emerald-600">-{(result?.discount || 0).toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
+                    <div className="!mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
+                      <span className="font-bold text-sm text-slate-700">Tổng dịch vụ</span>
+                      <span className="font-extrabold text-base text-emerald-600">{(result?.total || 0).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <div>
+                        <span className="font-semibold text-sm text-amber-600">Đặt cọc (30%)</span>
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ĐÃ CỌC</span>
+                      </div>
+                      <span className="font-bold text-base text-amber-600">{(result?.depositAmount || 0).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400 font-medium">Còn lại (thanh toán sau)</span>
+                      <span className="font-bold text-slate-500">{Math.max(0, (result?.total || 0) - (result?.depositAmount || 0)).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
+                <button type="button" onClick={doneCB}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98]">
+                  Đóng
+                </button>
+                <button type="button" onClick={doneCB}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
+                  Lịch sử đặt
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
           );
         }
         return (
