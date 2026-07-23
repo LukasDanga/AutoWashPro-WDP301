@@ -503,8 +503,24 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
 };
 
 exports.getPaymentById = async (id) => {
-  const payment = await Payment.findById(id);
+  let payment = await Payment.findById(id)
+    .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
+    .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
+    .populate('userId', 'name email phone tier');
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+  // Auto-poll SePay if pending & bank method
+  if (payment.status !== 'paid' && payment.method === 'bank') {
+    const isPaid = await pollSepayTransaction(payment.transactionId, payment.amount);
+    if (isPaid) {
+      await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
+      payment = await Payment.findById(id)
+        .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
+        .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
+        .populate('userId', 'name email phone tier');
+    }
+  }
+
   return payment;
 };
 
@@ -568,6 +584,7 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
   const [data, total] = await Promise.all([
     Payment.find(query)
       .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
+      .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
       .populate('userId', 'name email phone tier')
       .sort({ createdAt: -1 })
       .skip(skip)

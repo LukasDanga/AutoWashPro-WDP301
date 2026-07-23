@@ -8,6 +8,7 @@ import {
 import VoucherPicker from '../VoucherPicker.jsx';
 import SlotPackFlow from '../customer/SlotPackFlow.jsx';
 import useSSE from '../../hooks/useSSE.js';
+import { storageKeys } from '../../lib/authStorage.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -50,6 +51,11 @@ const VEHICLE_TYPES = [
   { value: 'pickup', label: 'Pickup' },
   { value: 'van', label: 'Van' },
 ];
+
+function authHeader(token) {
+  const t = token || localStorage.getItem(storageKeys.accessToken) || '';
+  return t ? `Bearer ${t}` : '';
+}
 
 export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab }) {
   const isLoggedIn = !!user && !!token;
@@ -106,6 +112,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   // Draft data để tạo booking sau khi payment confirm
   const [depositDraft, setDepositDraft] = useState(null);
+  const [creatingBooking, setCreatingBooking] = useState(false);
 
   // Process pending booking after login
   const [processingPending, setProcessingPending] = useState(false);
@@ -471,27 +478,36 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   // Poll payment status when QR is shown
   const checkPaymentStatus = useCallback(async () => {
-    if (depositQrStep !== 'qr' || !depositPayment || !pendingDeposit) return;
+    if (depositQrStep !== 'qr' || !depositPayment) return;
     try {
-      const res = await fetch(`${apiBase}/payments/booking/${pendingDeposit?._id}`, {
+      const targetUrl = pendingDeposit?._id
+        ? `${apiBase}/payments/booking/${pendingDeposit._id}`
+        : (depositPayment._id || depositPayment.id)
+          ? `${apiBase}/payments/${depositPayment._id || depositPayment.id}`
+          : null;
+      if (!targetUrl) return;
+
+      const res = await fetch(targetUrl, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
       const data = await res.json();
       const p = data?.data || data;
       if (p?.status === 'paid') {
-        setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
-        setDepositQrStep('success');
-        setTimeout(() => {
-          setPendingDeposit(null);
-          setDepositPayment(null);
-          setDepositQrStep('select');
-          setTimeout(() => setShowSuccessModal(true), 400);
-        }, 1500);
+        if (depositDraft && !creatingBooking) {
+          await createBookingAfterPayment(true, depositDraft, true);
+        } else {
+          setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
+        }
+        setPendingDeposit(null);
+        setDepositPayment(null);
+        setDepositDraft(null);
+        setDepositQrStep('select');
+        setShowSuccessModal(true);
       }
       setDepositPollCount(c => c + 1);
     } catch (e) { /* ignore errors */ }
-  }, [depositQrStep, depositPayment, pendingDeposit, apiBase, token, paymentMode]);
+  }, [depositQrStep, depositPayment, pendingDeposit, depositDraft, creatingBooking, apiBase, token, paymentMode]);
 
   useSSE(token, 'payment_new', checkPaymentStatus);
 
@@ -504,6 +520,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   async function payWithVnpay() {
     if (!pendingDeposit) return;
+    if (!authHeader(token)) { storePendingAndAuth(); return; }
     setVnpayLoading(true);
     setError('');
     try {
@@ -541,7 +558,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         // Gọi provisional VNPay
         const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
           body: JSON.stringify({ amount: actualAmount }),
         });
         const data = await res.json();
@@ -575,7 +592,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
         const res = await fetch(`${apiBase}/payments/vnpay-create`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
           body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: paymentMode, amount: actualAmount }),
         });
         const data = await res.json();
@@ -630,6 +647,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const parsed = JSON.parse(decodeURIComponent(vnpayResult));
         const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
         if (success) {
+          if (!authHeader(token)) {
+            setError('Bạn cần đăng nhập lại để hoàn tất đặt lịch');
+            return;
+          }
           // Tạo booking từ draft data đã lưu (provisional VNPay)
           createBookingAfterPayment();
         } else {
@@ -646,11 +667,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       url.searchParams.delete('vnpay_result');
       window.history.replaceState({}, '', url);
     }
-  }, []);
+  }, [token]);
 
   // Tạo booking sau khi VNPay/Bank payment thành công
-  const [creatingBooking, setCreatingBooking] = useState(false);
-
   async function createBookingAfterPayment(isBank = false, pendingData = null, skipSuccessModal = false) {
     if (creatingBooking) return;
     setCreatingBooking(true);
@@ -664,7 +683,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const bBody = isRec
         ? { branchId: draft.branchId, packageId: draft.packageId, vehicleId: draft.vehicleId, weekdays: draft.weekdays, startTime: draft.startTime, weeks: draft.weeks, voucherCode: draft.voucherCode || undefined, selectedSubServices: draft.selectedSubServices || [], note: '' }
         : { branchId: draft.branchId, packageId: draft.packageId, vehicleId: draft.vehicleId, bookingDate: draft.bookingDate, startTime: draft.startTime, voucherCode: draft.voucherCode || undefined, selectedSubServices: draft.selectedSubServices || [], note: '' };
-      const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(bBody) });
+      const ah = authHeader(token);
+      const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: ah }, body: JSON.stringify(bBody) });
       const bd = await br.json();
       if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
       const newBk = bd?.data || bd;
@@ -676,7 +696,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const method = isBank ? 'bank' : 'vnpay';
       const payRes = await fetch(`${apiBase}/payments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: ah },
         body: JSON.stringify({ bookingId: bkId, method, paymentType: draft.paymentMode, amount: actualAmount }),
       });
       const payData = await payRes.json();
@@ -686,7 +706,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       // Confirm payment
       await fetch(`${apiBase}/payments/simulate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: ah },
         body: JSON.stringify({
           transactionId: payment.transactionId,
           gatewayTransactionId: method === 'bank' ? `SIM${Date.now()}` : 'VNPAY',
@@ -700,7 +720,19 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         branch: { name: draft.branchName || selectedBranch?.name || '' },
         vehicle: draft.vehicleInfo || vehicle || { licensePlate: '' },
         pkg: { name: draft.pkgName || pkg?.name || '', price: draft.pkgPrice || 0 },
-        currentDate: isRec ? null : { label: draft.bookingDate ? new Date(draft.bookingDate).toLocaleDateString('vi-VN', { weekday: 'short' }) : '', iso: draft.bookingDate },
+        currentDate: isRec ? null : {
+          label: draft.bookingDate ? (() => {
+            const parts = String(draft.bookingDate).split('T')[0].split('-');
+            if (parts.length === 3) {
+              const [y, m, d] = parts.map(Number);
+              const dateObj = new Date(y, m - 1, d);
+              const days = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+              return `${days[dateObj.getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+            }
+            return draft.bookingDate;
+          })() : '',
+          iso: draft.bookingDate,
+        },
         selectedTime: draft.startTime,
         total: draft.finalPrice || 0,
         discount: 0, points: 0, isPayingWithPack: false,
@@ -2453,14 +2485,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2">
-                    <button type="button" onClick={simulatePaymentConfirm}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
-                      Đã chuyển khoản
-                    </button>
+                  <div className="p-3 bg-slate-50 border-t border-slate-100">
                     <button type="button" onClick={() => { setPendingDeposit(null); setDepositPayment(null); setDepositQrStep('select'); setError(''); }}
-                      className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
-                      Hủy
+                      className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                      Hủy giao dịch
                     </button>
                   </div>
                 </>

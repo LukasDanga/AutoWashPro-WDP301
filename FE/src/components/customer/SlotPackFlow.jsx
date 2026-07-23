@@ -203,6 +203,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const qtyDiscount = Math.floor(gross * discountPct / 100);
   const baseTotal = gross - qtyDiscount;
   const branchObj = branches.find(b => b.id === selectedBranch);
+  const vehicleObj = userVehicles.find(v => (v._id || v.id) === selectedVehicle);
 
   const voucherSavings = (() => {
     if (!appliedVoucher || !baseTotal) return 0;
@@ -675,7 +676,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
 
       {/* Success Modal */}
       <AnimatePresence>
-        {showSuccessModal && buyResult && (
+        {(showSuccessModal && buyResult) && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
             onClick={() => { setShowSuccessModal(false); setBuyResult(null); }}>
@@ -749,51 +750,108 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
               onClick={() => { if (!buyLoading) { setShowQrModal(false); setSlotPackPayment(null); } }}>
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-[1.5rem] w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+              <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", duration: 0.5 }}
+                className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100/80 p-6"
                 onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold text-slate-800 text-center mb-4">Chuyển khoản ngân hàng</h3>
-                <div className="flex justify-center mb-4">
-                  <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shadow-sm">
-                    <img src={slotPackPayment.qrCode} alt="QR code" className="w-48 h-48" />
+                
+                {/* Header */}
+                <div className="text-center mb-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-1 bg-emerald-50 border-2 border-emerald-100">
+                    <svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                    </svg>
                   </div>
+                  <h3 className="text-lg font-bold text-slate-800">Chuyển khoản ngân hàng</h3>
+                  <p className="text-slate-400 text-[11px] mt-0.5">Quét mã QR VietQR hoặc chuyển khoản thủ công</p>
                 </div>
-                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 mb-4">
-                  <div className="p-3 flex justify-between">
-                    <span className="text-xs text-slate-400 font-semibold">Ngân hàng</span>
-                    <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
+
+                {/* QR Image */}
+                {slotPackPayment.qrCode && (
+                  <div className="pb-2 flex justify-center">
+                    <div className="bg-white rounded-2xl border-2 border-slate-100 p-2.5 shadow-sm">
+                      <img src={slotPackPayment.qrCode} alt="QR code" className="w-36 h-36" />
+                    </div>
                   </div>
-                  <div className="p-3 flex justify-between">
-                    <span className="text-xs text-slate-400 font-semibold">Số tài khoản</span>
-                    <span className="text-sm font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                )}
+
+                {/* Amount display box */}
+                <div className="bg-slate-50 rounded-xl p-3 text-center mb-3">
+                  <div className="text-xs text-slate-400 mb-0.5 font-medium">Số tiền cần chuyển (Thanh toán 100%)</div>
+                  <div className="text-2xl font-black text-emerald-600">{formatCurrency(slotPackPayment.amount || finalTotal)}</div>
+                  {buyResult?.packCode && (
+                    <div className="text-[11px] text-emerald-600 font-semibold mt-1">Mã gói: {buyResult.packCode}</div>
+                  )}
+                </div>
+
+                {/* Account Details Box */}
+                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 mb-3 text-xs">
+                  <div className="p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 font-semibold">Ngân hàng</span>
+                    <span className="font-bold text-slate-700">{slotPackPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
                   </div>
-                  <div className="p-3 flex justify-between">
-                    <span className="text-xs text-slate-400 font-semibold">Chủ tài khoản</span>
-                    <span className="text-sm font-bold text-slate-700">{slotPackPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
+                  <div className="p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 font-semibold">Số tài khoản</span>
+                    <span className="font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '97966888888'}</span>
                   </div>
-                  <div className="p-3">
-                    <span className="text-xs text-slate-400 font-semibold block mb-1">Nội dung chuyển khoản</span>
+                  <div className="p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 font-semibold">Chủ tài khoản</span>
+                    <span className="font-bold text-slate-700">{slotPackPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
+                  </div>
+                  <div className="p-2.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-slate-400 font-semibold">Nội dung chuyển khoản</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(slotPackPayment.bankInfo?.transferContent || `THANH TOAN ${slotPackPayment.transactionId}`);
+                          showToast('Đã sao chép nội dung CK!', 'success');
+                        }}
+                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider"
+                      >
+                        Copy
+                      </button>
+                    </div>
                     <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
                       {slotPackPayment.bankInfo?.transferContent || `THANH TOAN ${slotPackPayment.transactionId}`}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400 pt-0.5 mb-4">
-                  <RefreshCw className={`w-3 h-3 ${payPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
-                  Đang kiểm tra thanh toán...
+
+                {/* Package Details Breakdown */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs space-y-2 mb-3">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">CHI TIẾT GÓI LƯỢT</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Chi nhánh</span>
+                    <span className="font-bold text-slate-700">{branchObj?.name || 'Toàn hệ thống'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Gói dịch vụ</span>
+                    <span className="font-bold text-slate-700">{pkg?.name || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Số lượt rửa</span>
+                    <span className="font-bold text-slate-700">{slotCount} lượt {discountPct > 0 ? `(-${discountPct}%)` : ''}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Áp dụng cho xe</span>
+                    <span className="font-bold text-slate-700">
+                      {selectedVehicle === 'ALL' ? 'Tất cả xe' : (vehicleObj?.licensePlate || vehicleObj?.brand || 'Xe đã chọn')}
+                    </span>
+                  </div>
                 </div>
-                <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2 mt-4 -mx-6 -mb-6 rounded-b-[1.5rem]">
-                  <button type="button" onClick={() => simulatePaymentConfirm()}
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
-                    Giả lập thanh toán (Test)
-                  </button>
-                  <button type="button" onClick={() => checkSlotPackPayment()}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]">
-                    Đã chuyển khoản (Kiểm tra)
-                  </button>
+
+                {/* Status Indicator */}
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 font-medium mb-3">
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${payPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
+                  <span>Đang tự động lắng nghe thanh toán từ ngân hàng...</span>
+                </div>
+
+                {/* Buttons */}
+                <div className="pt-2 border-t border-slate-100">
                   <button type="button" onClick={() => { setShowQrModal(false); setSlotPackPayment(null); }}
-                    className="w-full py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
-                    Hủy
+                    className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                    Hủy giao dịch
                   </button>
                 </div>
               </motion.div>

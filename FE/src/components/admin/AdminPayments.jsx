@@ -150,25 +150,27 @@ function PaymentDetail({ payment, onClose, onConfirm, onRefund, confirming, refu
             <span className="block text-xs text-slate-400 font-medium">Chi nhánh</span>
             <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
               <Buildings size={14} className="text-slate-400" />
-              {payment.bookingId?.branchId?.name || payment.branchId?.name || '—'}
+              {payment.bookingId?.branchId?.name || payment.slotPackId?.branchId?.name || payment.branchId?.name || (payment.slotPackId ? 'Toàn hệ thống' : '—')}
             </span>
           </div>
           <div>
             <span className="block text-xs text-slate-400 font-medium">Ngày đặt</span>
             <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
               <CalendarBlank size={14} className="text-slate-400" />
-              {payment.bookingId?.bookingDate ? formatDate(payment.bookingId.bookingDate) : '—'}
+              {payment.bookingId?.bookingDate ? formatDate(payment.bookingId.bookingDate) : (payment.createdAt ? formatDate(payment.createdAt) : '—')}
             </span>
           </div>
           <div>
             <span className="block text-xs text-slate-400 font-medium">Loại thanh toán</span>
             <span className="font-semibold text-slate-700 mt-0.5">
-              {payment.paymentType === 'deposit' ? 'Đặt cọc' : payment.paymentType === 'remaining' ? 'Thanh toán phần còn lại' : 'Thanh toán đầy đủ'}
+              {payment.slotPackId ? `Mua gói lượt (${payment.slotPackId.packCode || 'Gói lượt'})` : payment.paymentType === 'deposit' ? 'Đặt cọc' : payment.paymentType === 'remaining' ? 'Thanh toán phần còn lại' : 'Thanh toán đầy đủ'}
             </span>
           </div>
           <div>
-            <span className="block text-xs text-slate-400 font-medium">Trạng thái booking</span>
-            <span className="font-semibold text-slate-700 mt-0.5">{payment.bookingId?.status || '—'}</span>
+            <span className="block text-xs text-slate-400 font-medium">Trạng thái đơn hàng</span>
+            <span className="font-semibold text-slate-700 mt-0.5">
+              {payment.bookingId?.status ? payment.bookingId.status : payment.slotPackId ? `Gói lượt (${payment.slotPackId.status || 'Đã kích hoạt'})` : 'Giao dịch tạm tính'}
+            </span>
           </div>
         </div>
 

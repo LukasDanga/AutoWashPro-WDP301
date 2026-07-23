@@ -6,6 +6,7 @@ import RecurringBookingFlow from './customer/RecurringBookingFlow.jsx';
 import SlotPackFlow from './customer/SlotPackFlow.jsx';
 import CustomerProfile from './customer/CustomerProfile.jsx';
 import VoucherPicker from './VoucherPicker.jsx';
+import useSSE from '../hooks/useSSE.js';
 
 const sidebarItems = [
   { id: 'dashboard', label: 'Giới thiệu', hint: 'Các giải pháp đặt lịch', icon: '💡' },
@@ -70,6 +71,22 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const [selectedSlotPack, setSelectedSlotPack] = useState(null);
   const [activeNav, setActiveNav] = useState('dashboard');
   const [currentUser, setCurrentUser] = useState(user);
+  const [sepayData, setSepayData] = useState(null);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+
+  // Lắng nghe sự kiện thanh toán thành công qua SSE từ SePay Webhook
+  useSSE(token, 'PAYMENT_SUCCESS', (data) => {
+    if (pendingDeposit && (String(data?.bookingId) === String(pendingDeposit._id) || data?.transactionId === sepayData?.transactionId)) {
+      setPaymentCompleted(true);
+      setTimeout(() => {
+        setPendingDeposit(null);
+        setSepayData(null);
+        setPaymentCompleted(false);
+        setMessage(`🎉 Thanh toán SePay thành công! Mã đơn: ${pendingDeposit.bookingCode || bookingCode}`);
+        setActiveNav('history');
+      }, 2500);
+    }
+  });
 
   useEffect(() => {
     async function fetchData() {
@@ -226,8 +243,8 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const payload = await response.json();
       const booking = payload?.data || payload;
       setBookingCode(booking?.bookingCode || booking?.code || '');
-      // Đơn lẻ/định kỳ cần đặt cọc trước; gói lượt đã trả trước → không cọc
-      if (booking?.depositAmount > 0 && !booking?.depositPaid) {
+      // Đơn lẻ/định kỳ cần thanh toán; gói lượt đã trả trước → không cọc
+      if ((booking?.depositAmount > 0 || booking?.finalPrice > 0) && !booking?.depositPaid) {
         setPendingDeposit(booking);
         setMessage('');
       } else {
@@ -248,9 +265,18 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.message || 'Thanh toán cọc thất bại');
-      setMessage(`Đã đặt cọc ${formatCurrency(pendingDeposit.depositAmount)} thành công. Lịch của bạn đang chờ chi nhánh xác nhận.`);
-      setBookingCode(pendingDeposit.bookingCode || '');
-      setPendingDeposit(null);
+      const payObj = payload?.data || payload;
+      if (payObj?.qrCodeUrl || payObj?.transactionId) {
+        setSepayData({
+          qrCodeUrl: payObj.qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=97966888888&amount=${pendingDeposit.depositAmount || pendingDeposit.finalPrice}&des=DAT COC ${payObj.transactionId}`,
+          transactionId: payObj.transactionId,
+          amount: payObj.amount || pendingDeposit.depositAmount || pendingDeposit.finalPrice,
+        });
+      } else {
+        setMessage(`Đã đặt cọc ${formatCurrency(pendingDeposit.depositAmount || pendingDeposit.finalPrice)} thành công. Lịch của bạn đang chờ chi nhánh xác nhận.`);
+        setBookingCode(pendingDeposit.bookingCode || '');
+        setPendingDeposit(null);
+      }
     } catch (e) { setMessage(e.message || 'Thanh toán cọc thất bại'); }
     finally { setDepositLoading(false); }
   }
@@ -594,102 +620,140 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
 
       {pendingDeposit && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)', padding: 16 }}>
-          <div style={{ width: '100%', maxWidth: 420, background: '#fff', borderRadius: 20, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-            {/* Header */}
-            <div style={{ background: '#fff', padding: '24px 24px 0', textAlign: 'center' }}>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: 24 }}>💲</div>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Thanh toán</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Vui lòng thanh toán để hoàn tất đặt lịch</p>
-            </div>
-
-            <div style={{ padding: '16px 24px 24px' }}>
-              {/* Summary */}
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span style={{ color: '#64748b', fontSize: '0.88rem' }}>Tổng dịch vụ</span>
-                  <strong style={{ color: '#0f172a' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</strong>
-                </div>
-                {/* Payment amount options display */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                  <div style={{ borderRadius: 10, border: '2px solid #e2e8f0', padding: '10px 12px', background: '#fff' }}>
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Thanh toán cọc 30%</div>
-                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
-                  </div>
-                  <div style={{ borderRadius: 10, border: '2px solid #10b981', background: 'rgba(16,185,129,0.06)', padding: '10px 12px' }}>
-                    <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginBottom: 2 }}>Thanh toán 100%</div>
-                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#10b981' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
-                  <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Còn lại (thanh toán sau)</span>
-                  <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.82rem' }}>{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || 0) - (pendingDeposit.depositAmount || 0)))}</span>
-                </div>
+          <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 20, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            {paymentCompleted ? (
+              <div style={{ textAlign: 'center', padding: '36px 24px' }}>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 36, fontWeight: 900 }}>✓</div>
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>THANH TOÁN SEPAY THÀNH CÔNG!</h3>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 16px' }}>Hệ thống SePay đã ghi nhận giao dịch thành công. Lịch hẹn của bạn đã được xác nhận!</p>
+                <div style={{ fontSize: 13, color: '#10b981', fontWeight: 700 }}>Đang chuyển sang trang Lịch sử...</div>
               </div>
-
-              {/* SỐ TIỀN CẦN THANH TOÁN label */}
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>SỐ TIỀN CẦN THANH TOÁN</div>
-
-              {/* Payment method selection */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>CHỌN PHƯƠNG THỨC</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[
-                    { id: 'bank', label: 'Ngân hàng', icon: '🏦' },
-                    { id: 'vnpay', label: 'VNPay', icon: '💳' },
-                    { id: 'cash', label: 'Tiền mặt', icon: '💵' },
-                  ].map(m => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSelectedPayMethod(m.id)}
-                      style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                        padding: '10px 6px', borderRadius: 10, border: '2px solid',
-                        borderColor: selectedPayMethod === m.id ? '#10b981' : '#e2e8f0',
-                        background: selectedPayMethod === m.id ? 'rgba(16,185,129,0.06)' : '#fff',
-                        cursor: 'pointer', transition: 'all 0.15s',
-                      }}>
-                      <span style={{ fontSize: 20 }}>{m.icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: selectedPayMethod === m.id ? '#10b981' : '#64748b' }}>{m.label}</span>
-                    </button>
-                  ))}
+            ) : sepayData ? (
+              <div style={{ padding: '24px', textAlign: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Quét Mã VietQR Chuyển Khoản</h3>
+                  <button type="button" onClick={() => setSepayData(null)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
                 </div>
-              </div>
-
-              {/* Action button */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(selectedPayMethod === 'bank') && (
-                  <button type="button" onClick={payDeposit} disabled={depositLoading}
-                    style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
-                    {depositLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
-                  </button>
-                )}
-                {selectedPayMethod === 'vnpay' && (
-                  <button type="button" onClick={payWithVnpay} disabled={vnpayLoading}
-                    style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: vnpayLoading ? 0.7 : 1 }}>
-                    {vnpayLoading ? 'ĐANG CHUYỂN HƯỚNG...' : `THANH TOÁN VNPay ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
-                  </button>
-                )}
-                {selectedPayMethod === 'cash' && (
-                  <button type="button"
-                    onClick={() => {
-                      setMessage(`Đặt lịch thành công! Vui lòng đến tiệm để thanh toán tiền mặt ${formatCurrency(pendingDeposit.depositAmount || 0)} khi làm dịch vụ.`);
-                      setPendingDeposit(null);
-                    }}
-                    style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#0f172a', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>
-                    XÁC NHẬN — TRẢ TIỀN MẶT TẠI TIỆM
-                  </button>
-                )}
-                <button type="button" onClick={() => setPendingDeposit(null)}
-                  style={{ width: '100%', padding: 12, borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 16, border: '1px solid #e2e8f0', display: 'inline-block', marginBottom: 14 }}>
+                  <img src={sepayData.qrCodeUrl} alt="SePay VietQR" style={{ width: 220, height: 220, borderRadius: 10, display: 'block' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
+                  <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Số tiền:</span>
+                    <strong style={{ color: '#10b981', fontSize: 16, fontWeight: 800 }}>{formatCurrency(sepayData.amount)}</strong>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Nội dung CK:</span>
+                    <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: 14, fontWeight: 700 }}>{sepayData.transactionId}</strong>
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(16,185,129,0.08)', padding: '10px 14px', borderRadius: 10, color: '#10b981', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <span className="animate-spin">🔄</span> Đang chờ ngân hàng xác nhận giao dịch...
+                </div>
+                <button type="button" onClick={() => { setSepayData(null); setPendingDeposit(null); }}
+                  style={{ width: '100%', marginTop: 14, padding: 10, borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
                   ← Quay lại
                 </button>
               </div>
+            ) : (
+              <div>
+                {/* Header */}
+                <div style={{ background: '#fff', padding: '24px 24px 0', textAlign: 'center' }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: 24 }}>💲</div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Thanh toán</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Vui lòng thanh toán để hoàn tất đặt lịch</p>
+                </div>
 
-              <p style={{ margin: '10px 0 0', fontSize: '0.72rem', color: '#cbd5e1', textAlign: 'center' }}>
-                Tiền cọc sẽ không được hoàn lại nếu bạn không đến đúng giờ hẹn.
-              </p>
-            </div>
+                <div style={{ padding: '16px 24px 24px' }}>
+                  {/* Summary */}
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ color: '#64748b', fontSize: '0.88rem' }}>Tổng dịch vụ</span>
+                      <strong style={{ color: '#0f172a' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</strong>
+                    </div>
+                    {/* Payment amount options display */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                      <div style={{ borderRadius: 10, border: '2px solid #e2e8f0', padding: '10px 12px', background: '#fff' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Thanh toán cọc 30%</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
+                      </div>
+                      <div style={{ borderRadius: 10, border: '2px solid #10b981', background: 'rgba(16,185,129,0.06)', padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginBottom: 2 }}>Thanh toán 100%</div>
+                        <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#10b981' }}>{formatCurrency(pendingDeposit.finalPrice || 0)}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
+                      <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Còn lại (thanh toán sau)</span>
+                      <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.82rem' }}>{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || 0) - (pendingDeposit.depositAmount || 0)))}</span>
+                    </div>
+                  </div>
+
+                  {/* SỐ TIỀN CẦN THANH TOÁN label */}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>SỐ TIỀN CẦN THANH TOÁN</div>
+
+                  {/* Payment method selection */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>CHỌN PHƯƠNG THỨC</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                      {[
+                        { id: 'bank', label: 'Ngân hàng', icon: '🏦' },
+                        { id: 'vnpay', label: 'VNPay', icon: '💳' },
+                        { id: 'cash', label: 'Tiền mặt', icon: '💵' },
+                      ].map(m => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSelectedPayMethod(m.id)}
+                          style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                            padding: '10px 6px', borderRadius: 10, border: '2px solid',
+                            borderColor: selectedPayMethod === m.id ? '#10b981' : '#e2e8f0',
+                            background: selectedPayMethod === m.id ? 'rgba(16,185,129,0.06)' : '#fff',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                          }}>
+                          <span style={{ fontSize: 20 }}>{m.icon}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: selectedPayMethod === m.id ? '#10b981' : '#64748b' }}>{m.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Action button */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {(selectedPayMethod === 'bank') && (
+                      <button type="button" onClick={payDeposit} disabled={depositLoading}
+                        style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: depositLoading ? 0.7 : 1 }}>
+                        {depositLoading ? 'ĐANG TẠO MÃ VIETQR...' : `HIỆN MÃ VIETQR SEPAY`}
+                      </button>
+                    )}
+                    {selectedPayMethod === 'vnpay' && (
+                      <button type="button" onClick={payWithVnpay} disabled={vnpayLoading}
+                        style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: vnpayLoading ? 0.7 : 1 }}>
+                        {vnpayLoading ? 'ĐANG CHUYỂN HƯỚNG...' : `THANH TOÁN VNPay ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+                      </button>
+                    )}
+                    {selectedPayMethod === 'cash' && (
+                      <button type="button"
+                        onClick={() => {
+                          setMessage(`Đặt lịch thành công! Vui lòng đến tiệm để thanh toán tiền mặt ${formatCurrency(pendingDeposit.depositAmount || 0)} khi làm dịch vụ.`);
+                          setPendingDeposit(null);
+                        }}
+                        style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#0f172a', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>
+                        XÁC NHẬN — TRẢ TIỀN MẶT TẠI TIỆM
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setPendingDeposit(null)}
+                      style={{ width: '100%', padding: 12, borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                      ← Quay lại
+                    </button>
+                  </div>
+
+                  <p style={{ margin: '10px 0 0', fontSize: '0.72rem', color: '#cbd5e1', textAlign: 'center' }}>
+                    Tiền cọc sẽ không được hoàn lại nếu bạn không đến đúng giờ hẹn.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
