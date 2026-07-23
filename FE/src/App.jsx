@@ -222,7 +222,7 @@ export default function App() {
   }
 
   if (path === '/history' && token && user) {
-    return <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />;
+    return <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} />;
   }
 
   if (path === '/payments' && token && user) {

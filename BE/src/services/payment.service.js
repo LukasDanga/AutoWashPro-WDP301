@@ -255,7 +255,21 @@ exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
     payment.qrCode = await generateQrDataUrl(transactionId, payment.amount, method, 'full');
   }
 
-  await payment.save();
+  try {
+    await payment.save();
+  } catch (err) {
+    console.error('[createSlotPackPayment] save error:', {
+      code: err.code,
+      message: err.message,
+      keyPattern: err.keyPattern,
+      bookingIdInDoc: payment.bookingId,
+      slotPackId: payment.slotPackId,
+      method: payment.method,
+      status: payment.status,
+      toJSON: JSON.stringify(payment.toObject()),
+    });
+    throw err;
+  }
   return payment;
 };
 

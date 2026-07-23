@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Vehicle } = require('../models');
+const { Vehicle, Booking } = require('../models');
 const { VEHICLE_TYPE } = require('../config/constants');
 
 const SUPPORTED_TYPES = Object.values(VEHICLE_TYPE);
@@ -114,6 +114,22 @@ exports.updateVehicle = async (vehicleId, userId, updates) => {
 };
 
 exports.deleteVehicle = async (vehicleId, userId) => {
+  // Check for bookings referencing this vehicle
+  const activeStatuses = ['pending', 'confirmed', 'checked_in', 'in_progress'];
+  const existingBookings = await Booking.find({ vehicleId, status: { $in: activeStatuses } })
+    .select('bookingCode bookingDate startTime status')
+    .sort({ bookingDate: -1 })
+    .limit(20);
+  if (existingBookings.length > 0) {
+    const codes = existingBookings.map(b =>
+      `${b.bookingCode || 'N/A'} (${new Date(b.bookingDate).toLocaleDateString('vi-VN')} ${b.startTime})`
+    ).join(', ');
+    throw Object.assign(
+      new Error(`Không thể xóa xe này vì đã có ${existingBookings.length} lịch hẹn đang hoạt động. Mã: ${codes}`),
+      { statusCode: 409, code: 'VEHICLE_HAS_BOOKINGS' }
+    );
+  }
+
   const session = await createSafeSession();
   const opts = (session && session.inTransaction()) ? { session } : {};
 
