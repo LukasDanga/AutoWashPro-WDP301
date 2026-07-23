@@ -63,7 +63,7 @@ const bookingSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'momo', 'vnpay'],
+      enum: ['cash', 'momo', 'vnpay', 'bank', 'sepay'],
     },
     paidAt: { type: Date },
     // Check-in related fields
