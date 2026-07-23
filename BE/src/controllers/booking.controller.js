@@ -227,8 +227,9 @@ exports.getBookingQR = catchAsync(async (req, res) => {
 });
 
 exports.sepayWebhook = catchAsync(async (req, res) => {
-  const apiKey = req.headers.authorization;
-  if (process.env.SEPAY_API_KEY && apiKey !== `Apikey ${process.env.SEPAY_API_KEY}`) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, '').trim();
+  if (process.env.SEPAY_API_KEY && token !== process.env.SEPAY_API_KEY) {
     return res.status(401).json({ success: false, message: 'Invalid API Key' });
   }
 

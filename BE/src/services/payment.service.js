@@ -489,8 +489,18 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
 };
 
 exports.getPaymentById = async (id) => {
-  const payment = await Payment.findById(id);
+  let payment = await Payment.findById(id);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+  // Auto-poll SePay if pending & bank method
+  if (payment.status !== 'paid' && payment.method === 'bank') {
+    const isPaid = await pollSepayTransaction(payment.transactionId, payment.amount);
+    if (isPaid) {
+      await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
+      payment = await Payment.findById(id);
+    }
+  }
+
   return payment;
 };
 
