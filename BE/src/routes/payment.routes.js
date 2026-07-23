@@ -117,18 +117,6 @@ router.delete('/range', authenticate, authorize(ROLES.ADMIN), bookingController.
 router.patch('/:id/viewed', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.markPaymentViewed);
 
 
-/**
- * @swagger
- * /api/payments/{id}:
- *   get:
- *     summary: Get payment by ID
- *     tags: [Payments]
- *     security:
- *       - bearerAuth: []
- */
-router.get('/:id', authenticate, bookingController.getPaymentById);
-
-
 // Webhook từ SePay (giao dịch chuyển khoản ngân hàng)
 router.post('/sepay/webhook', bookingController.sepayWebhook);
 
@@ -149,5 +137,16 @@ router.get('/vnpay-ipn', bookingController.handleVnpayIPN);
 
 // VNPay callback (FE gọi sau khi nhận được redirect từ VNPay return)
 router.post('/vnpay-callback', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.vnpayCallback);
+
+/**
+ * @swagger
+ * /api/payments/{id}:
+ *   get:
+ *     summary: Get payment by ID
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/:id', authenticate, bookingController.getPaymentById);
 
 module.exports = router;
