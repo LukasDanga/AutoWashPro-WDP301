@@ -132,6 +132,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const [slotPackPayment, setSlotPackPayment] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [vnpayModalUrl, setVnpayModalUrl] = useState(null);
   const [payPollCount, setPayPollCount] = useState(0);
 
   const [myPacks, setMyPacks] = useState([]);
@@ -255,7 +256,6 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       const payResult = payData.data || payData;
 
       if (paymentMethod === 'vnpay') {
-        // Lưu thông tin vào sessionStorage rồi redirect
         sessionStorage.setItem('aw_lastSlotPack', JSON.stringify({
           packCode: pack.packCode,
           finalPrice: pack.finalPriceAfterVoucher || pack.finalPrice,
@@ -263,7 +263,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           branchName: branchObj?.name || 'Toàn hệ thống',
           paymentMethod: 'vnpay',
         }));
-        window.location.href = payResult.paymentUrl;
+        setVnpayModalUrl(payResult.paymentUrl);
       } else {
         setSlotPackPayment(payResult);
         setShowQrModal(true);
@@ -271,6 +271,25 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
     } catch (err) { setBuyError(err.message); }
     finally { setBuyLoading(false); }
   }
+
+  useEffect(() => {
+    function handleMessage(evt) {
+      if (evt.data && evt.data.type === 'VNPAY_DONE' && evt.data.vnpayResult) {
+        setVnpayModalUrl(null);
+        try {
+          const parsed = JSON.parse(decodeURIComponent(evt.data.vnpayResult));
+          if (parsed?.success !== false && parsed?.data?.responseCode === '00') {
+            setShowSuccessModal(true);
+            loadMyPacks();
+          } else {
+            setBuyError(parsed?.message || 'Thanh toán VNPay thất bại');
+          }
+        } catch (e) { console.error(e); }
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [loadMyPacks]);
 
   // Kiểm tra thanh toán Bank (polling)
   const checkSlotPackPayment = useCallback(async () => {
@@ -742,6 +761,69 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* VNPay iFrame Modal Popup */}
+      {createPortal(
+        <AnimatePresence>
+          {vnpayModalUrl && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+              onClick={() => {
+                if (window.confirm('Bạn có chắc chắn muốn đóng cổng thanh toán VNPay?')) {
+                  setVnpayModalUrl(null);
+                }
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", duration: 0.5 }}
+                className="bg-white rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="px-6 py-4 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-sm">
+                      VNP
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-base tracking-wide flex items-center gap-2">
+                        Cổng thanh toán VNPay
+                        <span className="text-[10px] font-semibold bg-emerald-400 text-slate-900 px-2 py-0.5 rounded-full uppercase tracking-widest">Bảo mật 256-bit</span>
+                      </h3>
+                      <p className="text-xs text-blue-100/90 mt-0.5">Hoàn tất giao dịch ngay trong trang Web AutoWashPro</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Bạn có chắc chắn muốn đóng cổng thanh toán VNPay?')) {
+                        setVnpayModalUrl(null);
+                      }
+                    }}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white font-bold text-sm transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 bg-slate-50 relative">
+                  <iframe
+                    src={vnpayModalUrl}
+                    title="VNPay Payment Portal"
+                    className="w-full h-full border-0"
+                  />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* QR Payment Modal */}
       {createPortal(
