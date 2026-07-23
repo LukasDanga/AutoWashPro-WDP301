@@ -71,12 +71,26 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
   async function handleDeleteVehicle(vId) {
     if (!(await confirmDialog({ title: 'Xóa xe', message: 'Bạn có chắc chắn muốn xóa xe này?', confirmLabel: 'Xóa', danger: true }))) return;
     try {
-      await fetch(`${apiBase || API_BASE}/vehicles/${vId}`, {
+      const res = await fetch(`${apiBase || API_BASE}/vehicles/${vId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || 'Xóa xe thất bại');
+      }
       setVehicles(prev => prev.filter(v => (v._id || v.id) !== vId));
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+      if (e.message.includes('lịch hẹn đang hoạt động')) {
+        await confirmDialog({
+          title: 'Không thể xóa xe',
+          message: e.message + '\n\nVui lòng hoàn thành hoặc hủy các lịch hẹn trước khi xóa xe.',
+          confirmLabel: 'Đã hiểu',
+        });
+      } else {
+        alert(e.message);
+      }
+    }
   }
 
   async function handleUpdateProfile(e) {
