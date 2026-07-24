@@ -64,6 +64,13 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   success(res, booking, 'Booking status updated');
 });
 
+exports.updateSubServices = catchAsync(async (req, res) => {
+  const booking = await bookingService.updateSubServices(req.params.id, req.body.subServices, req.user.role, req.user.branchId, req.userId);
+  sseService.broadcastToAll('slots_updated');
+  if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
+  success(res, booking, 'Updated sub-services successfully');
+});
+
 exports.extendGracePeriod = catchAsync(async (req, res) => {
   const booking = await bookingService.extendGracePeriod(req.params.id, req.user.role, req.user.branchId);
   success(res, booking, 'Đã gia hạn thời gian check-in cho đơn');
@@ -99,7 +106,9 @@ exports.deleteBookingsByDateRange = catchAsync(async (req, res) => {
 
 exports.getAvailableSlots = catchAsync(async (req, res) => {
   const { branchId, date, packageId } = req.query;
+  console.log('--- GET SLOTS CALLED ---', req.query);
   const slots = await bookingService.getAvailableSlots(branchId, date, packageId);
+  console.log('--- SLOTS RETURNED ---', slots.length);
   success(res, slots, 'Available slots retrieved');
 });
 

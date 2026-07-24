@@ -248,9 +248,9 @@ exports.createBooking = async (data) => {
       }
 
       computedDiscountAmount = 0;
-      computedFinalPrice = 0;
+      computedFinalPrice = extraPrice;
       bookingType = 'slot_pack_usage';
-      paymentStatus = 'paid';
+      paymentStatus = extraPrice > 0 ? 'unpaid' : 'paid';
     }
 
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
@@ -694,6 +694,93 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   }
 
   return booking;
+};
+
+exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, userId) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const booking = await Booking.findById(id).session(session);
+    if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    
+    if (userRole === 'manager') {
+      if (!userBranchId || String(userBranchId) !== String(booking.branchId)) {
+        throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
+    } else if (userRole === 'customer') {
+      if (!userId || String(userId) !== String(booking.userId)) {
+        throw Object.assign(new Error('Not authorized to update this booking'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
+    }
+    
+    if (booking.status === 'completed' || booking.status === 'cancelled') {
+      throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+    }
+
+    const packages = await Package.find({ branchId: booking.branchId }).session(session);
+    const validSubServices = [];
+    let addedDuration = 0;
+    let addedPrice = 0;
+
+    const uniqueNames = [...new Set(subServiceNames)];
+
+    for (const name of uniqueNames) {
+      let found = false;
+      for (const pkg of packages) {
+        const sub = pkg.subServices?.find(s => s.name === name);
+        if (sub) {
+          validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration, isOptional: sub.isOptional });
+          addedDuration += sub.duration || 0;
+          addedPrice += sub.price || 0;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        throw Object.assign(new Error(`Sub-service not found: ${name}`), { statusCode: 404 });
+      }
+    }
+
+    const pkg = await Package.findById(booking.packageId).session(session);
+    if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404 });
+
+    const totalDuration = pkg.duration + addedDuration;
+    const endTime = computeEndTime(booking.startTime, totalDuration);
+    
+    const branch = await Branch.findById(booking.branchId).session(session);
+    const closeMinutes = parseTime(branch?.closingTime || '20:00');
+    if (parseTime(endTime) > closeMinutes) {
+      throw Object.assign(new Error('Adding these services exceeds branch closing time'), { statusCode: 400 });
+    }
+
+    booking.selectedSubServices = validSubServices;
+    booking.endTime = endTime;
+    const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : pkg.price;
+    const newFinalPrice = basePrice + addedPrice - (booking.discountAmount || 0);
+    
+    // If the price increased and it was previously paid, mark as unpaid for the remaining balance.
+    // If we only charge for the newly added services, the finalPrice will increase.
+    if (newFinalPrice > (booking.finalPrice || 0) && booking.paymentStatus === 'paid') {
+        booking.paymentStatus = 'unpaid';
+    }
+    booking.finalPrice = Math.max(0, newFinalPrice);
+    
+    await booking.save({ session });
+    await session.commitTransaction();
+    return await Booking.findById(booking._id)
+      .populate('userId', 'name email phone tier')
+      .populate('branchId', 'name address phone')
+      .populate('packageId', 'name price duration')
+      .populate('vehicleId', 'licensePlate vehicleType brand color');
+  } catch (err) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw err;
+  } finally {
+    session.endSession();
+  }
 };
 
 /**

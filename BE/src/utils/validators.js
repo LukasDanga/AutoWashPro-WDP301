@@ -146,6 +146,11 @@ const bookingValidators = {
     param('id').isMongoId().withMessage('Invalid booking ID'),
     body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled']),
   ],
+  updateSubServices: [
+    param('id').isMongoId().withMessage('Invalid booking ID'),
+    body('subServices').isArray().withMessage('subServices must be an array'),
+    body('subServices.*').isString(),
+  ],
   slots: [
     query('branchId').isString().notEmpty().withMessage('Invalid branch ID'),
     query('date').isISO8601().withMessage('Invalid date format'),
