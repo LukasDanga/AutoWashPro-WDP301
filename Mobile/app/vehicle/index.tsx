@@ -10,7 +10,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { vehicleApi } from '../../src/api';
 import {
   Text as AppText,
@@ -51,9 +51,11 @@ export default function VehicleScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchVehicles();
-  }, [fetchVehicles]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchVehicles();
+    }, [fetchVehicles])
+  );
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -131,7 +133,7 @@ export default function VehicleScreen() {
         <View style={styles.cardActions}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
+            onPress={() => router.push({ pathname: '/vehicle/form', params: { id: item._id } })}
             accessibilityLabel="Sửa phương tiện"
             accessibilityRole="button"
           >
@@ -139,11 +141,16 @@ export default function VehicleScreen() {
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
+            onPress={() => handleDelete(item)}
             accessibilityLabel="Xóa phương tiện"
             accessibilityRole="button"
+            disabled={isDeleting === item._id}
           >
-            <Icon name="trash-outline" size={18} color={colors.error} />
+            {isDeleting === item._id ? (
+              <Loading />
+            ) : (
+              <Icon name="trash-outline" size={18} color={colors.error} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -164,7 +171,7 @@ export default function VehicleScreen() {
         title="Quản lý xe" 
         rightAction={
           <TouchableOpacity 
-            onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
+            onPress={() => router.push('/vehicle/form')}
             style={styles.addButton}
             accessibilityLabel="Thêm phương tiện mới"
             accessibilityRole="button"
@@ -196,7 +203,7 @@ export default function VehicleScreen() {
             title="Chưa có phương tiện"
             message="Thêm phương tiện để đặt lịch rửa xe nhanh hơn"
             actionLabel="Thêm xe"
-            onAction={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
+            onAction={() => router.push('/vehicle/form')}
           />
         }
       />
@@ -204,7 +211,7 @@ export default function VehicleScreen() {
       <View style={styles.bottomAction}>
         <Button
           title="+ Thêm phương tiện mới"
-          onPress={() => AlertDialog.show({ title: 'Tính năng đang phát triển', message: 'Tính năng này đang được phát triển.', actions: [{ text: 'Đóng' }] })}
+          onPress={() => router.push('/vehicle/form')}
           fullWidth
         />
       </View>
