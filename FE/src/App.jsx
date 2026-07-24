@@ -116,7 +116,16 @@ export default function App() {
       return;
     }
 
-    loadSession(token);
+    async function initSession() {
+      const profile = await loadSession(token);
+      if (profile && (profile.role === 'admin' || profile.role === 'manager')) {
+        if (location.pathname === '/' || location.pathname === '/auth') {
+          redirectByRole(profile);
+        }
+      }
+    }
+
+    initSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
