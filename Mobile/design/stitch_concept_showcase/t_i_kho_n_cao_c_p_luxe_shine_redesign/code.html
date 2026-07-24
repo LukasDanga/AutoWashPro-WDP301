@@ -1,0 +1,308 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Auto Wash Pro - Account</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#006b47",
+                        "inverse-on-surface": "#f0f1f2",
+                        "secondary": "#5f5e5e",
+                        "tertiary": "#735c00",
+                        "inverse-primary": "#71dba6",
+                        "surface-container-highest": "#e1e3e4",
+                        "outline": "#6e7a71",
+                        "surface-container-high": "#e7e8e9",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed": "#e5e2e1",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "surface-variant": "#e1e3e4",
+                        "inverse-surface": "#2e3132",
+                        "on-secondary-container": "#636262",
+                        "on-secondary": "#ffffff",
+                        "surface-dim": "#d9dadb",
+                        "on-background": "#191c1d",
+                        "outline-variant": "#bdcac0",
+                        "on-primary-fixed": "#002113",
+                        "surface-tint": "#006c47",
+                        "primary-container": "#00875a",
+                        "primary-fixed": "#8df7c1",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#4f3d00",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f3f4f5",
+                        "on-primary-fixed-variant": "#005235",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-primary-container": "#ffffff",
+                        "tertiary-fixed": "#ffe088",
+                        "surface-bright": "#f8f9fa",
+                        "on-tertiary-fixed": "#241a00",
+                        "on-surface-variant": "#3e4942",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#71dba6",
+                        "surface": "#f8f9fa",
+                        "background": "#f8f9fa",
+                        "on-surface": "#191c1d",
+                        "secondary-container": "#e2dfde",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "surface-container": "#edeeef",
+                        "tertiary-container": "#cca730",
+                        "on-error": "#ffffff"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "base": "8px",
+                        "section-margin": "32px",
+                        "gutter": "16px",
+                        "container-padding": "20px",
+                        "card-gap": "12px"
+                    },
+                    fontFamily: {
+                        "label-md": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "caption": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "headline-sm": ["Manrope"]
+                    },
+                    fontSize: {
+                        "label-md": ["14px", { lineHeight: "20px", letterSpacing: "0.05em", fontWeight: "600" }],
+                        "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "800" }],
+                        "headline-lg": ["32px", { lineHeight: "40px", fontWeight: "700" }],
+                        "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+                        "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
+                        "caption": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+                        "headline-md": ["24px", { lineHeight: "32px", fontWeight: "700" }],
+                        "headline-sm": ["20px", { lineHeight: "28px", fontWeight: "600" }]
+                    },
+                    boxShadow: {
+                        'ambient': '0px 4px 20px rgba(0, 0, 0, 0.05)',
+                        'ambient-lg': '0px 10px 30px rgba(0, 135, 90, 0.15)',
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; background-color: #f8f9fa; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background flex justify-center min-h-screen pb-24 md:pb-0">
+<div class="w-full max-w-md bg-background relative min-h-screen shadow-xl overflow-hidden flex flex-col">
+<!-- Header / TopAppBar -->
+<header class="flex justify-between items-center px-gutter py-base w-full z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-md shadow-sm sticky top-0">
+<button class="w-10 h-10 flex items-center justify-center text-primary dark:text-primary-fixed hover:bg-primary-container/20 transition-colors rounded-full rounded-full">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed text-center absolute left-1/2 -translate-x-1/2 w-max">Tài khoản</h1>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex-shrink-0">
+<img alt="User profile photo of Ho Dinh Anh" class="w-full h-full object-cover" data-alt="Close-up portrait of an Asian man with short dark hair, wearing a casual grey t-shirt, smiling gently in a bright, modern indoor setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwuSLp8y4PYZADskbeeIciIaGkhQtgc8KNwklijjIT39LkeIplFAMZ3oOMandqkQFI7_qZYhpcfICMeWvC7GfRO98C3mNjH2b9LhrSEeAaX9Ek_iNBCspBVxks5LoviD9irrHsQ4In4zP7G1FHdJVIVluzMwxM4CAvwiECa858eXp0lnjFdID9PhGleo-66wOoZnbqhwJiX4q80nIGMU9lWlLOzncplf2TMuLT5CH1Q4cbvQNa7JpI7Q">
+</div>
+</header>
+<main class="flex-1 overflow-y-auto hide-scrollbar relative">
+<!-- Profile Header -->
+<section class="relative pt-8 pb-6 px-container-padding text-center">
+<div class="absolute inset-0 z-0 overflow-hidden rounded-b-[40px]">
+<div class="bg-cover bg-center w-full h-full opacity-40 blur-sm scale-110" data-alt="A luxurious dark emerald green sports car parked in a pristine, modern, softly lit indoor garage with concrete walls. The image is significantly blurred to act as an abstract background." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCOY6iK43ehySMy6anEAN0xTILpY0Q35nL1fHkcITmu6A5AV-cBKCC5fEvq8H-nc8igTC_-EBFJ8btouv2VjRU8LGIWXKMsZqen_ZMOCawhMd2OqgKEUM85AXmDt8b6C70sivaPoUwdic_U5yMX4rolzcDGZAPlt5uTvT6DK4yD7m2hgSxEyZl3rkywlQQSdPtLoWkiwL_kuqmIl3ji6ZqdrVaqok5bVv2FseV4MEqedGj2vydlWMblAQ')"></div>
+<div class="absolute inset-0 bg-gradient-to-b from-surface-bright/20 via-surface-bright/80 to-surface-bright"></div>
+</div>
+<div class="relative z-10 flex flex-col items-center">
+<div class="relative">
+<img alt="Profile" class="w-24 h-24 rounded-full border-4 border-surface shadow-md object-cover z-10 relative" data-alt="Close-up portrait of an Asian man with short dark hair, wearing a casual grey t-shirt, smiling gently in a bright, modern indoor setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnQ9nTKwVJ6VagsG5_oNTPnVvioMEMzRHfgNJ1-InSY-qHie1g11dnKYziKIYcgbkNai6NTTuysEiDo2X0pmeCCRratmvLEu1XWOSsNUAdaeCTTy_gZIzHrVz_E0rBfg8QG-dV60Hinz1radmDmIqbTDah_FC1OOgYEOTf395-1vfACeNEnrMn_07rb-Q2s1zlLwykggJ-aSe_NjkQyzXNuJQm0WdhfuetToS54XMBfXmRrMdrL_f9hg">
+<button class="absolute bottom-0 right-0 bg-primary-container text-on-primary-container w-8 h-8 rounded-full flex items-center justify-center shadow-md border-2 border-surface z-20">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+<h2 class="font-headline-sm text-headline-sm mt-4 text-on-surface">Ho Dinh Anh</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4">dinhanh200304@gmail.com</p>
+<div class="bg-surface-container-low px-4 py-3 rounded-xl shadow-ambient w-full max-w-[280px]">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-md text-label-md text-tertiary-container flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] icon-fill">workspace_premium</span>
+                                Bronze Member
+                            </span>
+<span class="font-caption text-caption text-on-surface-variant">0 / 500 điểm</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5">
+<div class="bg-tertiary-container h-1.5 rounded-full" style="width: 5%"></div>
+</div>
+<p class="font-caption text-caption text-on-surface-variant text-left mt-2">Lên hạng Bạc: 500 điểm nữa</p>
+</div>
+</div>
+</section>
+<!-- Statistics Card -->
+<section class="px-container-padding -mt-4 relative z-20">
+<div class="bg-surface shadow-ambient rounded-xl p-4 flex justify-between divide-x divide-outline-variant/30 border border-surface-container">
+<div class="flex-1 text-center">
+<p class="font-headline-sm text-headline-sm text-primary mb-1">8</p>
+<p class="font-caption text-caption text-on-surface-variant">Đơn đặt</p>
+</div>
+<div class="flex-1 text-center">
+<p class="font-headline-sm text-headline-sm text-primary mb-1">0</p>
+<p class="font-caption text-caption text-on-surface-variant">Điểm</p>
+</div>
+<div class="flex-1 text-center">
+<p class="font-headline-sm text-headline-sm text-primary mb-1">0</p>
+<p class="font-caption text-caption text-on-surface-variant">Tổng điểm</p>
+</div>
+</div>
+</section>
+<!-- Settings Groups -->
+<section class="px-container-padding py-6 space-y-6">
+<!-- Group 1: TÀI KHOẢN -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant mb-2 pl-2">TÀI KHOẢN</h3>
+<div class="bg-surface rounded-xl shadow-ambient overflow-hidden border border-surface-container">
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">person</span>
+<span class="font-body-md text-body-md">Chỉnh sửa thông tin</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">directions_car</span>
+<span class="font-body-md text-body-md">Quản lý xe</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">lock</span>
+<span class="font-body-md text-body-md">Đổi mật khẩu</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Group 2: ĐẶT LỊCH -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant mb-2 pl-2">ĐẶT LỊCH</h3>
+<div class="bg-surface rounded-xl shadow-ambient overflow-hidden border border-surface-container">
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">history</span>
+<span class="font-body-md text-body-md">Lịch sử đặt lịch</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">receipt_long</span>
+<span class="font-body-md text-body-md">Lịch sử thanh toán</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">confirmation_number</span>
+<span class="font-body-md text-body-md">Voucher của tôi</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">inventory_2</span>
+<span class="font-body-md text-body-md">Gói slot đã mua</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Group 3: CÀI ĐẶT -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant mb-2 pl-2">CÀI ĐẶT</h3>
+<div class="bg-surface rounded-xl shadow-ambient overflow-hidden border border-surface-container">
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">notifications</span>
+<span class="font-body-md text-body-md">Thông báo</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">language</span>
+<span class="font-body-md text-body-md">Ngôn ngữ (Tiếng Việt)</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">help</span>
+<span class="font-body-md text-body-md">Trợ giúp &amp; Hỗ trợ</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-primary">policy</span>
+<span class="font-body-md text-body-md">Chính sách bảo mật</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Logout Button -->
+<button class="w-full mt-8 bg-error-container/30 border border-error-container text-error hover:bg-error-container/50 transition-colors py-4 rounded-xl flex items-center justify-center gap-2 font-label-md text-label-md bg-primary-container/10">
+<span class="material-symbols-outlined">logout</span>
+                    Đăng xuất
+                </button>
+<div class="h-8"></div>
+</section>
+</main>
+<!-- Bottom Navigation -->
+<nav class="md:hidden flex justify-around items-center w-full px-4 pt-2 pb-4 bg-surface/90 dark:bg-surface-dim/90 backdrop-blur-lg fixed bottom-0 w-full z-50 pb-safe border-t border-outline-variant/30 dark:border-outline/20 shadow-lg">
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim px-3 py-1 hover:text-primary-container transition-all">
+<span class="material-symbols-outlined">home_app_logo</span>
+<span class="font-label-md text-label-md text-[10px] mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim px-3 py-1 hover:text-primary-container transition-all">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-label-md text-label-md text-[10px] mt-1">Bookings</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim px-3 py-1 hover:text-primary-container transition-all">
+<span class="material-symbols-outlined">qr_code_scanner</span>
+<span class="font-label-md text-label-md text-[10px] mt-1">Check-in</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed bg-primary-container/15 rounded-xl px-3 py-1 scale-95 duration-100">
+<span class="material-symbols-outlined icon-fill">person</span>
+<span class="font-label-md text-label-md text-[10px] mt-1">Account</span>
+</button>
+</nav>
+</div>
+
+
+
+</body></html>

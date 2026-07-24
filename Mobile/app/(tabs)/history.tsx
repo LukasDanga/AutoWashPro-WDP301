@@ -95,7 +95,7 @@ function getDotColor(status: BookingStatus): string {
     case 'completed': return '#16A34A';
     case 'cancelled': return '#94A3B8';
     case 'pending': return '#F59E0B';
-    default: return '#3B82F6';
+    default: return '#10B981';
   }
 }
 

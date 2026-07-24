@@ -7,13 +7,14 @@
  */
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { useColors } from '../../../theme/ThemeContext';
-import { spacing, borderRadius } from '../../../theme/spacing';
+import { useColors } from '../../theme/ThemeContext';
+import { spacing, layout, borderRadius, shadows } from '../../theme/spacing';
 import { Icon, Icons } from '../common/Icon';
 import { Text } from '../common/Text';
-import { PressableScale } from '../common/PressableScale';
+import { Badge } from '../common/Badge';
 import { Card } from '../common/Card';
-import type { Branch } from '../../../types';
+import { PressableScale } from '../common/PressableScale';
+import type { Branch } from '../../types';
 
 interface BranchCardProps {
   branch: Branch;
@@ -139,7 +140,7 @@ export const BranchCard: React.FC<BranchCardProps> = ({
               </Text>
               {subline ? (
                 <>
-                  <View style={styles.dotSep} />
+                  <View style={[styles.dotSep, { backgroundColor: colors.borderLight }]} />
                   <Text variant="caption" color="textTertiary" numberOfLines={1}>
                     {subline}
                   </Text>
@@ -192,7 +193,6 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#CBD5E1',
   },
   matchPill: {
     flexDirection: 'row',

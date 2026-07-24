@@ -23,10 +23,11 @@ import {
   PressableProps,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
-import { borderRadius, spacing } from '../../theme/spacing';
+import { borderRadius, spacing, layout } from '../../theme/spacing';
 import { duration, scale } from '../../theme/tokens';
 
 type ButtonVariant =
@@ -288,7 +289,20 @@ export const Button: React.FC<ButtonProps> = ({
         }}
         {...props}
       >
-        <View style={containerStyles}>{renderContent()}</View>
+        <View style={containerStyles}>
+          {(variant === 'primary' || variant === 'gradient') && (
+            <>
+              <LinearGradient
+                colors={['#10B981', '#059669']} // FE override accent to accent-2
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View style={styles.ctaBlob} />
+            </>
+          )}
+          {renderContent()}
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -299,8 +313,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    gap: 8,
+    borderRadius: layout.buttonRadius,
+    gap: spacing.sm,
     overflow: 'hidden',
   },
   containerSmall: {
@@ -348,6 +362,15 @@ const styles = StyleSheet.create({
   },
   iconWrapperRight: {
     marginLeft: 4,
+  },
+  ctaBlob: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    top: -60,
+    right: -40,
   },
 });
 

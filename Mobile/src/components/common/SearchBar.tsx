@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
-import { spacing } from '../../theme/spacing';
+import { spacing, layout } from '../../theme/spacing';
 import { duration } from '../../theme/tokens';
 import { Icon, Icons } from './Icon';
 
@@ -90,13 +90,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       style={[
         {
           backgroundColor: variant === 'floating' ? colors.surfaceElevated : colors.surface,
-          borderRadius: 12,
+          borderRadius: layout.inputRadius,
           borderColor,
           borderWidth,
           shadowOpacity,
           ...Platform.select({
             ios: {
-              shadowColor: '#000',
+              shadowColor: colors.textPrimary,
               shadowOffset: { width: 0, height: 2 },
               shadowRadius: 4,
             },

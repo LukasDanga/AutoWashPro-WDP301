@@ -24,6 +24,7 @@ import {
   BottomNavBar,
   useToast,
   PressableScale,
+  Skeleton,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
@@ -231,8 +232,10 @@ export default function HistoryDayScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={[styles.listContent, { padding: 16 }]}>
+          <Skeleton width="100%" height={120} borderRadius={12} style={{ marginBottom: 12 }} />
+          <Skeleton width="100%" height={120} borderRadius={12} style={{ marginBottom: 12 }} />
+          <Skeleton width="100%" height={120} borderRadius={12} style={{ marginBottom: 12 }} />
         </View>
       ) : dayBookings.length === 0 ? (
         <EmptyState
@@ -243,8 +246,11 @@ export default function HistoryDayScreen() {
       ) : (
         <FlatList
           data={dayBookings}
-          keyExtractor={item => item._id}
           renderItem={renderBookingItem}
+          keyExtractor={(item) => item._id}
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListFooterComponent={<View style={{ height: 90 }} />}

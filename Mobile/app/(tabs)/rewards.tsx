@@ -59,7 +59,7 @@ const TIER_GRADIENTS: Record<UserTier, [string, string, string]> = {
   bronze:  ['#92400E', '#B45309', '#D97706'],
   silver:  ['#475569', '#64748B', '#94A3B8'],
   gold:    ['#B45309', '#D97706', '#FBBF24'],
-  diamond: ['#1E40AF', '#3B82F6', '#A5B4FC'],
+  diamond: ['#0369A1', '#38BDF8', '#BAE6FD'],
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ const CouponTabs: React.FC<{ value: TabKey; onChange: (v: TabKey) => void }> = (
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
           >
-            <Icon name={tab.icon} size={18} color={isActive ? '#2563EB' : '#94A3B8'} />
+            <Icon name={tab.icon} size={18} color={isActive ? '#10B981' : '#94A3B8'} />
             <Text style={[ctab.label, isActive && ctab.labelActive]}>{tab.label}</Text>
           </Pressable>
         );
@@ -145,9 +145,9 @@ const ctab = StyleSheet.create({
     top: 4,
     bottom: 4,
     borderRadius: 20,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1.5,
-    borderColor: '#2563EB',
+    borderColor: '#10B981',
   },
   tab: {
     flex: 1,
@@ -164,7 +164,7 @@ const ctab = StyleSheet.create({
   },
   labelActive: {
     fontFamily: 'Outfit_700Bold',
-    color: '#2563EB',
+    color: '#10B981',
   },
 });
 

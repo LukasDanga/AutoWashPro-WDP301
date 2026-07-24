@@ -567,6 +567,9 @@ export default function SlotPacksScreen() {
         data={filteredPacks}
         renderItem={renderSlotPack}
         keyExtractor={(item) => item._id}
+        initialNumToRender={5}
+        windowSize={5}
+        maxToRenderPerBatch={5}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[colors.primary]} />}

@@ -572,7 +572,10 @@ export default function RecurringBookingScreen() {
         paymentOption,
       };
 
-      await AsyncStorage.setItem('aw_recurring_draft', JSON.stringify(recurringDraft));
+      await AsyncStorage.setItem('aw_recurring_draft', JSON.stringify({
+        ...recurringDraft,
+        timestamp: Date.now(),
+      }));
       router.replace('/payment/checkout?type=recurring' as any);
     } catch (error: any) {
       const apiMessage =
@@ -633,7 +636,7 @@ export default function RecurringBookingScreen() {
     >
       {filteredPackages.length === 0 ? (
         <EmptyState
-          icon={<Text style={styles.optionEmoji}>✨</Text>}
+          icon={<AppText style={styles.optionEmoji}>✨</AppText>}
           title="Chưa có gói dịch vụ"
           message={
             selectedBranch
@@ -699,7 +702,7 @@ export default function RecurringBookingScreen() {
                   <AppText variant="caption" color="primary">{formatCurrency(sub.price)}</AppText>
                 </View>
                 <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: isSelected ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? colors.primary : 'transparent' }}>
-                  {isSelected && <Text style={{ color: 'white', fontSize: 12 }}>✓</Text>}
+                  {isSelected && <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>}
                 </View>
               </TouchableOpacity>
             );
@@ -774,14 +777,14 @@ export default function RecurringBookingScreen() {
               ]}
               onPress={() => toggleWeekday(day.value)}
             >
-              <Text
+              <AppText
                 style={[
                   styles.weekdayChipText,
                   active && styles.weekdayChipTextActive,
                 ]}
               >
                 {day.short}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           );
         })}
@@ -802,7 +805,7 @@ export default function RecurringBookingScreen() {
         <View style={styles.timeGrid}>
           {[1, 2, 3, 4, 5, 6].map(i => (
             <View key={i} style={styles.timeCardSkeleton}>
-              <Text style={styles.timeLoadingText}>--:--</Text>
+              <AppText style={styles.timeLoadingText}>--:--</AppText>
             </View>
           ))}
         </View>
@@ -860,7 +863,7 @@ export default function RecurringBookingScreen() {
                       disabled={!canBook}
                       onPress={() => canBook && setSelectedTime(slot.startTime)}
                     >
-                      <Text
+                      <AppText
                         style={[
                           styles.timeText,
                           isLocked && styles.timeTextDisabled,
@@ -868,17 +871,17 @@ export default function RecurringBookingScreen() {
                         ]}
                       >
                         {slot.startTime}
-                      </Text>
+                      </AppText>
                       {userHasThisSlot ? (
-                        <Text style={[styles.timeSlotFull, { color: colors.primary }]}>
+                        <AppText style={[styles.timeSlotFull, { color: colors.primary }]}>
                           Bạn đã đặt
-                        </Text>
+                        </AppText>
                       ) : isUnavailable ? (
-                        <Text style={styles.timeSlotFull}>Kín</Text>
+                        <AppText style={styles.timeSlotFull}>Kín</AppText>
                       ) : isVipOnly ? (
-                        <Text style={[styles.timeSlotFull, { color: colors.warning }]}>
+                        <AppText style={[styles.timeSlotFull, { color: colors.warning }]}>
                           VIP
-                        </Text>
+                        </AppText>
                       ) : null}
                     </TouchableOpacity>
                   );
@@ -930,14 +933,14 @@ export default function RecurringBookingScreen() {
             ]}
             onPress={() => selectPresetWeeks(w)}
           >
-            <Text
+            <AppText
               style={[
                 styles.weekChipText,
                 weeks === w && styles.weekChipTextActive,
               ]}
             >
               {w}
-            </Text>
+            </AppText>
           </TouchableOpacity>
         ))}
       </View>
@@ -975,16 +978,16 @@ export default function RecurringBookingScreen() {
               const weekdayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
               return (
                 <View key={i} style={styles.previewDateItem}>
-                  <Text style={styles.previewDateWeekday}>
+                  <AppText style={styles.previewDateWeekday}>
                     {weekdayLabels[d.getDay()]}
-                  </Text>
-                  <Text style={styles.previewDateValue}>
+                  </AppText>
+                  <AppText style={styles.previewDateValue}>
                     {d.toLocaleDateString('vi-VN', {
                       day: '2-digit',
                       month: '2-digit',
                       year: 'numeric',
                     })}
-                  </Text>
+                  </AppText>
                 </View>
               );
             })}
@@ -1038,113 +1041,113 @@ export default function RecurringBookingScreen() {
       >
         <Card style={styles.summaryCard}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Chi nhánh</Text>
-            <Text style={styles.summaryValue}>{selectedBranch?.name}</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Chi nhánh</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{selectedBranch?.name}</AppText>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Địa chỉ</Text>
-            <Text style={styles.summaryValue}>{selectedBranch?.address}</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Địa chỉ</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{selectedBranch?.address}</AppText>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Gói dịch vụ</Text>
-            <Text style={styles.summaryValue}>{selectedPackage?.name}</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Gói dịch vụ</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{selectedPackage?.name}</AppText>
           </View>
           {selectedSubServices.length > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Dịch vụ thêm</Text>
-              <Text style={styles.summaryValue}>
+              <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Dịch vụ thêm</AppText>
+              <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>
                 {selectedSubServices.map(s => s.name).join(', ')}
-              </Text>
+              </AppText>
             </View>
           )}
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Phương tiện</Text>
-            <Text style={styles.summaryValue}>{selectedVehicle?.licensePlate}</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Phương tiện</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{selectedVehicle?.licensePlate}</AppText>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Thứ</Text>
-            <Text style={styles.summaryValue}>{weekdayLabels || '—'}</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Thứ</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{weekdayLabels || '—'}</AppText>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Giờ</Text>
-            <Text style={styles.summaryValue}>{selectedTime || '—'}</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Giờ</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{selectedTime || '—'}</AppText>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Số tuần</Text>
-            <Text style={styles.summaryValue}>{effectiveWeeks} tuần</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Số tuần</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{effectiveWeeks} tuần</AppText>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Tổng buổi hợp lệ</Text>
-            <Text style={styles.summaryValue}>{totalSessions} buổi</Text>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Tổng buổi hợp lệ</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>{totalSessions} buổi</AppText>
           </View>
 
           {/* Preview dates in confirm step */}
           {previewDates.length > 0 && (
             <View style={styles.confirmPreviewDates}>
-              <Text style={styles.confirmPreviewTitle}>
+              <AppText variant="subtitle2" color="textPrimary" style={styles.confirmPreviewTitle}>
                 Lịch dự kiến ({previewDates.length} buổi)
-              </Text>
+              </AppText>
               {previewDates.slice(0, 8).map((d, i) => {
                 const weekdayShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
                 return (
                   <View key={i} style={styles.confirmPreviewItem}>
-                    <Text style={styles.confirmPreviewWeekday}>
+                    <AppText style={styles.confirmPreviewWeekday}>
                       {weekdayShort[d.getDay()]}
-                    </Text>
-                    <Text style={styles.confirmPreviewDate}>
+                    </AppText>
+                    <AppText style={styles.confirmPreviewDate}>
                       {d.toLocaleDateString('vi-VN', {
                         day: '2-digit',
                         month: '2-digit',
                         year: 'numeric',
                       })}
-                    </Text>
+                    </AppText>
                   </View>
                 );
               })}
               {previewDates.length > 8 && (
-                <Text style={styles.confirmPreviewMore}>
+                <AppText variant="caption" color="textTertiary" style={styles.confirmPreviewMore}>
                   +{previewDates.length - 8} ngày nữa
-                </Text>
+                </AppText>
               )}
             </View>
           )}
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Đơn giá</Text>
-            <Text style={styles.summaryValue}>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Đơn giá</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryValue}>
               {formatCurrency(pricePerSession)} / buổi
-            </Text>
+            </AppText>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Tổng cộng</Text>
-            <Text style={styles.summaryPrice}>
+            <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Tổng cộng</AppText>
+            <AppText variant="bodySmall" color="textPrimary" style={styles.summaryPrice}>
               {formatCurrency(totalEstimate)}
-            </Text>
+            </AppText>
           </View>
           {voucherSavings > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: '#10b981' }]}>Giảm giá voucher</Text>
-              <Text style={[styles.summaryPrice, { color: '#10b981' }]}>
+              <AppText variant="caption" style={[styles.summaryLabel, { color: '#10b981' }]}>Giảm giá voucher</AppText>
+              <AppText variant="bodySmall" style={[styles.summaryPrice, { color: '#10b981' }]}>
                 -{formatCurrency(voucherSavings)}
-              </Text>
+              </AppText>
             </View>
           )}
           {voucherSavings > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { fontWeight: '700' }]}>Thành tiền</Text>
-              <Text style={[styles.summaryPrice, { fontWeight: '700' }]}>
+              <AppText variant="caption" color="textSecondary" style={[styles.summaryLabel, { fontWeight: '700' }]}>Thành tiền</AppText>
+              <AppText variant="bodySmall" color="textPrimary" style={[styles.summaryPrice, { fontWeight: '700' }]}>
                 {formatCurrency(finalEstimate)}
-              </Text>
+              </AppText>
             </View>
           )}
           {totalPoints > 0 ? (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Điểm tích lũy ước tính</Text>
-              <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
+              <AppText variant="caption" color="textSecondary" style={styles.summaryLabel}>Điểm tích lũy ước tính</AppText>
+              <AppText variant="bodySmall" style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
                 +{totalPoints} điểm
-              </Text>
+              </AppText>
             </View>
           ) : null}
         </Card>

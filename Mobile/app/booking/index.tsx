@@ -681,6 +681,7 @@ export default function BookingScreen() {
         await AsyncStorage.setItem('aw_checkout_extras', JSON.stringify({
           voucherCode: voucherToSend,
           selectedSubServices,
+          timestamp: Date.now(),
         }));
         router.replace('/payment/checkout?type=deposit' as any);
       } else {

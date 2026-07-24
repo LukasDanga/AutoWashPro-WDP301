@@ -95,8 +95,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
     paddingHorizontal: 4,
   },
   alignCenter: {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
   titleTextWrap: {
     flex: 1,
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...typography.caption,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   actionButton: {
     flexDirection: 'row',

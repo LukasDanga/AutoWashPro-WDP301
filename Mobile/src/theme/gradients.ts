@@ -20,11 +20,11 @@ const linear = (...stops: [string, string?, string?][]): GradientStop[] =>
   );
 
 export const lightGradients = {
-  // Primary: deep blue → bright blue (CTA / hero)
-  primary: linear(['#1D4ED8', '#3B82F6']),
+  // Primary: FE override accent to accent-2
+  primary: linear(['#10B981', '#059669']),
 
-  // Welcome / hero banner (premium 3-stop)
-  hero: linear(['#1E40AF', '#2563EB', '#0EA5E9']),
+  // Welcome / hero banner (premium 3-stop matching FE)
+  hero: linear(['#34D399', '#10B981', '#059669']),
 
   // Sunset-ish accent for offers/voucher
   sunset: linear(['#F97316', '#FB923C']),
@@ -35,20 +35,20 @@ export const lightGradients = {
   // Success
   success: linear(['#15803D', '#22C55E']),
 
-  // Profile header
-  profile: linear(['#1E40AF', '#2563EB', '#3B82F6']),
+  // Profile header (avatar gradient from FE overrides)
+  profile: linear(['#A7F3D0', '#10B981']),
 
   // Subtle wash for surfaces
   subtle: linear(['#F8FAFC', '#F1F5F9']),
 } as const;
 
 export const darkGradients = {
-  primary: linear(['#1E40AF', '#2563EB']),
-  hero: linear(['#1E3A8A', '#1E40AF', '#2563EB']),
+  primary: linear(['#059669', '#10B981']),
+  hero: linear(['#047857', '#059669', '#10B981']),
   sunset: linear(['#C2410C', '#F97316']),
   gold: linear(['#B45309', '#F59E0B']),
   success: linear(['#14532D', '#15803D']),
-  profile: linear(['#1E3A8A', '#1E40AF', '#2563EB']),
+  profile: linear(['#047857', '#059669', '#10B981']),
   subtle: linear(['#1E293B', '#0F172A']),
 } as const;
 
@@ -64,7 +64,7 @@ export const toGradientColors = (
   stops: ReadonlyArray<GradientStop> | undefined | null,
 ): string[] => {
   if (!stops || stops.length === 0) {
-    return ['#1D4ED8', '#3B82F6'];
+    return ['#10B981', '#059669'];
   }
   return stops.map((s) => s.color);
 };

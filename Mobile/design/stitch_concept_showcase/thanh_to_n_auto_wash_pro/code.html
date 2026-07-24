@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Payment - Auto Wash Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "tertiary": "#735c00",
+                        "outline": "#6e7a71",
+                        "primary-container": "#00875a",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#d9dadb",
+                        "surface-tint": "#006c47",
+                        "on-tertiary-container": "#4f3d00",
+                        "on-primary-container": "#ffffff",
+                        "secondary": "#5f5e5e",
+                        "on-primary-fixed-variant": "#005235",
+                        "on-background": "#191c1d",
+                        "tertiary-container": "#cca730",
+                        "on-secondary-fixed-variant": "#474746",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "tertiary-fixed": "#ffe088",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "on-surface-variant": "#3e4942",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e7e8e9",
+                        "secondary-container": "#e2dfde",
+                        "surface-bright": "#f8f9fa",
+                        "primary": "#006b47",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "outline-variant": "#bdcac0",
+                        "on-tertiary-fixed": "#241a00",
+                        "error": "#ba1a1a",
+                        "secondary-fixed": "#e5e2e1",
+                        "primary-fixed-dim": "#71dba6",
+                        "surface-variant": "#e1e3e4",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "surface": "#f8f9fa",
+                        "primary-fixed": "#8df7c1",
+                        "on-surface": "#191c1d",
+                        "surface-container": "#edeeef",
+                        "on-primary-fixed": "#002113",
+                        "background": "#f8f9fa",
+                        "on-secondary-container": "#636262",
+                        "inverse-primary": "#71dba6",
+                        "surface-container-highest": "#e1e3e4",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "surface-container-low": "#f3f4f5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-padding": "20px",
+                        "base": "8px",
+                        "section-margin": "32px",
+                        "gutter": "16px",
+                        "card-gap": "12px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "caption": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "headline-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface antialiased min-h-screen flex flex-col font-body-md pb-[120px]">
+<!-- TopAppBar (Transactional - Hidden Nav per instructions, just back button and title) -->
+<header class="w-full top-0 sticky z-50 bg-surface">
+<div class="flex items-center justify-between px-container-padding py-base h-16">
+<button class="p-2 -ml-2 rounded-full hover:bg-surface-container-high transition-colors active:scale-95 duration-150 text-on-surface">
+<span class="material-symbols-outlined">arrow_back_ios_new</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm text-on-surface absolute left-1/2 -translate-x-1/2">Payment</h1>
+<div class="w-10"></div> <!-- Spacer for center alignment -->
+</div>
+</header>
+<main class="flex-1 px-container-padding py-4 max-w-lg mx-auto w-full">
+<!-- Header Section -->
+<div class="flex flex-col items-center mb-8">
+<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary text-3xl icon-fill">credit_card</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface text-center mb-2">Deposit Payment</h2>
+<p class="text-secondary text-body-md text-center">Please pay the deposit to complete your booking</p>
+</div>
+<!-- Booking Details Card -->
+<section class="mb-section-margin">
+<h3 class="font-label-md text-label-md text-primary mb-3 uppercase">Booking Details</h3>
+<div class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] overflow-hidden border border-surface-container">
+<ul class="divide-y divide-surface-container">
+<li class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">location_on</span>
+<span class="text-on-surface text-body-md">Branch</span>
+</div>
+<span class="material-symbols-outlined text-secondary text-sm">remove</span>
+</li>
+<li class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">local_car_wash</span>
+<span class="text-on-surface text-body-md">Package</span>
+</div>
+<span class="material-symbols-outlined text-secondary text-sm">remove</span>
+</li>
+<li class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">directions_car</span>
+<span class="text-on-surface text-body-md">Vehicle</span>
+</div>
+<span class="material-symbols-outlined text-secondary text-sm">remove</span>
+</li>
+<li class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">calendar_today</span>
+<span class="text-on-surface text-body-md">Date</span>
+</div>
+<span class="material-symbols-outlined text-secondary text-sm">remove</span>
+</li>
+<li class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">schedule</span>
+<span class="text-on-surface text-body-md">Time</span>
+</div>
+<span class="material-symbols-outlined text-secondary text-sm">remove</span>
+</li>
+</ul>
+</div>
+</section>
+<!-- Summary Card -->
+<section class="mb-section-margin">
+<div class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] p-5 border border-surface-container">
+<div class="flex justify-between items-center mb-4">
+<span class="text-secondary text-body-md">Service Total</span>
+<span class="text-on-surface text-body-md font-medium">1.000.000 ₫</span>
+</div>
+<div class="flex justify-between items-center mb-4">
+<span class="text-tertiary-container font-medium text-body-md">Deposit (30%)</span>
+<span class="text-tertiary-container font-headline-sm text-headline-sm">300.000 ₫</span>
+</div>
+<div class="h-px bg-surface-container w-full mb-4"></div>
+<div class="flex justify-between items-center">
+<span class="text-secondary text-body-md">Remaining (Pay at shop)</span>
+<span class="text-secondary text-body-md">700.000 ₫</span>
+</div>
+</div>
+</section>
+<!-- Payment Options -->
+<section class="mb-section-margin">
+<h3 class="font-label-md text-label-md text-primary mb-3 uppercase">Payment Options</h3>
+<div class="grid grid-cols-2 gap-4">
+<!-- Option 1: Selected -->
+<label class="cursor-pointer">
+<input checked="" class="peer sr-only" name="payment_option" type="radio"/>
+<div class="border-2 border-primary bg-primary/5 rounded-xl p-4 peer-checked:border-primary peer-checked:bg-primary/5 transition-all">
+<div class="font-label-md text-label-md text-primary mb-1">Deposit Only</div>
+<div class="font-headline-sm text-headline-sm text-primary">300.000 ₫</div>
+</div>
+</label>
+<!-- Option 2: Unselected -->
+<label class="cursor-pointer">
+<input class="peer sr-only" name="payment_option" type="radio"/>
+<div class="border border-surface-container bg-surface-container-lowest rounded-xl p-4 hover:border-outline-variant transition-all peer-checked:border-primary peer-checked:bg-primary/5">
+<div class="font-label-md text-label-md text-secondary mb-1">Full Payment</div>
+<div class="font-headline-sm text-headline-sm text-on-surface">1.000.000 ₫</div>
+</div>
+</label>
+</div>
+</section>
+<!-- Payment Methods -->
+<section class="mb-8">
+<h3 class="font-label-md text-label-md text-primary mb-3 uppercase">Payment Methods</h3>
+<div class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border border-surface-container p-2 space-y-2">
+<!-- Method 1: Selected -->
+<label class="flex items-center p-3 rounded-lg border border-primary bg-primary/5 cursor-pointer transition-colors">
+<div class="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-primary">qr_code_scanner</span>
+</div>
+<div class="flex-1">
+<div class="font-label-md text-label-md text-on-surface">Bank Transfer</div>
+<div class="text-caption font-caption text-secondary">via QR Code</div>
+</div>
+<input checked="" class="form-radio h-5 w-5 text-primary border-outline focus:ring-primary focus:ring-offset-surface-container-lowest" name="payment_method" type="radio"/>
+</label>
+<!-- Method 2: Unselected -->
+<label class="flex items-center p-3 rounded-lg border border-transparent hover:bg-surface-container-low cursor-pointer transition-colors">
+<div class="w-10 h-10 rounded-md bg-surface-container-high flex items-center justify-center mr-4 shrink-0">
+<span class="material-symbols-outlined text-secondary">language</span>
+</div>
+<div class="flex-1">
+<div class="font-label-md text-label-md text-on-surface">VNPay</div>
+<div class="text-caption font-caption text-secondary">Payment Gateway</div>
+</div>
+<input class="form-radio h-5 w-5 text-primary border-outline focus:ring-primary focus:ring-offset-surface-container-lowest" name="payment_method" type="radio"/>
+</label>
+</div>
+</section>
+</main>
+<!-- Bottom Sticky Action Bar (Replaces Bottom Nav for Transactional Flow) -->
+<div class="fixed bottom-0 left-0 w-full z-50 bg-inverse-surface text-inverse-on-surface p-container-padding shadow-[0px_-4px_20px_rgba(0,0,0,0.1)] rounded-t-xl">
+<div class="max-w-lg mx-auto w-full">
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-4 rounded-lg hover:bg-primary transition-colors flex justify-center items-center gap-2 active:scale-95 duration-150">
+                Confirm &amp; Pay 300.000 ₫
+            </button>
+<!-- Safe area spacer for modern phones -->
+<div class="h-1 w-1/3 bg-surface-variant mx-auto mt-4 rounded-full"></div>
+</div>
+</div>
+</body></html>

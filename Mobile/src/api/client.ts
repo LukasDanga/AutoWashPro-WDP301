@@ -7,6 +7,9 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import * as SecureStore from 'expo-secure-store';
 
 // Configuration
+if (!process.env.EXPO_PUBLIC_API_URL) {
+  console.warn('[AutoWashPro] WARNING: EXPO_PUBLIC_API_URL is missing in environment variables. Defaulting to localhost. Production network requests will fail.');
+}
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 // Storage keys
@@ -63,9 +66,29 @@ const onRefreshComplete = (token: string | null) => {
   refreshSubscribers = [];
 };
 
+// Token cache to prevent disk I/O bottlenecks
+let _cachedAccessToken: string | null = null;
+let _isTokenLoaded = false;
+
+export const setAccessTokenCache = (token: string | null) => {
+  _cachedAccessToken = token;
+  _isTokenLoaded = true;
+};
+
+export const clearAccessTokenCache = () => {
+  _cachedAccessToken = null;
+  _isTokenLoaded = false;
+};
+
 // Get tokens from storage
 const getAccessToken = async (): Promise<string | null> => {
-  return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+  if (_isTokenLoaded) {
+    return _cachedAccessToken;
+  }
+  const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+  _cachedAccessToken = token;
+  _isTokenLoaded = true;
+  return token;
 };
 
 const getRefreshToken = async (): Promise<string | null> => {
@@ -135,6 +158,7 @@ apiClient.interceptors.response.use(
       // Store new tokens
       await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
       await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+      setAccessTokenCache(accessToken);
 
         // Retry original request
         if (originalRequest.headers) {
@@ -151,6 +175,7 @@ apiClient.interceptors.response.use(
         // Clear tokens on refresh failure
         await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
         await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+        clearAccessTokenCache();
 
         return Promise.reject(refreshError);
       }

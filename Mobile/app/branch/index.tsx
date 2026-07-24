@@ -222,6 +222,9 @@ export default function BranchScreen() {
         <FlatList
           data={filteredBranches}
           keyExtractor={(item) => item._id}
+          initialNumToRender={5}
+          windowSize={5}
+          maxToRenderPerBatch={5}
           contentContainerStyle={styles.listContainer}
           renderItem={renderBranchCard}
           showsVerticalScrollIndicator={false}

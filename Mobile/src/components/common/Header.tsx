@@ -119,7 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
   if (variant === 'gradient') {
     return (
       <LinearGradient
-        colors={toGradientColors(gradients.hero)}
+        colors={toGradientColors(gradients.hero) as unknown as readonly [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[

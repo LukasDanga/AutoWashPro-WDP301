@@ -172,6 +172,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                 backgroundColor: colors.surfaceElevated,
                 height: sheetHeight,
                 transform: [{ translateY: Animated.add(translateY, dragY) }],
+                shadowColor: colors.textPrimary,
               },
               contentStyle,
             ]}
@@ -256,7 +257,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.15,
         shadowRadius: 20,
@@ -278,8 +278,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.screenPadding,
+    paddingVertical: spacing.md,
   },
   headerText: {
     flex: 1,
@@ -304,8 +304,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.screenPadding,
+    paddingBottom: spacing.lg,
   },
 });
 

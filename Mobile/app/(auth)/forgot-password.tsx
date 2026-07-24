@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   SafeAreaView,
@@ -14,22 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { AlertDialog } from '../../src/components/common';
+import { AlertDialog, Button, Input, Text } from '../../src/components/common';
 import { authApi } from '../../src/api';
-
-const C = {
-  brand:      '#2563EB',
-  bg:         '#FFFFFF',
-  bgInput:    '#F8FAFC',
-  border:     '#E2E8F0',
-  textPrimary:'#0F172A',
-  textBody:   '#475569',
-  textMuted:  '#94A3B8',
-  textLabel:  '#334155',
-  error:      '#EF4444',
-  errorBg:    '#FEF2F2',
-  divider:    '#F1F5F9',
-};
+import { colors } from '../../src/theme/colors';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -171,113 +157,95 @@ export default function ForgotPasswordScreen() {
 
   const renderEmailStep = () => (
     <>
-      <StableField label="Email đăng ký" error={errors.email}>
-        <TextInput
-          ref={emailRef}
-          style={[s.textInput, !!errors.email && s.inputError]}
-          placeholder="Nhập email của bạn"
-          placeholderTextColor={C.textMuted}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={(v) => { setEmail(v); clearError('email'); }}
-          returnKeyType="done"
-          onSubmitEditing={handleSendOTP}
-        />
-      </StableField>
+      <Input
+        ref={emailRef as any}
+        label="Email đăng ký"
+        placeholder="Nhập email của bạn"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        value={email}
+        onChangeText={(v) => { setEmail(v); clearError('email'); }}
+        error={errors.email}
+        returnKeyType="done"
+        onSubmitEditing={handleSendOTP}
+      />
       <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.cta, isLoading && s.ctaDisabled]}
+        <Button
+          title="Gửi mã OTP"
+          size="large"
+          fullWidth
+          loading={isLoading}
           onPress={handleSendOTP}
-          disabled={isLoading}
-          activeOpacity={0.85}
-        >
-          {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={s.ctaText}>Gửi mã OTP</Text>}
-        </TouchableOpacity>
+        />
       </View>
     </>
   );
 
   const renderOtpStep = () => (
     <>
-      <StableField label={`Mã OTP (Gửi tới ${email})`} error={errors.otp}>
-        <TextInput
-          ref={otpRef}
-          style={[s.textInput, !!errors.otp && s.inputError]}
-          placeholder="Nhập mã 6 chữ số"
-          placeholderTextColor={C.textMuted}
-          keyboardType="number-pad"
-          maxLength={6}
-          value={otp}
-          onChangeText={(v) => { setOtp(v.replace(/[^0-9]/g, '')); clearError('otp'); }}
-          returnKeyType="done"
-          onSubmitEditing={handleVerifyOTP}
-        />
-      </StableField>
+      <Input
+        ref={otpRef as any}
+        label={`Mã OTP (Gửi tới ${email})`}
+        placeholder="Nhập mã 6 chữ số"
+        keyboardType="number-pad"
+        maxLength={6}
+        value={otp}
+        onChangeText={(v) => { setOtp(v.replace(/[^0-9]/g, '')); clearError('otp'); }}
+        error={errors.otp}
+        returnKeyType="done"
+        onSubmitEditing={handleVerifyOTP}
+      />
       <View style={{ alignItems: 'flex-start', marginTop: -4, marginBottom: 16 }}>
         <TouchableOpacity onPress={resendOTP} disabled={countdown > 0} style={{ paddingVertical: 4 }}>
-          <Text style={{ color: countdown > 0 ? C.textMuted : C.brand, fontWeight: '600', fontSize: 13 }}>
+          <Text variant="bodySmall" weight="600" style={{ color: countdown > 0 ? colors.textTertiary : colors.primary }}>
             {countdown > 0 ? `Gửi lại mã sau ${countdown}s` : 'Gửi lại mã OTP'}
           </Text>
         </TouchableOpacity>
       </View>
       <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.cta, isLoading && s.ctaDisabled]}
+        <Button
+          title="Xác minh OTP"
+          size="large"
+          fullWidth
+          loading={isLoading}
           onPress={handleVerifyOTP}
-          disabled={isLoading}
-          activeOpacity={0.85}
-        >
-          {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={s.ctaText}>Xác minh OTP</Text>}
-        </TouchableOpacity>
+        />
       </View>
     </>
   );
 
   const renderResetStep = () => (
     <>
-      <StableField label="Mật khẩu mới" error={errors.newPassword}>
-        <View style={s.rowInput}>
-          <TextInput
-            ref={passwordRef}
-            style={[s.textInput, s.textInputFlex, !!errors.newPassword && s.inputError]}
-            placeholder="Tạo mật khẩu (ít nhất 6 ký tự)"
-            placeholderTextColor={C.textMuted}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-            value={newPassword}
-            onChangeText={(v) => { setNewPassword(v); clearError('newPassword'); }}
-            returnKeyType="next"
-          />
-          <TouchableOpacity onPress={() => setShowPassword(p => !p)} style={s.eyeBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={C.textMuted} />
-          </TouchableOpacity>
-        </View>
-      </StableField>
-
-      <StableField label="Xác nhận mật khẩu" error={errors.confirmPassword}>
-        <TextInput
-          style={[s.textInput, !!errors.confirmPassword && s.inputError]}
-          placeholder="Nhập lại mật khẩu mới"
-          placeholderTextColor={C.textMuted}
-          secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          value={confirmPassword}
-          onChangeText={(v) => { setConfirmPassword(v); clearError('confirmPassword'); }}
-          returnKeyType="done"
-          onSubmitEditing={handleResetPassword}
-        />
-      </StableField>
-
+      <Input
+        ref={passwordRef as any}
+        label="Mật khẩu mới"
+        placeholder="Tạo mật khẩu (ít nhất 6 ký tự)"
+        secureTextEntry
+        autoCapitalize="none"
+        value={newPassword}
+        onChangeText={(v) => { setNewPassword(v); clearError('newPassword'); }}
+        error={errors.newPassword}
+        returnKeyType="next"
+      />
+      <Input
+        label="Xác nhận mật khẩu"
+        placeholder="Nhập lại mật khẩu mới"
+        secureTextEntry
+        autoCapitalize="none"
+        value={confirmPassword}
+        onChangeText={(v) => { setConfirmPassword(v); clearError('confirmPassword'); }}
+        error={errors.confirmPassword}
+        returnKeyType="done"
+        onSubmitEditing={handleResetPassword}
+      />
       <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.cta, isLoading && s.ctaDisabled]}
+        <Button
+          title="Đặt lại mật khẩu"
+          size="large"
+          fullWidth
+          loading={isLoading}
           onPress={handleResetPassword}
-          disabled={isLoading}
-          activeOpacity={0.85}
-        >
-          {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={s.ctaText}>Đặt lại mật khẩu</Text>}
-        </TouchableOpacity>
+        />
       </View>
     </>
   );
@@ -304,15 +272,15 @@ export default function ForgotPasswordScreen() {
           {/* Top bar */}
           <View style={s.topbar}>
             <TouchableOpacity style={s.backBtn} onPress={handleBack} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
             <View style={{ width: 40 }} />
           </View>
 
           {/* Heading */}
           <View style={s.heading}>
-            <Text style={s.title}>{title}</Text>
-            <Text style={s.subtitle}>{subtitle}</Text>
+            <Text variant="h2" weight="700" style={s.title}>{title}</Text>
+            <Text variant="body" color="textSecondary" style={s.subtitle}>{subtitle}</Text>
           </View>
 
           {/* Content */}
@@ -326,76 +294,21 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-// ─── StableField: wrapper tĩnh, KHÔNG có state ─────────────────────────────
-function StableField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-  return (
-    <View style={s.fieldWrap}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <View style={[s.inputBox, !!error && s.inputBoxError]}>
-        {children}
-      </View>
-      {error ? <Text style={s.errMsg}>{error}</Text> : null}
-    </View>
-  );
-}
+
 
 const s = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: C.bg },
+  root:       { flex: 1, backgroundColor: colors.background },
   scroll:     { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 40 },
 
   // Top bar
   topbar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 56, marginTop: 4 },
-  backBtn:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  backBtn:    { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceDark, justifyContent: 'center', alignItems: 'center' },
 
   // Heading
   heading:    { marginTop: 24, marginBottom: 32 },
-  title:      { fontSize: 32, fontWeight: '800', color: C.textPrimary, letterSpacing: -0.5, marginBottom: 10 },
-  subtitle:   { fontSize: 15, color: C.textBody, lineHeight: 24 },
-
-  // Field
-  fieldWrap:  { marginBottom: 20 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: C.textLabel, marginBottom: 8, letterSpacing: 0.1 },
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 56,
-    backgroundColor: C.bgInput,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    paddingHorizontal: 16,
-  },
-  inputBoxError: { borderColor: C.error, backgroundColor: C.errorBg },
-
-  textInput: {
-    flex: 1,
-    height: 56,
-    fontSize: 16,
-    fontWeight: '500',
-    color: C.textPrimary,
-    paddingVertical: 0,
-  },
-  textInputFlex: { flex: 1 },
-  inputError: { color: C.error },
-
-  rowInput:   { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  eyeBtn:     { marginLeft: 10, padding: 4 },
-  errMsg:     { marginTop: 6, marginLeft: 4, fontSize: 12, fontWeight: '500', color: C.error, lineHeight: 16 },
+  title:      { letterSpacing: -0.5, marginBottom: 10 },
+  subtitle:   { lineHeight: 24 },
 
   // Bottom actions
   actions:    { marginTop: 16 },
-  cta: {
-    height: 56,
-    backgroundColor: C.brand,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: C.brand,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
-  },
-  ctaDisabled:  { opacity: 0.7, shadowOpacity: 0, elevation: 0 },
-  ctaText:      { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
 });

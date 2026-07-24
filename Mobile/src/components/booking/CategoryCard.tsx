@@ -9,14 +9,14 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useColors, useTheme } from '../../../theme/ThemeContext';
-import { toGradientColors, getGradients } from '../../../theme/gradients';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { typography } from '../../../theme/typography';
+import { useColors, useTheme } from '../../theme/ThemeContext';
+import { toGradientColors, getGradients } from '../../theme/gradients';
+import { spacing, borderRadius } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
 import { Icon, Icons } from '../common/Icon';
 import { Text } from '../common/Text';
 import { PressableScale } from '../common/PressableScale';
-import type { PackageCategory } from '../../../types';
+import type { PackageCategory } from '../../types';
 
 interface CategoryCardProps {
   category: PackageCategory;
@@ -62,7 +62,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       style={styles.wrap}
     >
       <LinearGradient
-        colors={toGradientColors(stops)}
+        colors={toGradientColors(stops) as unknown as readonly [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[
