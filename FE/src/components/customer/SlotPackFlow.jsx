@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, MapPin, Clock, CheckCircle2, ShieldCheck, Check, Sparkles, Info } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
 import QuickBookModal from './QuickBookModal.jsx';
 import { showToast } from '@/lib/toast';
@@ -197,7 +197,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
 
   useEffect(() => { if (showMyPacks) loadMyPacks(); }, [showMyPacks, loadMyPacks]);
 
-  const pkg = packages.find(p => p.id === selectedPackage);
+  const pkg = packages.find(p => p.id === selectedPackage || p._id === selectedPackage);
   const discountPct = getDiscountPct(slotCount);
   const gross = (pkg?.price || 0) * slotCount;
   const qtyDiscount = Math.floor(gross * discountPct / 100);
@@ -232,7 +232,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          branchId: selectedBranch === 'ALL' ? undefined : selectedBranch,
+          branchId: selectedBranch,
           vehicleId: selectedVehicle === 'ALL' ? undefined : selectedVehicle,
           packageId: selectedPackage,
           totalSlots: slotCount,
@@ -385,82 +385,183 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       )}
 
       {step === 1 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn chi nhánh</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-lg font-bold text-slate-800">Chọn chi nhánh gần bạn</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {branches.length === 0 ? (
-              <div className="col-span-2 text-center text-slate-400 py-8">Đang tải danh sách chi nhánh...</div>
+              <div className="col-span-2 text-center text-slate-400 py-12 flex flex-col items-center justify-center gap-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-slate-300" />
+                <span>Đang tải danh sách chi nhánh...</span>
+              </div>
             ) : (
-              <>
-                <button type="button" onClick={() => setSelectedBranch('ALL')}
-                  className={`text-left p-5 rounded-xl border transition-all ${selectedBranch === 'ALL' ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                  <div className="flex items-start gap-3">
-                    <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
-                    </svg>
-                    <div>
-                      <div className="font-semibold text-slate-800 text-sm">🌍 Áp dụng toàn hệ thống</div>
-                      <div className="text-xs text-slate-400 mt-0.5">Dùng ở bất kỳ chi nhánh nào</div>
-                    </div>
-                  </div>
-                </button>
-                {branches.map(b => (
-                  <button key={b.id} type="button" onClick={() => setSelectedBranch(b.id)}
-                    className={`text-left p-5 rounded-xl border transition-all ${selectedBranch === b.id ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                    <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 mt-0.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z" />
-                      </svg>
-                      <div>
-                        <div className="font-semibold text-slate-800 text-sm">{b.name}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{b.address}</div>
-                        {b.openingTime && <div className="text-xs text-slate-400 mt-1">⏰ {b.openingTime} – {b.closingTime}</div>}
+              branches.map((b) => {
+                const bId = b._id || b.id;
+                const isSelected = selectedBranch === bId;
+                return (
+                  <button
+                    key={bId}
+                    type="button"
+                    onClick={() => setSelectedBranch(bId)}
+                    className={`group text-left p-6 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-50/20 shadow-md ring-4 ring-emerald-500/5'
+                        : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-md'
+                    }`}
+                  >
+                    <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-10 blur-xl transition-all duration-300 ${
+                      isSelected ? 'bg-emerald-500 scale-125' : 'bg-slate-300 group-hover:bg-emerald-300'
+                    }`} />
+
+                    <div className="flex items-start gap-4">
+                      <div className={`p-3 rounded-xl transition-all duration-300 ${
+                        isSelected ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-500'
+                      }`}>
+                        <MapPin className="w-6 h-6" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-slate-800 text-base truncate group-hover:text-slate-900">{b.name}</h4>
+                          {isSelected && (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-500 mt-1 line-clamp-2 leading-relaxed">{b.address}</p>
+
+                        <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-slate-50">
+                          {b.openingTime && (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                              <Clock className="w-3.5 h-3.5" />
+                              {b.openingTime} – {b.closingTime}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100">
+                            🟢 Đang hoạt động
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </button>
-                ))}
-              </>
+                );
+              })
             )}
           </div>
         </motion.div>
       )}
 
       {step === 2 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn xe & gói dịch vụ</h3>
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Phương tiện</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <button type="button" onClick={() => setSelectedVehicle('ALL')}
-              className={`text-left p-5 rounded-xl border transition-all ${selectedVehicle === 'ALL' ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-              <div className="font-semibold text-slate-800 text-sm">🚗 Tất cả xe</div>
-              <div className="text-xs text-slate-400 mt-1">Không khóa cứng 1 biển số</div>
-            </button>
-            {userVehicles.map(v => {
-              const vid = v._id || v.id;
-              return (
-                <button key={vid} type="button" onClick={() => setSelectedVehicle(vid)}
-                  className={`text-left p-5 rounded-xl border transition-all ${selectedVehicle === vid ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                  <div className="font-semibold text-slate-800 text-sm">{v.brand || ''} {v.model || ''}</div>
-                  <div className="text-xs text-slate-400 mt-1">{v.licensePlate}</div>
-                </button>
-              );
-            })}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-lg font-bold text-slate-800">
+              Chọn xe & gói dịch vụ{branchObj ? ` tại ${branchObj.name}` : ''}
+            </h3>
           </div>
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Gói dịch vụ</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {packages.length === 0 ? (
-              <div className="col-span-2 text-center text-slate-400 py-8">Chi nhánh này chưa có gói dịch vụ nào.</div>
-            ) : packages.map(p => (
-              <button key={p.id} type="button" onClick={() => setSelectedPackage(p.id)}
-                className={`text-left p-5 rounded-xl border transition-all ${selectedPackage === p.id ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                <div className="flex items-start justify-between mb-2">
-                  <span className="font-semibold text-slate-800">{p.name}</span>
-                  <span className="text-emerald-600 font-bold">{formatCurrency(p.price)}</span>
-                </div>
-                <p className="text-xs text-slate-400 mb-1">{p.description}</p>
-                <span className="text-xs text-slate-400">⏱ {p.duration} phút</span>
+
+          <div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Phương tiện</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              <button type="button" onClick={() => setSelectedVehicle('ALL')}
+                className={`text-left p-5 rounded-xl border transition-all ${selectedVehicle === 'ALL' ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                <div className="font-semibold text-slate-800 text-sm">🚗 Tất cả xe</div>
+                <div className="text-xs text-slate-400 mt-1">Không khóa cứng 1 biển số</div>
               </button>
-            ))}
+              {userVehicles.map(v => {
+                const vid = v._id || v.id;
+                return (
+                  <button key={vid} type="button" onClick={() => setSelectedVehicle(vid)}
+                    className={`text-left p-5 rounded-xl border transition-all ${selectedVehicle === vid ? 'border-emerald-400 bg-emerald-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    <div className="font-semibold text-slate-800 text-sm">{v.brand || ''} {v.model || ''}</div>
+                    <div className="text-xs text-slate-400 mt-1">{v.licensePlate}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gói dịch vụ</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {packages.length === 0 ? (
+                <div className="col-span-2 text-center text-slate-400 py-12 flex flex-col items-center justify-center gap-3 border border-slate-100 rounded-2xl bg-white">
+                  <Info className="w-8 h-8 text-slate-300" />
+                  <span>Chi nhánh này chưa có gói dịch vụ nào.</span>
+                </div>
+              ) : packages.map((p, index) => {
+                const pId = p._id || p.id;
+                const isActive = pId === selectedPackage || p.id === selectedPackage;
+                const isPopular = p.price >= 150000 || index === 1;
+
+                return (
+                  <div 
+                    key={pId}
+                    className={`group rounded-2xl border-2 transition-all duration-300 relative overflow-hidden flex flex-col ${
+                      isActive 
+                        ? 'border-emerald-500 bg-emerald-50/10 shadow-md ring-4 ring-emerald-500/5' 
+                        : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-md'
+                    }`}
+                  >
+                    {isPopular && (
+                      <div className="absolute right-0 top-0 bg-gradient-to-l from-emerald-600 to-teal-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider uppercase shadow-sm">
+                        Khuyên Dùng
+                      </div>
+                    )}
+
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedPackage(pId)} 
+                      className="w-full text-left p-6 flex-1 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between pr-16 mb-2">
+                          <span className="font-bold text-slate-800 text-lg group-hover:text-emerald-700 transition-colors">{p.name}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-4 line-clamp-2 leading-relaxed">{p.description}</p>
+                      </div>
+                      
+                      <div className="flex items-baseline justify-between mt-auto pt-4 border-t border-slate-50">
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-400 font-semibold bg-slate-50 px-2 py-1 rounded-lg">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          {p.duration} phút
+                        </span>
+                        <span className="text-xl font-extrabold text-emerald-600">{formatCurrency(p.price)}</span>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Sub-services breakdown for selected package (included services only) */}
+            {pkg && pkg.subServices && pkg.subServices.filter(sub => !sub.isOptional).length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 p-6 rounded-2xl bg-slate-50 border border-slate-200/70"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-sm font-bold text-slate-700">Dịch vụ chi tiết đã bao gồm trong gói</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {pkg.subServices.filter(sub => !sub.isOptional).map((sub, idx) => (
+                    <div key={sub._id || sub.name || idx} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-white text-slate-700 shadow-2xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-md flex items-center justify-center bg-emerald-50 border border-emerald-200 shrink-0">
+                          <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-600" />
+                        </div>
+                        <span className="text-sm font-medium">{sub.name}</span>
+                      </div>
+                      {sub.duration > 0 && (
+                        <span className="text-xs font-medium text-slate-400 shrink-0">{sub.duration} phút</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
         </motion.div>
       )}

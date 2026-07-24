@@ -579,6 +579,34 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
                           </span>
                         )}
                       </div>
+                      {pkg.subServices && pkg.subServices.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                          {pkg.subServices.filter(s => !s.isOptional).length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                                ✓ Đã bao gồm ({pkg.subServices.filter(s => !s.isOptional).length}):
+                              </span>
+                              {pkg.subServices.filter(s => !s.isOptional).map((s, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[11px] font-medium">
+                                  {s.name} {s.duration > 0 ? `(${s.duration}p)` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {pkg.subServices.filter(s => s.isOptional).length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 shrink-0">
+                                ✨ Tùy chọn thêm ({pkg.subServices.filter(s => s.isOptional).length}):
+                              </span>
+                              {pkg.subServices.filter(s => s.isOptional).map((s, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[11px] font-medium">
+                                  {s.name} {s.price > 0 ? `(+${Number(s.price).toLocaleString('vi-VN')}đ)` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={() => { setPkgSelected(pkg); setPkgModal('edit'); }}
@@ -627,11 +655,16 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
 
       {/* ── Package Delete Modal ── */}
       {pkgModal === 'delete' && pkgSelected && (
-        <Modal title="Xác nhận xóa" onClose={() => { setPkgModal(null); setPkgSelected(null); }}>
+        <Modal title="Xác nhận xóa gói dịch vụ" onClose={() => { setPkgModal(null); setPkgSelected(null); }}>
           <div className="space-y-4">
             <div className="flex gap-3 rounded-xl bg-red-50 p-4 ring-1 ring-red-100">
               <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-red-500" />
-              <p className="text-sm text-red-700">Bạn chắc chắn muốn xóa gói <strong>"{pkgSelected.name}"</strong>? Hành động này không thể hoàn tác.</p>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-red-700">Bạn chắc chắn muốn xóa gói "{pkgSelected.name}"?</p>
+                <p className="text-xs text-red-600 leading-relaxed">
+                  Lưu ý: Nếu gói này đã được khách hàng đăng ký hoặc mua gói lượt, hệ thống sẽ bảo vệ dữ liệu và không cho phép xóa. Bạn có thể chọn "Ngừng hoạt động" gói thay vì xóa.
+                </p>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => { setPkgModal(null); setPkgSelected(null); }} disabled={pkgDeleting}
@@ -736,21 +769,80 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
           ))}
         </div>
       </div>
-      <div>
+      <div className="pt-2 border-t border-slate-100">
         <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-medium text-slate-600">Dịch vụ chọn thêm</label>
-          <button type="button" onClick={addSub} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"><Plus size={12} weight="bold" /> Thêm</button>
+          <div>
+            <label className="text-xs font-bold text-slate-700 block">Các dịch vụ nhỏ trong gói (Sub-services)</label>
+            <span className="text-[11px] text-slate-400">Các công đoạn chi tiết được thực hiện trong gói</span>
+          </div>
+          <button type="button" onClick={addSub}
+            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors">
+            <Plus size={13} weight="bold" /> Thêm dịch vụ nhỏ
+          </button>
         </div>
-        <div className="space-y-2">
+
+        <div className="space-y-3 mt-3">
           {form.subServices.map((sub, idx) => (
-            <div key={idx} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
-              <input placeholder="Tên DV" className={inp + ' text-xs flex-1'} value={sub.name} onChange={(e) => updSub(idx, 'name', e.target.value)} />
-              <input type="number" placeholder="Giá" className={inp + ' text-xs w-24'} value={sub.price} onChange={(e) => updSub(idx, 'price', e.target.value)} />
-              <input type="number" placeholder="Phút" className={inp + ' text-xs w-20'} value={sub.duration} onChange={(e) => updSub(idx, 'duration', e.target.value)} />
-              <button type="button" onClick={() => delSub(idx)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"><Trash size={13} /></button>
+            <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => updSub(idx, 'isOptional', false)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                      !sub.isOptional 
+                        ? 'bg-emerald-500 text-white shadow-xs' 
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    ✓ Đã bao gồm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updSub(idx, 'isOptional', true)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                      sub.isOptional 
+                        ? 'bg-indigo-500 text-white shadow-xs' 
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    ✨ Tùy chọn
+                  </button>
+                </div>
+                <button type="button" onClick={() => delSub(idx)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors" title="Xóa">
+                  <Trash size={15} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-1">
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Tên dịch vụ nhỏ</label>
+                  <input placeholder="VD: Phun bọt tuyết, Lau khô..." className={inp + ' text-xs'} value={sub.name}
+                    onChange={(e) => updSub(idx, 'name', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Giá phụ thu (VNĐ)</label>
+                  <input type="number" min="0" placeholder="0" className={inp + ' text-xs'} value={sub.price}
+                    onChange={(e) => updSub(idx, 'price', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Thời gian (phút)</label>
+                  <input type="number" min="0" placeholder="5" className={inp + ' text-xs'} value={sub.duration}
+                    onChange={(e) => updSub(idx, 'duration', e.target.value)} />
+                </div>
+              </div>
             </div>
           ))}
-          {form.subServices.length === 0 && <p className="text-xs text-slate-400 italic">Chưa có dịch vụ chọn thêm</p>}
+
+          {form.subServices.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center">
+              <p className="text-xs text-slate-400">Chưa có dịch vụ nhỏ nào trong gói này.</p>
+              <button type="button" onClick={addSub} className="mt-1 text-xs font-semibold text-blue-600 hover:underline">
+                + Thêm dịch vụ nhỏ ngay
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
