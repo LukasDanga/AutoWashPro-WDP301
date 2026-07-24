@@ -1163,11 +1163,11 @@ exports.deleteAllBookings = async () => {
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),
-    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
+    Package.findById(packageId),
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-  if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-  if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
+  const duration = pkg ? pkg.duration : 30;
+  if (pkg && pkg.branchId && String(pkg.branchId) !== String(branchId)) {
     throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
   }
 
@@ -1179,7 +1179,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime');
 
-  const slots = buildSlots(pkg.duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
 

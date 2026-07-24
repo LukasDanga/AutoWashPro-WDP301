@@ -729,9 +729,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     if (!rebookDate || !rebookTarget) { setRebookSlots([]); return; }
     const branchId = rebookTarget.branchId?._id || rebookTarget.branchId?.id || rebookTarget.branchId;
     const pkgId = rebookTarget.packageId?._id || rebookTarget.packageId?.id || rebookTarget.packageId;
-    if (!branchId || !pkgId) return;
+    if (!branchId) { setRebookSlots([]); return; }
     setRebookSlotsLoading(true);
-    fetch(`${apiBase || API_BASE}/bookings/slots?branchId=${branchId}&date=${rebookDate}&packageId=${pkgId}`, {
+    let url = `${apiBase || API_BASE}/bookings/slots?branchId=${branchId}&date=${rebookDate}`;
+    if (pkgId) url += `&packageId=${pkgId}`;
+    fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.json())
