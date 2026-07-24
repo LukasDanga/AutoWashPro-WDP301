@@ -37,10 +37,11 @@ function buildBookingDates() {
     date.setDate(date.getDate() + index);
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
+    const isoString = date.toLocaleDateString('en-CA');
     return {
-      id: `${date.getFullYear()}-${month}-${day}`,
+      id: isoString,
       label: index === 0 ? 'Hôm nay' : weekdayFormatter.format(date).toUpperCase(),
-      day, month, iso: `${date.getFullYear()}-${month}-${day}`,
+      day, month, iso: isoString,
     };
   });
 }
@@ -204,9 +205,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const branchId = selectedBranch._id || selectedBranch.id;
         const pkgId = selectedPackage._id || selectedPackage.id;
         const url = `${API_BASE}/bookings/slots?branchId=${branchId}&date=${currentDate.iso}&packageId=${pkgId}`;
-        const res = isLoggedIn
-          ? await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-          : await fetch(url);
+        const res = await fetch(url);
         const payload = await res.json();
         if (res.ok) setAvailableSlots(payload.data || []);
         else setAvailableSlots([]);
@@ -361,7 +360,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const estimatedTotal = perSession * sessionCount;
       const calculatedDeposit = Math.round((estimatedTotal * 0.3) / 1000) * 1000;
 
-      if (calculatedDeposit > 0 && !pb.isPayingWithPack) {
+      if (estimatedTotal > 0) {
         setPendingDeposit({
           isDraft: true,
           tab: pb.tab || 'regular',
@@ -374,6 +373,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         });
         setDepositQrStep('select');
         setDepositPayment(null);
+        setPaymentMode(calculatedDeposit > 0 ? 'deposit' : 'full');
         onSetPendingBooking(null);
       } else {
         // No deposit needed - create booking directly
@@ -845,7 +845,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value)
     : 0;
   const isPayingWithPack = !!selectedSlotPack;
-  const total = isPayingWithPack ? 0 : Math.max(0, totalBase - discount);
+  const effectiveBase = isPayingWithPack ? extraPrice : totalBase;
+  const total = Math.max(0, effectiveBase - discount);
   const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
 
   const vehicle = userVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
@@ -916,12 +917,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const branchId = selectedBranch._id || selectedBranch.id;
       const pkgId = pkg._id || pkg.id;
       const calculatedDeposit = Math.round((total * 0.3) / 1000) * 1000;
-      if (calculatedDeposit > 0 && !isPayingWithPack) {
+      if (total > 0) {
         setPendingDeposit({
           isDraft: true, tab: 'regular', finalPrice: total, totalAmount: total, depositAmount: calculatedDeposit, depositPaid: false
         });
         setDepositQrStep('select');
         setDepositPayment(null);
+        setPaymentMode(calculatedDeposit > 0 ? 'deposit' : 'full');
         setBookingLoading(false);
         return;
       }
@@ -999,7 +1001,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         note: '',
       };
 
-      if (totalDeposit > 0) {
+      if (totalPrice > 0) {
         setPendingDeposit({
           isDraft: true,
           tab: 'recurring',
@@ -1359,59 +1361,90 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     })}
                   </div>
 
-                  {/* Optional Sub-services below packages */}
+                  {/* Sub-services below packages */}
                   {selectedPackage && selectedPackage.subServices && selectedPackage.subServices.length > 0 && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }} 
                       animate={{ opacity: 1, y: 0 }}
                       className="mt-8 p-6 rounded-2xl bg-slate-100/50 border border-slate-200/50"
                     >
-                      <div className="flex items-center gap-2 mb-4">
-                        <Sparkles className="w-4 h-4 text-emerald-600" />
-                        <h4 className="text-sm font-bold text-slate-700">Dịch vụ đi kèm nâng cao (Tùy chọn)</h4>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {selectedPackage.subServices.map(sub => {
-                          const pId = selectedPackage._id || selectedPackage.id;
-                          const checked = currentSubServices.includes(sub.name);
-                          return (
-                            <button
-                              type="button"
-                              key={sub.name}
-                              disabled={!sub.isOptional}
-                              onClick={() => {
-                                setSelectedSubServices(prev => {
-                                  const current = prev[pId] || [];
-                                  return { 
-                                    ...prev, 
-                                    [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
-                                  };
-                                });
-                              }}
-                              className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all duration-300 ${
-                                checked
-                                  ? 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium'
-                                  : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                              } ${!sub.isOptional ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
-                                  checked 
-                                    ? 'bg-emerald-500 border-emerald-500 text-white' 
-                                    : 'border-slate-300 bg-white'
-                                }`}>
-                                  {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      {/* Included services */}
+                      {selectedPackage.subServices.filter(sub => !sub.isOptional).length > 0 && (
+                        <div className="mb-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Check className="w-4 h-4 text-emerald-600" />
+                            <h4 className="text-sm font-bold text-slate-700">Dịch vụ đã bao gồm</h4>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {selectedPackage.subServices.filter(sub => !sub.isOptional).map(sub => (
+                              <div key={sub.name} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-white opacity-80 cursor-default text-slate-600">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-100 border border-slate-300">
+                                    <Check className="w-3.5 h-3.5 stroke-[3] text-slate-400" />
+                                  </div>
+                                  <span className="text-sm font-medium">{sub.name}</span>
                                 </div>
-                                <span className="text-sm font-medium">{sub.name}</span>
+                                {sub.duration > 0 && (
+                                  <span className="text-xs font-medium text-slate-400">{sub.duration} phút</span>
+                                )}
                               </div>
-                              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50/50 px-2.5 py-1 rounded-lg">
-                                {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                  </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Optional extra services */}
+                      {selectedPackage.subServices.filter(sub => sub.isOptional).length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <Sparkles className="w-4 h-4 text-indigo-600" />
+                            <h4 className="text-sm font-bold text-slate-700">Dịch vụ chọn thêm (Tùy chọn)</h4>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {selectedPackage.subServices.filter(sub => sub.isOptional).map(sub => {
+                              const pId = selectedPackage._id || selectedPackage.id;
+                              const checked = currentSubServices.includes(sub.name);
+                              return (
+                                <button
+                                  type="button"
+                                  key={sub.name}
+                                  onClick={() => {
+                                    setSelectedSubServices(prev => {
+                                      const current = prev[pId] || [];
+                                      return { 
+                                        ...prev, 
+                                        [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
+                                      };
+                                    });
+                                  }}
+                                  className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all duration-300 ${
+                                    checked
+                                      ? 'border-indigo-400 bg-indigo-50 text-indigo-800 font-medium'
+                                      : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                                  } cursor-pointer`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                                      checked 
+                                        ? 'bg-indigo-600 border-indigo-600 text-white' 
+                                        : 'border-slate-300 bg-white'
+                                    }`}>
+                                      {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                    </div>
+                                    <span className="text-sm font-medium">{sub.name}</span>
+                                  </div>
+                                  <span className="text-xs font-semibold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg">
+                                    {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
 
                   {/* ── Today availability preview ── */}
                   {selectedBranch && (
@@ -1423,31 +1456,61 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       </div>
                       {todaySlotsLoading ? (
                         <p className="text-xs text-slate-400">Đang kiểm tra lịch trống...</p>
-                      ) : todaySlots.filter(s => s.available).length === 0 ? (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                          <p className="text-xs text-amber-700 font-medium">Hôm nay đã hết lịch trống. Bạn có thể chọn ngày khác ở bước chọn thời gian.</p>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-xs text-slate-500 mb-2">Còn <span className="font-bold text-emerald-600">{todaySlots.filter(s => s.available).length}</span> khung giờ trống:</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {todaySlots.filter(s => s.available).slice(0, 12).map(s => (
-                              <span key={s.startTime} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[11px] font-semibold text-emerald-700">
-                                {s.startTime}
-                              </span>
-                            ))}
-                            {todaySlots.filter(s => s.available).length > 12 && (
-                              <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-500">
-                                +{todaySlots.filter(s => s.available).length - 12}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      )}
+                      ) : (() => {
+                        const hasSlots = todaySlots.length > 0;
+                        const allPast = hasSlots && todaySlots.every(s => !s.available);
+                        const isTodayClosed = allPast;
+
+                        if (todaySlots.filter(s => s.available).length === 0) {
+                          return (
+                            <div className={`flex items-center gap-3 p-4 rounded-2xl border ${
+                              isTodayClosed 
+                                ? 'bg-slate-50 border-slate-200' 
+                                : 'bg-amber-50 border-amber-200'
+                            }`}>
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
+                                isTodayClosed ? 'bg-slate-100' : 'bg-amber-100'
+                              }`}>
+                                {isTodayClosed ? '🔒' : '📅'}
+                              </div>
+                              <div>
+                                <p className={`text-sm font-bold ${
+                                  isTodayClosed ? 'text-slate-700' : 'text-amber-800'
+                                }`}>
+                                  {isTodayClosed ? 'Cửa hàng hôm nay đã đóng cửa' : 'Hôm nay đã hết lịch trống'}
+                                </p>
+                                <p className={`text-xs mt-0.5 ${
+                                  isTodayClosed ? 'text-slate-500' : 'text-amber-700 font-medium'
+                                }`}>
+                                  {isTodayClosed 
+                                    ? 'Đã hết giờ tiếp nhận cho hôm nay. Vui lòng chọn ngày khác từ ngày mai.' 
+                                    : 'Bạn có thể chọn ngày khác ở bước chọn thời gian.'
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <>
+                            <p className="text-xs text-slate-500 mb-2">Còn <span className="font-bold text-emerald-600">{todaySlots.filter(s => s.available).length}</span> khung giờ trống:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {todaySlots.filter(s => s.available).slice(0, 12).map(s => (
+                                <span key={s.startTime} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[11px] font-semibold text-emerald-700">
+                                  {s.startTime}
+                                </span>
+                              ))}
+                              {todaySlots.filter(s => s.available).length > 12 && (
+                                <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-500">
+                                  +{todaySlots.filter(s => s.available).length - 12}
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </motion.div>
-                  )}
-                </motion.div>
                   )}
                 </motion.div>
               )}
@@ -2018,6 +2081,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <span>Giá gốc dịch vụ</span>
                           <span className="font-semibold">{formatCurrency(totalBase)}</span>
                         </div>
+                        {isPayingWithPack && (
+                          <div className="flex justify-between text-sm text-emerald-600">
+                            <span>Sử dụng gói lượt</span>
+                            <span>-{formatCurrency(basePrice)}</span>
+                          </div>
+                        )}
                         {isLoggedIn && discount > 0 && (
                           <div className="flex justify-between text-sm text-emerald-600">
                             <span>Mã giảm giá</span>
@@ -2569,16 +2638,18 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <div>
                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Số tiền cần thanh toán</span>
                       <div className="grid grid-cols-2 gap-3">
-                        <button 
-                          onClick={() => setPaymentMode('deposit')} 
-                          className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'deposit' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-200 hover:border-amber-200 hover:bg-amber-50/50'}`}
-                        >
-                          <div className={`font-bold text-xs ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc 30%</div>
-                          <div className={`mt-0.5 text-base font-black ${paymentMode === 'deposit' ? 'text-amber-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
-                        </button>
+                        {pendingDeposit.depositAmount > 0 && (
+                          <button 
+                            onClick={() => setPaymentMode('deposit')} 
+                            className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'deposit' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-200 hover:border-amber-200 hover:bg-amber-50/50'}`}
+                          >
+                            <div className={`font-bold text-xs ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc 30%</div>
+                            <div className={`mt-0.5 text-base font-black ${paymentMode === 'deposit' ? 'text-amber-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
+                          </button>
+                        )}
                         <button 
                           onClick={() => setPaymentMode('full')} 
-                          className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'full' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 hover:border-emerald-200 hover:bg-emerald-50/50'}`}
+                          className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'full' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 hover:border-emerald-200 hover:bg-emerald-50/50'} ${pendingDeposit.depositAmount === 0 ? 'col-span-2' : ''}`}
                         >
                           <div className={`font-bold text-xs ${paymentMode === 'full' ? 'text-emerald-700' : 'text-slate-500'}`}>Thanh toán 100%</div>
                           <div className={`mt-0.5 text-base font-black ${paymentMode === 'full' ? 'text-emerald-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>

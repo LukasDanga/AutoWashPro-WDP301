@@ -6,6 +6,7 @@ export default function ConfirmDialog({
   open,
   title,
   message,
+  content,
   confirmLabel = 'Xác nhận',
   cancelLabel = 'Huỷ',
   onConfirm,
@@ -16,7 +17,7 @@ export default function ConfirmDialog({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onCancel}
     >
       <div
@@ -25,6 +26,7 @@ export default function ConfirmDialog({
       >
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
         {message && <p className="mt-2 text-sm leading-relaxed text-slate-500">{message}</p>}
+        {content && <div className="mt-4">{content}</div>}
         <div className="mt-6 flex justify-end gap-2.5">
           <button
             onClick={onCancel}

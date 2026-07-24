@@ -248,9 +248,9 @@ exports.createBooking = async (data) => {
       }
 
       computedDiscountAmount = 0;
-      computedFinalPrice = 0;
+      computedFinalPrice = extraPrice;
       bookingType = 'slot_pack_usage';
-      paymentStatus = 'paid';
+      paymentStatus = extraPrice > 0 ? 'unpaid' : 'paid';
     }
 
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
@@ -270,7 +270,10 @@ exports.createBooking = async (data) => {
       slotPackId: slotPackId || undefined,
       bookingType,
       paymentStatus,
+      packageName: pkg.name,
+      packageDuration: pkg.duration,
     });
+
     await booking.save({ session });
 
     // Reserve voucher khi tạo booking (trừ remaining + tạo VoucherUsage)
@@ -696,6 +699,93 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   return booking;
 };
 
+exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, userId) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const booking = await Booking.findById(id).session(session);
+    if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    
+    if (userRole === 'manager') {
+      if (!userBranchId || String(userBranchId) !== String(booking.branchId)) {
+        throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
+    } else if (userRole === 'customer') {
+      if (!userId || String(userId) !== String(booking.userId)) {
+        throw Object.assign(new Error('Not authorized to update this booking'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
+    }
+    
+    if (booking.status === 'completed' || booking.status === 'cancelled') {
+      throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+    }
+
+    const packages = await Package.find({ branchId: booking.branchId }).session(session);
+    const validSubServices = [];
+    let addedDuration = 0;
+    let addedPrice = 0;
+
+    const uniqueNames = [...new Set(subServiceNames)];
+
+    for (const name of uniqueNames) {
+      let found = false;
+      for (const pkg of packages) {
+        const sub = pkg.subServices?.find(s => s.name === name);
+        if (sub) {
+          validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration, isOptional: sub.isOptional });
+          addedDuration += sub.duration || 0;
+          addedPrice += sub.price || 0;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        throw Object.assign(new Error(`Sub-service not found: ${name}`), { statusCode: 404 });
+      }
+    }
+
+    const pkg = await Package.findById(booking.packageId).session(session);
+    if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404 });
+
+    const totalDuration = pkg.duration + addedDuration;
+    const endTime = computeEndTime(booking.startTime, totalDuration);
+    
+    const branch = await Branch.findById(booking.branchId).session(session);
+    const closeMinutes = parseTime(branch?.closingTime || '20:00');
+    if (parseTime(endTime) > closeMinutes) {
+      throw Object.assign(new Error('Adding these services exceeds branch closing time'), { statusCode: 400 });
+    }
+
+    booking.selectedSubServices = validSubServices;
+    booking.endTime = endTime;
+    const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : pkg.price;
+    const newFinalPrice = basePrice + addedPrice - (booking.discountAmount || 0);
+    
+    // If the price increased and it was previously paid, mark as unpaid for the remaining balance.
+    // If we only charge for the newly added services, the finalPrice will increase.
+    if (newFinalPrice > (booking.finalPrice || 0) && booking.paymentStatus === 'paid') {
+        booking.paymentStatus = 'unpaid';
+    }
+    booking.finalPrice = Math.max(0, newFinalPrice);
+    
+    await booking.save({ session });
+    await session.commitTransaction();
+    return await Booking.findById(booking._id)
+      .populate('userId', 'name email phone tier')
+      .populate('branchId', 'name address phone')
+      .populate('packageId', 'name price duration')
+      .populate('vehicleId', 'licensePlate vehicleType brand color');
+  } catch (err) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw err;
+  } finally {
+    session.endSession();
+  }
+};
+
 /**
  * Xác nhận hàng loạt các đơn đang 'pending' → 'confirmed'.
  * Nếu truyền ids → chỉ xác nhận các id đó; nếu không → xác nhận tất cả pending trong phạm vi.
@@ -1076,13 +1166,10 @@ exports.deleteAllBookings = async () => {
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),
-    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
+    Package.findById(packageId),
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-  if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-  if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
-    throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
-  }
+  const duration = pkg ? pkg.duration : 30;
 
   const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
   const { gte, lte } = getDayBounds(dateStr);
@@ -1092,7 +1179,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime');
 
-  const slots = buildSlots(pkg.duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
 
@@ -1350,6 +1437,8 @@ exports.createRecurringBooking = async (data) => {
         finalPrice: computedFinalPrice,
         depositAmount: isFirstInGroup ? groupDepositAmount : 0,
         selectedSubServices: validSubServices,
+        packageName: pkg.name,
+        packageDuration: pkg.duration,
       });
       await booking.save({ session });
       await session.commitTransaction();
@@ -1659,7 +1748,6 @@ exports.replyToFeedback = async (bookingId, managerId, reply) => {
 // ─── Rebook: clone a booking with new date/time ───────────────────────────────
 exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime }) => {
   const src = await Booking.findById(bookingId)
-    .populate('packageId')
     .populate('branchId');
   if (!src) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
 
@@ -1671,13 +1759,21 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     throw Object.assign(new Error('Chỉ có thể đặt lại đơn đã hoàn thành hoặc đã hủy'), { statusCode: 400 });
   }
 
-  const pkg = src.packageId;
   const branch = src.branchId;
-  if (!pkg || pkg.status === 'inactive') throw Object.assign(new Error('Gói dịch vụ không còn hoạt động'), { statusCode: 400 });
   if (!branch || branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh không còn hoạt động'), { statusCode: 400 });
 
-  // Compute endTime
-  const totalDuration = pkg.duration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
+  // Lấy thời lượng gói dịch vụ — ưu tiên stored value, fallback lookup, fallback 30 phút
+  let pkgDuration = src.packageDuration;
+  let pkgName = src.packageName;
+  if (!pkgDuration || !pkgName) {
+    try {
+      const pkg = await Package.findById(src.packageId);
+      if (pkg) { pkgDuration = pkg.duration; pkgName = pkgName || pkg.name; }
+    } catch (_) { /* ignore lookup failure */ }
+  }
+  pkgDuration = pkgDuration || 30;
+  pkgName = pkgName || 'Gói dịch vụ';
+  const totalDuration = pkgDuration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
   const endTime = computeEndTime(startTime, totalDuration);
 
   // Check slot conflict
@@ -1701,6 +1797,8 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     userId: src.userId,
     branchId: src.branchId,
     packageId: src.packageId,
+    packageName: pkgName,
+    packageDuration: pkgDuration,
     vehicleId: src.vehicleId,
     bookingDate: bookingDateObj,
     startTime,
@@ -1723,7 +1821,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   notificationService.send(
     src.userId,
     'Đặt lại lịch thành công',
-    `Lịch hẹn mới của bạn: ${pkg.name} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
+    `Lịch hẹn mới của bạn: ${pkgName} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
     'booking_created',
     { bookingId: newBooking._id }
   ).catch(() => {});
@@ -1732,7 +1830,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   notificationService.sendToAdminAndManager(
     src.branchId?._id || src.branchId,
     'Đặt lại lịch mới',
-    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkg.name} lúc ${startTime}.`,
+    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkgName} lúc ${startTime}.`,
     'booking_created',
     { bookingId: newBooking._id, branchId: src.branchId?._id || src.branchId }
   ).catch(() => {});

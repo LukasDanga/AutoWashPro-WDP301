@@ -8,6 +8,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 export function confirmDialog({
   title = 'Xác nhận',
   message = '',
+  content = null,
   confirmLabel = 'Xác nhận',
   cancelLabel = 'Huỷ',
   danger = false,
@@ -26,6 +27,7 @@ export function confirmDialog({
         open
         title={title}
         message={message}
+        content={content}
         confirmLabel={confirmLabel}
         cancelLabel={cancelLabel}
         danger={danger}

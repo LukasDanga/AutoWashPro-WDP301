@@ -1,4 +1,4 @@
-const { Package } = require('../models');
+const { Package, Booking, SlotPack } = require('../models');
 
 exports.createPackage = async (data) => {
   const pkg = new Package(data);
@@ -55,6 +55,26 @@ exports.deletePackage = async (id, userRole, userBranchId) => {
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
+
+  // Ràng buộc: Kiểm tra xem gói đã được khách hàng sử dụng (đặt lịch hoặc mua gói lượt) chưa
+  const [bookingCount, slotPackCount] = await Promise.all([
+    Booking.countDocuments({ packageId: id }),
+    SlotPack.countDocuments({ packageId: id }),
+  ]);
+
+  if (bookingCount > 0 || slotPackCount > 0) {
+    const usageDetails = [];
+    if (bookingCount > 0) usageDetails.push(`${bookingCount} đơn đặt lịch`);
+    if (slotPackCount > 0) usageDetails.push(`${slotPackCount} gói lượt`);
+
+    const err = new Error(
+      `Không thể xóa gói "${pkg.name}" vì đã được khách hàng sử dụng (${usageDetails.join(' và ')}). Bạn vui lòng chuyển trạng thái thành "Ngừng hoạt động" nếu không muốn nhận lượt đặt mới.`
+    );
+    err.statusCode = 400;
+    err.code = 'PACKAGE_IN_USE';
+    throw err;
+  }
+
   await Package.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
   return pkg;
 };

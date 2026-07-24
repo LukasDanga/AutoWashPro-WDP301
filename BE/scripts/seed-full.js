@@ -143,17 +143,17 @@ async function main() {
   const SVG_CY = [708, 703, 706, 702, 707];
 
   const branchData = [
-    { name: 'AutoWash Pro Quận 1',      addr: '123 Nguyễn Thị Minh Khai, Phường 2, Quận 1, TP.HCM',          phone: '028 3822 1111', email: 'q1@autowashpro.vn',       coords: [106.6920, 10.7769], close: '19:00' },
-    { name: 'AutoWash Pro Thủ Đức',     addr: '456 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP.HCM',     phone: '028 3720 2222', email: 'thuduc@autowashpro.vn',    coords: [106.7690, 10.8504], close: '20:00' },
-    { name: 'AutoWash Pro Bình Thạnh',  addr: '789 Điện Biên Phủ, Phường 11, Bình Thạnh, TP.HCM',            phone: '028 3510 3333', email: 'binhthanh@autowashpro.vn', coords: [106.7130, 10.8010], close: '20:00' },
-    { name: 'AutoWash Pro Gò Vấp',      addr: '321 Phan Văn Trị, Phường 11, Gò Vấp, TP.HCM',                phone: '028 3890 4444', email: 'govap@autowashpro.vn',     coords: [106.6690, 10.8380], close: '19:30' },
-    { name: 'AutoWash Pro Tân Phú',     addr: '55 Trường Chinh, Phường Tân Thới Nhất, Tân Phú, TP.HCM',     phone: '028 3710 5555', email: 'tanphu@autowashpro.vn',    coords: [106.6260, 10.7900], close: '20:00' },
+    { name: 'AutoWash Pro Quận 1',      addr: '123 Nguyễn Thị Minh Khai, Phường 2, Quận 1, TP.HCM',          phone: '028 3822 1111', email: 'q1@autowashpro.vn',       coords: [106.6920, 10.7769], close: '19:00', img: '/branches/autowash_quan_1.jpg' },
+    { name: 'AutoWash Pro Thủ Đức',     addr: '456 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP.HCM',     phone: '028 3720 2222', email: 'thuduc@autowashpro.vn',    coords: [106.7690, 10.8504], close: '20:00', img: '/branches/autowash_thu_duc.jpg' },
+    { name: 'AutoWash Pro Bình Thạnh',  addr: '789 Điện Biên Phủ, Phường 11, Bình Thạnh, TP.HCM',            phone: '028 3510 3333', email: 'binhthanh@autowashpro.vn', coords: [106.7130, 10.8010], close: '20:00', img: '/branches/autowash_binh_thanh.jpg' },
+    { name: 'AutoWash Pro Gò Vấp',      addr: '321 Phan Văn Trị, Phường 11, Gò Vấp, TP.HCM',                phone: '028 3890 4444', email: 'govap@autowashpro.vn',     coords: [106.6690, 10.8380], close: '19:30', img: '/branches/autowash_go_vap.jpg' },
+    { name: 'AutoWash Pro Tân Phú',     addr: '55 Trường Chinh, Phường Tân Thới Nhất, Tân Phú, TP.HCM',     phone: '028 3710 5555', email: 'tanphu@autowashpro.vn',    coords: [106.6260, 10.7900], close: '20:00', img: '/branches/autowash_tan_phu.jpg' },
   ];
 
   await Branch.insertMany(branchData.map((b, i) => ({
     _id: branchIds[i], name: b.name, address: b.addr, phone: b.phone,
     email: b.email, openingTime: '07:00', closingTime: b.close,
-    status: 'active', managerId: mgrIds[i],
+    status: 'active', managerId: mgrIds[i], image: b.img,
     city: 'Hồ Chí Minh',
     location: { type: 'Point', coordinates: b.coords },
     mapCoordinates: { svgCx: SVG_CX[i], svgCy: SVG_CY[i] },
@@ -162,10 +162,60 @@ async function main() {
   // ── 3. PACKAGES (4 per branch) ───────────────────────────────────────────
   console.log('Seeding packages…');
   const pkgTemplates = [
-    { name: 'Rửa xe cơ bản',     desc: 'Rửa ngoại thất toàn bộ, lau khô và vệ sinh bánh xe.',             price: 100000, dur: 30, cat: 'external',    vehicles: ['sedan','suv','van','pickup'] },
-    { name: 'Rửa xe + Phủ Nano',  desc: 'Rửa ngoại thất chuyên sâu và phủ bảo vệ nano, bảo vệ sơn 3 tháng.', price: 250000, dur: 50, cat: 'external',    vehicles: ['sedan','suv','pickup'] },
-    { name: 'Vệ sinh toàn diện',  desc: 'Chăm sóc xe toàn bộ: ngoại thất, nội thất và khoang máy.',          price: 380000, dur: 90, cat: 'full',        vehicles: ['sedan','suv','pickup','van'] },
-    { name: 'Đánh bóng nhanh',    desc: 'Đánh bóng ngoại thất nhanh, phục hồi độ bóng sơn xe.',               price: 180000, dur: 40, cat: 'external',    vehicles: ['sedan','suv','pickup','van'] },
+    {
+      name: 'Rửa ô tô cơ bản',
+      desc: 'Rửa vỏ ô tô tự động bằng hệ thống chổi xoay & phun bọt tuyết, lau khô ngoại thất và dưỡng bóng lốp xe.',
+      price: 100000, dur: 30, cat: 'external', vehicles: ['sedan','suv','van','pickup'],
+      subServices: [
+        { name: 'Phun bọt tuyết tự động', price: 0, duration: 5, isOptional: false },
+        { name: 'Rửa vỏ xe bằng chổi xoay tự động', price: 0, duration: 15, isOptional: false },
+        { name: 'Xịt sấy khô tự động', price: 0, duration: 5, isOptional: false },
+        { name: 'Dưỡng bóng lốp xe', price: 0, duration: 5, isOptional: false },
+        { name: 'Xịt rửa gầm áp lực cao', price: 30000, duration: 10, isOptional: true },
+        { name: 'Hút bụi nội thất ô tô', price: 50000, duration: 15, isOptional: true },
+        { name: 'Xịt nước hoa cabin', price: 20000, duration: 5, isOptional: true },
+      ]
+    },
+    {
+      name: 'Rửa ô tô + Phủ Nano',
+      desc: 'Rửa vỏ ô tô tự động chuyên sâu, xịt gầm áp lực cao và phủ sáp Nano bảo vệ sơn xe bóng đẹp tới 3 tháng.',
+      price: 250000, dur: 50, cat: 'external', vehicles: ['sedan','suv','pickup'],
+      subServices: [
+        { name: 'Phun bọt tuyết & rửa tự động chuyên sâu', price: 0, duration: 15, isOptional: false },
+        { name: 'Xịt rửa gầm áp lực cao', price: 0, duration: 10, isOptional: false },
+        { name: 'Phủ sáp bóng Nano bảo vệ sơn xe', price: 0, duration: 15, isOptional: false },
+        { name: 'Sấy khô & lau kính sạch bóng', price: 0, duration: 10, isOptional: false },
+        { name: 'Vệ sinh khoang máy bằng hơi nước', price: 100000, duration: 20, isOptional: true },
+        { name: 'Tẩy nhựa đường & vết ố kính', price: 80000, duration: 15, isOptional: true },
+        { name: 'Hút bụi & bảo dưỡng da nội thất', price: 120000, duration: 20, isOptional: true },
+      ]
+    },
+    {
+      name: 'Vệ sinh toàn diện ô tô',
+      desc: 'Dịch vụ chăm sóc ô tô toàn bộ: Rửa xe tự động, xịt gầm, hút bụi vệ sinh nội thất chi tiết và khử mùi cabin.',
+      price: 380000, dur: 90, cat: 'full', vehicles: ['sedan','suv','pickup','van'],
+      subServices: [
+        { name: 'Rửa xe tự động & xịt gầm cao cấp', price: 0, duration: 20, isOptional: false },
+        { name: 'Hút bụi & Vệ sinh nội thất chi tiết', price: 0, duration: 30, isOptional: false },
+        { name: 'Khử mùi sinh học / Khử trùng Ozone', price: 0, duration: 25, isOptional: false },
+        { name: 'Phủ bóng sáp sơn xe & dưỡng lốp', price: 0, duration: 15, isOptional: false },
+        { name: 'Phủ Ceramic sơn xe tạm thời', price: 150000, duration: 20, isOptional: true },
+        { name: 'Tẩy ố kính & Phục hồi nhựa nhám', price: 100000, duration: 20, isOptional: true },
+        { name: 'Phủ gầm cao su chống gỉ', price: 300000, duration: 45, isOptional: true },
+      ]
+    },
+    {
+      name: 'Đánh bóng sơn ô tô nhanh',
+      desc: 'Rửa xe tự động, đánh bóng nhanh xóa xước dăm và phục hồi độ bóng bẩy cho sơn ô tô.',
+      price: 180000, dur: 40, cat: 'external', vehicles: ['sedan','suv','pickup','van'],
+      subServices: [
+        { name: 'Rửa xe tự động bọt tuyết', price: 0, duration: 15, isOptional: false },
+        { name: 'Đánh bóng bề mặt sơn ô tô', price: 0, duration: 20, isOptional: false },
+        { name: 'Dưỡng bóng lốp & nhựa ngoại thất', price: 0, duration: 5, isOptional: false },
+        { name: 'Phủ wax bảo vệ sơn', price: 80000, duration: 15, isOptional: true },
+        { name: 'Đánh bóng đèn pha ô tô', price: 60000, duration: 10, isOptional: true },
+      ]
+    },
   ];
 
   const packages = [];
@@ -174,7 +224,7 @@ async function main() {
       packages.push({
         _id: pkgIds[bi * 4 + pi], name: t.name, description: t.desc,
         price: t.price, duration: t.dur, branchId: brId, status: 'active',
-        category: t.cat, vehicleTypes: t.vehicles, subServices: [],
+        category: t.cat, vehicleTypes: t.vehicles, subServices: t.subServices,
       });
     });
   });

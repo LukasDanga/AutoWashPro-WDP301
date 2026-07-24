@@ -165,6 +165,17 @@ router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER),
 
 /**
  * @swagger
+ * /api/bookings/{id}/sub-services:
+ *   patch:
+ *     summary: Update sub-services for a booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.patch('/:id/sub-services', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.updateSubServices, validate, bookingController.updateSubServices);
+
+/**
+ * @swagger
  * /api/bookings/{id}/extend-grace:
  *   patch:
  *     summary: Extend the no-show grace period for a booking at risk of auto-cancellation (manager/admin)
