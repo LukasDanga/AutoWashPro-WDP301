@@ -38,7 +38,7 @@ export default function ManagerLayout({ user, onLogout }) {
     try {
       const bId = user?.branchId;
       const [bRes, fRes, cRes, spRes] = await Promise.all([
-        api('/bookings?status=pending&limit=1'),
+        api('/bookings?status=pending&limit=1&groupByRecurring=true'),
         api('/bookings/feedbacks?replied=false&limit=1'),
         api('/bookings/customers?limit=100'),
         bId ? api(`/slot-packs?branchId=${bId}&limit=100`) : Promise.resolve(null),
