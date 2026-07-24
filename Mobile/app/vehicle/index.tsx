@@ -178,6 +178,9 @@ export default function VehicleScreen() {
         data={vehicles}
         renderItem={renderVehicleCard}
         keyExtractor={(item) => item._id}
+        initialNumToRender={5}
+        windowSize={5}
+        maxToRenderPerBatch={5}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={

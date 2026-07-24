@@ -137,7 +137,7 @@ const seg = StyleSheet.create({
     top: 4,
     bottom: 4,
     borderRadius: 22,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#10B981',
   },
   tab: {
     flex: 1,
@@ -419,7 +419,7 @@ const NoBookingCard: React.FC<{ onSelectMode: () => void }> = ({ onSelectMode })
   <Card style={styles.noBookingCard} padding="xl">
     {/* QR icon in light-blue circle */}
     <View style={styles.noBookingIconBg}>
-      <Icon name={Icons.qrCodeOutline} size={40} color="#2563EB" />
+      <Icon name={Icons.qrCodeOutline} size={40} color="#10B981" />
     </View>
 
     <Text style={styles.noBookingTitle}>Chưa chọn lịch hẹn</Text>
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#2563EB',
+    backgroundColor: '#10B981',
     paddingHorizontal: 16,
     height: 64,
     shadowColor: '#000',
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderColor: '#2563EB',
+    borderColor: '#10B981',
   },
   cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 8 },
   cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 8 },
@@ -953,7 +953,7 @@ const styles = StyleSheet.create({
   },
   rescanText: {
     fontSize: 14,
-    color: '#2563EB',
+    color: '#10B981',
     fontWeight: '600',
   },
   codeInput: {

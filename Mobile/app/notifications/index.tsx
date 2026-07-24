@@ -360,6 +360,10 @@ export default function NotificationsScreen() {
             </View>
           </View>
         )}
+        initialNumToRender={5}
+        windowSize={5}
+        maxToRenderPerBatch={5}
+        removeClippedSubviews={true}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={

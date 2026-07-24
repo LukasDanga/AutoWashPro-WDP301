@@ -1,0 +1,260 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Select Package - Luxe Shine</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#ffe088",
+                        "outline": "#6e7a71",
+                        "on-primary-fixed-variant": "#005235",
+                        "on-background": "#191c1d",
+                        "surface": "#f8f9fa",
+                        "inverse-primary": "#71dba6",
+                        "on-primary-fixed": "#002113",
+                        "tertiary-container": "#cca730",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "background": "#f8f9fa",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-container": "#4f3d00",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#edeeef",
+                        "on-primary-container": "#ffffff",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "surface-dim": "#d9dadb",
+                        "surface-container-highest": "#e1e3e4",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "primary-container": "#00875a",
+                        "on-surface": "#191c1d",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#735c00",
+                        "primary-fixed-dim": "#71dba6",
+                        "surface-variant": "#e1e3e4",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#f0f1f2",
+                        "primary": "#006b47",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f8f9fa",
+                        "outline-variant": "#bdcac0",
+                        "on-tertiary-fixed": "#241a00",
+                        "secondary-fixed": "#e5e2e1",
+                        "on-secondary-container": "#636262",
+                        "on-surface-variant": "#3e4942",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "surface-tint": "#006c47",
+                        "primary-fixed": "#8df7c1",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "surface-container-low": "#f3f4f5",
+                        "secondary-container": "#e2dfde",
+                        "secondary": "#5f5e5e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "card-gap": "12px",
+                        "section-margin": "32px",
+                        "base": "8px",
+                        "container-padding": "20px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "caption": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "body-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        
+        /* Hide scrollbar for clean aesthetic */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        * {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-sans antialiased min-h-screen flex flex-col selection:bg-primary selection:text-white">
+<!-- TopAppBar Shared Component -->
+<header class="bg-surface dark:bg-background text-primary dark:text-primary-fixed docked full-width top-0 z-40 sticky">
+<div class="flex justify-between items-center px-container-padding py-base w-full max-w-7xl mx-auto">
+<button aria-label="Back" class="hover:bg-surface-container-low transition-colors rounded-full p-2 flex items-center justify-center -ml-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary dark:text-primary-fixed">Auto Wash Pro</h1>
+<button aria-label="Help" class="hover:bg-surface-container-low transition-colors rounded-full p-2 flex items-center justify-center -mr-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">help</span>
+</button>
+</div>
+</header>
+<main class="flex-1 w-full max-w-lg mx-auto pb-40 md:pb-32 relative">
+<!-- Progress Header -->
+<section class="px-container-padding pt-6 pb-4">
+<div class="flex items-center justify-between mb-3">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Step 2 of 5</span>
+<span class="font-label-md text-label-md text-primary font-bold">Details</span>
+</div>
+<div class="w-full bg-surface-container-highest rounded-full h-1.5 mb-8 overflow-hidden">
+<div class="bg-primary h-full rounded-full transition-all duration-500 ease-out" style="width: 40%"></div>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Chọn gói dịch vụ</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Select the perfect detailing package to restore your vehicle's pristine condition.</p>
+</section>
+<!-- Service Packages List -->
+<section class="px-container-padding flex flex-col gap-card-gap mt-4">
+<!-- Motorbike Wash Package -->
+<label class="block relative cursor-pointer group">
+<input checked="" class="peer sr-only" name="service_package" type="radio" value="motorbike">
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border-[1.5px] border-surface-container-high peer-checked:border-primary transition-all duration-300 peer-checked:shadow-[0px_8px_24px_rgba(0,107,71,0.12)]">
+<!-- Image Area -->
+<div class="h-48 relative w-full overflow-hidden">
+<img class="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 ease-in-out" data-alt="A pristine luxury motorcycle being meticulously detailed in a high-end, bright studio. Clean, modern aesthetic, professional lighting highlighting the glossy metallic paint. Deep emerald accents subtly integrated into the background environment, evoking a sense of spotless premium care." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCh2EwsDR_iJTiD-yGy6VqWfnZWAzFCRGkBIDq0FVnqLc9IJpETcjABClkQ1CpEoet9HrYzDvOqKqyPj2q5VJVgIKavVn9_R7FEFgnVmSaANrx90zXjCgkPaOsokeRwawLkv_vSJ9GK_F6PJOMxQiKf7Tz1cLeGegz53fg9OPbLbz9jr9HeJp8nQZxLtO8sfDL900e3NfZJOZo9F3wW8ukq7dRsQZacKNoTy1u5ajI0ccxvqZs4vFH8GQ">
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+<div class="absolute bottom-3 left-3 flex gap-2">
+<span class="bg-surface-container-lowest/90 backdrop-blur-md px-2.5 py-1 rounded-md font-caption text-caption text-on-surface flex items-center gap-1.5 shadow-sm">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 45 Min
+                            </span>
+</div>
+</div>
+<!-- Content Area -->
+<div class="p-5">
+<div class="flex justify-between items-start mb-2 gap-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface leading-tight">Motorbike Wash</h3>
+<span class="font-headline-md text-headline-md text-primary-container font-bold shrink-0">$35</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">Comprehensive exterior wash, detailed degreasing, premium chain lubrication, and spotless hand dry using microfiber cloth.</p>
+<div class="flex items-center justify-between border-t border-surface-container-highest pt-3 mt-1">
+<div class="flex items-center gap-2 text-primary font-label-md text-label-md opacity-0 peer-checked:opacity-100 transition-opacity duration-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">verified</span>
+                                Selected
+                            </div>
+<div class="w-6 h-6 rounded-full border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary flex items-center justify-center transition-colors duration-300 ml-auto">
+<span class="material-symbols-outlined text-on-primary text-[16px] scale-0 peer-checked:scale-100 transition-transform duration-300">check</span>
+</div>
+</div>
+</div>
+</div>
+</label>
+<!-- Basic Car Wash Package (Using IMAGE_7) -->
+<label class="block relative cursor-pointer group">
+<input class="peer sr-only" name="service_package" type="radio" value="car_basic">
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border-[1.5px] border-surface-container-high peer-checked:border-primary transition-all duration-300 peer-checked:shadow-[0px_8px_24px_rgba(0,107,71,0.12)]">
+<!-- Image Area -->
+<div class="h-48 relative w-full overflow-hidden">
+<img class="w-full h-full object-cover object-center transform group-hover:scale-105 transition-transform duration-700 ease-in-out" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBz0nwAjzIsR_AJWjMSu8j0Zn_Co1oFL_thd2zX2pbjKrpqhJrnKhBgNoU01RsbSNoyVgY6nIhrdUDuFGUnzaUlMtwNFvZR8Oz2ZqIIpMbc7Y47XCabF_UhHpqg_hR0yX8V1AfV2qIneNMgGV7G3Tx2X8pfe6laU9y7Z62YeF7nU_TFrpVtysYhnLOMJdh3M1PAYdP2LWlegZa5HNg2q8MrUlqDKHQECsu20Ct81U1xPGAZpR2Equ59w3De3aOMrMBrWY8">
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+<div class="absolute bottom-3 left-3 flex gap-2">
+<span class="bg-surface-container-lowest/90 backdrop-blur-md px-2.5 py-1 rounded-md font-caption text-caption text-on-surface flex items-center gap-1.5 shadow-sm">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 90 Min
+                            </span>
+</div>
+</div>
+<!-- Content Area -->
+<div class="p-5">
+<div class="flex justify-between items-start mb-2 gap-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface leading-tight">Basic Car Wash</h3>
+<span class="font-headline-md text-headline-md text-primary-container font-bold shrink-0">$65</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">Precision exterior foam wash, wheel rim detailing, tire dressing, and thorough interior vacuum to restore freshness.</p>
+<div class="flex items-center justify-between border-t border-surface-container-highest pt-3 mt-1">
+<div class="flex items-center gap-2 text-primary font-label-md text-label-md opacity-0 peer-checked:opacity-100 transition-opacity duration-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">verified</span>
+                                Selected
+                            </div>
+<div class="w-6 h-6 rounded-full border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary flex items-center justify-center transition-colors duration-300 ml-auto">
+<span class="material-symbols-outlined text-on-primary text-[16px] scale-0 peer-checked:scale-100 transition-transform duration-300">check</span>
+</div>
+</div>
+</div>
+</div>
+</label>
+</section>
+</main>
+<!-- Sticky Continue Button -->
+<div class="fixed bottom-[80px] md:bottom-20 left-0 w-full z-40 px-container-padding py-4 bg-gradient-to-t from-surface via-surface/95 to-transparent pointer-events-none">
+<div class="max-w-lg mx-auto pointer-events-auto">
+<button class="w-full bg-primary-container text-on-primary font-label-md text-label-md font-bold py-4 px-6 rounded-lg shadow-[0px_10px_30px_rgba(0,135,90,0.15)] hover:bg-primary transition-colors flex justify-center items-center gap-2 active:scale-[0.98] duration-200">
+                Continue
+                <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- BottomNavBar Shared Component -->
+<nav class="bg-surface dark:bg-surface-container-lowest fixed bottom-0 w-full z-50 rounded-t-xl shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] md:hidden">
+<div class="fixed bottom-0 left-0 w-full flex justify-around items-center bg-surface dark:bg-surface-container-lowest px-4 py-3 pb-safe">
+<!-- Home (Inactive) -->
+<button class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-fixed-variant hover:text-primary-container transition-colors group">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-caption text-caption">Home</span>
+</button>
+<!-- Bookings (Inactive) -->
+<button class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-fixed-variant hover:text-primary-container transition-colors group">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">calendar_month</span>
+<span class="font-caption text-caption">Bookings</span>
+</button>
+<!-- Check-in (Active - Matching TopAppBar & Intent) -->
+<button class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-bold scale-95 transition-transform duration-200 opacity-70">
+<div class="relative">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">qr_code_scanner</span>
+<div class="absolute -top-1 -right-1 w-2 h-2 bg-primary-container rounded-full"></div>
+</div>
+<span class="font-caption text-caption">Check-in</span>
+</button>
+<!-- Profile (Inactive) -->
+<button class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-fixed-variant hover:text-primary-container transition-colors group">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-caption text-caption">Account</span>
+</button>
+</div>
+</nav>
+
+
+
+</body></html>

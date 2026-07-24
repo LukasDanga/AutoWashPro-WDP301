@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Select Vehicle - Bookings - Luxe Shine</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error": "#ffffff",
+                      "tertiary-fixed-dim": "#e9c349",
+                      "tertiary": "#735c00",
+                      "outline": "#6e7a71",
+                      "primary-container": "#00875a",
+                      "on-error-container": "#93000a",
+                      "surface-dim": "#d9dadb",
+                      "surface-tint": "#006c47",
+                      "on-tertiary-container": "#4f3d00",
+                      "on-primary-container": "#ffffff",
+                      "secondary": "#5f5e5e",
+                      "on-primary-fixed-variant": "#005235",
+                      "on-background": "#191c1d",
+                      "tertiary-container": "#cca730",
+                      "on-secondary-fixed-variant": "#474746",
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary-fixed": "#1c1b1b",
+                      "tertiary-fixed": "#ffe088",
+                      "on-tertiary-fixed-variant": "#574500",
+                      "on-surface-variant": "#3e4942",
+                      "on-secondary": "#ffffff",
+                      "surface-container-high": "#e7e8e9",
+                      "secondary-container": "#e2dfde",
+                      "surface-bright": "#f8f9fa",
+                      "primary": "#006b47",
+                      "on-primary": "#ffffff",
+                      "inverse-surface": "#2e3132",
+                      "outline-variant": "#bdcac0",
+                      "on-tertiary-fixed": "#241a00",
+                      "error": "#ba1a1a",
+                      "secondary-fixed": "#e5e2e1",
+                      "primary-fixed-dim": "#71dba6",
+                      "surface-variant": "#e1e3e4",
+                      "error-container": "#ffdad6",
+                      "on-tertiary": "#ffffff",
+                      "inverse-on-surface": "#f0f1f2",
+                      "surface": "#f8f9fa",
+                      "primary-fixed": "#8df7c1",
+                      "on-surface": "#191c1d",
+                      "surface-container": "#edeeef",
+                      "on-primary-fixed": "#002113",
+                      "background": "#f8f9fa",
+                      "on-secondary-container": "#636262",
+                      "inverse-primary": "#71dba6",
+                      "surface-container-highest": "#e1e3e4",
+                      "secondary-fixed-dim": "#c8c6c5",
+                      "surface-container-low": "#f3f4f5"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "container-padding": "20px",
+                      "base": "8px",
+                      "section-margin": "32px",
+                      "gutter": "16px",
+                      "card-gap": "12px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Manrope"
+                      ],
+                      "display-lg": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Manrope"
+                      ],
+                      "headline-lg": [
+                              "Manrope"
+                      ],
+                      "caption": [
+                              "Manrope"
+                      ],
+                      "headline-sm": [
+                              "Manrope"
+                      ],
+                      "headline-md": [
+                              "Manrope"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "800"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "caption": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        
+        /* Subtle selection glow */
+        .vehicle-card.selected {
+            border-color: #00875a;
+            box-shadow: 0px 4px 20px rgba(0, 135, 90, 0.08);
+            background-color: #f0fbf6;
+        }
+        
+        .vehicle-card.selected .selection-indicator {
+            background-color: #00875a;
+            border-color: #00875a;
+            color: white;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface antialiased flex flex-col min-h-screen selection:bg-primary-container/30">
+<!-- Linear Flow / Task-Focused: Navigation Shell Suppressed (Back action implies temporary departure from main nav) -->
+<!-- Top App Bar (Task/Flow specific) -->
+<header class="bg-surface/90 backdrop-blur-md sticky top-0 z-50 shadow-sm border-b border-surface-variant">
+<div class="flex items-center px-gutter py-4 max-w-4xl mx-auto w-full">
+<button aria-label="Go back" class="p-2 -ml-2 rounded-full text-primary hover:bg-surface-variant/50 transition-colors">
+<span class="material-symbols-outlined text-[28px]" data-icon="arrow_back" data-weight="regular">arrow_back</span>
+</button>
+<div class="flex-1 text-center">
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Recurring Booking</h1>
+</div>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 w-full max-w-4xl mx-auto px-container-padding py-6 pb-32">
+<!-- Progress Stepper -->
+<div class="flex items-center justify-between mb-section-margin max-w-md mx-auto relative px-4">
+<!-- Connecting Line -->
+<div class="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 bg-surface-variant z-0 w-[calc(100%-2rem)] mx-auto">
+<!-- Active Line Progress -->
+<div class="absolute left-0 top-0 h-full bg-primary-container transition-all duration-500 w-[50%]"></div>
+</div>
+<!-- Step 1: Branch -->
+<div class="relative z-10 flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="check" data-weight="bold">check</span>
+</div>
+<span class="font-caption text-caption text-primary">Branch</span>
+</div>
+<!-- Step 2: Package -->
+<div class="relative z-10 flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="check" data-weight="bold">check</span>
+</div>
+<span class="font-caption text-caption text-primary">Package</span>
+</div>
+<!-- Step 3: Vehicle (Active) -->
+<div class="relative z-10 flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-md text-label-md shadow-md ring-4 ring-primary-container/20">
+                    3
+                </div>
+<span class="font-caption text-caption text-primary font-bold">Vehicle</span>
+</div>
+<!-- Step 4: Schedule -->
+<div class="relative z-10 flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-label-md text-label-md">
+                    4
+                </div>
+<span class="font-caption text-caption text-on-surface-variant">Schedule</span>
+</div>
+<!-- Step 5: Confirm -->
+<div class="relative z-10 flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-label-md text-label-md">
+                    5
+                </div>
+<span class="font-caption text-caption text-on-surface-variant">Confirm</span>
+</div>
+</div>
+<section class="mb-section-margin">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-6">Select Vehicle</h2>
+<div class="flex flex-col gap-card-gap">
+<!-- Vehicle Card 1 (Selected) -->
+<button class="vehicle-card selected text-left bg-surface-container-lowest rounded-xl p-4 flex items-center gap-4 border-2 border-primary-container transition-all hover:shadow-md cursor-pointer relative overflow-hidden group">
+<!-- Subtle gradient bg effect for selected state -->
+<div class="absolute inset-0 bg-gradient-to-r from-primary-container/5 to-transparent pointer-events-none"></div>
+<div class="w-14 h-14 rounded-full bg-surface-variant/50 flex items-center justify-center shrink-0 relative z-10">
+<span class="material-symbols-outlined text-on-surface text-[28px]" data-icon="directions_car" data-weight="fill" style="font-variation-settings: 'FILL' 1;">directions_car</span>
+</div>
+<div class="flex-1 relative z-10">
+<h3 class="font-body-lg text-body-lg font-semibold text-on-surface mb-0.5">47A-56789</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">LEXUS • LX600</p>
+<p class="font-caption text-caption text-secondary mt-1 uppercase tracking-wider">Black • SUV</p>
+</div>
+<div class="selection-indicator w-6 h-6 rounded-full border-2 border-primary-container bg-primary-container text-white flex items-center justify-center shrink-0 transition-colors relative z-10">
+<span class="material-symbols-outlined text-[16px]" data-icon="check" data-weight="bold">check</span>
+</div>
+</button>
+<!-- Vehicle Card 2 -->
+<button class="vehicle-card text-left bg-surface-container-lowest rounded-xl p-4 flex items-center gap-4 border-2 border-transparent shadow-[0px_4px_20px_rgba(0,0,0,0.05)] transition-all hover:shadow-md hover:border-outline-variant cursor-pointer">
+<div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant text-[28px]" data-icon="directions_car" data-weight="regular">directions_car</span>
+</div>
+<div class="flex-1">
+<h3 class="font-body-lg text-body-lg font-semibold text-on-surface mb-0.5">47A-99999</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">BMW • 735i Pure Excellence</p>
+<p class="font-caption text-caption text-secondary mt-1 uppercase tracking-wider">Black • Sedan</p>
+</div>
+<div class="selection-indicator w-6 h-6 rounded-full border-2 border-outline-variant flex items-center justify-center shrink-0 transition-colors">
+<!-- Empty space for unselected state -->
+</div>
+</button>
+</div>
+<!-- Add New Vehicle Action -->
+<button class="mt-6 w-full bg-surface-container-lowest border border-primary-container border-dashed rounded-xl py-4 flex items-center justify-center gap-2 text-primary-container hover:bg-primary-container/5 hover:border-solid transition-all">
+<span class="material-symbols-outlined text-[20px]" data-icon="add" data-weight="regular">add</span>
+<span class="font-label-md text-label-md">Add new vehicle</span>
+</button>
+</section>
+</main>
+<!-- Bottom Action Area (Fixed for Flow) -->
+<div class="fixed bottom-0 left-0 right-0 p-container-padding bg-surface/90 backdrop-blur-lg border-t border-surface-variant z-40 pb-safe">
+<div class="max-w-4xl mx-auto flex gap-4">
+<!-- Ghost button for secondary action if needed, otherwise just primary -->
+<button class="flex-1 bg-primary-container hover:bg-surface-tint text-on-primary-container font-label-md text-label-md py-4 rounded-xl shadow-[0_10px_30px_rgba(0,135,90,0.15)] transition-all transform active:scale-[0.98]">
+                Continue
+            </button>
+</div>
+</div>
+<script>
+        // Simple script to handle selection toggling for demonstration
+        document.addEventListener('DOMContentLoaded', () => {
+            const cards = document.querySelectorAll('.vehicle-card');
+            
+            cards.forEach(card => {
+                card.addEventListener('click', () => {
+                    // Remove selected state from all
+                    cards.forEach(c => {
+                        c.classList.remove('selected');
+                        c.classList.remove('border-primary-container');
+                        c.classList.add('border-transparent');
+                        c.classList.add('shadow-[0px_4px_20px_rgba(0,0,0,0.05)]');
+                        
+                        // Reset icon fill
+                        const icon = c.querySelector('.material-symbols-outlined[data-icon="directions_car"]');
+                        if(icon) {
+                            icon.style.fontVariationSettings = "'FILL' 0";
+                            icon.classList.replace('text-on-surface', 'text-on-surface-variant');
+                        }
+
+                        // Reset indicator
+                        const indicator = c.querySelector('.selection-indicator');
+                        indicator.innerHTML = '';
+                        indicator.className = 'selection-indicator w-6 h-6 rounded-full border-2 border-outline-variant flex items-center justify-center shrink-0 transition-colors';
+                    });
+                    
+                    // Add selected state to clicked
+                    card.classList.add('selected');
+                    card.classList.remove('border-transparent');
+                    card.classList.remove('shadow-[0px_4px_20px_rgba(0,0,0,0.05)]');
+                    
+                    // Set icon fill
+                    const activeIcon = card.querySelector('.material-symbols-outlined[data-icon="directions_car"]');
+                    if(activeIcon) {
+                        activeIcon.style.fontVariationSettings = "'FILL' 1";
+                        activeIcon.classList.replace('text-on-surface-variant', 'text-on-surface');
+                    }
+
+                    // Set indicator
+                    const activeIndicator = card.querySelector('.selection-indicator');
+                    activeIndicator.innerHTML = '<span class="material-symbols-outlined text-[16px]" data-icon="check" data-weight="bold">check</span>';
+                    activeIndicator.className = 'selection-indicator w-6 h-6 rounded-full border-2 border-primary-container bg-primary-container text-white flex items-center justify-center shrink-0 transition-colors relative z-10';
+                });
+            });
+        });
+    </script>
+</body></html>

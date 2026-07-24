@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   value: {
-    fontSize: 14,
+    ...typography.label,
     fontWeight: '700',
   },
   trendRow: {
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   trendText: {
-    fontSize: 12,
+    ...typography.caption,
     fontWeight: '600',
   },
 });

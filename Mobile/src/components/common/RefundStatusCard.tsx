@@ -11,7 +11,9 @@ import {
   UIManager,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { colors } from '../../theme/colors';
 import { spacing, borderRadius, shadows } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
 import { formatCurrency } from '../../utils';
 import Icon, { Icons } from './Icon';
 
@@ -23,9 +25,9 @@ import Icon, { Icons } from './Icon';
 //   3. request.refundAmount  (legacy)
 //   4. 0
 function resolveRefundAmount(req: RefundStatusCardProps['request']): number {
-  const b = typeof req.bookingId === 'object' ? req.bookingId : null;
+  const b = typeof req.bookingId === 'object' ? (req.bookingId as any) : null;
   const isDepositOnly = b?.paymentStatus === 'deposit_paid' || (b?.depositPaid && b?.paymentStatus !== 'paid');
-  const actualDeposit = b?.depositAmount || (b as any)?.deposit;
+  const actualDeposit = b?.depositAmount || b?.deposit;
 
   const candidates = [
     req.refundAmount,
@@ -87,6 +89,7 @@ function deriveStatus(raw?: string): StatusKey {
 
 // Editorial luxury palette — calm sky → confident emerald → serious crimson → quiet slate.
 // Each tone has: [gradient-start, gradient-end, hero-text, body-tint, accent-text, dot-color]
+// Preserved: Semantic visualizations (all colors in STATUS_META are intentional palette choices)
 const STATUS_META: Record<
   StatusKey,
   {
@@ -109,7 +112,7 @@ const STATUS_META: Record<
   pending: {
     label: 'Đang chờ xử lý',
     eyebrow: 'YÊU CẦU HOÀN TIỀN',
-    gradient: ['#0EA5E9', '#2563EB'],
+    gradient: ['#0EA5E9', '#10B981'],
     heroText: '#FFFFFF',
     bodyTint: '#F0F9FF',
     accentText: '#0369A1',
@@ -126,13 +129,13 @@ const STATUS_META: Record<
   processing: {
     label: 'Đang xem xét',
     eyebrow: 'YÊU CẦU HOÀN TIỀN',
-    gradient: ['#0EA5E9', '#1D4ED8'],
+    gradient: ['#0EA5E9', '#059669'],
     heroText: '#FFFFFF',
     bodyTint: '#F0F9FF',
     accentText: '#075985',
-    dotColor: '#1D4ED8',
+    dotColor: '#059669',
     iconBg: '#FFFFFF',
-    iconColor: '#1D4ED8',
+    iconColor: '#059669',
     divider: 'rgba(29,78,216,0.12)',
     chipBg: '#DBEAFE',
     chipBorder: '#BFDBFE',
@@ -336,7 +339,7 @@ export const RefundStatusCard: React.FC<RefundStatusCardProps> = ({ request, onV
             style={styles.hero}
           >
             {/* Decorative mesh blobs */}
-            <View style={[styles.meshBlob, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
+            <View style={[styles.meshBlob, { backgroundColor: 'rgba(255,255,255,0.18)' /* Preserved: Illustration artwork overlay on gradient */ }]} />
             <View
               style={[
                 styles.meshBlob2,
@@ -471,7 +474,7 @@ export const RefundStatusCard: React.FC<RefundStatusCardProps> = ({ request, onV
                       Phản hồi từ quản lý
                     </Text>
                   </View>
-                  <Text style={[styles.replyText, { color: '#0F172A' }]}>{replyText}</Text>
+                  <Text style={[styles.replyText, { color: colors.textPrimary }]}>{replyText}</Text>
                 </View>
               </>
             ) : null}
@@ -522,13 +525,13 @@ const styles = StyleSheet.create({
   shellBorder: {
     borderRadius: 28,
     padding: 2,
-    backgroundColor: 'rgba(15,23,42,0.06)',
+    backgroundColor: 'rgba(15,23,42,0.06)', // Preserved: Specific translucent bezel effect
     ...shadows.md,
   },
   core: {
     borderRadius: 26,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceElevated,
   },
   hero: {
     paddingHorizontal: spacing.lg,
@@ -571,21 +574,19 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0F172A',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.18,
     shadowRadius: 6,
     elevation: 3,
   },
   heroEyebrow: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 10,
+    ...typography.overline,
     color: 'rgba(255,255,255,0.78)',
     letterSpacing: 1.6,
-    textTransform: 'uppercase',
   },
   heroTitleRow: {
     flexDirection: 'row',
@@ -594,9 +595,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   heroTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 18,
-    color: '#FFFFFF',
+    ...typography.h4,
+    color: colors.textInverse,
     letterSpacing: -0.2,
     flexShrink: 1,
   },
@@ -610,11 +610,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   liveChipText: {
-    fontFamily: 'Outfit_600SemiBold',
+    ...typography.overline,
     fontSize: 9,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     letterSpacing: 1,
-    textTransform: 'uppercase',
   },
   body: {
     paddingHorizontal: spacing.lg,
@@ -622,8 +621,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   subtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
+    ...typography.caption,
     lineHeight: 20,
     marginBottom: spacing.md,
   },
@@ -635,14 +633,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   amountLabel: {
-    fontFamily: 'Outfit_500Medium',
-    fontSize: 11,
+    ...typography.overline,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
     marginBottom: 6,
   },
   amountValue: {
-    fontFamily: 'Outfit_700Bold',
+    ...typography.h1,
     fontSize: 30,
     letterSpacing: -0.6,
     lineHeight: 36,
@@ -654,15 +650,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   amountMeta: {
-    fontFamily: 'Outfit_500Medium',
-    fontSize: 11,
+    ...typography.overline,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
     opacity: 0.7,
   },
   amountMetaValue: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 13,
+    ...typography.buttonSmall,
     letterSpacing: 0.4,
   },
   timeline: {
@@ -685,15 +678,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   timelineLabel: {
-    fontFamily: 'Outfit_600SemiBold',
+    ...typography.label,
     fontSize: 12,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: 0.1,
   },
   timelineValue: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 12,
-    color: '#475569',
+    ...typography.caption,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   reasonBlock: {
@@ -706,16 +698,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   reasonLabel: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 11,
+    ...typography.overline,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   reasonQuote: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 14,
+    ...typography.body,
     lineHeight: 21,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontStyle: 'italic',
     paddingLeft: 4,
   },
@@ -725,8 +714,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   replyText: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
+    ...typography.caption,
     lineHeight: 20,
   },
   historyRow: {
@@ -736,8 +724,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   historyLabel: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 13,
+    ...typography.buttonSmall,
     letterSpacing: 0.1,
   },
 });

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../../theme/colors';
 import { borderRadius, shadows, spacing } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
 import type { Branch } from '../../types';
 
 interface InAppDirectionsModalProps {
@@ -278,7 +279,7 @@ const s = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     maxHeight: '85%',
@@ -303,15 +304,13 @@ const s = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 17,
+    ...typography.h4,
     color: colors.textPrimary,
   },
   headerSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
+    ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 1,
+    marginTop: spacing.xs,
   },
   closeBtn: {
     width: 36,
@@ -329,8 +328,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'Outfit_500Medium',
-    fontSize: 14,
+    ...typography.label,
     color: colors.textSecondary,
   },
 
@@ -341,11 +339,10 @@ const s = StyleSheet.create({
     gap: 14,
   },
   errorText: {
-    fontFamily: 'Outfit_500Medium',
-    fontSize: 14,
+    ...typography.label,
     color: colors.textSecondary,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.screenPadding,
   },
 
   scrollContent: {
@@ -365,15 +362,12 @@ const s = StyleSheet.create({
     borderRadius: borderRadius.lg,
   },
   statLabel: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 11,
+    ...typography.overline,
     color: colors.textSecondary,
-    letterSpacing: 0.5,
   },
   statValue: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 18,
-    marginTop: 2,
+    ...typography.h4,
+    marginTop: spacing.xs,
   },
 
   destCard: {
@@ -385,22 +379,20 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   destName: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 15,
+    ...typography.label,
     color: colors.textPrimary,
   },
   destAddress: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
+    ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
 
   sectionHeader: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 14,
+    ...typography.label,
+    fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: 12,
+    marginBottom: spacing.sm,
   },
   stepsList: {
     marginBottom: 20,
@@ -422,24 +414,21 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   stepBadgeText: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 12,
+    ...typography.caption,
+    fontWeight: '700',
     color: colors.primary,
   },
   stepContent: {
     flex: 1,
   },
   stepInstruction: {
-    fontFamily: 'Outfit_500Medium',
-    fontSize: 14,
+    ...typography.label,
     color: colors.textPrimary,
-    lineHeight: 20,
   },
   stepMeta: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textTertiary,
-    marginTop: 3,
+    marginTop: spacing.xs,
   },
 
   externalBtn: {
@@ -454,8 +443,7 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   externalBtnText: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 15,
-    color: '#FFFFFF',
+    ...typography.button,
+    color: colors.textInverse,
   },
 });

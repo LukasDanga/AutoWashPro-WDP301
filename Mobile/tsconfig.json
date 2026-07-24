@@ -5,6 +5,8 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "ignoreDeprecations": "5.0",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [

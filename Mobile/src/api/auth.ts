@@ -109,6 +109,7 @@ export const resetPassword = async (payload: {
 export const authApi = {
   register,
   login,
+  loginWithGoogle,
   refreshToken,
   logout,
   getProfile,

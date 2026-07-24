@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Text, PanResponder } from 'react-native';
 import Svg, { Path, G, Circle, Text as SvgText, Rect, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../../theme/colors';
+import { typography } from '../../theme/typography';
 import { VIETNAM_SVG_PATHS } from '../../constants/vietnamSvgPaths';
 import type { Branch } from '../../types';
 
@@ -159,9 +161,10 @@ export const VietnamMapComponent: React.FC<VietnamMapProps> = ({
         viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`}
         style={styles.svg}
       >
+        {/* Preserved: SVG Map Artwork & Pin Colors (Intentional dark radar aesthetic) */}
         <Defs>
           <RadialGradient id="bg-glow" cx="50%" cy="50%" r="60%">
-            <Stop offset="0%" stopColor="rgba(37,99,235,0.22)" />
+            <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.22" />
             <Stop offset="100%" stopColor="rgba(15,23,42,0)" />
           </RadialGradient>
         </Defs>
@@ -209,8 +212,9 @@ export const VietnamMapComponent: React.FC<VietnamMapProps> = ({
                     cx={cx}
                     cy={cy}
                     r={auraR}
-                    fill="rgba(37, 99, 235, 0.4)"
-                    stroke="#2563EB"
+                    fill={colors.primary}
+                    fillOpacity="0.4"
+                    stroke={colors.primary}
                     strokeWidth={1.8 / zoomScale}
                   />
                 )}
@@ -220,7 +224,7 @@ export const VietnamMapComponent: React.FC<VietnamMapProps> = ({
                   cx={cx}
                   cy={cy}
                   r={outerR}
-                  fill={isSelected ? '#2563EB' : 'rgba(15, 23, 42, 0.9)'}
+                  fill={isSelected ? colors.primary : 'rgba(15, 23, 42, 0.9)'}
                   stroke={isSelected ? '#FFFFFF' : '#38BDF8'}
                   strokeWidth={(isSelected ? 2.5 : 1.5) / Math.sqrt(zoomScale)}
                 />
@@ -240,7 +244,7 @@ export const VietnamMapComponent: React.FC<VietnamMapProps> = ({
                   width={labelWidth}
                   height={labelHeight}
                   rx={labelHeight / 2}
-                  fill={isSelected ? '#2563EB' : 'rgba(15, 23, 42, 0.85)'}
+                  fill={isSelected ? colors.primary : 'rgba(15, 23, 42, 0.85)'}
                   stroke={isSelected ? '#FFFFFF' : 'rgba(56, 189, 248, 0.3)'}
                   strokeWidth={0.5}
                 />
@@ -304,14 +308,14 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.surfaceDark,
     borderRadius: 24,
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: colors.borderLight,
     overflow: 'hidden',
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -322,6 +326,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   zoomControls: {
+    // Preserved: Map overlay controls (intentionally dark to contrast with map)
     position: 'absolute',
     top: 20,
     right: 20,
@@ -349,6 +354,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(56, 189, 248, 0.2)',
   },
   scaleBadge: {
+    // Preserved: Map overlay controls
     position: 'absolute',
     bottom: 20,
     left: 20,
@@ -362,8 +368,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   scaleBadgeText: {
-    color: '#CBD5E1',
-    fontSize: 11,
+    ...typography.overline,
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 });

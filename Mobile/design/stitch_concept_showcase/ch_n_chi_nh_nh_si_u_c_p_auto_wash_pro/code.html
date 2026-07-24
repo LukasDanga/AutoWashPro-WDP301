@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Auto Wash Pro - Book Branch</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Manrope -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "primary": "#006b47",
+                "background": "#f8f9fa",
+                "error": "#ba1a1a",
+                "on-primary-fixed": "#002113",
+                "on-primary-container": "#ffffff",
+                "surface-variant": "#e1e3e4",
+                "on-surface-variant": "#3e4942",
+                "on-background": "#191c1d",
+                "surface-container-high": "#e7e8e9",
+                "secondary": "#5f5e5e",
+                "tertiary-container": "#cca730",
+                "surface-container-lowest": "#ffffff",
+                "surface": "#f8f9fa",
+                "on-secondary-fixed-variant": "#474746",
+                "outline": "#6e7a71",
+                "on-primary": "#ffffff",
+                "tertiary": "#735c00",
+                "on-secondary-container": "#636262",
+                "on-error-container": "#93000a",
+                "error-container": "#ffdad6",
+                "on-tertiary-container": "#4f3d00",
+                "outline-variant": "#bdcac0",
+                "tertiary-fixed": "#ffe088",
+                "on-tertiary": "#ffffff",
+                "secondary-fixed-dim": "#c8c6c5",
+                "on-secondary": "#ffffff",
+                "on-tertiary-fixed": "#241a00",
+                "surface-container-highest": "#e1e3e4",
+                "inverse-on-surface": "#f0f1f2",
+                "surface-container-low": "#f3f4f5",
+                "surface-bright": "#f8f9fa",
+                "surface-container": "#edeeef",
+                "on-tertiary-fixed-variant": "#574500",
+                "inverse-surface": "#2e3132",
+                "on-secondary-fixed": "#1c1b1b",
+                "tertiary-fixed-dim": "#e9c349",
+                "secondary-container": "#e2dfde",
+                "on-error": "#ffffff",
+                "surface-tint": "#006c47",
+                "primary-fixed-dim": "#71dba6",
+                "primary-container": "#00875a",
+                "on-primary-fixed-variant": "#005235",
+                "primary-fixed": "#8df7c1",
+                "inverse-primary": "#71dba6",
+                "secondary-fixed": "#e5e2e1",
+                "surface-dim": "#d9dadb",
+                "on-surface": "#191c1d"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "gutter": "16px",
+                "container-padding": "20px",
+                "section-margin": "32px",
+                "base": "8px",
+                "card-gap": "12px"
+        },
+        "fontFamily": {
+                "body-md": [
+                        "Manrope"
+                ],
+                "label-md": [
+                        "Manrope"
+                ],
+                "display-lg": [
+                        "Manrope"
+                ],
+                "caption": [
+                        "Manrope"
+                ],
+                "headline-sm": [
+                        "Manrope"
+                ],
+                "body-lg": [
+                        "Manrope"
+                ],
+                "headline-lg": [
+                        "Manrope"
+                ],
+                "headline-md": [
+                        "Manrope"
+                ]
+        },
+        "fontSize": {
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "56px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "caption": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-sm": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "fontWeight": "700"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "700"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body { font-family: 'Manrope', sans-serif; background-color: #f8f9fa; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .radio-custom:checked + div {
+            border-color: #00875a;
+            background-color: #f0fdf4;
+            box-shadow: 0px 8px 24px rgba(0, 135, 90, 0.12);
+        }
+        .radio-custom:checked + div .check-icon {
+            opacity: 1;
+            transform: scale(1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface antialiased flex flex-col min-h-screen">
+<!-- Top Navigation -->
+<header class="bg-surface/90 backdrop-blur-md sticky top-0 z-50 shadow-sm border-b border-outline-variant/30">
+<div class="flex items-center justify-between px-container-padding py-4">
+<button aria-label="Go back" class="p-2 -ml-2 rounded-full hover:bg-surface-variant transition-colors text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm text-on-surface font-bold">Auto Wash Pro</h1>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</div>
+<!-- Step Indicator -->
+<div class="px-container-padding pb-4 pt-2">
+<div class="flex justify-between items-center relative z-10">
+<!-- Line background -->
+<div class="absolute top-1/2 left-0 w-full h-[2px] bg-surface-variant -z-10 -translate-y-1/2"></div>
+<!-- Active progress line -->
+<div class="absolute top-1/2 left-0 w-[12%] h-[2px] bg-primary-container -z-10 -translate-y-1/2 transition-all duration-300"></div>
+<!-- Steps -->
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-md text-sm shadow-sm ring-4 ring-surface">1</div>
+<span class="font-caption text-caption text-primary-container font-semibold">Branch</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-label-md text-sm ring-4 ring-surface">2</div>
+<span class="font-caption text-caption text-on-surface-variant">Package</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-label-md text-sm ring-4 ring-surface">3</div>
+<span class="font-caption text-caption text-on-surface-variant">Vehicle</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-label-md text-sm ring-4 ring-surface">4</div>
+<span class="font-caption text-caption text-on-surface-variant">Schedule</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-label-md text-sm ring-4 ring-surface">5</div>
+<span class="font-caption text-caption text-on-surface-variant">Confirm</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow px-container-padding py-6 pb-48">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-6 font-bold">Select Branch</h2>
+<!-- Branch List -->
+<div class="flex flex-col gap-4">
+<!-- Branch Item 1 (Selected) -->
+<label class="relative cursor-pointer group block">
+<input checked="" class="radio-custom sr-only" name="branch" type="radio" value="tan-binh"/>
+<div class="bg-surface-container-lowest border-2 border-outline-variant/40 rounded-xl p-5 transition-all duration-300 shadow-sm hover:shadow-md flex gap-4 items-start">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-primary-container mt-1 shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">location_on</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-label-md text-on-surface text-base font-bold">Auto Wash Pro Tân Bình</h3>
+<span class="font-caption text-caption text-on-surface-variant bg-surface-container py-1 px-2 rounded-md font-semibold">1.2 km</span>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">Trường Chinh, Q. Tân Bình, TP.HCM</p>
+<div class="flex items-center gap-2 text-xs font-semibold text-primary">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                            06:00 - 21:00
+                        </div>
+</div>
+<!-- Check Indicator -->
+<div class="absolute right-5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center check-icon opacity-100 scale-100 transition-all duration-300 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+</label>
+<!-- Branch Item 2 -->
+<label class="relative cursor-pointer group block">
+<input class="radio-custom sr-only" name="branch" type="radio" value="hai-chau"/>
+<div class="bg-surface-container-lowest border-2 border-outline-variant/40 rounded-xl p-5 transition-all duration-300 shadow-sm hover:shadow-md flex gap-4 items-start">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant mt-1 group-hover:text-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">location_on</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-label-md text-on-surface text-base font-bold">Auto Wash Pro Hải Châu</h3>
+<span class="font-caption text-caption text-on-surface-variant bg-surface-container py-1 px-2 rounded-md font-semibold">3.5 km</span>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">Nguyễn Văn Linh, Q. Hải Châu, Đà Nẵng</p>
+<div class="flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                            06:00 - 20:00
+                        </div>
+</div>
+<!-- Check Indicator -->
+<div class="absolute right-5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center check-icon opacity-0 scale-50 transition-all duration-300 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+</label>
+<!-- Branch Item 3 -->
+<label class="relative cursor-pointer group block">
+<input class="radio-custom sr-only" name="branch" type="radio" value="cau-giay"/>
+<div class="bg-surface-container-lowest border-2 border-outline-variant/40 rounded-xl p-5 transition-all duration-300 shadow-sm hover:shadow-md flex gap-4 items-start">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant mt-1 group-hover:text-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">location_on</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-label-md text-on-surface text-base font-bold">Auto Wash Pro Cầu Giấy</h3>
+<span class="font-caption text-caption text-on-surface-variant bg-surface-container py-1 px-2 rounded-md font-semibold">8.1 km</span>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">122 Cầu Giấy, Q. Cầu Giấy, Hà Nội</p>
+<div class="flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                            06:00 - 20:00
+                        </div>
+</div>
+<!-- Check Indicator -->
+<div class="absolute right-5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center check-icon opacity-0 scale-50 transition-all duration-300 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+</label>
+<!-- Branch Item 4 -->
+<label class="relative cursor-pointer group block">
+<input class="radio-custom sr-only" name="branch" type="radio" value="go-vap"/>
+<div class="bg-surface-container-lowest border-2 border-outline-variant/40 rounded-xl p-5 transition-all duration-300 shadow-sm hover:shadow-md flex gap-4 items-start">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant mt-1 group-hover:text-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">location_on</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-label-md text-on-surface text-base font-bold">Auto Wash Pro Gò Vấp</h3>
+<span class="font-caption text-caption text-on-surface-variant bg-surface-container py-1 px-2 rounded-md font-semibold">4.0 km</span>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">321 Phan Văn Trị, P. 11, Gò Vấp, TP.HCM</p>
+<div class="flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                            07:00 - 19:30
+                        </div>
+</div>
+<!-- Check Indicator -->
+<div class="absolute right-5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center check-icon opacity-0 scale-50 transition-all duration-300 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+</label>
+</div>
+</main>
+<!-- Fixed Bottom Action Area & Standard Bottom Nav -->
+<div class="fixed bottom-0 w-full z-50">
+<div class="bg-surface-container-lowest border-t border-outline-variant/20 px-container-padding py-4 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-surface-tint transition-colors shadow-sm font-bold">
+                Continue
+                <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
+<nav class="bg-surface-container-lowest border-t border-outline-variant/20 pb-safe">
+<ul class="flex justify-around items-center h-16">
+<li>
+<a class="flex flex-col items-center justify-center w-16 h-full text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl mb-1" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="text-[10px] font-medium font-caption">Home</span>
+</a>
+</li>
+<li>
+<a class="flex flex-col items-center justify-center w-16 h-full text-primary transition-colors" href="#">
+<div class="bg-secondary-container/50 px-4 py-1 rounded-full mb-1">
+<span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+</div>
+<span class="text-[10px] font-bold font-caption">Bookings</span>
+</a>
+</li>
+<li>
+<a class="flex flex-col items-center justify-center w-16 h-full text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl mb-1" style="font-variation-settings: 'FILL' 0;">qr_code_scanner</span>
+<span class="text-[10px] font-medium font-caption">Check-in</span>
+</a>
+</li>
+<li>
+<a class="flex flex-col items-center justify-center w-16 h-full text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl mb-1" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="text-[10px] font-medium font-caption">Account</span>
+</a>
+</li>
+</ul>
+</nav>
+</div>
+</body></html>

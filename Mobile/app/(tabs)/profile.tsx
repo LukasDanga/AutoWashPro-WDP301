@@ -89,7 +89,7 @@ const MenuItem: React.FC<MenuItemProps> = ({
       </View>
       {badge ? (
         <View style={[styles.menuBadge, badgeVariantStyle(badgeVariant, colors)]}>
-          <Text style={styles.menuBadgeText}>{badge}</Text>
+          <AppText variant="labelSmall" style={styles.menuBadgeText}>{badge}</AppText>
         </View>
       ) : null}
       {showArrow ? (
@@ -224,10 +224,10 @@ export default function ProfileScreen() {
           <View style={styles.guestIconWrap}>
             <Icon name={Icons.personOutline} size={48} color={colors.textInverse} />
           </View>
-          <Text style={styles.guestTitle}>Chào khách!</Text>
-          <Text style={styles.guestSubtitle}>
+          <AppText variant="h2" style={styles.guestTitle}>Chào khách!</AppText>
+          <AppText variant="body" style={styles.guestSubtitle}>
             Đăng nhập để trải nghiệm đầy đủ dịch vụ
-          </Text>
+          </AppText>
         </LinearGradient>
 
         <View style={styles.guestCTAs}>
@@ -266,24 +266,24 @@ onPress={() => router.push('/profile/edit' as any)}
               accessibilityRole="button"
               accessibilityLabel="Chỉnh sửa thông tin cá nhân"
         >
-          <Text style={styles.avatarText}>
+          <AppText variant="h1" style={styles.avatarText}>
             {user?.name?.charAt(0).toUpperCase() || 'U'}
-          </Text>
+          </AppText>
         </PressableScale>
 
-        <Text style={styles.userName}>{user?.name}</Text>
-        <Text style={styles.userEmail}>{user?.email}</Text>
+        <AppText variant="h2" style={styles.userName}>{user?.name}</AppText>
+        <AppText variant="body" style={styles.userEmail}>{user?.email}</AppText>
         <View style={styles.tierBadgeWrap}>
           <TierBadge tier={user?.tier || 'bronze'} />
         </View>
 
         <View style={styles.progressContainer}>
           {isMax ? (
-            <Text style={styles.progressText}>Bạn đang ở hạng cao nhất</Text>
+            <AppText variant="label" style={styles.progressText}>Bạn đang ở hạng cao nhất</AppText>
           ) : (
-            <Text style={styles.progressText}>
+            <AppText variant="label" style={styles.progressText}>
               Lên hạng {nextTierLabel}: {lifetime} / {threshold} điểm
-            </Text>
+            </AppText>
           )}
           <View style={styles.progressBarBg}>
             <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
@@ -300,21 +300,21 @@ onPress={() => router.push('/profile/edit' as any)}
               onPress={() => router.push('/(tabs)/history' as any)}
               style={styles.statItem}
             >
-              <Text style={styles.statValue}>{bookingCount ?? '—'}</Text>
+              <AppText variant="h3" style={styles.statValue}>{bookingCount ?? '—'}</AppText>
               <AppText variant="caption" color="textSecondary">
                 Đơn đặt
               </AppText>
             </TouchableOpacity>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{user?.loyaltyPoints || 0}</Text>
+              <AppText variant="h3" style={styles.statValue}>{user?.loyaltyPoints || 0}</AppText>
               <AppText variant="caption" color="textSecondary">
                 Điểm
               </AppText>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{user?.lifetimePoints || 0}</Text>
+              <AppText variant="h3" style={styles.statValue}>{user?.lifetimePoints || 0}</AppText>
               <AppText variant="caption" color="textSecondary">
                 Tổng điểm
               </AppText>
@@ -485,14 +485,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginBottom: spacing.md,
   },
   guestTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 24,
     color: colors.textInverse,
     marginBottom: spacing.xs,
   },
   guestSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 14,
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     paddingHorizontal: spacing.lg,
@@ -522,18 +518,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginBottom: spacing.md,
   },
   avatarText: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 40,
     color: colors.textInverse,
   },
   userName: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 22,
     color: colors.textInverse,
   },
   userEmail: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 14,
     color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
@@ -547,9 +537,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
   },
   progressText: {
-    fontFamily: 'Outfit_600SemiBold',
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 13,
     marginBottom: spacing.xs,
   },
   progressBarBg: {
@@ -598,7 +586,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   // Section
   sectionTitle: {
-    fontFamily: 'Outfit_600SemiBold',
     marginLeft: spacing.lg,
     marginTop: spacing.lg,
     marginBottom: spacing.xs,
@@ -641,7 +628,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginRight: spacing.sm,
   },
   logoutText: {
-    fontFamily: 'Outfit_700Bold',
+    fontWeight: '700',
   },
   destructiveText: {
     color: colors.error,

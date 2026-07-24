@@ -245,6 +245,9 @@ export default function VouchersIndexScreen() {
         data={data}
         renderItem={activeTab === 'available' ? renderVoucher : renderMyVoucher}
         keyExtractor={(item) => item._id}
+        initialNumToRender={5}
+        windowSize={5}
+        maxToRenderPerBatch={5}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={

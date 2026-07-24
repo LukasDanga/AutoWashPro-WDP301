@@ -8,7 +8,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
-import { spacing } from '../../theme/spacing';
+import { spacing, layout } from '../../theme/spacing';
 import { Icon } from './Icon';
 
 type ChipVariant = 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info';
@@ -92,9 +92,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: layout.chipRadius,
     alignSelf: 'flex-start',
-    gap: 4,
+    gap: spacing.xs,
     minHeight: 32,
   },
   containerSmall: {

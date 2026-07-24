@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { borderRadius, shadows } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
+import { borderRadius, shadows, spacing } from '../../theme/spacing';
 import type { Branch } from '../../types';
 
 interface DirectionsOptionModalProps {
@@ -71,8 +72,8 @@ export const DirectionsOptionModal: React.FC<DirectionsOptionModalProps> = ({
               onPress={handleSelectInApp}
               activeOpacity={0.75}
             >
-              <View style={[s.iconBox, { backgroundColor: '#EFF6FF' }]}>
-                <Ionicons name="navigate-circle" size={28} color="#2563EB" />
+              <View style={[s.iconBox, { backgroundColor: colors.infoLight }]}>
+                <Ionicons name="navigate-circle" size={28} color={colors.primary} />
               </View>
               <View style={s.optionTextWrap}>
                 <Text style={s.optionTitle}>Chỉ đường trong ứng dụng</Text>
@@ -80,7 +81,7 @@ export const DirectionsOptionModal: React.FC<DirectionsOptionModalProps> = ({
                   Xem khoảng cách, thời gian & lộ trình từng ngã rẽ trực tiếp
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
             </TouchableOpacity>
 
             {/* Option 2: Google Maps External */}
@@ -89,8 +90,8 @@ export const DirectionsOptionModal: React.FC<DirectionsOptionModalProps> = ({
               onPress={handleOpenGoogleMaps}
               activeOpacity={0.75}
             >
-              <View style={[s.iconBox, { backgroundColor: '#FEF2F2' }]}>
-                <Ionicons name="map" size={26} color="#EF4444" />
+              <View style={[s.iconBox, { backgroundColor: colors.errorLight }]}>
+                <Ionicons name="map" size={26} color={colors.error} />
               </View>
               <View style={s.optionTextWrap}>
                 <Text style={s.optionTitle}>Mở ứng dụng Google Maps</Text>
@@ -98,7 +99,7 @@ export const DirectionsOptionModal: React.FC<DirectionsOptionModalProps> = ({
                   Dẫn đường giọng nói Turn-by-Turn chuẩn xác từ Google
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
             </TouchableOpacity>
           </View>
 
@@ -115,11 +116,11 @@ export const DirectionsOptionModal: React.FC<DirectionsOptionModalProps> = ({
 const s = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -131,7 +132,7 @@ const s = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: 16,
   },
@@ -139,15 +140,13 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 18,
+    ...typography.h4,
     color: colors.textPrimary,
   },
   subtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
+    ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   optionsWrap: {
     gap: 12,
@@ -174,27 +173,23 @@ const s = StyleSheet.create({
     flex: 1,
   },
   optionTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 15,
+    ...typography.label,
     color: colors.textPrimary,
   },
   optionSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
+    marginTop: spacing.xs,
   },
   cancelBtn: {
     height: 48,
     borderRadius: borderRadius.lg,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cancelBtnText: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 15,
+    ...typography.button,
     color: colors.textSecondary,
   },
 });
