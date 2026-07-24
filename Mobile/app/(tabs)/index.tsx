@@ -77,7 +77,7 @@ const LoyaltyCard: React.FC<LoyaltyCardProps> = ({
 
         {/* Text column */}
         <View style={styles.loyaltyTextCol}>
-          <AppText variant="labelSmall" style={styles.loyaltyLabel} numberOfLines={1}>{label}</AppText>
+          <AppText variant="labelSmall" style={styles.loyaltyLabel} numberOfLines={2}>{label}</AppText>
           <AppText
             variant="h3"
             style={[styles.loyaltyValue, { color: textColor }]}
@@ -213,7 +213,7 @@ export default function HomeScreen() {
         {/* Top App Bar */}
         <View style={styles.topAppBar}>
           <View style={styles.topAppBarLeft}>
-            <View style={styles.avatar}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
               <Text style={styles.avatarText}>
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </Text>
@@ -261,7 +261,7 @@ export default function HomeScreen() {
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <LinearGradient
-            colors={['#0050cb', '#0ea5e9']}
+            colors={[colors.primary, colors.primarySubtle || '#10b981']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1.2 }}
             style={styles.heroGradient}
@@ -309,9 +309,9 @@ export default function HomeScreen() {
               value={tierTheme.label}
               textColor={tierTheme.textColor}
               iconBgColor={`${tierTheme.textColor}1A`}
-              borderColor={tierTheme.borderColor}
-              gradientHint={tierTheme.bgColor}
-              accentBg={`${tierTheme.textColor}10`}
+              borderColor={`${colors.primary}33`}
+              gradientHint={colors.primaryLight}
+              accentBg={`${colors.primary}10`}
               onPress={() => router.push('/(tabs)/rewards' as any)}
             />
           </View>
@@ -329,43 +329,43 @@ export default function HomeScreen() {
           <QuickService
             icon={Icons.carOutline}
             label="Đặt lịch"
-            bgColor={colors.infoLight}
+            bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/booking')}
           />
           <QuickService
             icon={Icons.voucherOutline}
             label="Voucher"
-            bgColor={colors.warningLight}
-            iconColor={colors.warning}
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/rewards')}
           />
           <QuickService
             icon={Icons.listOutline}
             label="Lịch sử"
-            bgColor={colors.successLight}
-            iconColor={colors.success}
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/history')}
           />
           <QuickService
             icon={Icons.qrCodeOutline}
             label="Check-in QR"
-            bgColor={colors.infoLight}
-            iconColor={colors.info}
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/checkin')}
           />
           <QuickService
             icon={Icons.chatBot}
             label="Chat AI"
-            bgColor={colors.primaryLight}
+            bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/chat')}
           />
           <QuickService
             icon={Icons.locationOutline}
             label="Chi nhánh"
-            bgColor={colors.errorLight}
-            iconColor={colors.error}
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/branch')}
           />
         </View>
@@ -467,7 +467,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#0050cb',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -566,6 +565,7 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   loyaltyGradient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,

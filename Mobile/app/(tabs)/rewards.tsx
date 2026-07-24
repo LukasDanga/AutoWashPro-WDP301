@@ -806,7 +806,7 @@ export default function RewardsScreen() {
           <Text style={styles.headerSubtitle}>Tích điểm, đổi quà và nhiều ưu đãi hấp dẫn</Text>
         </View>
         <PressableScale
-          onPress={() => router.push('/voucher/my' as any)}
+          onPress={() => router.push({ pathname: '/voucher', params: { tab: 'my' } })}
           accessibilityLabel="Lịch sử voucher"
           style={[styles.historyBtn, { backgroundColor: colors.primarySubtle }]}
         >
@@ -915,7 +915,7 @@ export default function RewardsScreen() {
           subtitle={activeTab === 'available' ? `${allAvailable.length} voucher khả dụng` : `${myVouchers.length} voucher của bạn`}
           action={
             <PressableScale
-              onPress={() => router.push('/voucher/my' as any)}
+              onPress={() => router.push({ pathname: '/voucher', params: { tab: 'my' } })}
               style={styles.viewAllBtn}
             >
               <Text style={[styles.viewAllText, { color: colors.primary }]}>Xem tất cả</Text>

@@ -742,7 +742,7 @@ export default function PaymentCheckoutScreen() {
             Đang kiểm tra thanh toán... ({pollCount})
           </AppText>
 
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningSubtle || colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
             <View style={styles.doubleBezelInner}>
               <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center', lineHeight: 16 }}>
                 Nếu sau khi OTP xong trình duyệt báo lỗi (ngrok offline), hãy quay lại app.
@@ -1345,8 +1345,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   qrImage: {
-    width: 240,
-    height: 240,
+    width: 180,
+    height: 180,
   },
   txnCard: {
     marginBottom: spacing.md,
