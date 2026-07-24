@@ -353,8 +353,8 @@ export default function RecurringBookingScreen() {
           if (!allSlotsRes[i]) continue;
           allSlotsRes[i].forEach((slot) => {
             const existing = slotsMap.get(slot.startTime);
-            if (existing && !slot.isAvailable) {
-              existing.isAvailable = false;
+            if (existing && !slot.available) {
+              existing.available = false;
             }
           });
         }
@@ -560,7 +560,7 @@ export default function RecurringBookingScreen() {
         packageId: selectedPackage._id,
         packageName: selectedPackage.name,
         vehicleId: selectedVehicle._id,
-        vehiclePlate: selectedVehicle.licensePlate || selectedVehicle.plate,
+        vehiclePlate: selectedVehicle.licensePlate,
         weekdays: selectedWeekdays,
         startTime: selectedTime,
         weeks: effectiveWeeks,
@@ -1086,7 +1086,7 @@ export default function RecurringBookingScreen() {
           {/* Preview dates in confirm step */}
           {previewDates.length > 0 && (
             <View style={styles.confirmPreviewDates}>
-              <AppText variant="subtitle2" color="textPrimary" style={styles.confirmPreviewTitle}>
+              <AppText variant="label" color="textPrimary" style={styles.confirmPreviewTitle}>
                 Lịch dự kiến ({previewDates.length} buổi)
               </AppText>
               {previewDates.slice(0, 8).map((d, i) => {
@@ -1314,7 +1314,7 @@ export default function RecurringBookingScreen() {
       />
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxxl }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}
         showsVerticalScrollIndicator={false}
       >
         {step === 'branch' && renderBranchStep()}
@@ -1947,7 +1947,7 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
               borderColor: selected ? colors.primary : colors.textTertiary,
             }
           ]}>
-            {selected && <Icon name={Icons.check} size={14} color={colors.textInverse} />}
+            {selected && <Icon name={Icons.checkmark} size={14} color={colors.textInverse} />}
           </View>
         </View>
       </Card>

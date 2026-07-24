@@ -1654,7 +1654,7 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
               borderColor: selected ? colors.primary : colors.textTertiary,
             }
           ]}>
-            {selected && <Icon name={Icons.check} size={14} color={colors.textInverse} />}
+            {selected && <Icon name={Icons.checkmark} size={14} color={colors.textInverse} />}
           </View>
         </View>
       </Card>
