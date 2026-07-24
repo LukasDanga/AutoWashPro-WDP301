@@ -285,16 +285,32 @@ export default function ManagerPackages({ user }) {
                 </div>
 
                 {subCount > 0 && (
-                  <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">DV chọn thêm ({subCount})</p>
-                    <div className="space-y-1">
-                      {(pkg.subServices || []).map((s, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="text-slate-600">{s.name} {s.isOptional ? '' : '(bắt buộc)'}</span>
-                          <span className="text-emerald-600 font-medium">{s.price > 0 ? `+${formatCurrency(s.price)}` : 'Miễn phí'}</span>
+                  <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Chi tiết dịch vụ nhỏ ({subCount})</p>
+                    {(pkg.subServices || []).filter(s => !s.isOptional).length > 0 && (
+                      <div>
+                        <span className="text-[10px] font-semibold text-emerald-700 block mb-1">✓ Đã bao gồm:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {(pkg.subServices || []).filter(s => !s.isOptional).map((s, i) => (
+                            <span key={i} className="bg-white border border-emerald-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
+                              {s.name} {s.duration > 0 ? `(${s.duration}p)` : ''}
+                            </span>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
+                    {(pkg.subServices || []).filter(s => s.isOptional).length > 0 && (
+                      <div>
+                        <span className="text-[10px] font-semibold text-indigo-700 block mb-1">✨ Tùy chọn thêm:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {(pkg.subServices || []).filter(s => s.isOptional).map((s, i) => (
+                            <span key={i} className="bg-white border border-indigo-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
+                              {s.name} {s.price > 0 ? `(+${formatCurrency(s.price)})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -476,8 +492,10 @@ export default function ManagerPackages({ user }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 text-center space-y-4">
             <span className="text-4xl">🗑️</span>
-            <p className="text-slate-700 font-medium">Xác nhận xoá gói dịch vụ này?</p>
-            <p className="text-xs text-slate-400">Hành động này không thể hoàn tác.</p>
+            <p className="text-slate-700 font-semibold">Xác nhận xoá gói dịch vụ này?</p>
+            <p className="text-xs text-red-500 bg-red-50 p-2.5 rounded-xl border border-red-100 leading-relaxed">
+              Lưu ý: Nếu gói này đã có khách hàng đặt lịch hoặc mua gói lượt, hệ thống sẽ chặn xóa để bảo mật dữ liệu. Bạn vui lòng chọn "Tạm dừng" gói thay vì xóa.
+            </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteId(null)}
                 className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
