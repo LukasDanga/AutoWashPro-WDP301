@@ -1167,9 +1167,6 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
   const duration = pkg ? pkg.duration : 30;
-  if (pkg && pkg.branchId && String(pkg.branchId) !== String(branchId)) {
-    throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
-  }
 
   const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
   const { gte, lte } = getDayBounds(dateStr);
