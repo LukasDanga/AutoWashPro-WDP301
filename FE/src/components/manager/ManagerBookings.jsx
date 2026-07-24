@@ -439,307 +439,301 @@ function QRDisplayModal({ booking, onClose }) {
 
 /* ── print receipt modal ── */
 function PrintReceiptModal({ booking, onClose }) {
-  function fmt(n)    { return Number(n || 0).toLocaleString('vi-VN'); }
-  function dateFmt(d){ return d ? new Date(d).toLocaleDateString('vi-VN') : '—'; }
-  function timeFmt(d){ return d ? new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''; }
+  const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  const formatDate = (dateString) => { const d = new Date(dateString); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
 
-  const shortId   = String(booking._id).slice(-8).toUpperCase();
-  const receiptNo = `HD-${new Date().getFullYear()}-${shortId}`;
-  const datePaid  = dateFmt(booking.checkOutTime || booking.updatedAt || booking.bookingDate);
-  const basePrice = booking.packageId?.price || booking.finalPrice || 0;
-  const discount  = booking.discountAmount || 0;
-  const finalAmt  = booking.finalPrice || 0;
-  const payLabel  = booking.paymentMethod === 'cash' ? 'Tiền mặt'
-                  : booking.paymentMethod === 'bank'  ? 'Chuyển khoản'
-                  : (booking.paymentMethod || 'Tiền mặt');
-  const checkIn   = timeFmt(booking.checkInTime)  || booking.startTime || '—';
-  const checkOut  = timeFmt(booking.checkOutTime) || booking.endTime   || '';
-  const printedAt = new Date().toLocaleString('vi-VN');
+  const detailBooking = booking;
+  const displayTotal = detailBooking.isGroup ? (detailBooking.groupTotalPrice || 0) : (detailBooking.totalAmount || detailBooking.finalPrice || 0);
+  const displayDeposit = detailBooking.isGroup ? (detailBooking.groupTotalDeposit || 0) : (detailBooking.depositAmount || 0);
+  const displayId = detailBooking.isGroup ? (detailBooking.recurringGroupId || detailBooking._id) : detailBooking._id;
+  const displayInvoiceNumber = String(displayId).slice(-8).toUpperCase();
+  const recurringGroupBookings = detailBooking.children || [];
 
-  function handleExportPDF() {
-    const win = window.open('', '_blank', 'width=820,height=1050,scrollbars=yes');
-    win.document.write(`<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8"/>
-<title>Hóa đơn ${receiptNo}</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  @page{size:A4;margin:20mm 18mm}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-       font-size:13px;color:#111;background:#fff;line-height:1.5}
-  .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
-  .hd h1{font-size:32px;font-weight:800;letter-spacing:-.5px}
-  .logo-box{width:54px;height:54px;background:#111;border-radius:10px;
-            display:flex;align-items:center;justify-content:center}
-  .logo-box svg{fill:#fff}
-  .meta{margin-bottom:28px}
-  .meta p{margin-bottom:3px;font-size:13px;color:#555}
-  .meta span{color:#111;font-weight:600}
-  .parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;
-           margin-bottom:28px;padding-top:20px;border-top:1px solid #e5e7eb}
-  .plabel{font-size:11px;font-weight:700;text-transform:uppercase;
-          letter-spacing:.08em;color:#9ca3af;margin-bottom:6px}
-  .pname{font-weight:700;font-size:14px;margin-bottom:2px}
-  .party p{font-size:13px;color:#555;margin-bottom:1px}
-  .amount-h{font-size:24px;font-weight:800;margin:0 0 4px}
-  .amount-sub{font-size:13px;color:#6b7280;margin-bottom:28px}
-  table{width:100%;border-collapse:collapse;margin-bottom:0}
-  thead tr{border-top:2px solid #e5e7eb;border-bottom:2px solid #e5e7eb}
-  thead th{padding:9px 8px;text-align:left;font-size:11px;font-weight:700;
-           text-transform:uppercase;letter-spacing:.06em;color:#9ca3af}
-  th.r,td.r{text-align:right}
-  tbody tr{border-bottom:1px solid #f3f4f6}
-  tbody td{padding:12px 8px;font-size:13px;color:#374151;vertical-align:top}
-  .desc-main{font-weight:600;color:#111}
-  .desc-sub{font-size:12px;color:#9ca3af;margin-top:2px}
-  .totals{border-top:2px solid #e5e7eb}
-  .totals td{padding:5px 8px;font-size:13px;color:#374151}
-  .totals tr.final td{font-weight:800;font-size:14px;color:#111;
-                      border-top:2px solid #e5e7eb;padding-top:10px}
-  .ph-title{font-size:18px;font-weight:800;margin:32px 0 12px}
-  .ph thead tr{border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}
-  .ph thead th{font-size:11px;font-weight:700;text-transform:uppercase;
-               letter-spacing:.06em;color:#9ca3af;padding:8px 8px 8px 0}
-  .ph tbody td{padding:10px 8px 10px 0;font-size:13px;color:#374151;
-               border-bottom:1px solid #f3f4f6}
-  .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;
-          font-size:11px;color:#d1d5db;display:flex;justify-content:space-between}
-  @media print{
-    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .no-print{display:none}
-  }
-</style>
-</head>
-<body>
-<div class="hd">
-  <h1>Hóa đơn</h1>
-  <div class="logo-box">
-    <svg width="28" height="28" viewBox="0 0 24 24"><path d="M12 2C8 7 4 10 4 14a8 8 0 0016 0c0-4-4-7-8-12z"/></svg>
-  </div>
-</div>
-<div class="meta">
-  <p>Mã đặt lịch &nbsp;<span>#${shortId}</span></p>
-  <p>Số hóa đơn &nbsp;&nbsp;<span>${receiptNo}</span></p>
-  <p>Ngày thanh toán &nbsp;<span>${datePaid}</span></p>
-</div>
-<div class="parties">
-  <div class="party">
-    <div class="plabel">Chi nhánh</div>
-    <div class="pname">AutoWash Pro</div>
-    <p>${booking.branchId?.name || ''}</p>
-    <p>${booking.branchId?.address || ''}</p>
-    <p>autowashpro.vn</p>
-  </div>
-  <div class="party">
-    <div class="plabel">Khách hàng</div>
-    <div class="pname">${booking.userId?.name || 'Khách hàng'}</div>
-    <p>${booking.userId?.phone || ''}</p>
-    <p>${booking.userId?.email || ''}</p>
-    <p>Xe: ${booking.vehicleId?.licensePlate || '—'}${booking.vehicleId?.brand ? ` (${booking.vehicleId.brand} ${booking.vehicleId.color || ''})` : ''}</p>
-  </div>
-</div>
-<div class="amount-h">${fmt(finalAmt)}đ đã thanh toán ngày ${datePaid}</div>
-<div class="amount-sub">Trạng thái: <strong>${booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</strong></div>
-<table>
-  <thead>
-    <tr><th style="width:50%">Mô tả</th><th class="r" style="width:10%">SL</th><th class="r" style="width:20%">Đơn giá</th><th class="r" style="width:20%">Thành tiền</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><div class="desc-main">${booking.packageId?.name || 'Dịch vụ rửa xe'}</div>
-          <div class="desc-sub">${dateFmt(booking.bookingDate)} · Vào ${checkIn}${checkOut ? ' → Ra ' + checkOut : ''}</div></td>
-      <td class="r">1</td><td class="r">${fmt(basePrice)}đ</td><td class="r">${fmt(basePrice)}đ</td>
-    </tr>
-    ${discount > 0 ? `<tr>
-      <td><div class="desc-main">Giảm giá voucher</div>
-          <div class="desc-sub">${booking.voucherCode ? 'Mã: ' + booking.voucherCode : 'Khuyến mãi'}</div></td>
-      <td class="r">1</td><td class="r">-${fmt(discount)}đ</td><td class="r">-${fmt(discount)}đ</td>
-    </tr>` : ''}
-  </tbody>
-</table>
-<div class="totals">
-  <table>
-    <tbody>
-      <tr><td>Tạm tính</td><td></td><td></td><td class="r">${fmt(basePrice)}đ</td></tr>
-      ${discount > 0 ? `<tr><td>Giảm giá</td><td></td><td></td><td class="r">-${fmt(discount)}đ</td></tr>` : ''}
-      <tr><td>Tổng cộng</td><td></td><td></td><td class="r">${fmt(finalAmt)}đ</td></tr>
-      <tr class="final"><td><strong>Đã thanh toán</strong></td><td></td><td></td>
-        <td class="r"><strong>${booking.paymentStatus === 'paid' ? fmt(finalAmt) : '0'}đ</strong></td></tr>
-    </tbody>
-  </table>
-</div>
-<h2 class="ph-title">Lịch sử thanh toán</h2>
-<table class="ph">
-  <thead><tr>
-    <th>Phương thức</th><th>Ngày</th><th class="r">Số tiền</th><th class="r">Mã giao dịch</th>
-  </tr></thead>
-  <tbody><tr>
-    <td>${payLabel}</td><td>${datePaid}</td>
-    <td class="r">${booking.paymentStatus === 'paid' ? fmt(finalAmt) + 'đ' : '—'}</td>
-    <td class="r">#${shortId}</td>
-  </tr></tbody>
-</table>
-<div class="footer"><span>In lúc: ${printedAt}</span><span>Trang 1 / 1</span></div>
-<script>window.onload=()=>{setTimeout(()=>{window.print()},300)}<\/script>
-</body></html>`);
-    win.document.close();
-  }
-
-  /* ── preview in modal (scaled A4 layout) ── */
-  const th = (txt, right = false) => (
-    <th style={{ padding: '9px 8px', textAlign: right ? 'right' : 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9ca3af' }}>{txt}</th>
-  );
-  const td = (txt, right = false, extra = {}) => (
-    <td style={{ padding: '11px 8px', textAlign: right ? 'right' : 'left', ...extra }}>{txt}</td>
-  );
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" style={{ maxHeight: '92vh' }}
-        onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 no-print-bg"
+      onClick={onClose}>
+      
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #receipt-printable-area, #receipt-printable-area * { visibility: visible; }
+          #receipt-printable-area { 
+            position: absolute !important; 
+            left: 0 !important; 
+            top: 0 !important; 
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+          }
+          .no-print { display: none !important; }
+          .no-print-bg { background: transparent !important; }
+        }
+      `}</style>
+      
+      <div id="receipt-printable-area" className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] font-sans text-slate-900 relative" onClick={e => e.stopPropagation()}>
+        
+        {/* Close Button Absolute */}
+        <button onClick={onClose} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors no-print">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
 
-        {/* modal header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div className="flex items-center gap-2">
-            <Printer size={18} className="text-slate-600" weight="duotone" />
-            <span className="font-semibold text-slate-800">Xem trước hóa đơn</span>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
-        </div>
-
-        {/* A4 preview */}
-        <div className="flex-1 overflow-y-auto bg-slate-200 p-6">
-          <div style={{ maxWidth: 595, margin: '0 auto', background: '#fff', padding: '40px 48px', boxShadow: '0 4px 20px rgba(0,0,0,.18)', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif', fontSize: 13, color: '#111', lineHeight: 1.6 }}>
-
-            {/* header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-              <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.5px' }}>Hóa đơn</h1>
-              <div style={{ width: 52, height: 52, background: '#111', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M12 2C8 7 4 10 4 14a8 8 0 0016 0c0-4-4-7-8-12z"/></svg>
+        {/* Receipt Body */}
+        <div className="px-10 py-12 overflow-y-auto flex-1 selection:bg-slate-200">
+          
+          {/* Header */}
+          <div className="flex justify-between items-start mb-12">
+            <div>
+              <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Receipt</h2>
+              <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
+                <div className="font-semibold text-black">Invoice number</div>
+                <div className="text-black">AWP-{displayInvoiceNumber}</div>
+                <div className="font-semibold text-black">Receipt number</div>
+                <div className="text-black">{displayId}</div>
+                <div className="font-semibold text-black">Date paid</div>
+                <div className="text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
               </div>
             </div>
-
-            {/* meta */}
-            <div style={{ marginBottom: 24 }}>
-              {[['Mã đặt lịch', `#${shortId}`], ['Số hóa đơn', receiptNo], ['Ngày thanh toán', datePaid]].map(([k, v]) => (
-                <p key={k} style={{ marginBottom: 3, color: '#555' }}>
-                  {k} <span style={{ marginLeft: 8, fontWeight: 600, color: '#111' }}>{v}</span>
-                </p>
-              ))}
+            <div>
+              <div className="text-4xl font-black tracking-tighter select-none">
+                AW<span className="text-slate-400">P</span>
+              </div>
             </div>
+          </div>
 
-            {/* parties */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, borderTop: '1px solid #e5e7eb', paddingTop: 20, marginBottom: 24 }}>
-              {[
-                { label: 'Chi nhánh', name: 'AutoWash Pro', lines: [booking.branchId?.name, booking.branchId?.address, 'autowashpro.vn'] },
-                { label: 'Khách hàng', name: booking.userId?.name || 'Khách hàng', lines: [booking.userId?.phone, booking.userId?.email, `Xe: ${booking.vehicleId?.licensePlate || '—'}${booking.vehicleId?.brand ? ` (${booking.vehicleId.brand})` : ''}`] },
-              ].map(({ label, name, lines }) => (
-                <div key={label}>
-                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#9ca3af', marginBottom: 6 }}>{label}</p>
-                  <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{name}</p>
-                  {lines.filter(Boolean).map((l, i) => <p key={i} style={{ fontSize: 13, color: '#555', marginBottom: 1 }}>{l}</p>)}
-                </div>
-              ))}
+          {/* Addresses */}
+          <div className="grid grid-cols-2 gap-8 mb-12 text-[13px] leading-relaxed">
+            <div>
+              <div className="font-semibold text-black mb-1">AutoWash Pro</div>
+              <div className="text-black">
+                {detailBooking.branchName || detailBooking.branchId?.name || 'Chi nhánh trung tâm'}<br/>
+                {detailBooking.branchId?.address || '123 Đường Rửa Xe'}<br/>
+                Hồ Chí Minh, Việt Nam<br/>
+                support@autowashpro.com
+              </div>
             </div>
+            <div>
+              <div className="font-semibold text-black mb-1">Bill to</div>
+              <div className="text-black">
+                {detailBooking.userId?.name || 'Khách hàng'} ({detailBooking.userId?.phone || ''})<br/>
+                Biển số: {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
+                {detailBooking.userId?.email || ''}
+              </div>
+            </div>
+          </div>
 
-            {/* amount paid */}
-            <p style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{fmt(finalAmt)}đ đã thanh toán ngày {datePaid}</p>
-            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>
-              Trạng thái: <strong style={{ color: '#111' }}>{booking.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</strong>
+          {/* Big Payment Status */}
+          <div className="mb-10">
+            <h3 className="text-2xl font-bold text-black mb-3">
+              {formatCurrency(displayTotal)} {detailBooking.paymentStatus === 'paid' ? `paid on ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `due on ${formatDate(detailBooking.bookingDate)}`}
+            </h3>
+            <p className="text-[13px] text-black max-w-xl leading-relaxed">
+              While we prefer electronic payment methods,<br/>
+              any checks must be sent to the address below, NOT to our branch office.<br/>
+              --------------------------------<br/>
+              PAYMENT ADDRESS:<br/>
+              AutoWash Pro<br/>
+              Hồ Chí Minh, Vietnam
             </p>
+            <p className="text-[13px] text-black mt-4">
+              VAT is calculated on the gross invoice amount using the formula: VAT = (sales price / (1 - 10%)) × 10%
+            </p>
+          </div>
 
-            {/* line items */}
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          {/* Table */}
+          <div className="mb-14">
+            <table className="w-full text-[13px]">
               <thead>
-                <tr style={{ borderTop: '2px solid #e5e7eb', borderBottom: '2px solid #e5e7eb' }}>
-                  {th('Mô tả')}{th('SL', true)}{th('Đơn giá', true)}{th('Thành tiền', true)}
+                <tr className="border-b border-black">
+                  <th className="py-2 text-left font-normal text-black w-1/2">Description</th>
+                  <th className="py-2 text-right font-normal text-black">Qty</th>
+                  <th className="py-2 text-right font-normal text-black">Unit price</th>
+                  <th className="py-2 text-right font-normal text-black">Tax</th>
+                  <th className="py-2 text-right font-normal text-black">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
-                    <div style={{ fontWeight: 600 }}>{booking.packageId?.name || 'Dịch vụ rửa xe'}</div>
-                    <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{dateFmt(booking.bookingDate)} · Vào {checkIn}{checkOut ? ` → Ra ${checkOut}` : ''}</div>
+                <tr className="border-b border-slate-200">
+                  <td className="py-3 text-left align-top">
+                    <div className="font-normal text-black">{detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ rửa xe'}</div>
+                    {!detailBooking.isGroup && <div className="text-black">{formatDate(detailBooking.bookingDate)} • {detailBooking.startTime || '—'}</div>}
+                    {detailBooking.isGroup && (
+                      <div className="mt-2 space-y-1">
+                        {recurringGroupBookings.map((rb, idx) => (
+                          <div key={idx} className="text-slate-600 text-xs flex gap-2 items-center">
+                            <span>Buổi {idx + 1}: {formatDate(rb.bookingDate)} • {rb.startTime}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100">{STATUS_MAP[rb.status]?.label || rb.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
-                  {td('1', true)}{td(`${fmt(basePrice)}đ`, true)}{td(`${fmt(basePrice)}đ`, true)}
+                  <td className="py-3 text-right text-black align-top">{detailBooking.isGroup ? detailBooking.groupCount || recurringGroupBookings.length : 1}</td>
+                  <td className="py-3 text-right text-black align-top">
+                    {detailBooking.bookingType === 'slot_pack_usage' ? (
+                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packageId?.price || 0)}</span>
+                    ) : null}
+                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
+                  </td>
+                  <td className="py-3 text-right text-black align-top">10%</td>
+                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
-                {discount > 0 && (
-                  <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
-                      <div style={{ fontWeight: 600 }}>Giảm giá voucher</div>
-                      <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{booking.voucherCode ? `Mã: ${booking.voucherCode}` : 'Khuyến mãi'}</div>
-                    </td>
-                    {td('1', true)}{td(`-${fmt(discount)}đ`, true)}{td(`-${fmt(discount)}đ`, true)}
+                
+                {/* Sub-services rows */}
+                {detailBooking.selectedSubServices && detailBooking.selectedSubServices.map((sub, i) => (
+                  <tr key={`sub-${i}`} className="border-b border-slate-100">
+                    <td className="py-2 text-left text-black pl-4">- {sub.name}</td>
+                    <td className="py-2 text-right text-black">1</td>
+                    <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
+                    <td className="py-2 text-right text-black">10%</td>
+                    <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
 
-            {/* totals */}
-            <div style={{ borderTop: '2px solid #e5e7eb' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr><td style={{ padding: '5px 8px', color: '#374151' }}>Tạm tính</td><td /><td /><td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{fmt(basePrice)}đ</td></tr>
-                  {discount > 0 && <tr><td style={{ padding: '5px 8px', color: '#374151' }}>Giảm giá</td><td /><td /><td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>-{fmt(discount)}đ</td></tr>}
-                  <tr><td style={{ padding: '5px 8px', color: '#374151' }}>Tổng cộng</td><td /><td /><td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{fmt(finalAmt)}đ</td></tr>
-                  <tr style={{ borderTop: '2px solid #e5e7eb' }}>
-                    <td style={{ padding: '10px 8px', fontWeight: 800, fontSize: 14 }}>Đã thanh toán</td><td /><td />
-                    <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 800, fontSize: 14 }}>
-                      {booking.paymentStatus === 'paid' ? `${fmt(finalAmt)}đ` : '0đ'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            {/* Summary */}
+            <div className="flex justify-end mt-6">
+              <div className="w-[300px] text-[13px]">
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-black">Subtotal</span>
+                  <span className="text-black">{formatCurrency(displayTotal)}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-black">Total excluding tax</span>
+                  <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-black">VAT - Vietnam (10% on {formatCurrency(Math.round((displayTotal) * 0.9))})</span>
+                  <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="font-normal text-black">Total</span>
+                  <span className="font-normal text-black">{formatCurrency(displayTotal)}</span>
+                </div>
+                {detailBooking.paymentStatus === 'deposit_paid' && (
+                  <div className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="font-normal text-black">Deposit Paid</span>
+                    <span className="font-normal text-black">-{formatCurrency(displayDeposit || 0)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1.5 border-b border-black">
+                  <span className="font-bold text-black">Amount {detailBooking.paymentStatus === 'paid' ? 'paid' : 'due'}</span>
+                  <span className="font-bold text-black">
+                    {detailBooking.paymentStatus === 'paid' 
+                      ? formatCurrency(displayTotal)
+                      : detailBooking.paymentStatus === 'deposit_paid'
+                        ? formatCurrency(Math.max(0, (displayTotal || 0) - (displayDeposit || 0)))
+                        : formatCurrency(displayTotal)
+                    }
+                  </span>
+                </div>
+              </div>
             </div>
+          </div>
 
-            {/* payment history */}
-            <h3 style={{ fontSize: 18, fontWeight: 800, margin: '28px 0 12px' }}>Lịch sử thanh toán</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          {/* Payment History */}
+          <div>
+            <h3 className="text-xl font-bold text-black mb-4">Payment history</h3>
+            <table className="w-full text-[13px]">
               <thead>
-                <tr style={{ borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
-                  {['Phương thức', 'Ngày', 'Số tiền', 'Mã GD'].map((h, i) => (
-                    <th key={h} style={{ padding: '8px', textAlign: i > 1 ? 'right' : 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9ca3af' }}>{h}</th>
-                  ))}
+                <tr className="border-b border-black">
+                  <th className="py-2 text-left font-normal text-black">Payment method</th>
+                  <th className="py-2 text-left font-normal text-black">Date</th>
+                  <th className="py-2 text-right font-normal text-black">Amount paid</th>
+                  <th className="py-2 text-right font-normal text-black">Receipt number</th>
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '10px 8px', fontSize: 13 }}>{payLabel}</td>
-                  <td style={{ padding: '10px 8px', fontSize: 13 }}>{datePaid}</td>
-                  <td style={{ padding: '10px 8px', fontSize: 13, textAlign: 'right' }}>{booking.paymentStatus === 'paid' ? `${fmt(finalAmt)}đ` : '—'}</td>
-                  <td style={{ padding: '10px 8px', fontSize: 13, textAlign: 'right' }}>#{shortId}</td>
+                <tr className="border-b border-slate-200">
+                  <td className="py-3 text-left text-black">
+                    {detailBooking.paymentStatus === 'paid' ? 'Bank Transfer' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Deposit' : 'Pending')}
+                  </td>
+                  <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
+                  <td className="py-3 text-right text-black">
+                    {detailBooking.paymentStatus === 'paid' 
+                      ? formatCurrency(displayTotal) 
+                      : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
+                  </td>
+                  <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
                 </tr>
               </tbody>
             </table>
-
-            <div style={{ marginTop: 32, paddingTop: 14, borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#d1d5db' }}>
-              <span>In lúc: {printedAt}</span>
-              <span>Trang 1 / 1</span>
-            </div>
           </div>
         </div>
 
-        {/* actions */}
-        <div className="flex shrink-0 gap-3 border-t border-slate-100 px-6 py-4">
-          <button onClick={onClose}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-            Đóng
-          </button>
-          <button onClick={handleExportPDF}
-            className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors">
-            <Printer size={15} weight="fill" />
-            Xuất PDF / In
+        {/* Footer Actions (Sticky) - Hide on Print */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 no-print">
+          <button onClick={handlePrint}
+            className="w-full px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center">
+            In hóa đơn
           </button>
         </div>
+
       </div>
     </div>
   );
 }
-
-/* ── booking details tab ── */
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
+  const [showAddService, setShowAddService] = useState(false);
+  const [availableSubServices, setAvailableSubServices] = useState([]);
+  const [selectedNewSubs, setSelectedNewSubs] = useState([]);
+  const [addingService, setAddingService] = useState(false);
+
+  const handleOpenAddService = async () => {
+    setShowAddService(true);
+    setAvailableSubServices([]);
+    setSelectedNewSubs([]);
+    try {
+      const res = await fetch(`http://localhost:5000/api/packages`);
+      if (res.ok) {
+        const data = await res.json();
+        const allPackages = data.data || [];
+        const allSubs = [];
+        const alreadySelected = booking.selectedSubServices?.map(s => s.name) || [];
+        allPackages.forEach(p => {
+          if (p.subServices) {
+            p.subServices.forEach(s => {
+              if (!alreadySelected.includes(s.name) && !allSubs.some(x => x.name === s.name)) {
+                allSubs.push(s);
+              }
+            });
+          }
+        });
+        setAvailableSubServices(allSubs);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const submitAddServices = async () => {
+    if (selectedNewSubs.length === 0) return;
+    setAddingService(true);
+    try {
+      const bId = booking.isGroup ? booking.recurringGroupId : booking._id;
+      const updatedSubs = [...(booking.selectedSubServices || []), ...selectedNewSubs].map(s => s.name || s);
+      const res = await api(`/bookings/${bId}/sub-services`, {
+        method: 'PATCH',
+        body: JSON.stringify({ subServices: updatedSubs }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const payload = await res.json();
+      notify('Đã thêm dịch vụ thành công!', 'success');
+      setShowAddService(false);
+      setSelectedNewSubs([]);
+      onUpdated(payload?.data || payload);
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setAddingService(false);
+    }
+  };
   const [showQR, setShowQR] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
   const [confirmCash, setConfirmCash] = useState(false);
@@ -857,12 +851,29 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dịch vụ</h3>
             <p className="font-medium text-slate-800">{booking.packageId?.name || '—'}</p>
-            <p className="text-sm text-slate-600">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')} lúc {booking.startTime}</p>
+            {booking.selectedSubServices?.length > 0 && (
+              <ul className="mt-1 mb-2 space-y-0.5">
+                {booking.selectedSubServices.map((sub, idx) => (
+                  <li key={idx} className="text-[13px] text-slate-600 flex items-center gap-1.5 before:content-['•'] before:text-slate-300">
+                    {sub.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-sm text-slate-600 mt-2">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')} lúc {booking.startTime}</p>
             <p className="text-xs text-slate-500 mt-1">{booking.branchId?.name || '—'}</p>
             {booking.checkInTime && (
               <p className="text-xs text-blue-600 font-medium mt-2 bg-blue-50 px-2 py-1 inline-block rounded">
                 Vào lúc: {new Date(booking.checkInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
               </p>
+            )}
+
+            {/* Add service button moved here */}
+            {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+              <button onClick={handleOpenAddService} disabled={busy}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
+                <Package size={13} /> Thêm dịch vụ
+              </button>
             )}
           </div>
           <div>
@@ -1067,6 +1078,49 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
       {showQR    && <QRDisplayModal      booking={booking} onClose={() => setShowQR(false)} />}
       {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
+      
+      {/* ADD SERVICE MODAL */}
+      {showAddService && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !addingService && setShowAddService(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ con</h3>
+            <p className="text-xs text-slate-500 mb-4">Bạn có thể chọn thêm các dịch vụ phát sinh. Hệ thống sẽ tự động tính lại tổng tiền.</p>
+            
+            <div className="max-h-60 overflow-y-auto space-y-2 mb-4 pr-2">
+              {availableSubServices.length === 0 ? (
+                <p className="text-sm text-slate-500">Đang tải hoặc không có dịch vụ nào thêm...</p>
+              ) : availableSubServices.map((sub, i) => {
+                const checked = selectedNewSubs.some(s => s.name === sub.name);
+                return (
+                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="hidden" checked={checked} onChange={() => {
+                        if (checked) setSelectedNewSubs(prev => prev.filter(s => s.name !== sub.name));
+                        else setSelectedNewSubs(prev => [...prev, sub]);
+                      }} />
+                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300'}`}>
+                        {checked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                      </div>
+                      <span className={`text-sm font-medium ${checked ? 'text-emerald-800' : 'text-slate-700'}`}>{sub.name}</span>
+                    </div>
+                    <span className={`text-sm font-bold ${checked ? 'text-emerald-600' : 'text-slate-900'}`}>+{(sub.price || 0).toLocaleString('vi-VN')}</span>
+                  </label>
+                )
+              })}
+            </div>
+            
+            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-slate-100">
+              <button onClick={() => setShowAddService(false)} disabled={addingService} className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
+                Hủy
+              </button>
+              <button onClick={submitAddServices} disabled={addingService || selectedNewSubs.length === 0} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 disabled:opacity-50">
+                {addingService ? 'Đang thêm...' : 'Xác nhận thêm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         open={confirmCash}
         title={`Xác nhận thu tiền (${managerPayMethod === 'bank' ? 'Chuyển khoản' : managerPayMethod === 'vnpay' ? 'VNPay' : 'Tiền mặt'})`}
@@ -1554,6 +1608,15 @@ export default function ManagerBookings() {
                             </span>
                             <p className="font-medium text-slate-800">{b.userId?.name ?? '—'}</p>
                             {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
+                            {(() => {
+                              const hasNew = (b.children || []).some(isNewBooking);
+                              if (!hasNew) return null;
+                              return (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                                </span>
+                              );
+                            })()}
                           </div>
                           <p className="text-[11px] text-slate-400 pl-6">{b.userId?.phone ?? ''}</p>
                         </td>
@@ -1589,11 +1652,6 @@ export default function ManagerBookings() {
                             <div className="flex items-center gap-2 mb-0.5">
                               <p className="font-medium text-slate-800">{child.userId?.name ?? '—'}</p>
                               {child.userId?.tier && <TierBadge tier={child.userId.tier} />}
-                              {isNewBooking(child) && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
-                                </span>
-                              )}
                             </div>
                             <p className="text-[11px] text-slate-400">{child.userId?.phone ?? ''}</p>
                           </td>
