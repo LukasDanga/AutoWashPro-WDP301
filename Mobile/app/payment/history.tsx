@@ -100,7 +100,7 @@ export default function PaymentHistoryScreen() {
     return (
       <Card
         style={styles.paymentCard}
-        onPress={() => router.push(`/payment/${item._id}` as any)}
+        onPress={() => router.push({ pathname: '/payment/detail', params: { id: item._id } })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.methodContainer}>

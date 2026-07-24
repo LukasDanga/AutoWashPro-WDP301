@@ -12,7 +12,7 @@ import {
   Text,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { voucherApi } from '../../src/api';
 import { 
@@ -34,10 +34,11 @@ type TabType = 'available' | 'my';
 
 export default function VouchersIndexScreen() {
   const router = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { isAuthenticated } = useAuth();
   const colors = useColors();
 
-  const [activeTab, setActiveTab] = useState<TabType>('available');
+  const [activeTab, setActiveTab] = useState<TabType>((tab as TabType) || 'available');
   const [availableVouchers, setAvailableVouchers] = useState<any[]>([]);
   const [myVouchers, setMyVouchers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
