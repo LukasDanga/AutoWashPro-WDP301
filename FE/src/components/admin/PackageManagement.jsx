@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
@@ -336,6 +336,98 @@ function ConfirmDelete({ pkg, onConfirm, onCancel, deleting }) {
   );
 }
 
+function parseBlockedMessage(msg = '') {
+  const match = msg.match(/^(.*?)\((.*?)\)\.(.*)$/s);
+  if (match) {
+    const header = match[1].trim();
+    const itemsRaw = match[2].trim().split(/,\s*/);
+    const footer = match[3].trim();
+
+    const items = itemsRaw.map((item) => {
+      let icon = '📌';
+      if (item.includes('lịch đặt')) icon = '📅';
+      else if (item.includes('gói lượt')) icon = '🎫';
+      else if (item.includes('voucher') || item.includes('mã ưu đãi')) icon = '🏷️';
+      else if (item.includes('khách hàng đặt') || item.includes('sử dụng')) icon = '👥';
+
+      return { icon, text: item };
+    });
+
+    return { header, items, footer };
+  }
+  return { header: msg, items: [], footer: '' };
+}
+
+function BlockDeleteModal({ title, message, onClose, onDeactivate, deactivating }) {
+  const { header, items, footer } = useMemo(() => parseBlockedMessage(message), [message]);
+
+  return (
+    <Modal title={title || "Không thể xóa"} onClose={onClose}>
+      <div className="space-y-4 py-1">
+        {/* Header Warning Banner */}
+        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200/70">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 mt-0.5 font-bold shadow-xs">
+            <Warning size={20} weight="fill" />
+          </div>
+          <div className="space-y-1 min-w-0 flex-1">
+            <h4 className="text-sm font-bold text-amber-900">Bảo vệ liên kết dữ liệu hệ thống</h4>
+            <p className="text-xs text-amber-800 leading-relaxed font-medium">{header}</p>
+          </div>
+        </div>
+
+        {/* Structured Grid Items */}
+        {items.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+              Các dữ liệu đang liên kết hoạt động:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {items.map((it, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 shadow-2xs hover:bg-amber-50 transition-colors"
+                >
+                  <span className="text-base shrink-0">{it.icon}</span>
+                  <span className="text-xs font-semibold text-slate-800 leading-tight">{it.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer recommendation note */}
+        {footer && (
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+            <span className="text-amber-500 shrink-0 mt-0.5">💡</span>
+            <p className="leading-relaxed">{footer}</p>
+          </div>
+        )}
+
+        {/* Modal Buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Đóng
+          </button>
+          {onDeactivate && (
+            <button
+              type="button"
+              onClick={onDeactivate}
+              disabled={deactivating}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors shadow-xs"
+            >
+              {deactivating ? 'Đang xử lý…' : 'Chuyển sang "Ngừng hoạt động"'}
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 const VEHICLE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van' };
 
 export default function PackageManagement() {
@@ -406,6 +498,8 @@ export default function PackageManagement() {
     } finally { setSaving(false); }
   };
 
+  const [blockedMsg, setBlockedMsg] = useState('');
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -415,7 +509,27 @@ export default function PackageManagement() {
       setModal(null);
       notify('Đã xóa gói dịch vụ.');
     } catch (err) {
-      notify(err.message || 'Xóa thất bại', 'error');
+      setBlockedMsg(err.message || 'Không thể xóa gói dịch vụ');
+      setModal('blocked');
+    } finally { setDeleting(false); }
+  };
+
+  const handleDeactivatePackage = async () => {
+    if (!selected) return;
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/packages/${selected._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...selected, status: 'inactive' }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const payload = await res.json();
+      const updated = payload?.data ?? payload;
+      setPackages((p) => p.map((b) => (b._id === updated._id ? updated : b)));
+      setModal(null);
+      notify(`Đã chuyển gói "${selected.name}" sang "Ngừng hoạt động".`);
+    } catch (err) {
+      notify(err.message || 'Cập nhật thất bại', 'error');
     } finally { setDeleting(false); }
   };
 
@@ -570,6 +684,15 @@ export default function PackageManagement() {
       )}
       {modal === 'delete' && selected && (
         <ConfirmDelete pkg={selected} onConfirm={handleDelete} onCancel={() => setModal(null)} deleting={deleting} />
+      )}
+      {modal === 'blocked' && selected && (
+        <BlockDeleteModal
+          title="Không thể xóa gói dịch vụ"
+          message={blockedMsg}
+          onClose={() => setModal(null)}
+          onDeactivate={handleDeactivatePackage}
+          deactivating={deleting}
+        />
       )}
     </div>
   );
