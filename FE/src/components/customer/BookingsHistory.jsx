@@ -723,7 +723,18 @@ export default function BookingsHistory({ apiBase, token }) {
                   borderBottom: '1px solid #f1f5f9',
                 }}>
                   <span style={{ fontSize: 13, color: '#64748b' }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+                  <div style={{ textAlign: 'right', maxWidth: '60%' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{value}</span>
+                    {label === '📦 Dịch vụ' && detailBooking.selectedSubServices && detailBooking.selectedSubServices.length > 0 && (
+                      <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+                        {detailBooking.selectedSubServices.map((sub, idx) => (
+                          <span key={idx} style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12 }}>
+                            + {sub.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
 
@@ -1059,9 +1070,18 @@ export default function BookingsHistory({ apiBase, token }) {
               background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
             }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Đặt lại lịch</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: '#e2e8f0', marginTop: 4, fontWeight: 600 }}>
                 {rebookTarget?.packageName || rebookTarget?.packageId?.name || ''}
               </div>
+              {rebookTarget?.selectedSubServices && rebookTarget.selectedSubServices.length > 0 && (
+                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {rebookTarget.selectedSubServices.map((sub, idx) => (
+                    <span key={idx} style={{ padding: '2px 8px', borderRadius: 12, background: 'rgba(255,255,255,0.1)', color: '#cbd5e1', fontSize: 11, border: '1px solid rgba(255,255,255,0.2)' }}>
+                      + {sub.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ padding: '20px 24px' }}>
               <div style={{ marginBottom: 16 }}>
