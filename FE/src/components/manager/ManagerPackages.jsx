@@ -195,13 +195,42 @@ export default function ManagerPackages({ user }) {
     } catch { /* silent */ }
   }
 
+  const [blockedMsg, setBlockedMsg] = useState('');
+  const [blockedPkg, setBlockedPkg] = useState(null);
+
   async function handleDelete(id) {
+    const pkgTarget = packages.find((p) => (p._id || p.id) === id);
     try {
-      await api(`/packages/${id}`, { method: 'DELETE' });
+      const res = await api(`/packages/${id}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBlockedMsg(payload.message || payload.error || 'Không thể xóa gói dịch vụ');
+        setBlockedPkg(pkgTarget || null);
+        setDeleteId(null);
+        return;
+      }
       setDeleteId(null);
       showToast('Xóa gói dịch vụ thành công!');
       loadPackages(branchId, search, page);
-    } catch { /* silent */ }
+    } catch (err) {
+      setBlockedMsg(err.message || 'Không thể xóa gói dịch vụ');
+      setBlockedPkg(pkgTarget || null);
+      setDeleteId(null);
+    }
+  }
+
+  async function handleDeactivateBlockedPkg() {
+    if (!blockedPkg) return;
+    const targetId = blockedPkg._id || blockedPkg.id;
+    try {
+      await api(`/packages/${targetId}`, { method: 'PUT', body: JSON.stringify({ status: 'inactive' }) });
+      showToast(`Đã chuyển gói "${blockedPkg.name}" sang "Tạm dừng"!`);
+      setBlockedMsg('');
+      setBlockedPkg(null);
+      loadPackages(branchId, search, page);
+    } catch (err) {
+      showToast(err.message || 'Cập nhật thất bại', 'error');
+    }
   }
 
   function toggleVehicleType(vt) {
@@ -542,6 +571,83 @@ export default function ManagerPackages({ user }) {
           </div>
         </div>
       )}
+      {/* Blocked Delete Modal */}
+      {blockedMsg && (() => {
+        const match = blockedMsg.match(/^(.*?)\((.*?)\)\.(.*)$/s);
+        const header = match ? match[1].trim() : blockedMsg;
+        const itemsRaw = match ? match[2].trim().split(/,\s*/) : [];
+        const footer = match ? match[3].trim() : '';
+
+        const items = itemsRaw.map((item) => {
+          let icon = '📌';
+          if (item.includes('lịch đặt')) icon = '📅';
+          else if (item.includes('gói lượt')) icon = '🎫';
+          else if (item.includes('voucher') || item.includes('mã ưu đãi')) icon = '🏷️';
+          else if (item.includes('khách hàng đặt') || item.includes('sử dụng')) icon = '👥';
+          return { icon, text: item };
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200/70">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 mt-0.5 font-bold shadow-xs">
+                  ⚠️
+                </div>
+                <div className="space-y-1 min-w-0 flex-1">
+                  <h4 className="text-sm font-bold text-amber-900">Bảo vệ liên kết dữ liệu hệ thống</h4>
+                  <p className="text-xs text-amber-800 leading-relaxed font-medium">{header}</p>
+                </div>
+              </div>
+
+              {items.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+                    Dữ liệu đang liên kết hoạt động:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {items.map((it, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 shadow-2xs hover:bg-amber-50 transition-colors"
+                      >
+                        <span className="text-base shrink-0">{it.icon}</span>
+                        <span className="text-xs font-semibold text-slate-800 leading-tight">{it.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {footer && (
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+                  <span className="text-amber-500 shrink-0 mt-0.5">💡</span>
+                  <p className="leading-relaxed">{footer}</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setBlockedMsg(''); setBlockedPkg(null); }}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Đóng
+                </button>
+                {blockedPkg && (
+                  <button
+                    type="button"
+                    onClick={handleDeactivateBlockedPkg}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors shadow-xs"
+                  >
+                    Chuyển sang "Tạm dừng"
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

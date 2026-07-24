@@ -150,6 +150,18 @@ exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
       throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
+
+  // Ràng buộc: Kiểm tra xem voucher đã được khách hàng đổi/sử dụng chưa
+  const usedCount = await VoucherUsage.countDocuments({ voucherId: id });
+  if (usedCount > 0) {
+    const err = new Error(
+      `Không thể xóa mã ưu đãi "${voucher.code}" vì đã có ${usedCount} lượt khách hàng đổi/sử dụng. Bạn vui lòng chuyển trạng thái voucher sang "Ngừng hoạt động" để ngưng tiếp nhận đặt mới mà vẫn bảo toàn dữ liệu.`
+    );
+    err.statusCode = 400;
+    err.code = 'VOUCHER_IN_USE';
+    throw err;
+  }
+
   await Voucher.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
   sseService.broadcastToAll('vouchers_updated', { action: 'delete' });
   return voucher;
