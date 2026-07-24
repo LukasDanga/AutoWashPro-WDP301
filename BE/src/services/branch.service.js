@@ -8,7 +8,7 @@ exports.createBranch = async (data) => {
   }
   const branch = new Branch(data);
   await branch.save();
-  return branch;
+  return Branch.findById(branch._id).populate('managerId', 'name email phone status');
 };
 
 exports.getAllBranches = async (filters = {}, user) => {
@@ -27,13 +27,13 @@ exports.getAllBranches = async (filters = {}, user) => {
     query.managerId = user.id;
   }
 
-  return Branch.find(query).sort({ createdAt: -1 });
+  return Branch.find(query).populate('managerId', 'name email phone status').sort({ createdAt: -1 });
 };
 
 exports.getBranchById = async (id, userRole, userId) => {
-  const branch = await Branch.findOne({ _id: id, isDeleted: { $ne: true } });
+  const branch = await Branch.findOne({ _id: id, isDeleted: { $ne: true } }).populate('managerId', 'name email phone status');
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-  if (userRole === 'manager' && String(branch.managerId) !== String(userId)) {
+  if (userRole === 'manager' && String(branch.managerId?._id || branch.managerId) !== String(userId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   return branch;
@@ -59,7 +59,7 @@ exports.updateBranch = async (id, updates, userRole, userId) => {
     if (!manager) throw Object.assign(new Error('Manager not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
     if (manager.role !== 'manager') throw Object.assign(new Error('Selected manager must have manager role'), { statusCode: 400, code: 'INVALID_MANAGER_ROLE' });
   }
-  const updated = await Branch.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  const updated = await Branch.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).populate('managerId', 'name email phone status');
   return updated;
 };
 
