@@ -20,6 +20,8 @@ const branchSchema = new mongoose.Schema(
       svgCx: { type: Number },
       svgCy: { type: Number },
     },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );

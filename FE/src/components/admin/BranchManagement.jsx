@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
@@ -8,6 +9,7 @@ import {
   Clock,
   Envelope,
   MagnifyingGlass,
+  MagnifyingGlassPlus,
   MapPin,
   PencilSimple,
   Phone,
@@ -182,9 +184,15 @@ const inp =
   'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
 
 function BranchForm({ initial, onSave, onCancel, saving }) {
+  const initialManagerId =
+    typeof initial?.managerId === 'object' && initial?.managerId !== null
+      ? initial.managerId._id || initial.managerId.id || ''
+      : initial?.managerId ?? '';
+
   const [form, setForm] = useState(() => ({
     ...EMPTY,
     ...initial,
+    managerId: initialManagerId,
     svgCx: initial?.mapCoordinates?.svgCx ?? '',
     svgCy: initial?.mapCoordinates?.svgCy ?? '',
   }));
@@ -195,11 +203,12 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
   useEffect(() => {
     async function fetchManagers() {
       try {
-        const res = await apiFetch('/auth/users?role=manager&status=active');
+        const res = await apiFetch('/auth/users?role=manager&all=true');
         if (!res.ok) return;
         const payload = await res.json();
-        const data = payload?.data ?? payload;
-        setManagers(Array.isArray(data) ? data : []);
+        const raw = payload?.data ?? payload;
+        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.users) ? raw.users : [];
+        setManagers(list);
       } catch (e) {
         console.error('Failed to load managers', e);
       } finally {
@@ -318,18 +327,112 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
   );
 }
 
+function parseBlockedMessage(msg = '') {
+  const match = msg.match(/^(.*?)\((.*?)\)\.(.*)$/s);
+  if (match) {
+    const header = match[1].trim();
+    const itemsRaw = match[2].trim().split(/,\s*/);
+    const footer = match[3].trim();
+
+    const items = itemsRaw.map((item) => {
+      let icon = '📌';
+      if (item.includes('lịch đặt chưa hoàn thành')) icon = '📅';
+      else if (item.includes('gói lượt')) icon = '🎫';
+      else if (item.includes('đơn đặt lịch') || item.includes('gói của chi nhánh')) icon = '🚗';
+      else if (item.includes('voucher') || item.includes('mã ưu đãi')) icon = '🏷️';
+      else if (item.includes('khách hàng đặt') || item.includes('sử dụng')) icon = '👥';
+
+      return { icon, text: item };
+    });
+
+    return { header, items, footer };
+  }
+  return { header: msg, items: [], footer: '' };
+}
+
+function BlockDeleteModal({ title, message, onClose, onDeactivate, deactivating }) {
+  const { header, items, footer } = useMemo(() => parseBlockedMessage(message), [message]);
+
+  return (
+    <Modal title={title || "Không thể xóa"} onClose={onClose}>
+      <div className="space-y-4 py-1">
+        {/* Header Warning Banner */}
+        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200/70">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 mt-0.5 font-bold shadow-xs">
+            <Warning size={20} weight="fill" />
+          </div>
+          <div className="space-y-1 min-w-0 flex-1">
+            <h4 className="text-sm font-bold text-amber-900">Bảo vệ liên kết dữ liệu hệ thống</h4>
+            <p className="text-xs text-amber-800 leading-relaxed font-medium">{header}</p>
+          </div>
+        </div>
+
+        {/* Structured Grid Items */}
+        {items.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+              Các dữ liệu đang liên kết hoạt động:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {items.map((it, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 shadow-2xs hover:bg-amber-50 transition-colors"
+                >
+                  <span className="text-base shrink-0">{it.icon}</span>
+                  <span className="text-xs font-semibold text-slate-800 leading-tight">{it.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer recommendation note */}
+        {footer && (
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+            <span className="text-amber-500 shrink-0 mt-0.5">💡</span>
+            <p className="leading-relaxed">{footer}</p>
+          </div>
+        )}
+
+        {/* Modal Buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Đóng
+          </button>
+          {onDeactivate && (
+            <button
+              type="button"
+              onClick={onDeactivate}
+              disabled={deactivating}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors shadow-xs"
+            >
+              {deactivating ? 'Đang xử lý…' : 'Chuyển sang "Ngừng hoạt động"'}
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─────────────────────────── Confirm delete ─────────────────────── */
 function ConfirmDelete({ branch, onConfirm, onCancel, deleting }) {
   return (
-    <Modal title="Xác nhận xóa" onClose={onCancel}>
+    <Modal title="Xác nhận xóa chi nhánh" onClose={onCancel}>
       <div className="space-y-4">
         <div className="flex gap-3 rounded-xl bg-red-50 p-4 ring-1 ring-red-100">
           <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">
-            Bạn chắc chắn muốn xóa chi nhánh{' '}
-            <strong>"{branch.name}"</strong>?{' '}
-            Hành động này không thể hoàn tác.
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-red-700">Bạn chắc chắn muốn xóa chi nhánh "{branch.name}"?</p>
+            <p className="text-xs text-red-600 leading-relaxed">
+              Lưu ý: Nếu chi nhánh đang có lịch đặt chưa hoàn thành hoặc gói lượt còn hiệu lực của khách hàng, hệ thống sẽ bảo vệ dữ liệu và không cho phép xóa. Tất cả các gói dịch vụ và voucher riêng của chi nhánh này cũng sẽ tự động được dọn dẹp khi xóa.
+            </p>
+          </div>
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} disabled={deleting}
@@ -347,8 +450,273 @@ function ConfirmDelete({ branch, onConfirm, onCancel, deleting }) {
   );
 }
 
+/* ─────────────────────────── Assign Manager Modal ─────────────────────────── */
+function AssignManagerModal({ branch, allBranches = [], onClose, onSave, saving }) {
+  const [managers, setManagers] = useState([]);
+  const [branchesList, setBranchesList] = useState(allBranches);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [formError, setFormError] = useState('');
+  const [selectedMgrId, setSelectedMgrId] = useState(() => {
+    if (!branch?.managerId) return '';
+    return typeof branch.managerId === 'object' ? branch.managerId._id : String(branch.managerId);
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    async function initData() {
+      setLoading(true);
+      try {
+        const [userRes, branchRes] = await Promise.all([
+          apiFetch('/auth/users?role=manager&all=true'),
+          branchesList.length > 0 ? Promise.resolve(null) : apiFetch('/branches'),
+        ]);
+
+        let mgrList = [];
+        if (userRes && userRes.ok) {
+          const payload = await userRes.json();
+          const raw = payload?.data ?? payload;
+          mgrList = Array.isArray(raw) ? raw : Array.isArray(raw?.users) ? raw.users : [];
+        }
+
+        if (branchRes && branchRes.ok) {
+          const payload = await branchRes.json();
+          const raw = payload?.data ?? payload;
+          if (mounted) setBranchesList(Array.isArray(raw) ? raw : []);
+        }
+
+        if (mounted) setManagers(mgrList);
+      } catch (err) {
+        console.error('Failed to load modal data', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    initData();
+    return () => { mounted = false; };
+  }, []); // eslint-disable-line
+
+  // Map managerId -> assigned branch
+  const managerAssignmentMap = useMemo(() => {
+    const map = {};
+    branchesList.forEach((b) => {
+      if (!b.managerId) return;
+      const mId = typeof b.managerId === 'object' ? b.managerId._id : String(b.managerId);
+      if (mId) {
+        map[mId] = b;
+      }
+    });
+    return map;
+  }, [branchesList]);
+
+  const filteredManagers = useMemo(() => {
+    if (!search.trim()) return managers;
+    const s = search.trim().toLowerCase();
+    return managers.filter(
+      (m) =>
+        (m.name && m.name.toLowerCase().includes(s)) ||
+        (m.email && m.email.toLowerCase().includes(s)) ||
+        (m.phone && m.phone.includes(s))
+    );
+  }, [managers, search]);
+
+  const handleSelect = (mId, isDisabled) => {
+    setFormError('');
+    if (isDisabled) return;
+    setSelectedMgrId(mId);
+  };
+
+  const isSearchEmptyResult = search.trim() !== '' && filteredManagers.length === 0;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setFormError('');
+
+    // Strict validation 1: Search typed but no results matched
+    if (isSearchEmptyResult) {
+      setFormError(`Không tìm thấy quản lý nào khớp với từ khóa "${search}". Vui lòng xóa từ khóa tìm kiếm hoặc chọn quản lý khả dụng.`);
+      return;
+    }
+
+    // Strict validation 2: If a manager ID is selected, check if it's currently visible in search or valid
+    if (selectedMgrId !== '') {
+      const isVisible = filteredManagers.some((m) => String(m._id) === String(selectedMgrId));
+      if (search.trim() !== '' && !isVisible) {
+        setFormError(`Quản lý đã chọn trước đó không khớp với từ khóa tìm kiếm "${search}". Vui lòng chọn một quản lý từ kết quả hiển thị bên dưới.`);
+        return;
+      }
+
+      const targetMgr = managers.find((m) => String(m._id) === String(selectedMgrId));
+      if (!targetMgr) {
+        setFormError('Vui lòng chọn một quản lý hợp lệ từ danh sách hiển thị bên dưới.');
+        return;
+      }
+      const assignedBranch = managerAssignmentMap[selectedMgrId];
+      if (assignedBranch && String(assignedBranch._id) !== String(branch._id)) {
+        setFormError(`Quản lý "${targetMgr.name}" đã được phân công cho chi nhánh "${assignedBranch.name}". Vui lòng chọn quản lý chưa có chi nhánh.`);
+        return;
+      }
+    }
+
+    onSave(selectedMgrId || null);
+  };
+
+  return (
+    <Modal title={`Phân công quản lý: ${branch.name}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Error notification */}
+        {formError && (
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600 border border-red-200">
+            <Warning size={16} weight="fill" className="shrink-0" />
+            <span>{formError}</span>
+          </div>
+        )}
+
+        {/* Search Input */}
+        <div className="relative">
+          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+            placeholder="Tìm theo tên hoặc email quản lý..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setFormError('');
+            }}
+          />
+        </div>
+
+        {/* Manager Options List */}
+        <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
+          {/* Option: Unassign / Bỏ phân công */}
+          <div
+            onClick={() => handleSelect('', false)}
+            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+              selectedMgrId === ''
+                ? 'border-blue-500 bg-blue-50/80 ring-2 ring-blue-100'
+                : 'border-slate-200 bg-white hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400 font-bold text-sm">
+                🚫
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-700">Chưa phân công quản lý</p>
+                <p className="text-[11px] text-slate-400">Để trống người quản lý chi nhánh này</p>
+              </div>
+            </div>
+            <input
+              type="radio"
+              name="manager-select"
+              checked={selectedMgrId === ''}
+              onChange={() => handleSelect('', false)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+              <Spinner size={18} />
+              <span className="text-xs">Đang tải danh sách quản lý...</span>
+            </div>
+          ) : filteredManagers.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400">
+              Không tìm thấy quản lý nào khớp với "{search}"
+            </div>
+          ) : (
+            filteredManagers.map((m) => {
+              const isSelected = String(selectedMgrId) === String(m._id);
+              const assignedBranch = managerAssignmentMap[m._id];
+              const isOtherBranch = assignedBranch && String(assignedBranch._id) !== String(branch._id);
+              const isCurrentBranch = assignedBranch && String(assignedBranch._id) === String(branch._id);
+
+              return (
+                <div
+                  key={m._id}
+                  onClick={() => handleSelect(m._id, isOtherBranch)}
+                  className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                    isOtherBranch
+                      ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                      : isSelected
+                      ? 'border-blue-500 bg-blue-50/90 ring-2 ring-blue-100 cursor-pointer'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-sm shadow-2xs ${
+                        isOtherBranch
+                          ? 'bg-slate-200 text-slate-500'
+                          : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white'
+                      }`}
+                    >
+                      {m.name ? m.name.charAt(0).toUpperCase() : '👤'}
+                    </div>
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-bold text-slate-800 truncate">{m.name}</p>
+                        {isOtherBranch ? (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            📍 Đã quản lý: {assignedBranch.name}
+                          </span>
+                        ) : isCurrentBranch ? (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            ✓ Đang quản lý chi nhánh này
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            ✨ Khả dụng (Chưa có chi nhánh)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 truncate flex items-center gap-1.5">
+                        <span>✉️ {m.email}</span>
+                        {m.phone && <span>• 📞 {m.phone}</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <input
+                    type="radio"
+                    name="manager-select"
+                    disabled={isOtherBranch}
+                    checked={isSelected}
+                    onChange={() => handleSelect(m._id, isOtherBranch)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 shrink-0 ml-2 disabled:opacity-40"
+                  />
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            type="submit"
+            disabled={saving || isSearchEmptyResult}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-xs"
+          >
+            {saving && <Spinner size={14} className="text-white" />}
+            {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 /* ─────────────────────────── Detail View ─────────────────────────── */
-function BranchDetailFull({ branch, onBack, onEdit }) {
+function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
   const [packages, setPackages] = useState([]);
   const [pkgLoading, setPkgLoading] = useState(true);
   const [pkgSearch, setPkgSearch] = useState('');
@@ -357,6 +725,9 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
   const [pkgSelected, setPkgSelected] = useState(null);
   const [pkgDeleting, setPkgDeleting] = useState(false);
   const [toast, setToast] = useState(null);
+  const [zoomImage, setZoomImage] = useState(null);
+
+  const mgr = typeof branch.managerId === 'object' && branch.managerId !== null ? branch.managerId : null;
 
   const notify = (msg, type = 'success') => showToast(msg, type);
 
@@ -455,11 +826,22 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
       <div className="flex flex-col gap-6">
         {/* ── Top: Title & Status ── */}
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 overflow-hidden shadow-sm shrink-0">
+          <div
+            onClick={() => branch.image && setZoomImage(branch.image)}
+            className={`relative flex h-20 w-20 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 overflow-hidden shadow-xs shrink-0 transition-all ${
+              branch.image ? 'cursor-pointer group ring-2 ring-blue-100 hover:ring-blue-500 hover:shadow-md' : ''
+            }`}
+            title={branch.image ? 'Click để xem ảnh lớn' : undefined}
+          >
             {branch.image ? (
-              <img src={branch.image} alt={branch.name} className="h-full w-full object-cover" />
+              <>
+                <img src={branch.image} alt={branch.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                  <MagnifyingGlassPlus size={24} weight="bold" />
+                </div>
+              </>
             ) : (
-              <Buildings size={32} weight="duotone" />
+              <Buildings size={36} weight="duotone" />
             )}
           </div>
           <div>
@@ -467,6 +849,64 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
               {branch.name}
               <StatusBadge status={branch.status} />
             </h2>
+            {branch.image && (
+              <button
+                onClick={() => setZoomImage(branch.image)}
+                className="mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              >
+                <MagnifyingGlassPlus size={13} weight="bold" /> Xem ảnh phóng to
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Manager Card Banner ── */}
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 p-5 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-xl shadow-xs shrink-0">
+                {mgr?.name ? mgr.name.charAt(0).toUpperCase() : '👤'}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/90 px-2.5 py-0.5 rounded-md">
+                    Quản lý chi nhánh
+                  </span>
+                  {mgr && (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md">
+                      ✓ Hoạt động
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-lg font-bold text-slate-800">
+                  {mgr ? mgr.name : <span className="text-slate-400 italic">Chưa phân công quản lý</span>}
+                </h4>
+                {mgr && (
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-medium pt-0.5">
+                    {mgr.email && (
+                      <span className="flex items-center gap-1.5">
+                        <Envelope size={14} className="text-blue-500" />
+                        {mgr.email}
+                      </span>
+                    )}
+                    {mgr.phone && (
+                      <span className="flex items-center gap-1.5 font-mono">
+                        <Phone size={14} className="text-emerald-500" />
+                        {mgr.phone}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={() => onChangeManager ? onChangeManager() : onEdit(branch)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-blue-200 px-3.5 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors shadow-2xs"
+            >
+              <PencilSimple size={14} />
+              {mgr ? 'Thay đổi Quản Lý' : 'Phân Công Quản Lý'}
+            </button>
           </div>
         </div>
 
@@ -516,7 +956,7 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
         </div>
 
         {/* ── Packages Section ── */}
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -544,80 +984,130 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
               <p className="text-sm">Không có gói dịch vụ nào</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-slate-50/60">
               {packages.map((pkg) => (
-                <div key={pkg._id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-sm font-bold text-slate-800">{pkg.name}</h4>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${pkg.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {pkg.status === 'active' ? 'Hoạt động' : 'Ngừng'}
+                <div
+                  key={pkg._id}
+                  className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-md hover:border-blue-300 transition-all duration-200 group"
+                >
+                  <div>
+                    {/* Card Header: Category & Actions */}
+                    <div className="flex items-start justify-between gap-3 mb-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 uppercase tracking-wide border border-blue-100">
+                          {pkg.category === 'external' ? '🚗 Ngoại thất' : pkg.category === 'internal' ? '🪑 Nội thất' : '✨ Tổng thể'}
                         </span>
-                        {pkg.category && (
-                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 capitalize">
-                            {pkg.category === 'external' ? 'Ngoại thất' : pkg.category === 'internal' ? 'Nội thất' : 'Tổng thể'}
-                          </span>
-                        )}
+                        <span className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold border ${
+                          pkg.status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {pkg.status === 'active' ? '● Hoạt động' : '○ Ngừng'}
+                        </span>
                       </div>
-                      {pkg.description && (
-                        <p className="text-[12px] text-slate-500 line-clamp-2 mb-2">{pkg.description}</p>
-                      )}
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                        <span className="inline-flex items-center gap-1">
-                          <Money size={12} weight="bold" className="text-emerald-500" />
-                          <strong className="text-slate-700">{Number(pkg.price).toLocaleString('vi-VN')}₫</strong>
+
+                      <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => { setPkgSelected(pkg); setPkgModal('edit'); }}
+                          title="Chỉnh sửa"
+                          className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        >
+                          <PencilSimple size={15} />
+                        </button>
+                        <button
+                          onClick={() => { setPkgSelected(pkg); setPkgModal('delete'); }}
+                          title="Xóa gói"
+                          className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        >
+                          <Trash size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Title & Price Header */}
+                    <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                      <h4 className="text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                        {pkg.name}
+                      </h4>
+                      <div className="text-right shrink-0">
+                        <span className="text-lg font-extrabold text-emerald-600">
+                          {Number(pkg.price).toLocaleString('vi-VN')}₫
                         </span>
-                        <span className="inline-flex items-center gap-1">
-                          <ClockCountdown size={12} weight="bold" className="text-amber-500" />
-                          {pkg.duration} phút
-                        </span>
-                        {pkg.vehicleTypes?.length > 0 && (
-                          <span className="inline-flex items-center gap-1">
-                            <Car size={12} weight="bold" className="text-blue-500" />
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {pkg.description && (
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-3">
+                        {pkg.description}
+                      </p>
+                    )}
+
+                    {/* Duration & Vehicle Types */}
+                    <div className="flex flex-wrap items-center gap-2 py-1.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600 mb-3">
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                        <ClockCountdown size={14} className="text-amber-500" />
+                        {pkg.duration} phút
+                      </span>
+                      {pkg.vehicleTypes?.length > 0 && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <span className="inline-flex items-center gap-1.5 font-medium text-slate-600">
+                            <Car size={14} className="text-blue-500" />
                             {pkg.vehicleTypes.map((vt) => VEHICLE_LABELS[vt] || vt).join(', ')}
                           </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Sub-services Checklist */}
+                    {pkg.subServices && pkg.subServices.length > 0 && (
+                      <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                        {/* Included subservices */}
+                        {pkg.subServices.filter((s) => !s.isOptional).length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                              <span className="text-emerald-500 font-bold">✓</span> Quy trình ({pkg.subServices.filter((s) => !s.isOptional).length} công đoạn)
+                            </p>
+                            <div className="grid grid-cols-1 gap-1">
+                              {pkg.subServices.filter((s) => !s.isOptional).map((sub, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs text-slate-700 bg-emerald-50/50 px-2.5 py-1 rounded-lg border border-emerald-100/60">
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <span className="text-emerald-600 font-bold text-xs">✓</span> {sub.name}
+                                  </span>
+                                  {sub.duration > 0 && (
+                                    <span className="text-[10px] text-slate-400 font-mono">({sub.duration}p)</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Optional add-ons */}
+                        {pkg.subServices.filter((s) => s.isOptional).length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                              <span className="text-indigo-500 font-bold">✨</span> Nâng cấp tùy chọn ({pkg.subServices.filter((s) => s.isOptional).length})
+                            </p>
+                            <div className="grid grid-cols-1 gap-1">
+                              {pkg.subServices.filter((s) => s.isOptional).map((sub, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs text-slate-700 bg-indigo-50/40 px-2.5 py-1 rounded-lg border border-indigo-100/60">
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <span className="text-indigo-500 font-bold text-xs">+</span> {sub.name}
+                                  </span>
+                                  {sub.price > 0 && (
+                                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100/70 px-1.5 py-0.2 rounded">
+                                      +{Number(sub.price).toLocaleString('vi-VN')}₫
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
-                      {pkg.subServices && pkg.subServices.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-                          {pkg.subServices.filter(s => !s.isOptional).length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
-                                ✓ Đã bao gồm ({pkg.subServices.filter(s => !s.isOptional).length}):
-                              </span>
-                              {pkg.subServices.filter(s => !s.isOptional).map((s, idx) => (
-                                <span key={idx} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[11px] font-medium">
-                                  {s.name} {s.duration > 0 ? `(${s.duration}p)` : ''}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {pkg.subServices.filter(s => s.isOptional).length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                              <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 shrink-0">
-                                ✨ Tùy chọn thêm ({pkg.subServices.filter(s => s.isOptional).length}):
-                              </span>
-                              {pkg.subServices.filter(s => s.isOptional).map((s, idx) => (
-                                <span key={idx} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[11px] font-medium">
-                                  {s.name} {s.price > 0 ? `(+${Number(s.price).toLocaleString('vi-VN')}đ)` : ''}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => { setPkgSelected(pkg); setPkgModal('edit'); }}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                      <PencilSimple size={15} />
-                    </button>
-                    <button onClick={() => { setPkgSelected(pkg); setPkgModal('delete'); }}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                      <Trash size={15} />
-                    </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -677,6 +1167,42 @@ function BranchDetailFull({ branch, onBack, onEdit }) {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── Zoom Image Lightbox Modal ── */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fadeIn"
+          onClick={() => setZoomImage(null)}
+        >
+          <div
+            className="relative flex flex-col max-w-4xl max-h-[90vh] w-full overflow-hidden rounded-2xl bg-slate-900 shadow-2xl border border-slate-700/80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setZoomImage(null)}
+              className="absolute top-4 right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black/90 hover:scale-110 transition-all border border-white/20 shadow-lg"
+              title="Đóng"
+            >
+              <X size={20} weight="bold" />
+            </button>
+
+            <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden p-3 bg-black/40">
+              <img
+                src={zoomImage}
+                alt={branch.name}
+                className="max-h-[68vh] w-auto max-w-full rounded-xl object-contain shadow-2xl"
+              />
+            </div>
+
+            <div className="shrink-0 py-4 px-6 text-center bg-slate-900 border-t border-slate-800">
+              <p className="text-base font-bold text-white leading-snug">{branch.name}</p>
+              {branch.address && (
+                <p className="text-xs text-slate-300 mt-1 leading-snug">{branch.address}</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -859,6 +1385,9 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
    Main page
 ═══════════════════════════════════════════════════════════════════ */
 export default function BranchManagement() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const detailIdFromUrl = searchParams.get('detail');
+
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -866,7 +1395,7 @@ export default function BranchManagement() {
   const [statusFilter, setStatusFilter] = useState('');
   const [modal, setModal] = useState(null);     // null | 'create' | 'edit' | 'delete'
   const [selected, setSelected] = useState(null);
-  const [currentView, setCurrentView] = useState('list'); // 'list' | 'detail'
+  const [currentView, setCurrentView] = useState(detailIdFromUrl ? 'detail' : 'list'); // 'list' | 'detail'
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
@@ -874,6 +1403,48 @@ export default function BranchManagement() {
   const debounce = useRef(null);
 
   const notify = (message, type = 'success') => showToast(message, type);
+
+  const openDetailView = useCallback((branchObj) => {
+    setSelected(branchObj);
+    setCurrentView('detail');
+    setSearchParams({ detail: branchObj._id });
+  }, [setSearchParams]);
+
+  const closeDetailView = useCallback(() => {
+    setSelected(null);
+    setCurrentView('list');
+    setSearchParams({});
+  }, [setSearchParams]);
+
+  // Restore detail view on initial load or F5 refresh if ?detail=<id> is in URL
+  useEffect(() => {
+    if (!detailIdFromUrl) {
+      return;
+    }
+
+    const found = branches.find((b) => String(b._id) === String(detailIdFromUrl));
+    if (found) {
+      setSelected(found);
+      setCurrentView('detail');
+    } else {
+      async function restoreBranch() {
+        try {
+          const res = await apiFetch(`/branches/${detailIdFromUrl}`);
+          if (res.ok) {
+            const payload = await res.json();
+            const b = payload?.data ?? payload;
+            if (b && b._id) {
+              setSelected(b);
+              setCurrentView('detail');
+            }
+          }
+        } catch (e) {
+          console.error('Failed to restore branch from URL', e);
+        }
+      }
+      restoreBranch();
+    }
+  }, [detailIdFromUrl, branches]);
 
   /* ── fetch ── */
   const fetchBranches = useCallback(async (q = search, st = statusFilter) => {
@@ -940,6 +1511,8 @@ export default function BranchManagement() {
     } finally { setSaving(false); }
   };
 
+  const [blockedMsg, setBlockedMsg] = useState('');
+
   /* ── delete ── */
   const handleDelete = async () => {
     setDeleting(true);
@@ -950,27 +1523,49 @@ export default function BranchManagement() {
       setModal(null);
       notify('Đã xóa chi nhánh.');
     } catch (err) {
-      notify(err.message || 'Xóa thất bại', 'error');
+      setBlockedMsg(err.message || 'Không thể xóa chi nhánh');
+      setModal('blocked');
     } finally { setDeleting(false); }
   };
 
-  /* ── toggle ── */
-  const handleToggle = async (branch) => {
-    const next = branch.status === 'active' ? 'inactive' : 'active';
-    setTogglingId(branch._id);
+  const handleDeactivateBranch = async () => {
+    if (!selected) return;
+    setDeleting(true);
     try {
-      const res = await apiFetch(`/branches/${branch._id}/status`, {
+      const res = await apiFetch(`/branches/${selected._id}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status: next }),
+        body: JSON.stringify({ status: 'inactive' }),
       });
       if (!res.ok) throw new Error(await readError(res));
       const payload = await res.json();
       const updated = payload?.data ?? payload;
       setBranches((p) => p.map((b) => (b._id === updated._id ? updated : b)));
-      notify(next === 'active' ? `Đã kích hoạt "${branch.name}"` : `Đã tắt "${branch.name}"`);
+      setModal(null);
+      notify(`Đã chuyển chi nhánh "${selected.name}" sang "Ngừng hoạt động".`);
     } catch (err) {
       notify(err.message || 'Thay đổi thất bại', 'error');
-    } finally { setTogglingId(null); }
+    } finally { setDeleting(false); }
+  };
+
+  /* ── assign manager ── */
+  const handleAssignManager = async (managerId) => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/branches/${selected._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ managerId: managerId || null }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const payload = await res.json();
+      const updated = payload?.data ?? payload;
+      setBranches((p) => p.map((b) => (b._id === updated._id ? updated : b)));
+      setSelected(updated);
+      setModal(null);
+      notify('Cập nhật quản lý chi nhánh thành công!');
+    } catch (err) {
+      notify(err.message || 'Cập nhật quản lý thất bại', 'error');
+    } finally { setSaving(false); }
   };
 
   const stats = {
@@ -985,8 +1580,9 @@ export default function BranchManagement() {
       <div className="space-y-6">
         <BranchDetailFull
           branch={selected}
-          onBack={() => setCurrentView('list')}
+          onBack={closeDetailView}
           onEdit={(br) => { setSelected(br); setModal('edit'); }}
+          onChangeManager={() => setModal('assignManager')}
         />
 
         {/* ── Modals for Detail View ── */}
@@ -994,6 +1590,15 @@ export default function BranchManagement() {
           <Modal title="Cập nhật thông tin chi nhánh" onClose={() => setModal(null)} wide>
             <BranchForm initial={selected} onSave={handleUpdate} onCancel={() => setModal(null)} saving={saving} />
           </Modal>
+        )}
+        {modal === 'assignManager' && selected && (
+          <AssignManagerModal
+            branch={selected}
+            allBranches={branches}
+            onClose={() => setModal(null)}
+            onSave={handleAssignManager}
+            saving={saving}
+          />
         )}
         {modal === 'delete' && (
           <ConfirmDelete branch={selected} onConfirm={handleDelete} onCancel={() => setModal(null)} deleting={deleting} />
@@ -1012,7 +1617,7 @@ export default function BranchManagement() {
           { label: 'Ngừng hoạt động',    value: stats.inactive, icon: <XCircle size={18} weight="duotone" className="text-slate-400" />,      bg: 'bg-slate-100' },
         ].map((s) => (
           <div key={s.label}
-            className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm"
+            className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xs"
           >
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${s.bg}`}>
               {s.icon}
@@ -1066,7 +1671,7 @@ export default function BranchManagement() {
         <button
           id="add-branch-btn"
           onClick={() => { setSelected(null); setModal('create'); }}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-xs"
         >
           <Plus size={15} weight="bold" />
           Thêm chi nhánh
@@ -1104,83 +1709,101 @@ export default function BranchManagement() {
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full border-collapse text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-xs">
+          <table className="w-full border-collapse text-left text-xs text-slate-600">
+            <thead className="bg-slate-50/90 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200 tracking-wider">
               <tr>
-                <th className="px-6 py-4">Tên chi nhánh</th>
-                <th className="px-6 py-4">Địa chỉ / Liên hệ</th>
-                <th className="px-6 py-4">Giờ hoạt động</th>
-                <th className="px-6 py-4">Trạng thái</th>
-                <th className="px-6 py-4 text-right">Thao tác</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Tên chi nhánh / Quản lý</th>
+                <th className="px-5 py-3.5">Địa chỉ & Liên hệ</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Giờ hoạt động</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Trạng thái</th>
+                <th className="px-5 py-3.5 whitespace-nowrap text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {branches.map((b) => (
-                <tr key={b._id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400 overflow-hidden">
-                        {b.image ? (
-                          <img src={b.image} alt={b.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <Buildings size={20} weight="thin" />
-                        )}
+              {branches.map((b) => {
+                const mgr = typeof b.managerId === 'object' && b.managerId !== null ? b.managerId : null;
+                return (
+                  <tr
+                    key={b._id}
+                    onClick={() => openDetailView(b)}
+                    className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
+                  >
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400 overflow-hidden shadow-2xs border border-slate-200/60 group-hover:border-blue-200 transition-colors">
+                          {b.image ? (
+                            <img src={b.image} alt={b.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <Buildings size={22} weight="duotone" className="text-blue-500" />
+                          )}
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-slate-800 text-sm whitespace-nowrap group-hover:text-blue-600 transition-colors">{b.name}</div>
+                          <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
+                            👤 Quản lý: {mgr ? mgr.name : <span className="text-slate-400 italic font-normal">Chưa phân công</span>}
+                          </div>
+                          {b.email && (
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                              ✉️ {b.email}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="font-semibold text-slate-800">{b.name}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3.5">
-                    <div className="text-slate-700 font-medium line-clamp-1">{b.address}</div>
-                    {(b.phone || b.email) && (
-                      <div className="text-xs text-slate-400 mt-1 flex gap-2">
-                        {b.phone && <span>{b.phone}</span>}
-                        {b.phone && b.email && <span>·</span>}
-                        {b.email && <span>{b.email}</span>}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="text-xs font-semibold text-slate-800 line-clamp-1 max-w-[280px]" title={b.address}>
+                        {b.address || '—'}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap text-slate-500">
-                    {b.openingTime || b.closingTime ? `${b.openingTime} - ${b.closingTime}` : '-'}
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap">
-                    <StatusBadge status={b.status} />
-                  </td>
-                  <td className="px-6 py-3.5 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => { setSelected(b); setCurrentView('detail'); }}
-                        title="Xem chi tiết"
-                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg !text-slate-400 hover:bg-slate-100 hover:!text-slate-700 transition-colors"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor">
-                          <path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.48c.35.79,8.82,19.58,27.65,38.41C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.35c18.83-18.83,27.3-37.62,27.65-38.41A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128a133.47,133.47,0,0,1-23.06,30.75C185.67,180.81,158.78,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => { setSelected(b); setModal('edit'); }}
-                        title="Chỉnh sửa"
-                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg !text-slate-400 hover:bg-blue-50 hover:!text-blue-600 transition-colors"
-                      >
-                        <PencilSimple size={15} />
-                      </button>
-                      <button
-                        onClick={() => { setSelected(b); setModal('delete'); }}
-                        title="Xóa"
-                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg !text-slate-400 hover:bg-red-50 hover:!text-red-500 transition-colors"
-                      >
-                        <Trash size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      {b.phone && (
+                        <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                          📞 {b.phone}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-xs font-medium text-slate-600">
+                      {b.openingTime || b.closingTime ? `${b.openingTime} – ${b.closingTime}` : '—'}
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <StatusBadge status={b.status} />
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openDetailView(b); }}
+                          title="Xem chi tiết"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor">
+                            <path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.48c.35.79,8.82,19.58,27.65,38.41C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.35c18.83-18.83,27.3-37.62,27.65-38.41A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128a133.47,133.47,0,0,1-23.06,30.75C185.67,180.81,158.78,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelected(b); setModal('edit'); }}
+                          title="Chỉnh sửa"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        >
+                          <PencilSimple size={15} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelected(b); setModal('delete'); }}
+                          title="Xóa"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        >
+                          <Trash size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* ── Modals ── */}      {modal === 'create' && (
+      {/* ── Modals ── */}
+      {modal === 'create' && (
         <Modal title="Thêm chi nhánh mới" onClose={() => setModal(null)} wide>
           <BranchForm initial={EMPTY} onSave={handleCreate} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
@@ -1192,12 +1815,63 @@ export default function BranchManagement() {
         </Modal>
       )}
 
+      {modal === 'assignManager' && selected && (
+        <AssignManagerModal
+          branch={selected}
+          allBranches={branches}
+          onClose={() => setModal(null)}
+          onSave={handleAssignManager}
+          saving={saving}
+        />
+      )}
+
       {modal === 'delete' && selected && (
         <ConfirmDelete
           branch={selected}
           onConfirm={handleDelete}
           onCancel={() => setModal(null)}
           deleting={deleting}
+        />
+      )}
+
+      {/* ── Modals ── */}
+      {modal === 'create' && (
+        <Modal title="Thêm chi nhánh mới" onClose={() => setModal(null)} wide>
+          <BranchForm initial={EMPTY} onSave={handleCreate} onCancel={() => setModal(null)} saving={saving} />
+        </Modal>
+      )}
+
+      {modal === 'edit' && selected && (
+        <Modal title={`Chỉnh sửa: ${selected.name}`} onClose={() => setModal(null)} wide>
+          <BranchForm initial={selected} onSave={handleUpdate} onCancel={() => setModal(null)} saving={saving} />
+        </Modal>
+      )}
+
+      {modal === 'assignManager' && selected && (
+        <AssignManagerModal
+          branch={selected}
+          onClose={() => setModal(null)}
+          onSave={handleAssignManager}
+          saving={saving}
+        />
+      )}
+
+      {modal === 'delete' && selected && (
+        <ConfirmDelete
+          branch={selected}
+          onConfirm={handleDelete}
+          onCancel={() => setModal(null)}
+          deleting={deleting}
+        />
+      )}
+
+      {modal === 'blocked' && selected && (
+        <BlockDeleteModal
+          title="Không thể xóa chi nhánh"
+          message={blockedMsg}
+          onClose={() => setModal(null)}
+          onDeactivate={handleDeactivateBranch}
+          deactivating={deleting}
         />
       )}
 

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/authStorage';
 import {
   MapPin, Clock, Phone, Envelope, ArrowRight, Tag,
-  CaretLeft, Compass, Star, Ticket,
+  CaretLeft, Compass, Star, Ticket, X,
 } from '@phosphor-icons/react';
 import Navbar from './Navbar';
 import Footer from './Footer';
@@ -37,6 +37,7 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
   const [loading, setLoading] = useState(true);
   const [showDirections, setShowDirections] = useState(false);
   const [dirMenuOpen, setDirMenuOpen] = useState(false);
+  const [zoomImage, setZoomImage] = useState(null);
 
   useEffect(() => {
     if (!dirMenuOpen) return;
@@ -75,6 +76,7 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
         <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
         <div className="max-w-6xl mx-auto px-4 py-12 space-y-6">
           <div className="h-8 w-48 animate-pulse rounded-lg bg-slate-100" />
+          <div className="h-[320px] animate-pulse rounded-2xl bg-slate-100" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />
             <div className="space-y-4">
@@ -143,6 +145,32 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
           <span className="text-slate-700 font-medium">{branch.name}</span>
         </div>
       </div>
+
+      {/* Hero Branch Image */}
+      {branch.image && (
+        <div className="max-w-6xl mx-auto px-4 pt-8">
+          <div
+            className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm cursor-pointer group h-[320px] md:h-[400px]"
+            onClick={() => setZoomImage(branch.image)}
+          >
+            <img
+              src={branch.image}
+              alt={branch.name}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <div className="absolute bottom-6 left-6 right-6">
+              <h2 className="text-2xl font-bold text-white drop-shadow-lg">{branch.name}</h2>
+              <p className="text-sm text-white/80 mt-1">{branch.address}</p>
+            </div>
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
+              <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm text-slate-800 text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
+                🔍 Click để phóng to
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto px-4 py-8">
 
@@ -348,6 +376,42 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
       </div>
 
       <Footer />
+
+      {/* Lightbox Zoom Modal */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          onClick={() => setZoomImage(null)}
+        >
+          <div
+            className="relative flex flex-col max-w-4xl max-h-[90vh] w-full overflow-hidden rounded-2xl bg-slate-900 shadow-2xl border border-slate-700/80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setZoomImage(null)}
+              className="absolute top-4 right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black/90 hover:scale-110 transition-all border border-white/20 shadow-lg"
+              title="Đóng"
+            >
+              <X size={20} weight="bold" />
+            </button>
+
+            <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden p-3 bg-black/40">
+              <img
+                src={zoomImage}
+                alt={branch?.name || 'Chi nhánh'}
+                className="max-h-[68vh] w-auto max-w-full rounded-xl object-contain shadow-2xl"
+              />
+            </div>
+
+            <div className="shrink-0 py-4 px-6 text-center bg-slate-900 border-t border-slate-800">
+              <p className="text-base font-bold text-white leading-snug">{branch?.name}</p>
+              {branch?.address && (
+                <p className="text-xs text-slate-300 mt-1 leading-snug">{branch.address}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

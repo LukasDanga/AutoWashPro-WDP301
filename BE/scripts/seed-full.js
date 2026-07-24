@@ -143,17 +143,17 @@ async function main() {
   const SVG_CY = [708, 703, 706, 702, 707];
 
   const branchData = [
-    { name: 'AutoWash Pro Quận 1',      addr: '123 Nguyễn Thị Minh Khai, Phường 2, Quận 1, TP.HCM',          phone: '028 3822 1111', email: 'q1@autowashpro.vn',       coords: [106.6920, 10.7769], close: '19:00' },
-    { name: 'AutoWash Pro Thủ Đức',     addr: '456 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP.HCM',     phone: '028 3720 2222', email: 'thuduc@autowashpro.vn',    coords: [106.7690, 10.8504], close: '20:00' },
-    { name: 'AutoWash Pro Bình Thạnh',  addr: '789 Điện Biên Phủ, Phường 11, Bình Thạnh, TP.HCM',            phone: '028 3510 3333', email: 'binhthanh@autowashpro.vn', coords: [106.7130, 10.8010], close: '20:00' },
-    { name: 'AutoWash Pro Gò Vấp',      addr: '321 Phan Văn Trị, Phường 11, Gò Vấp, TP.HCM',                phone: '028 3890 4444', email: 'govap@autowashpro.vn',     coords: [106.6690, 10.8380], close: '19:30' },
-    { name: 'AutoWash Pro Tân Phú',     addr: '55 Trường Chinh, Phường Tân Thới Nhất, Tân Phú, TP.HCM',     phone: '028 3710 5555', email: 'tanphu@autowashpro.vn',    coords: [106.6260, 10.7900], close: '20:00' },
+    { name: 'AutoWash Pro Quận 1',      addr: '123 Nguyễn Thị Minh Khai, Phường 2, Quận 1, TP.HCM',          phone: '028 3822 1111', email: 'q1@autowashpro.vn',       coords: [106.6920, 10.7769], close: '19:00', img: '/branches/autowash_quan_1.jpg' },
+    { name: 'AutoWash Pro Thủ Đức',     addr: '456 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP.HCM',     phone: '028 3720 2222', email: 'thuduc@autowashpro.vn',    coords: [106.7690, 10.8504], close: '20:00', img: '/branches/autowash_thu_duc.jpg' },
+    { name: 'AutoWash Pro Bình Thạnh',  addr: '789 Điện Biên Phủ, Phường 11, Bình Thạnh, TP.HCM',            phone: '028 3510 3333', email: 'binhthanh@autowashpro.vn', coords: [106.7130, 10.8010], close: '20:00', img: '/branches/autowash_binh_thanh.jpg' },
+    { name: 'AutoWash Pro Gò Vấp',      addr: '321 Phan Văn Trị, Phường 11, Gò Vấp, TP.HCM',                phone: '028 3890 4444', email: 'govap@autowashpro.vn',     coords: [106.6690, 10.8380], close: '19:30', img: '/branches/autowash_go_vap.jpg' },
+    { name: 'AutoWash Pro Tân Phú',     addr: '55 Trường Chinh, Phường Tân Thới Nhất, Tân Phú, TP.HCM',     phone: '028 3710 5555', email: 'tanphu@autowashpro.vn',    coords: [106.6260, 10.7900], close: '20:00', img: '/branches/autowash_tan_phu.jpg' },
   ];
 
   await Branch.insertMany(branchData.map((b, i) => ({
     _id: branchIds[i], name: b.name, address: b.addr, phone: b.phone,
     email: b.email, openingTime: '07:00', closingTime: b.close,
-    status: 'active', managerId: mgrIds[i],
+    status: 'active', managerId: mgrIds[i], image: b.img,
     city: 'Hồ Chí Minh',
     location: { type: 'Point', coordinates: b.coords },
     mapCoordinates: { svgCx: SVG_CX[i], svgCy: SVG_CY[i] },
