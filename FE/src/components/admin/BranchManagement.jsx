@@ -321,15 +321,16 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
 /* ─────────────────────────── Confirm delete ─────────────────────── */
 function ConfirmDelete({ branch, onConfirm, onCancel, deleting }) {
   return (
-    <Modal title="Xác nhận xóa" onClose={onCancel}>
+    <Modal title="Xác nhận xóa chi nhánh" onClose={onCancel}>
       <div className="space-y-4">
         <div className="flex gap-3 rounded-xl bg-red-50 p-4 ring-1 ring-red-100">
           <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">
-            Bạn chắc chắn muốn xóa chi nhánh{' '}
-            <strong>"{branch.name}"</strong>?{' '}
-            Hành động này không thể hoàn tác.
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-red-700">Bạn chắc chắn muốn xóa chi nhánh "{branch.name}"?</p>
+            <p className="text-xs text-red-600 leading-relaxed">
+              Lưu ý: Nếu chi nhánh đang có lịch đặt chưa hoàn thành hoặc gói lượt còn hiệu lực của khách hàng, hệ thống sẽ chặn xóa để bảo mật dữ liệu. Tất cả các gói dịch vụ và voucher riêng của chi nhánh này cũng sẽ tự động được dọn dẹp khi xóa.
+            </p>
+          </div>
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} disabled={deleting}
