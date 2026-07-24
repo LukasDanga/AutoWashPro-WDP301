@@ -24,7 +24,13 @@ export default function ConfirmDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        {message && <p className="mt-2 text-sm leading-relaxed text-slate-500">{message}</p>}
+        {message && (
+          <div className="mt-2 text-sm leading-relaxed text-slate-500 space-y-1">
+            {message.split('\n').map((line, i) => (
+              <p key={i} className={line.startsWith('  ') ? 'pl-4 font-mono text-xs' : ''}>{line.replace(/^  /, '') || '\u00A0'}</p>
+            ))}
+          </div>
+        )}
         <div className="mt-6 flex justify-end gap-2.5">
           <button
             onClick={onCancel}

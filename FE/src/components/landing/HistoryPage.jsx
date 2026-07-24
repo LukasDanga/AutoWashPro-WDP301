@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, Copy, Check } from 'lucide-react';
+import { RefreshCw, Copy, Check, Sun, Sunset } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
 import QuickBookModal from '../customer/QuickBookModal.jsx';
@@ -2318,7 +2318,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
         const currentAmount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
         const branchName = rebookTarget?.branchId?.name || rebookTarget?.branchName || '';
-        const pkgName = rebookTarget?.packageId?.name || rebookTarget?.packageName || '';
+        const pkgName = rebookTarget?.packageId?.name || rebookTarget?.packageName || 'Gói dịch vụ';
         const vehicleLabel = rebookTarget?.vehicleId?.licensePlate || rebookTarget?.vehicleLicensePlate || '';
         return (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
@@ -2371,34 +2371,85 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       Giờ mới <span className="text-red-500">*</span>
                       {rebookTarget?.startTime && <span className="text-emerald-500 font-normal ml-1">(Giờ cũ: {rebookTarget.startTime})</span>}
                     </label>
-                    <input type="time"
-                      value={rebookTime}
-                      onChange={e => setRebookTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
-                    />
-                    {rebookSlotsLoading && <p className="text-xs text-slate-400 mt-1">Đang kiểm tra khung giờ...</p>}
-                    {!rebookSlotsLoading && rebookSlots.length > 0 && rebookDate && (
-                      <>
-                        <p className="text-xs text-slate-400 mt-2 mb-1.5">Khung giờ trống:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {rebookSlots.map((slot, i) => {
-                            const timeVal = slot.startTime || slot.time || slot;
-                            const isActive = rebookTime === timeVal;
-                            return (
-                              <button key={i} type="button"
-                                onClick={() => setRebookTime(timeVal)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                                  isActive ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
-                                }`}
-                              >{timeVal}</button>
-                            );
-                          })}
+                    {rebookSlotsLoading ? (
+                      <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
+                        <RefreshCw className="w-5 h-5 animate-spin text-slate-300" />
+                        <span className="text-sm">Đang tìm lịch trống...</span>
+                      </div>
+                    ) : !rebookSlotsLoading && rebookSlots.length > 0 && rebookDate ? (
+                      <div className="grid grid-cols-1 gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-amber-600">
+                            <Sun className="w-4 h-4" />
+                            <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi sáng</h4>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(() => {
+                              const morning = rebookSlots.filter(s => {
+                                const h = parseInt((s.startTime || s.time || s).split(':')[0], 10);
+                                return h < 12;
+                              });
+                              return morning.length === 0
+                                ? <span className="text-xs text-slate-400 py-1">Không có lịch trống buổi sáng</span>
+                                : morning.map((slot, i) => {
+                                    const timeVal = slot.startTime || slot.time || slot;
+                                    const isDisabled = !slot.available || timeVal === rebookTarget?.startTime;
+                                    const isSelected = rebookTime === timeVal;
+                                    return (
+                                      <button key={i} type="button"
+                                        disabled={isDisabled}
+                                        onClick={() => setRebookTime(timeVal)}
+                                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                          isSelected
+                                            ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
+                                            : isDisabled
+                                              ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
+                                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                      >{timeVal}</button>
+                                    );
+                                  });
+                            })()}
+                          </div>
                         </div>
-                      </>
-                    )}
-                    {!rebookSlotsLoading && rebookSlots.length === 0 && rebookDate && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-blue-600">
+                            <Sunset className="w-4 h-4" />
+                            <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi chiều</h4>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(() => {
+                              const afternoon = rebookSlots.filter(s => {
+                                const h = parseInt((s.startTime || s.time || s).split(':')[0], 10);
+                                return h >= 12;
+                              });
+                              return afternoon.length === 0
+                                ? <span className="text-xs text-slate-400 py-1">Không có lịch trống buổi chiều</span>
+                                : afternoon.map((slot, i) => {
+                                    const timeVal = slot.startTime || slot.time || slot;
+                                    const isDisabled = !slot.available || timeVal === rebookTarget?.startTime;
+                                    const isSelected = rebookTime === timeVal;
+                                    return (
+                                      <button key={i} type="button"
+                                        disabled={isDisabled}
+                                        onClick={() => setRebookTime(timeVal)}
+                                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                          isSelected
+                                            ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
+                                            : isDisabled
+                                              ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
+                                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                      >{timeVal}</button>
+                                    );
+                                  });
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    ) : !rebookSlotsLoading && rebookSlots.length === 0 && rebookDate ? (
                       <p className="text-xs text-amber-500 mt-1">Không có khung giờ trống cho ngày này</p>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Payment mode: 30% deposit or 100% full */}
