@@ -82,9 +82,12 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
       setVehicles(prev => prev.filter(v => (v._id || v.id) !== vId));
     } catch (e) {
       if (e.message.includes('lịch hẹn đang hoạt động')) {
+        const shortMsg = e.message.replace(/^Không thể xóa xe này vì đã có /i, '');
+        const [countLine, ...codeLines] = shortMsg.includes('Mã:') ? shortMsg.split('Mã:') : [shortMsg, ''];
+        const codes = (codeLines.join('') || '').trim();
         await confirmDialog({
-          title: 'Không thể xóa xe',
-          message: e.message + '\n\nVui lòng hoàn thành hoặc hủy các lịch hẹn trước khi xóa xe.',
+          title: '⚠️ Không thể xóa xe',
+          message: `Xe này đang có ${countLine.trim().toLowerCase()}. Vui lòng hoàn thành hoặc hủy các lịch hẹn trước khi xóa xe.${codes ? '\n\n' + codes : ''}`,
           confirmLabel: 'Đã hiểu',
         });
       } else {

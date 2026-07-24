@@ -226,6 +226,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [rebookSlots, setRebookSlots] = useState([]);
   const [rebookSlotsLoading, setRebookSlotsLoading] = useState(false);
   const [rebookDepositMethod, setRebookDepositMethod] = useState('bank');
+  const [rebookPaymentMode, setRebookPaymentMode] = useState('deposit'); // 'deposit' | 'full'
+  const [rebookDraft, setRebookDraft] = useState(null);
   const [rebookDepositPayment, setRebookDepositPayment] = useState(null);
   const [rebookQrStep, setRebookQrStep] = useState('form'); // 'form' | 'qr' | 'success'
   const [rebookQrLoading, setRebookQrLoading] = useState(false);
@@ -488,6 +490,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setRebookFormError('');
     setRebookSlots([]);
     setRebookDepositMethod('bank');
+    setRebookPaymentMode('deposit');
+    setRebookDraft(null);
     setRebookDepositPayment(null);
     setRebookQrStep('form');
     setRebookQrLoading(false);
@@ -500,6 +504,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     if (!rebookTarget) return;
     setRebookFormError('');
     setRebookQrStep('form');
+    setRebookDraft(null);
     setRebookDepositPayment(null);
     if (rebookPollRef.current) clearInterval(rebookPollRef.current);
     if (!rebookDate) { setRebookFormError('Vui lòng chọn ngày'); return; }
@@ -508,41 +513,62 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (selected < today) { setRebookFormError('Ngày phải từ hôm nay trở đi'); return; }
+
+    // Validate slot availability
+    if (rebookSlots.length > 0) {
+      const slotTimes = rebookSlots.map(s => s.startTime || s.time || s);
+      if (!slotTimes.includes(rebookTime)) {
+        setRebookFormError('Khung giờ này không có sẵn. Vui lòng chọn giờ từ danh sách.');
+        return;
+      }
+    }
+
     setRebookLoading(true);
     try {
-      const bId = rebookTarget._id || rebookTarget.id;
-      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime }),
-      });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
-      const payload = await res.json();
-      const newBooking = payload?.data || payload;
-      const depositAmt = newBooking.depositAmount || 0;
+      const totalPrice = rebookTarget.finalPrice || 0;
+      const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
+      const amount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
 
-      if (depositAmt <= 0) {
-        showToastMsg('Đặt lại thành công! Vui lòng kiểm tra lịch mới.');
+      // Lưu draft để sau payment mới tạo booking
+      setRebookDraft({
+        bookingId: rebookTarget._id || rebookTarget.id,
+        bookingDate: rebookDate,
+        startTime: rebookTime,
+        amount,
+        paymentMode: rebookPaymentMode,
+      });
+
+      if (amount <= 0) {
+        // Miễn phí → tạo rebook ngay
+        const bId = rebookTarget._id || rebookTarget.id;
+        const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime }),
+        });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
+        showToastMsg('Đặt lại thành công!');
         setShowRebookModal(false); setRebookTarget(null);
         doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
         if (showRecurringGroupModal) loadRecurringGroup();
         return;
       }
 
-      // Có cọc → chuyển sang bước thanh toán
-      setRebookDepositPayment({ ...newBooking, depositAmount: depositAmt, bookingDate: rebookDate, startTime: rebookTime });
-
       if (rebookDepositMethod === 'vnpay') {
-        // VNPay → gọi tạo payment cho booking đã tồn tại
+        // VNPay provisional (chưa tạo booking — giống BookingWidget)
         setRebookVnpayLoading(true);
         try {
-          const vnpRes = await fetch(`${apiBase || API_BASE}/payments/vnpay-create`, {
+          const vnpRes = await fetch(`${apiBase || API_BASE}/bookings/vnpay-provisional`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({
-              bookingId: newBooking._id || newBooking.id,
-              amount: depositAmt,
+              amount,
               bankCode: '',
+              bookingDate: rebookDate,
+              startTime: rebookTime,
+              packageId: rebookTarget.packageId?._id || rebookTarget.packageId?.id || rebookTarget.packageId,
+              branchId: rebookTarget.branchId?._id || rebookTarget.branchId?.id || rebookTarget.branchId,
+              vehicleId: rebookTarget.vehicleId?._id || rebookTarget.vehicleId?.id || rebookTarget.vehicleId,
             }),
           });
           const vnpData = await vnpRes.json();
@@ -550,7 +576,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           const vnpUrl = vnpData?.data?.paymentUrl || vnpData?.paymentUrl || vnpData?.url;
           if (vnpUrl) {
             window.open(vnpUrl, '_blank');
-            showToastMsg('Vui lòng thanh toán VNPay trong cửa sổ mới.');
+            showToastMsg('Vui lòng thanh toán VNPay trong cửa sổ mới. Sau khi thanh toán xong, đặt lại sẽ được hoàn tất.');
             setShowRebookModal(false); setRebookTarget(null);
             doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
             if (showRecurringGroupModal) loadRecurringGroup();
@@ -563,18 +589,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           setRebookVnpayLoading(false);
         }
       } else {
-        // Bank transfer → tạo payment cho booking đã tồn tại (giống BookingWidget)
+        // Bank provisional (chưa tạo booking — giống BookingWidget)
         setRebookQrLoading(true);
         try {
-          const payRes = await fetch(`${apiBase || API_BASE}/payments`, {
+          const payRes = await fetch(`${apiBase || API_BASE}/payments/bank-provisional`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              bookingId: newBooking._id || newBooking.id,
-              method: 'bank',
-              paymentType: 'deposit',
-              amount: depositAmt,
-            }),
+            body: JSON.stringify({ amount, paymentType: rebookPaymentMode }),
           });
           const payData = await payRes.json();
           if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
@@ -591,14 +612,14 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     finally { setRebookLoading(false); }
   }
 
-  // Poll rebook payment (giống BookingWidget)
+  // Poll rebook provisional payment → khi paid thì tạo rebook
   useEffect(() => {
     if (rebookQrStep !== 'qr' || !rebookDepositPayment) return;
     rebookPollRef.current = setInterval(async () => {
       try {
-        const bid = rebookDepositPayment.booking?._id || rebookDepositPayment.bookingId || rebookDepositPayment.booking;
-        if (!bid) return;
-        const res = await fetch(`${apiBase || API_BASE}/payments/booking/${bid}`, {
+        const pid = rebookDepositPayment._id || rebookDepositPayment.id;
+        if (!pid) return;
+        const res = await fetch(`${apiBase || API_BASE}/payments/booking/${pid}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -606,19 +627,39 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const p = data?.data || data;
         if (p?.status === 'paid') {
           clearInterval(rebookPollRef.current);
-          showToastMsg('Đặt lại thành công! Vui lòng kiểm tra lịch mới.');
-          setShowRebookModal(false); setRebookTarget(null);
-          doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
-          if (showRecurringGroupModal) loadRecurringGroup();
+          await executeRebookAfterPayment();
         }
       } catch {}
     }, 10000);
     return () => { if (rebookPollRef.current) clearInterval(rebookPollRef.current); };
   }, [rebookQrStep, rebookDepositPayment, apiBase, token]);
 
-  // Simulate rebook payment (giống BookingWidget)
+  // Tạo rebook sau khi thanh toán thành công
+  async function executeRebookAfterPayment() {
+    if (!rebookDraft) return;
+    const d = rebookDraft;
+    setRebookQrLoading(true);
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${d.bookingId}/rebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingDate: d.bookingDate, startTime: d.startTime }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
+      showToastMsg('Đặt lại thành công!');
+      setShowRebookModal(false); setRebookTarget(null);
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      if (showRecurringGroupModal) loadRecurringGroup();
+    } catch (e) {
+      setRebookFormError(e.message);
+    } finally {
+      setRebookQrLoading(false);
+    }
+  }
+
+  // Simulate rebook payment → simulate + execute rebook
   async function simulateRebookPayment() {
-    if (!rebookDepositPayment) return;
+    if (!rebookDepositPayment || !rebookDraft) return;
     setRebookQrLoading(true);
     try {
       await fetch(`${apiBase || API_BASE}/payments/simulate`, {
@@ -629,10 +670,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           gatewayTransactionId: `SIM${Date.now()}`,
         }),
       });
-      showToastMsg('Đặt lại thành công! Vui lòng kiểm tra lịch mới.');
-      setShowRebookModal(false); setRebookTarget(null);
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
-      if (showRecurringGroupModal) loadRecurringGroup();
+      await executeRebookAfterPayment();
     } catch (e) {
       setRebookFormError(e.message);
     } finally {
@@ -2275,16 +2313,49 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       )}
 
       {/* ── REBOOK MODAL ── */}
-      {showRebookModal && (
+      {showRebookModal && (() => {
+        const totalPrice = rebookTarget?.finalPrice || 0;
+        const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
+        const currentAmount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
+        const branchName = rebookTarget?.branchId?.name || rebookTarget?.branchName || '';
+        const pkgName = rebookTarget?.packageId?.name || rebookTarget?.packageName || '';
+        const vehicleLabel = rebookTarget?.vehicleId?.licensePlate || rebookTarget?.vehicleLicensePlate || '';
+        return (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => { if (!rebookLoading && !rebookQrLoading) { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); } }}>
-          <div className="bg-white rounded-[1.5rem] w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+          onClick={() => { if (!rebookLoading && !rebookQrLoading) { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDraft(null); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); } }}>
+          <div className="bg-white rounded-[1.5rem] w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
             {/* ── Form bước ── */}
             {rebookQrStep === 'form' && (
               <div className="p-8">
                 <h3 className="text-lg font-bold text-slate-900 mb-1">Đặt lại lịch</h3>
-                <p className="text-sm text-slate-400 mb-6">{rebookTarget?.packageId?.name || rebookTarget?.packageName || ''}</p>
+
+                {/* Thông tin đặt lại */}
+                <div className="mb-5 rounded-xl bg-slate-50 p-4 space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Chi nhánh</span>
+                    <span className="font-medium text-slate-800 text-right max-w-[60%]">{branchName || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Gói dịch vụ</span>
+                    <span className="font-medium text-slate-800 text-right max-w-[60%]">{pkgName || '—'}</span>
+                  </div>
+                  {vehicleLabel && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Xe</span>
+                      <span className="font-medium text-slate-800">{vehicleLabel}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Giờ cũ</span>
+                    <span className="font-medium text-slate-800">{rebookTarget?.startTime || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5">
+                    <span className="text-slate-500">Tổng tiền</span>
+                    <span className="font-bold text-emerald-600">{totalPrice.toLocaleString('vi-VN')}₫</span>
+                  </div>
+                </div>
+
                 <div className="space-y-4">
                   <div>
                     <label className="text-xs font-medium text-slate-500 block mb-1.5">Ngày mới <span className="text-red-500">*</span></label>
@@ -2307,25 +2378,51 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     />
                     {rebookSlotsLoading && <p className="text-xs text-slate-400 mt-1">Đang kiểm tra khung giờ...</p>}
                     {!rebookSlotsLoading && rebookSlots.length > 0 && rebookDate && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {rebookSlots.map((slot, i) => {
-                          const timeVal = slot.startTime || slot.time || slot;
-                          const isActive = rebookTime === timeVal;
-                          return (
-                            <button key={i} type="button"
-                              onClick={() => setRebookTime(timeVal)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                                isActive ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
-                              }`}
-                            >{timeVal}</button>
-                          );
-                        })}
-                      </div>
+                      <>
+                        <p className="text-xs text-slate-400 mt-2 mb-1.5">Khung giờ trống:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {rebookSlots.map((slot, i) => {
+                            const timeVal = slot.startTime || slot.time || slot;
+                            const isActive = rebookTime === timeVal;
+                            return (
+                              <button key={i} type="button"
+                                onClick={() => setRebookTime(timeVal)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                                  isActive ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
+                                }`}
+                              >{timeVal}</button>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
                     {!rebookSlotsLoading && rebookSlots.length === 0 && rebookDate && (
                       <p className="text-xs text-amber-500 mt-1">Không có khung giờ trống cho ngày này</p>
                     )}
                   </div>
+
+                  {/* Payment mode: 30% deposit or 100% full */}
+                  {totalPrice > 0 && deposit30 > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1.5">Hình thức thanh toán</label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setRebookPaymentMode('deposit')}
+                          className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
+                            rebookPaymentMode === 'deposit' ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-white text-slate-600 border-slate-200'
+                          }`}>
+                          <span className="block font-semibold">Đặt cọc 30%</span>
+                          <span className="text-xs opacity-70">{deposit30.toLocaleString('vi-VN')}₫</span>
+                        </button>
+                        <button type="button" onClick={() => setRebookPaymentMode('full')}
+                          className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
+                            rebookPaymentMode === 'full' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-600 border-slate-200'
+                          }`}>
+                          <span className="block font-semibold">Thanh toán 100%</span>
+                          <span className="text-xs opacity-70">{totalPrice.toLocaleString('vi-VN')}₫</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Payment method selector */}
                   <div>
@@ -2346,23 +2443,22 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-400">💡 Chọn ngày và giờ bạn muốn đặt lại. Ngày phải từ hôm nay trở đi.</p>
                   {rebookFormError && (
                     <div className="px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{rebookFormError}</div>
                   )}
                 </div>
                 <div className="flex gap-3 mt-6">
-                  <button onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); }}
+                  <button onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDraft(null); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); }}
                     disabled={rebookLoading || rebookVnpayLoading}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer">
                     Hủy
                   </button>
                   <button onClick={submitRebook} disabled={rebookLoading || rebookVnpayLoading}
-                    className="flex-[2] px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    className="flex-[2] px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
                     {(rebookLoading || rebookVnpayLoading) && (
                       <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                     )}
-                    {rebookLoading ? 'Đang xử lý...' : rebookVnpayLoading ? 'Đang tạo VNPay...' : 'Xác nhận đặt lại'}
+                    {rebookLoading ? 'Đang xử lý...' : rebookVnpayLoading ? 'Đang tạo VNPay...' : `Thanh toán ${currentAmount.toLocaleString('vi-VN')}₫`}
                   </button>
                 </div>
               </div>
@@ -2396,13 +2492,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500">Ngân hàng</span>
                     <span className="text-xs font-bold text-slate-700">{rebookDepositPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500">Số tài khoản</span>
-                    <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{rebookDepositPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                    <span className="text-xs font-bold text-slate-700 font-mono tracking-wider flex items-center gap-1">
+                      {rebookDepositPayment.bankInfo?.accountNumber || '97966888888'}
+                      <button onClick={() => { navigator.clipboard.writeText(rebookDepositPayment.bankInfo?.accountNumber || '97966888888'); showToastMsg('Đã sao chép số tài khoản'); }} className="text-emerald-500 hover:text-emerald-600 cursor-pointer" title="Copy">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      </button>
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Chủ tài khoản</span>
@@ -2410,9 +2511,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Nội dung CK</span>
-                    <span className="text-xs font-bold text-slate-800 font-mono max-w-[180px] text-right break-all">
-                      {rebookDepositPayment.bankInfo?.transferContent || `DAT COC ${rebookDepositPayment.transactionId || ''}`}
-                    </span>
+                    <span className="text-xs font-bold text-slate-800 font-mono max-w-[180px] text-right break-all">{rebookDepositPayment.bankInfo?.transferContent || `DAT COC ${rebookDepositPayment.transactionId || ''}`}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Mã GD</span>
@@ -2446,8 +2545,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
             )}
 
           </div>
-        </div>
-      )}
+        </div>);
+      })()}
 
       {/* ── MONTH PICKER MODAL ── */}
       {showMonthPicker && (
