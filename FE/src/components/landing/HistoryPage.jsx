@@ -4,6 +4,7 @@ import { RefreshCw, Copy, Check, Sun, Sunset } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
 import QuickBookModal from '../customer/QuickBookModal.jsx';
+import VoucherPicker from '../VoucherPicker.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -235,11 +236,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const rebookPollRef = useRef(null);
   const [rebookSubServices, setRebookSubServices] = useState([]);
   const [rebookAvailableSubServices, setRebookAvailableSubServices] = useState([]);
-  const [rebookVoucherCode, setRebookVoucherCode] = useState('');
-  const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
-  const [rebookApplyingVoucher, setRebookApplyingVoucher] = useState(false);
-  const [rebookAvailableVouchers, setRebookAvailableVouchers] = useState(null);
-  const [rebookShowVoucherPicker, setRebookShowVoucherPicker] = useState(false);
+  const [rebookAppliedVoucher, setRebookAppliedVoucher] = useState(null); // null | voucher object
 
 
   // Quick book modal
@@ -283,6 +280,15 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   }, [showRebookModal]);
 
   const debounceRef = useRef(null);
+
+  function computeVoucherDiscount(voucher, orderAmount) {
+    if (!voucher || !orderAmount) return 0;
+    if (voucher.type === 'percentage') {
+      const d = Math.floor(orderAmount * voucher.value / 100);
+      return voucher.maxDiscount > 0 ? Math.min(d, voucher.maxDiscount) : d;
+    }
+    return Math.min(voucher.value || 0, orderAmount);
+  }
 
   function showToastMsg(message, type = 'success') {
     showToast(message, type);
@@ -500,11 +506,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setRebookQrStep('form');
     setRebookQrLoading(false);
     setRebookVnpayLoading(false);
-    setRebookVoucherCode('');
-    setRebookVoucherDiscount(0);
-    setRebookApplyingVoucher(false);
-    setRebookShowVoucherPicker(false);
-    setRebookAvailableVouchers(null);
+    setRebookAppliedVoucher(null);
     if (rebookPollRef.current) clearInterval(rebookPollRef.current);
     // Fetch package sub-services from the original booking's package
     const pkgId = b.packageId?._id || b.packageId?.id || b.packageId;
@@ -560,9 +562,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     try {
       const basePrice = rebookTarget.packageId?.price || rebookTarget.finalPrice || 0;
       const subServiceTotal = rebookSubServices.filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
-      const totalPrice = Math.max(0, basePrice + subServiceTotal - rebookVoucherDiscount);
+      const voucherDiscount = computeVoucherDiscount(rebookAppliedVoucher, basePrice + subServiceTotal);
+      const totalPrice = Math.max(0, basePrice + subServiceTotal - voucherDiscount);
       const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
       const amount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
+      const vCode = rebookAppliedVoucher?.code || undefined;
 
       // Lưu draft để sau payment mới tạo booking
       setRebookDraft({
@@ -572,7 +576,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         amount,
         paymentMode: rebookPaymentMode,
         selectedSubServices: rebookSubServices,
-        voucherCode: rebookVoucherCode.trim() || undefined,
+        voucherCode: vCode,
       });
 
       if (amount <= 0) {
@@ -581,7 +585,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, selectedSubServices: rebookSubServices, voucherCode: rebookVoucherCode.trim() || undefined }),
+          body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, selectedSubServices: rebookSubServices, voucherCode: vCode }),
         });
         if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
         showToastMsg('Đặt lại thành công!');
@@ -608,7 +612,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               branchId: rebookTarget.branchId?._id || rebookTarget.branchId?.id || rebookTarget.branchId,
               vehicleId: rebookTarget.vehicleId?._id || rebookTarget.vehicleId?.id || rebookTarget.vehicleId,
               selectedSubServices: rebookSubServices,
-              voucherCode: rebookVoucherCode.trim() || undefined,
+              voucherCode: rebookAppliedVoucher?.code || undefined,
             }),
           });
           const vnpData = await vnpRes.json();
@@ -2362,7 +2366,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       {showRebookModal && (() => {
         const basePrice = rebookTarget?.packageId?.price || rebookTarget?.finalPrice || 0;
         const subServiceTotal = (rebookSubServices || []).filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
-        const totalPrice = Math.max(0, basePrice + subServiceTotal - rebookVoucherDiscount);
+        const voucherDiscount = computeVoucherDiscount(rebookAppliedVoucher, basePrice + subServiceTotal);
+        const totalPrice = Math.max(0, basePrice + subServiceTotal - voucherDiscount);
         const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
         const currentAmount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
         const branchName = rebookTarget?.branchId?.name || rebookTarget?.branchName || '';
@@ -2404,10 +2409,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       <span className="font-medium text-emerald-600">+{subServiceTotal.toLocaleString('vi-VN')}₫</span>
                     </div>
                   )}
-                  {rebookVoucherDiscount > 0 && (
+                  {voucherDiscount > 0 && (
                     <div className="flex justify-between">
                       <span className="text-slate-500">Giảm giá</span>
-                      <span className="font-medium text-red-500">-{rebookVoucherDiscount.toLocaleString('vi-VN')}₫</span>
+                      <span className="font-medium text-red-500">-{voucherDiscount.toLocaleString('vi-VN')}₫</span>
                     </div>
                   )}
                   <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5">
@@ -2564,140 +2569,16 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     </div>
                   )}
 
-                  {/* Voucher code + picker */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-medium text-slate-500">Mã giảm giá</label>
-                      <button type="button" onClick={async () => {
-                        if (rebookShowVoucherPicker) { setRebookShowVoucherPicker(false); return; }
-                        if (!rebookAvailableVouchers) {
-                          try {
-                            const branchId = rebookTarget?.branchId?._id || rebookTarget?.branchId?.id || rebookTarget?.branchId;
-                            const vRes = await fetch(`${apiBase || API_BASE}/vouchers/available?branchId=${branchId}`, {
-                              headers: { Authorization: `Bearer ${token}` },
-                            });
-                            if (vRes.ok) {
-                              const vData = await vRes.json();
-                              const data = vData?.data || vData;
-                              const allVouchers = [...(data.public || []), ...(data.tier_exclusive || [])];
-                              setRebookAvailableVouchers(allVouchers);
-                            }
-                          } catch (_) {}
-                        }
-                        setRebookShowVoucherPicker(!rebookShowVoucherPicker);
-                      }} className="text-xs text-emerald-600 font-semibold hover:text-emerald-700 flex items-center gap-1 cursor-pointer">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                        {rebookShowVoucherPicker ? 'Thu gọn' : 'Chọn mã'}
-                      </button>
-                    </div>
-                    {rebookShowVoucherPicker && rebookAvailableVouchers && rebookAvailableVouchers.length > 0 && (
-                      <div className="mb-2 max-h-44 overflow-y-auto space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2">
-                        {rebookAvailableVouchers.map(v => {
-                          const saving = v.type === 'percent' ? `${v.discountValue}% (tối đa ${(v.maxDiscount || 0).toLocaleString('vi-VN')}₫)` : `${(v.discountValue || 0).toLocaleString('vi-VN')}₫`;
-                          const isSelected = rebookVoucherCode === v.code;
-                          return (
-                            <button type="button" key={v._id}
-                              onClick={() => {
-                                setRebookVoucherCode(v.code);
-                                setRebookVoucherDiscount(0);
-                                setRebookShowVoucherPicker(false);
-                                // Auto-apply
-                                (async () => {
-                                  setRebookApplyingVoucher(true);
-                                  setRebookFormError('');
-                                  try {
-                                    const vRes = await fetch(`${apiBase || API_BASE}/vouchers/validate`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                      body: JSON.stringify({
-                                        code: v.code,
-                                        amount: basePrice + subServiceTotal,
-                                        branchId: rebookTarget?.branchId?._id || rebookTarget?.branchId?.id || rebookTarget?.branchId,
-                                        packageId: rebookTarget?.packageId?._id || rebookTarget?.packageId?.id || rebookTarget?.packageId,
-                                      }),
-                                    });
-                                    const vData = await vRes.json();
-                                    if (!vRes.ok) throw new Error(vData.message || 'Mã không hợp lệ');
-                                    const discount = vData?.data?.savings || vData?.data?.discountAmount || 0;
-                                    if (discount <= 0) throw new Error('Không có giá trị');
-                                    setRebookVoucherDiscount(discount);
-                                    showToastMsg(`Giảm ${discount.toLocaleString('vi-VN')}₫`);
-                                  } catch (e) {
-                                    setRebookFormError(e.message);
-                                    setRebookVoucherDiscount(0);
-                                  } finally {
-                                    setRebookApplyingVoucher(false);
-                                  }
-                                })();
-                              }}
-                              className={`w-full text-left p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
-                                isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-800">{v.code}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  v.type === 'percent' ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'
-                                }`}>Giảm {saving}</span>
-                              </div>
-                              {v.description && <p className="text-[11px] text-slate-500 mt-1">{v.description}</p>}
-                              {(v.minOrder || 0) > 0 && <p className="text-[10px] text-slate-400 mt-0.5 italic">Đơn tối thiểu {(v.minOrder).toLocaleString('vi-VN')}₫</p>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {rebookShowVoucherPicker && rebookAvailableVouchers && rebookAvailableVouchers.length === 0 && (
-                      <p className="text-xs text-slate-400 mb-2">Không có mã giảm giá nào khả dụng cho chi nhánh này.</p>
-                    )}
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Hoặc nhập mã"
-                        value={rebookVoucherCode}
-                        onChange={e => { setRebookVoucherCode(e.target.value); setRebookVoucherDiscount(0); }}
-                        className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
-                      />
-                      <button type="button" onClick={async () => {
-                        if (!rebookVoucherCode.trim()) { setRebookFormError('Nhập mã giảm giá'); return; }
-                        setRebookApplyingVoucher(true);
-                        setRebookFormError('');
-                        try {
-                          const vRes = await fetch(`${apiBase || API_BASE}/vouchers/validate`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({
-                              code: rebookVoucherCode.trim().toUpperCase(),
-                              amount: basePrice + subServiceTotal,
-                              branchId: rebookTarget?.branchId?._id || rebookTarget?.branchId?.id || rebookTarget?.branchId,
-                              packageId: rebookTarget?.packageId?._id || rebookTarget?.packageId?.id || rebookTarget?.packageId,
-                            }),
-                          });
-                          const vData = await vRes.json();
-                          if (!vRes.ok) throw new Error(vData.message || 'Mã giảm giá không hợp lệ');
-                          const discount = vData?.data?.savings || vData?.data?.discountAmount || 0;
-                          if (discount <= 0) throw new Error('Mã giảm giá không có giá trị');
-                          setRebookVoucherDiscount(discount);
-                          showToastMsg(`Giảm ${discount.toLocaleString('vi-VN')}₫`);
-                        } catch (e) {
-                          setRebookFormError(e.message);
-                          setRebookVoucherDiscount(0);
-                        } finally {
-                          setRebookApplyingVoucher(false);
-                        }
-                      }} disabled={rebookApplyingVoucher}
-                        className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-1 cursor-pointer">
-                        {rebookApplyingVoucher ? (
-                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                        ) : 'Áp dụng'}
-                      </button>
-                    </div>
-                    {rebookVoucherDiscount > 0 && (
-                      <p className="text-xs text-emerald-600 mt-1">
-                        Đã áp dụng giảm <strong>{rebookVoucherDiscount.toLocaleString('vi-VN')}₫</strong>
-                      </p>
-                    )}
-                  </div>
+                  {/* Voucher picker — same as BookingWidget */}
+                  <VoucherPicker
+                    apiBase={apiBase || API_BASE}
+                    token={token}
+                    selected={rebookAppliedVoucher}
+                    onSelect={setRebookAppliedVoucher}
+                    orderAmount={basePrice + subServiceTotal}
+                    compact
+                    branchId={rebookTarget?.branchId?._id || rebookTarget?.branchId?.id || rebookTarget?.branchId}
+                  />
 
                   {/* Payment mode: 30% deposit or 100% full */}
                   {totalPrice > 0 && deposit30 > 0 && (
