@@ -233,6 +233,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [rebookQrLoading, setRebookQrLoading] = useState(false);
   const [rebookVnpayLoading, setRebookVnpayLoading] = useState(false);
   const rebookPollRef = useRef(null);
+  const [rebookSubServices, setRebookSubServices] = useState([]);
+  const [rebookAvailableSubServices, setRebookAvailableSubServices] = useState([]);
+  const [rebookVoucherCode, setRebookVoucherCode] = useState('');
+  const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
+  const [rebookApplyingVoucher, setRebookApplyingVoucher] = useState(false);
 
   // Quick book modal
   const [showQuickBookModal, setShowQuickBookModal] = useState(false);
@@ -492,7 +497,34 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setRebookQrStep('form');
     setRebookQrLoading(false);
     setRebookVnpayLoading(false);
+    setRebookVoucherCode('');
+    setRebookVoucherDiscount(0);
+    setRebookApplyingVoucher(false);
     if (rebookPollRef.current) clearInterval(rebookPollRef.current);
+    // Fetch package sub-services from the original booking's package
+    const pkgId = b.packageId?._id || b.packageId?.id || b.packageId;
+    if (pkgId) {
+      try {
+        const pkgRes = await fetch(`${apiBase || API_BASE}/packages/${pkgId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (pkgRes.ok) {
+          const pkgData = await pkgRes.json();
+          const pkg = pkgData?.data || pkgData;
+          const allSubs = pkg?.subServices || [];
+          setRebookAvailableSubServices(allSubs);
+          // Pre-select: all mandatory (isOptional: false) + previously selected
+          const prevSelected = (b.selectedSubServices || []).map(s => s.name || s);
+          const initialSelection = allSubs
+            .filter(s => !s.isOptional || prevSelected.includes(s.name))
+            .map(s => ({ name: s.name, price: s.price, duration: s.duration }));
+          setRebookSubServices(initialSelection);
+        }
+      } catch (_) {}
+    } else {
+      setRebookAvailableSubServices([]);
+      setRebookSubServices([]);
+    }
     setShowRebookModal(true);
   }
 
@@ -521,7 +553,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
     setRebookLoading(true);
     try {
-      const totalPrice = rebookTarget.finalPrice || 0;
+      const basePrice = rebookTarget.packageId?.price || rebookTarget.finalPrice || 0;
+      const subServiceTotal = rebookSubServices.filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
+      const totalPrice = Math.max(0, basePrice + subServiceTotal - rebookVoucherDiscount);
       const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
       const amount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
 
@@ -532,6 +566,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         startTime: rebookTime,
         amount,
         paymentMode: rebookPaymentMode,
+        selectedSubServices: rebookSubServices,
+        voucherCode: rebookVoucherCode.trim() || undefined,
       });
 
       if (amount <= 0) {
@@ -540,7 +576,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime }),
+          body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, selectedSubServices: rebookSubServices, voucherCode: rebookVoucherCode.trim() || undefined }),
         });
         if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
         showToastMsg('Đặt lại thành công!');
@@ -566,6 +602,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               packageId: rebookTarget.packageId?._id || rebookTarget.packageId?.id || rebookTarget.packageId,
               branchId: rebookTarget.branchId?._id || rebookTarget.branchId?.id || rebookTarget.branchId,
               vehicleId: rebookTarget.vehicleId?._id || rebookTarget.vehicleId?.id || rebookTarget.vehicleId,
+              selectedSubServices: rebookSubServices,
+              voucherCode: rebookVoucherCode.trim() || undefined,
             }),
           });
           const vnpData = await vnpRes.json();
@@ -644,7 +682,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       const res = await fetch(`${apiBase || API_BASE}/bookings/${d.bookingId}/rebook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingDate: d.bookingDate, startTime: d.startTime }),
+        body: JSON.stringify({ bookingDate: d.bookingDate, startTime: d.startTime, selectedSubServices: d.selectedSubServices, voucherCode: d.voucherCode }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
       showToastMsg('Đặt lại thành công!');
@@ -2317,7 +2355,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
       {/* ── REBOOK MODAL ── */}
       {showRebookModal && (() => {
-        const totalPrice = rebookTarget?.finalPrice || 0;
+        const basePrice = rebookTarget?.packageId?.price || rebookTarget?.finalPrice || 0;
+        const subServiceTotal = (rebookSubServices || []).filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
+        const totalPrice = Math.max(0, basePrice + subServiceTotal - rebookVoucherDiscount);
         const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
         const currentAmount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
         const branchName = rebookTarget?.branchId?.name || rebookTarget?.branchName || '';
@@ -2353,6 +2393,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     <span className="text-slate-500">Giờ cũ</span>
                     <span className="font-medium text-slate-800">{rebookTarget?.startTime || '—'}</span>
                   </div>
+                  {subServiceTotal > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Dịch vụ thêm</span>
+                      <span className="font-medium text-emerald-600">+{subServiceTotal.toLocaleString('vi-VN')}₫</span>
+                    </div>
+                  )}
+                  {rebookVoucherDiscount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Giảm giá</span>
+                      <span className="font-medium text-red-500">-{rebookVoucherDiscount.toLocaleString('vi-VN')}₫</span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5">
                     <span className="text-slate-500">Tổng tiền</span>
                     <span className="font-bold text-emerald-600">{totalPrice.toLocaleString('vi-VN')}₫</span>
@@ -2453,6 +2505,108 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     ) : !rebookSlotsLoading && rebookSlots.length === 0 && rebookDate ? (
                       <p className="text-xs text-amber-500 mt-1">Không có khung giờ trống cho ngày này</p>
                     ) : null}
+                  </div>
+
+                  {/* Sub-services toggle */}
+                  {rebookAvailableSubServices.length > 0 && (
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                        </svg>
+                        Dịch vụ thêm (Tùy chọn)
+                      </label>
+                      <div className="space-y-2">
+                        {rebookAvailableSubServices.map(sub => {
+                          const isMandatory = !sub.isOptional;
+                          const checked = rebookSubServices.some(s => s.name === sub.name);
+                          return (
+                            <button type="button" key={sub.name}
+                              onClick={() => {
+                                if (isMandatory) return;
+                                setRebookSubServices(prev =>
+                                  checked ? prev.filter(s => s.name !== sub.name) : [...prev, { name: sub.name, price: sub.price, duration: sub.duration }]
+                                );
+                              }}
+                              className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs font-semibold transition-all cursor-pointer ${
+                                isMandatory
+                                  ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
+                                  : checked
+                                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                {!isMandatory && (
+                                  <span className={`w-4 h-4 rounded border flex items-center justify-center text-white text-[10px] font-bold ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {checked ? '✓' : ''}
+                                  </span>
+                                )}
+                                {sub.name}
+                              </span>
+                              <span className={isMandatory ? 'text-slate-400' : 'text-emerald-600'}>
+                                {sub.price > 0 ? `+${sub.price.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {subServiceTotal > 0 && (
+                        <p className="text-xs text-slate-500 mt-1.5 text-right">
+                          Phí dịch vụ thêm: <span className="font-bold text-emerald-600">+{subServiceTotal.toLocaleString('vi-VN')}₫</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Voucher code */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1.5">Mã giảm giá</label>
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="Nhập mã giảm giá"
+                        value={rebookVoucherCode}
+                        onChange={e => { setRebookVoucherCode(e.target.value); setRebookVoucherDiscount(0); }}
+                        className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
+                      />
+                      <button type="button" onClick={async () => {
+                        if (!rebookVoucherCode.trim()) { setRebookFormError('Nhập mã giảm giá'); return; }
+                        setRebookApplyingVoucher(true);
+                        setRebookFormError('');
+                        try {
+                          const vRes = await fetch(`${apiBase || API_BASE}/vouchers/validate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({
+                              code: rebookVoucherCode.trim().toUpperCase(),
+                              amount: basePrice + subServiceTotal,
+                              branchId: rebookTarget?.branchId?._id || rebookTarget?.branchId?.id || rebookTarget?.branchId,
+                              packageId: rebookTarget?.packageId?._id || rebookTarget?.packageId?.id || rebookTarget?.packageId,
+                            }),
+                          });
+                          const vData = await vRes.json();
+                          if (!vRes.ok) throw new Error(vData.message || 'Mã giảm giá không hợp lệ');
+                          const discount = vData?.data?.savings || vData?.data?.discountAmount || 0;
+                          if (discount <= 0) throw new Error('Mã giảm giá không có giá trị');
+                          setRebookVoucherDiscount(discount);
+                          showToastMsg(`Giảm ${discount.toLocaleString('vi-VN')}₫`);
+                        } catch (e) {
+                          setRebookFormError(e.message);
+                          setRebookVoucherDiscount(0);
+                        } finally {
+                          setRebookApplyingVoucher(false);
+                        }
+                      }} disabled={rebookApplyingVoucher}
+                        className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-1 cursor-pointer">
+                        {rebookApplyingVoucher ? (
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        ) : 'Áp dụng'}
+                      </button>
+                    </div>
+                    {rebookVoucherDiscount > 0 && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        Đã áp dụng giảm <strong>{rebookVoucherDiscount.toLocaleString('vi-VN')}₫</strong>
+                      </p>
+                    )}
                   </div>
 
                   {/* Payment mode: 30% deposit or 100% full */}

@@ -1746,7 +1746,7 @@ exports.replyToFeedback = async (bookingId, managerId, reply) => {
 };
 
 // ─── Rebook: clone a booking with new date/time ───────────────────────────────
-exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime }) => {
+exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime, selectedSubServices, voucherCode }) => {
   const src = await Booking.findById(bookingId)
     .populate('branchId');
   if (!src) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
@@ -1773,7 +1773,9 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   }
   pkgDuration = pkgDuration || 30;
   pkgName = pkgName || 'Gói dịch vụ';
-  const totalDuration = pkgDuration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
+  // Use passed sub-services or fall back to original booking's selection
+  const effectiveSubServices = selectedSubServices || src.selectedSubServices || [];
+  const totalDuration = pkgDuration + effectiveSubServices.reduce((s, ss) => s + (ss.duration || 0), 0);
   const endTime = computeEndTime(startTime, totalDuration);
 
   // Check slot conflict
@@ -1793,6 +1795,36 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   const user = await User.findById(src.userId);
   const priority = TIER_PRIORITY[user?.tier] || 1;
 
+  // ── Price re-computation ─────────────────────────────────────────────
+  // Base: package price (fallback to src.finalPrice)
+  const pkgPrice = pkg?.price || src.finalPrice || 0;
+  // Add optional sub-service prices (only those with price > 0, i.e. not bundled-in)
+  const optionalSubPrice = effectiveSubServices
+    .filter(ss => ss.price > 0)
+    .reduce((s, ss) => s + (ss.price || 0), 0);
+  let computedFinalPrice = pkgPrice + optionalSubPrice;
+  let computedDiscount = 0;
+  let validatedVoucherCode = undefined;
+  // Validate voucher if provided
+  if (voucherCode && String(voucherCode).trim()) {
+    try {
+      const Voucher = require('../models/voucher.schema');
+      const v = await Voucher.findOne({ code: String(voucherCode).trim().toUpperCase() });
+      if (v && v.status === 'active') {
+        const now = new Date();
+        if ((!v.startDate || v.startDate <= now) && (!v.endDate || v.endDate >= now)) {
+          if (v.usageLimit === undefined || v.usedCount < v.usageLimit) {
+            validatedVoucherCode = v.code;
+            computedDiscount = v.discountType === 'percent'
+              ? Math.min(Math.round(computedFinalPrice * v.discountValue / 100), v.maxDiscount || Infinity)
+              : v.discountValue;
+          }
+        }
+      }
+    } catch (_) { /* voucher validation failed silently */ }
+  }
+  computedFinalPrice = Math.max(0, computedFinalPrice - computedDiscount);
+
   const newBooking = await Booking.create({
     userId: src.userId,
     branchId: src.branchId,
@@ -1805,16 +1837,16 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     endTime,
     bookingCode: generateBookingCode(),
     bookingType: src.bookingType === 'recurring' ? 'single' : src.bookingType,
-    selectedSubServices: src.selectedSubServices || [],
+    selectedSubServices: effectiveSubServices,
     note: src.note,
     priority,
     rebookedFromId: src._id,
-    finalPrice: src.finalPrice,
-    discountAmount: src.discountAmount || 0,
+    finalPrice: computedFinalPrice,
+    discountAmount: computedDiscount,
     depositAmount: src.bookingType === 'slot_pack_usage'
       ? 0
-      : Math.round(((src.finalPrice || 0) * DEPOSIT_RATE) / 1000) * 1000,
-    voucherCode: undefined,
+      : Math.round(((computedFinalPrice || 0) * DEPOSIT_RATE) / 1000) * 1000,
+    voucherCode: validatedVoucherCode,
     paymentStatus: 'unpaid',
   });
 
