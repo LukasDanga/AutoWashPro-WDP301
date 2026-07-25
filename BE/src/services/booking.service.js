@@ -1811,9 +1811,9 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
         if ((!v.startDate || v.startDate <= now) && (!v.endDate || v.endDate >= now)) {
           if (v.usageLimit === undefined || v.usedCount < v.usageLimit) {
             validatedVoucherCode = v.code;
-            computedDiscount = v.discountType === 'percent'
-              ? Math.min(Math.round(computedFinalPrice * v.discountValue / 100), v.maxDiscount || Infinity)
-              : v.discountValue;
+            computedDiscount = v.type === 'percentage'
+              ? Math.min(Math.round(computedFinalPrice * v.value / 100), v.maxDiscount || Infinity)
+              : v.value;
           }
         }
       }
