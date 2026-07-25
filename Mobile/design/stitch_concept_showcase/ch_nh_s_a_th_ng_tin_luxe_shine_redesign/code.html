@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile - Emerald Detail Elite</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#006c47",
+                        "surface-dim": "#d9dadb",
+                        "primary-fixed-dim": "#71dba6",
+                        "on-background": "#191c1d",
+                        "surface": "#f8f9fa",
+                        "primary-container": "#00875a",
+                        "on-surface": "#191c1d",
+                        "secondary-container": "#e2dfde",
+                        "outline-variant": "#bdcac0",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-secondary-container": "#636262",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#e7e8e9",
+                        "on-primary-fixed": "#002113",
+                        "tertiary-fixed": "#ffe088",
+                        "on-primary": "#ffffff",
+                        "secondary": "#5f5e5e",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#cca730",
+                        "primary": "#006b47",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-bright": "#f8f9fa",
+                        "on-primary-container": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "on-tertiary-fixed": "#241a00",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "on-surface-variant": "#3e4942",
+                        "primary-fixed": "#8df7c1",
+                        "surface-variant": "#e1e3e4",
+                        "background": "#f8f9fa",
+                        "outline": "#6e7a71",
+                        "surface-container-low": "#f3f4f5",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "inverse-on-surface": "#f0f1f2",
+                        "inverse-surface": "#2e3132",
+                        "on-secondary": "#ffffff",
+                        "tertiary": "#735c00",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-container": "#edeeef",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#71dba6",
+                        "on-tertiary-container": "#4f3d00",
+                        "on-primary-fixed-variant": "#005235",
+                        "surface-container-lowest": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "base": "8px",
+                        "container-padding": "20px",
+                        "section-margin": "32px",
+                        "card-gap": "12px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "caption": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "headline-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Manrope', sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        /* Glassmorphism styling */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        .input-glass {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #E0E0E0;
+            transition: all 0.3s ease;
+        }
+        
+        .input-glass:focus-within {
+            border-color: #00875A;
+            box-shadow: 0 0 0 2px rgba(0, 135, 90, 0.1);
+        }
+        
+        /* Floating label specific styles */
+        .floating-input:focus + .floating-label,
+        .floating-input:not(:placeholder-shown) + .floating-label {
+            transform: translateY(-50%) scale(0.85);
+            top: 0;
+            left: 12px;
+            color: #00875A;
+            background: white;
+            padding: 0 4px;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen flex flex-col items-center">
+
+    <!-- Mobile Container Wrapper for preview context -->
+    <div class="w-full max-w-md mx-auto bg-surface min-h-screen shadow-2xl overflow-hidden relative flex flex-col">
+        
+        <!-- TopAppBar -->
+        <header class="flex justify-between items-center px-container-padding py-base w-full bg-surface z-10 sticky top-0">
+            <button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors text-primary" aria-label="Go back">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </button>
+            <h1 class="font-headline-sm text-headline-sm text-on-surface absolute left-1/2 -translate-x-1/2">Chỉnh sửa thông tin</h1>
+            <div class="w-10 h-10"></div> <!-- Spacer for centering -->
+        </header>
+
+        <!-- Main Content Canvas -->
+        <main class="flex-1 px-container-padding pt-6 pb-24 overflow-y-auto w-full">
+            
+            <!-- Profile Avatar Section -->
+            <div class="flex flex-col items-center mb-8">
+                <div class="relative group cursor-pointer">
+                    <!-- Avatar Image -->
+                    <div class="w-24 h-24 rounded-full overflow-hidden border-4 border-surface shadow-[0px_4px_20px_rgba(0,135,90,0.15)] ring-2 ring-primary-container bg-surface-container-low flex items-center justify-center">
+                         <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFqWlueG-h6E7izX6N5qKC3zIEaf3nsuGCL4OO2sx2W72YP6_UV3P2_-OAugmdZzfCBoKYOijyY-ajZh1HveBlpd8HKV4eQ01Fq4XBjixGQukKTuSlgJ_W7gsGmj46wl91Eo9i3f2ugXOOQV0Qd_Sh052D3QWSKz8TpCQqVp02E6HXQcFOFY0Lyj3L7eKZF0SmqSte1pgW1tY6VwOIBOvooDz1AlvR-nms_vIGVbHAyE0Lpa3-Z18VIHm_UvrAo87optw" data-alt="A detailed headshot portrait of an Asian male, wearing a dark jacket over a white t-shirt, set against a plain light wall. The image serves as a profile picture placeholder in a modern UI design. Lighting is soft and natural." class="w-full h-full object-cover" alt="Profile Picture">
+                    </div>
+                    
+                    <!-- Camera Icon Button -->
+                    <button class="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-surface border border-outline-variant shadow-sm flex items-center justify-center text-primary-container hover:bg-surface-container-low transition-colors group-hover:scale-105" aria-label="Change profile picture">
+                        <span class="material-symbols-outlined text-[18px]">photo_camera</span>
+                    </button>
+                </div>
+                <p class="mt-3 font-caption text-caption text-secondary">Nhấn để thay đổi ảnh đại diện</p>
+            </div>
+
+            <!-- Form Container (Glassmorphism) -->
+            <div class="glass-card rounded-xl p-5 w-full flex flex-col gap-5">
+                
+                <!-- Full Name Field -->
+                <div class="flex flex-col gap-1">
+                    <label for="fullName" class="font-label-md text-label-md text-on-surface-variant ml-1">Họ và tên *</label>
+                    <div class="input-glass rounded-lg w-full h-12 flex items-center px-4">
+                        <input type="text" id="fullName" value="Ho Dinh Anh" class="w-full h-full bg-transparent border-none outline-none font-body-md text-body-md text-on-surface focus:ring-0 p-0" placeholder="Nhập họ và tên">
+                    </div>
+                </div>
+
+                <!-- Phone Number Field -->
+                <div class="flex flex-col gap-1">
+                    <label for="phoneNumber" class="font-label-md text-label-md text-on-surface-variant ml-1">Số điện thoại</label>
+                    <div class="input-glass rounded-lg w-full h-12 flex items-center px-4">
+                        <input type="tel" id="phoneNumber" value="0867007818" class="w-full h-full bg-transparent border-none outline-none font-body-md text-body-md text-on-surface focus:ring-0 p-0" placeholder="Nhập số điện thoại">
+                    </div>
+                </div>
+
+                <!-- Date of Birth Field -->
+                <div class="flex flex-col gap-1">
+                    <label for="dob" class="font-label-md text-label-md text-on-surface-variant ml-1">Ngày sinh</label>
+                    <div class="input-glass rounded-lg w-full h-12 flex items-center px-4 relative">
+                        <input type="date" id="dob" class="w-full h-full bg-transparent border-none outline-none font-body-md text-body-md text-secondary focus:ring-0 p-0 appearance-none" placeholder="YYYY-MM-DD">
+                         <!-- Custom Calendar Icon to overlay native date picker icon if needed, though native often looks fine, adding for premium feel -->
+                        <span class="material-symbols-outlined absolute right-4 text-secondary pointer-events-none">calendar_month</span>
+                    </div>
+                </div>
+
+                <!-- Email Field (Read-only styled) -->
+                <div class="flex flex-col gap-1 mt-2">
+                    <div class="bg-surface-container-low rounded-lg w-full p-3 border border-transparent">
+                        <label for="email" class="font-label-md text-label-md text-secondary block mb-1">Email</label>
+                        <input type="email" id="email" value="dinhanh200304@gmail.com" readonly="" class="w-full bg-transparent border-none outline-none font-body-md text-body-md text-on-surface focus:ring-0 p-0" aria-describedby="email-note">
+                        <p id="email-note" class="font-caption text-caption text-secondary mt-1">Email không thể thay đổi</p>
+                    </div>
+                </div>
+
+            </div>
+            
+            <!-- Spacer to push button up if screen is tall, or just margin -->
+            <div class="h-8"></div>
+
+            <!-- Primary Action Button -->
+            <button class="w-full h-14 bg-primary-container text-on-primary-container font-headline-sm text-headline-sm rounded-lg shadow-[0px_10px_30px_rgba(0,135,90,0.15)] hover:bg-surface-tint active:scale-[0.98] transition-all duration-200 flex items-center justify-center">
+                Lưu thay đổi
+            </button>
+
+        </main>
+        
+        <!-- Bottom Safe Area Spacer for modern devices -->
+        <div class="h-safe pb-4 bg-surface w-full"></div>
+
+    </div>
+
+
+
+
+</body></html>

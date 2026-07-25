@@ -33,6 +33,7 @@ import {
   Animated,
   Easing,
   KeyboardAvoidingView,
+  TouchableOpacity,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -80,8 +81,9 @@ const getVariantConfig = (variant: AlertVariant, colors: any, isDark: boolean) =
   const isLight = !isDark;
   switch (variant) {
     case 'success':
+      // Preserved: Semantic success visualization colors (Emerald/Green tint)
       return {
-        iconBg: isLight ? '#FFFFFF' : 'rgba(34, 197, 94, 0.2)',
+        iconBg: isLight ? colors.surfaceElevated : 'rgba(34, 197, 94, 0.2)',
         iconBorderColor: isLight ? '#BBF7D0' : 'rgba(34, 197, 94, 0.4)',
         iconColor: colors.success || '#22c55e',
         icon: Icons.success || 'checkmark-circle-outline',
@@ -90,8 +92,9 @@ const getVariantConfig = (variant: AlertVariant, colors: any, isDark: boolean) =
         subtitleColor: isLight ? '#166534' : 'rgba(34, 197, 94, 0.9)',
       };
     case 'warning':
+      // Preserved: Semantic warning visualization colors (Amber/Yellow tint)
       return {
-        iconBg: isLight ? '#FFFFFF' : 'rgba(245, 158, 11, 0.2)',
+        iconBg: isLight ? colors.surfaceElevated : 'rgba(245, 158, 11, 0.2)',
         iconBorderColor: isLight ? '#FDE68A' : 'rgba(245, 158, 11, 0.4)',
         iconColor: colors.warning || '#f59e0b',
         icon: Icons.warning || 'alert-circle-outline',
@@ -100,8 +103,9 @@ const getVariantConfig = (variant: AlertVariant, colors: any, isDark: boolean) =
         subtitleColor: isLight ? '#92400E' : 'rgba(245, 158, 11, 0.9)',
       };
     case 'danger':
+      // Preserved: Semantic danger visualization colors (Red tint)
       return {
-        iconBg: isLight ? '#FFFFFF' : 'rgba(239, 68, 68, 0.2)',
+        iconBg: isLight ? colors.surfaceElevated : 'rgba(239, 68, 68, 0.2)',
         iconBorderColor: isLight ? '#FECACA' : 'rgba(239, 68, 68, 0.4)',
         iconColor: colors.error || '#ef4444',
         icon: Icons.warning || 'alert-circle-outline',
@@ -110,10 +114,11 @@ const getVariantConfig = (variant: AlertVariant, colors: any, isDark: boolean) =
         subtitleColor: isLight ? '#991B1B' : 'rgba(239, 68, 68, 0.9)',
       };
     case 'confirm':
+      // Preserved: Semantic info/confirm visualization colors (Blue tint)
       return {
-        iconBg: isLight ? '#FFFFFF' : 'rgba(59, 130, 246, 0.2)',
+        iconBg: isLight ? colors.surfaceElevated : 'rgba(59, 130, 246, 0.2)',
         iconBorderColor: isLight ? '#BAE6FD' : 'rgba(59, 130, 246, 0.4)',
-        iconColor: colors.primary || '#3b82f6',
+        iconColor: colors.primary || '#10b981',
         icon: Icons.helpOutline || 'help-circle-outline',
         gradientColors: isLight ? ['#F0F9FF', 'rgba(59, 130, 246, 0.1)'] : ['rgba(59, 130, 246, 0.15)', 'rgba(59, 130, 246, 0.05)'],
         defaultSubtitle: 'Yêu cầu xác nhận',
@@ -121,10 +126,11 @@ const getVariantConfig = (variant: AlertVariant, colors: any, isDark: boolean) =
       };
     case 'info':
     default:
+      // Preserved: Semantic info visualization colors (Blue tint)
       return {
-        iconBg: isLight ? '#FFFFFF' : 'rgba(59, 130, 246, 0.2)',
+        iconBg: isLight ? colors.surfaceElevated : 'rgba(59, 130, 246, 0.2)',
         iconBorderColor: isLight ? '#BAE6FD' : 'rgba(59, 130, 246, 0.4)',
-        iconColor: colors.info || '#3b82f6',
+        iconColor: colors.info || '#10b981',
         icon: Icons.info || 'information-circle-outline',
         gradientColors: isLight ? ['#F0F9FF', 'rgba(59, 130, 246, 0.1)'] : ['rgba(59, 130, 246, 0.15)', 'rgba(59, 130, 246, 0.05)'],
         defaultSubtitle: 'Thông báo',
@@ -494,7 +500,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
+    backgroundColor: '#000000', // Preserved: Modal backdrop opacity base
   },
   center: {
     flex: 1,

@@ -5,13 +5,13 @@
  */
 
 export const lightColors = {
-  // Primary Colors (Royal Blue Trust)
-  primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  primaryLight: '#3B82F6',
-  primarySubtle: '#EFF6FF',
-  secondary: '#1E40AF',
-  accent: '#0EA5E9',
+  // Primary Colors (Emerald Trust - FE sync)
+  primary: '#10B981', // emerald-500
+  primaryDark: '#059669', // emerald-600
+  primaryLight: '#34D399', // emerald-400
+  primarySubtle: '#ECFDF5', // emerald-50
+  secondary: '#0F766E', // teal-700
+  accent: '#059669', // emerald-600
 
   // Background Colors
   background: '#FFFFFF',
@@ -52,21 +52,21 @@ export const lightColors = {
 
   // Booking Status Colors
   statusPending: '#EA580C',
-  statusConfirmed: '#2563EB',
+  statusConfirmed: '#10B981', // emerald-500
   statusCheckedIn: '#9333EA',
   statusInProgress: '#0891B2',
-  statusCompleted: '#16A34A',
+  statusCompleted: '#059669', // emerald-600
   statusCancelled: '#DC2626',
 };
 
 export const darkColors = {
-  // Primary Colors (lighter for dark mode)
-  primary: '#3B82F6',
-  primaryDark: '#2563EB',
-  primaryLight: '#60A5FA',
-  primarySubtle: 'rgba(59, 130, 246, 0.15)',
-  secondary: '#60A5FA',
-  accent: '#38BDF8',
+  // Primary Colors (Emerald - dark mode)
+  primary: '#34D399', // emerald-400
+  primaryDark: '#10B981', // emerald-500
+  primaryLight: '#6EE7B7', // emerald-300
+  primarySubtle: 'rgba(16, 185, 129, 0.15)',
+  secondary: '#14B8A6', // teal-500
+  accent: '#34D399', // emerald-400
 
   // Background Colors (Dark mode)
   background: '#0F172A',
@@ -107,10 +107,10 @@ export const darkColors = {
 
   // Booking Status Colors
   statusPending: '#FB923C',
-  statusConfirmed: '#3B82F6',
+  statusConfirmed: '#34D399', // emerald-400
   statusCheckedIn: '#A855F7',
   statusInProgress: '#22D3EE',
-  statusCompleted: '#4ADE80',
+  statusCompleted: '#10B981', // emerald-500
   statusCancelled: '#F87171',
 };
 

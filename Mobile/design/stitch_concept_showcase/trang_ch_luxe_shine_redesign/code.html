@@ -1,0 +1,327 @@
+<!DOCTYPE html><html lang="vi"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Auto Wash Pro - Đặt Lịch Chăm Sóc Xe Hơi Cao Cấp</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f8f9fa",
+                        "on-primary-container": "#ffffff",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "primary": "#006b47",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "inverse-on-surface": "#f0f1f2",
+                        "primary-container": "#00875a",
+                        "surface-container-low": "#f3f4f5",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#cca730",
+                        "surface": "#f8f9fa",
+                        "on-tertiary-container": "#4f3d00",
+                        "primary-fixed": "#8df7c1",
+                        "on-secondary-container": "#636262",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-container": "#edeeef",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-tint": "#006c47",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "tertiary-fixed": "#ffe088",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "outline-variant": "#bdcac0",
+                        "background": "#f8f9fa",
+                        "surface-variant": "#e1e3e4",
+                        "secondary-container": "#e2dfde",
+                        "on-surface": "#191c1d",
+                        "secondary": "#5f5e5e",
+                        "surface-container-high": "#e7e8e9",
+                        "outline": "#6e7a71",
+                        "on-background": "#191c1d",
+                        "inverse-primary": "#71dba6",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d9dadb",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#005235",
+                        "on-primary-fixed": "#002113",
+                        "on-tertiary-fixed": "#241a00",
+                        "tertiary": "#735c00",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#71dba6",
+                        "on-surface-variant": "#3e4942"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "2xl": "1rem",
+                        "3xl": "1.5rem"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "base": "8px",
+                        "card-gap": "12px",
+                        "section-margin": "32px",
+                        "container-padding": "20px"
+                    },
+                    "fontFamily": {
+                        "caption": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "headline-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }]
+                    },
+                    "boxShadow": {
+                        "soft": "0px 4px 20px rgba(0, 0, 0, 0.05)",
+                        "floating": "0px 10px 30px rgba(0, 135, 90, 0.15)",
+                        "nav": "0px -4px 20px rgba(0,0,0,0.05)"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .icon-fill { font-variation-settings: 'FILL' 1; }
+        
+        /* Hide scrollbar for horizontal scroll areas but keep functionality */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased pb-24 max-w-md mx-auto md:max-w-full md:pb-0 relative overflow-x-hidden">
+<!-- Desktop Navigation (Hidden on Mobile) -->
+<nav class="hidden md:flex justify-between items-center w-full px-container-padding py-base max-w-7xl mx-auto bg-surface shadow-sm z-50 sticky top-0">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg">
+                H
+            </div>
+<div>
+<p class="font-caption text-caption text-secondary">Chào buổi sáng,</p>
+<p class="font-label-md text-label-md">Ho Dinh Anh</p>
+</div>
+</div>
+<div class="font-headline-lg text-headline-lg font-extrabold text-primary tracking-tight">AUTO WASH PRO</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">qr_code_scanner</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+</div>
+</nav>
+<!-- Mobile Top App Bar -->
+<div class="md:hidden flex justify-between items-center w-full px-container-padding pt-6 pb-4 absolute top-0 z-20 text-white">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center font-bold text-white shadow-md">
+                H
+            </div>
+<div>
+<p class="text-xs opacity-80">Chào buổi sáng,</p>
+<p class="font-label-md text-label-md text-white">Ho Dinh Anh</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors">
+<span class="material-symbols-outlined text-white">qr_code_scanner</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors relative">
+<span class="material-symbols-outlined text-white">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+</div>
+</div>
+<main>
+<!-- Hero Section -->
+<section class="relative h-[60vh] md:h-[70vh] w-full flex flex-col justify-end pb-12 rounded-b-[2rem] overflow-hidden">
+<!-- Background Image -->
+<div class="absolute inset-0 w-full h-full bg-cover bg-center" data-alt="A sleek dark metallic Porsche sports car being professionally detailed in a premium, dimly lit garage setting. Water mist is being sprayed over the car's surface, catching the light and highlighting its curves. The mood is high-end, precise, and luxurious, matching a modern corporate aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCD8UTLjwIe98lDO69q46qdKXidvs_68MEIx2QRaTLzsTZkUO7-91BUwZYJwr6jEMB2_HWRobr217h8aPolrZhumTPSuOe_XjMGddLErp9ADc8r6NCjn6q31vPNr7DdDGmLdh8zwzyrRz_z_YW70RC50PkjUG6qP1P-9T-f6EJKgYY9Ut_-0y-PXrlAhIN1SJgSEgTTp4YSutZ8TMcl10AVzUphf2uN3JC_8-6rKlmPtt-5LjjdFRrBKw')"></div>
+<!-- Gradient Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+<div class="relative z-10 px-container-padding text-center md:max-w-3xl md:mx-auto w-full">
+<h1 class="font-headline-lg text-headline-lg md:font-display-lg md:text-display-lg font-extrabold text-white mb-2 uppercase tracking-wide drop-shadow-lg">AUTO WASH PRO</h1>
+<p class="font-headline-sm text-headline-sm text-white mb-1">Book Premium Car Care</p>
+<p class="font-body-md text-body-md text-gray-300 mb-8">Your car, perfected.</p>
+<button class="bg-primary-container text-white font-label-md text-label-md py-4 px-8 rounded-lg shadow-floating w-full md:w-auto md:px-16 flex items-center justify-center gap-2 hover:bg-primary transition-all active:scale-95 mx-auto">
+                    Book Now
+                    <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+</button>
+</div>
+</section>
+<!-- Quick Actions Card -->
+<div class="relative z-20 px-container-padding -mt-8 md:-mt-12 md:max-w-4xl mx-auto">
+<div class="bg-surface-container-lowest rounded-3xl shadow-soft py-6 px-4 flex justify-between md:justify-around items-center">
+<button class="flex flex-col items-center gap-2 group flex-1">
+<div class="w-14 h-14 rounded-full bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">directions_car</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface">Xe của tôi</span>
+</button>
+<!-- Divider -->
+<div class="w-px h-12 bg-surface-variant hidden sm:block"></div>
+<button class="flex flex-col items-center gap-2 group flex-1">
+<div class="w-14 h-14 rounded-full bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">featured_seasonal_and_gifts</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface">Ưu đãi</span>
+</button>
+<!-- Divider -->
+<div class="w-px h-12 bg-surface-variant hidden sm:block"></div>
+<button class="flex flex-col items-center gap-2 group flex-1">
+<div class="w-14 h-14 rounded-full bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">smart_toy</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface">Hỗ trợ AI</span>
+</button>
+</div>
+</div>
+<!-- Explore Services Section -->
+<section class="mt-section-margin px-container-padding md:max-w-7xl md:mx-auto">
+<div class="flex justify-between items-end mb-4">
+<h2 class="font-headline-md text-headline-md text-on-surface">Explore Services</h2>
+<button class="text-primary font-label-md text-label-md hover:underline">Xem tất cả</button>
+</div>
+<!-- Horizontal Scroll on Mobile, Grid on Desktop -->
+<div class="flex overflow-x-auto no-scrollbar gap-card-gap pb-4 md:grid md:grid-cols-3 xl:grid-cols-4 md:overflow-visible">
+<!-- Service Card 1 -->
+<div class="min-w-[240px] md:min-w-0 bg-surface-container-lowest rounded-2xl shadow-soft overflow-hidden flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]">
+<div class="h-40 w-full bg-cover bg-center" data-alt="A grey luxury car parked outdoors on a bright sunny day, showcasing a perfectly clean and polished exterior after a signature detailing service. The paint is highly reflective." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBuLscY0s4ksmJ-EdNfMeaYsF9AWsDAA4M6lJEjY7zAfYoEahvdgBXsZgEWvHl8Hgxkx9Lipk4MKCPaoc6g-GF0L40mfaHwbpCuIhX1x6qpe7J-9DR7cbh54VCqR_6JR7OqDaAEQpw-pj9znjpX3dQu4c4Hf0Nb2nkh7rNG1iLQzju-raMMg5G4Xp3YTg4VcVK_N3G8Q1Mf1IfiXbrMv2yu-qwx4OXRSZpgkJ9_pNTnVzo3uz4ILF9ZSw')"></div>
+<div class="p-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Signature Detail</h3>
+<div class="flex items-center text-secondary font-caption text-caption mb-3 gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+                            90 min
+                        </div>
+<div class="flex justify-between items-center">
+<span class="font-headline-sm text-headline-sm text-on-surface">50.000 ₫</span>
+<span class="material-symbols-outlined text-secondary">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Service Card 2 -->
+<div class="min-w-[240px] md:min-w-0 bg-surface-container-lowest rounded-2xl shadow-soft overflow-hidden flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]">
+<div class="h-40 w-full bg-cover bg-center" data-alt="Close up of a black car's rear being aggressively washed with a high-pressure water hose, spraying water everywhere. The scene depicts a thorough cleaning process in a professional setting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD_VvLmfKrGy6C02Xh43dZy9ust8VVPuFENAn6DEXkwpKQ0rIyLGvjua4sUaH4x8Oao-mynK7JyyW0OHoq7hVaQMP_whXtFEjgcGFBCGXsx5gBSwz8LU2zmuEfJeGxJtj4jD_sd8CMZVrrTvVWULi8ACoTK1gmjepr6OnEJCjk90P_u1p2J2JgKRhsHY3D_l4wu2tBf2HyUvTYQXT8zwaSNhUARVldZDSd47f2USNXDe-DZUla78nsxZQ')"></div>
+<div class="p-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Rửa xe chuyên sâu</h3>
+<div class="flex items-center text-secondary font-caption text-caption mb-3 gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+                            45 min
+                        </div>
+<div class="flex justify-between items-center">
+<span class="font-headline-sm text-headline-sm text-on-surface">150.000 ₫</span>
+<span class="material-symbols-outlined text-secondary">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Service Card 3 (Hidden on mobile scroll initially, visible on desktop) -->
+<div class="min-w-[240px] md:min-w-0 bg-surface-container-lowest rounded-2xl shadow-soft overflow-hidden flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]">
+<div class="h-40 w-full bg-cover bg-center" data-alt="A professional detailer using a polishing machine on the hood of a sleek, dark-colored sports car. The focus is on the shiny, mirror-like finish being achieved on the paintwork." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA0PIvzZXWaUv2tbB9OeDxDlU29g75HZKYqYfkFrTtS1kVil3jkkPteY0G_IQ-1suw-j7Ygcyg47ajr49h7MVFvBtPCi2VLaDtwQ64spEbaliDRCQmXCuUcu2DNeZCz2B3iBq7RckUTnPLwxBknVO-i3mGpMCFZDAAG84AJyyRyERHM_taGQtXnrK8IXBtnrSYjx_UgeDkYWVrZw70ylYION60jt0lWl1Z01tIb_e6oFNcKdpgQIuDguw')"></div>
+<div class="p-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Ceramic Coating</h3>
+<div class="flex items-center text-secondary font-caption text-caption mb-3 gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+                            4 hours
+                        </div>
+<div class="flex justify-between items-center">
+<span class="font-headline-sm text-headline-sm text-on-surface">8.500.000 ₫</span>
+<span class="material-symbols-outlined text-secondary">chevron_right</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Recommended Section (Example of Bento Grid layout for Desktop) -->
+<section class="mt-section-margin px-container-padding md:max-w-7xl md:mx-auto mb-12">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4">Gói Đề Xuất</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Large Promo Card -->
+<div class="md:col-span-2 bg-primary rounded-2xl p-6 text-white relative overflow-hidden flex flex-col justify-center min-h-[200px]">
+<div class="relative z-10 max-w-sm">
+<span class="inline-block px-2 py-1 bg-white/20 rounded font-caption text-caption mb-2 backdrop-blur-sm">Khuyến mãi tháng</span>
+<h3 class="font-headline-md text-headline-md mb-2">Combo Bảo Dưỡng Toàn Diện</h3>
+<p class="font-body-md text-body-md opacity-90 mb-4">Giảm 20% khi đặt lịch trước thứ 6.</p>
+<button class="bg-white text-primary font-label-md text-label-md py-2 px-6 rounded-lg w-fit hover:bg-surface-bright transition-colors">Xem chi tiết</button>
+</div>
+<div class="absolute right-0 top-0 bottom-0 w-1/2 bg-cover bg-center opacity-50 mix-blend-overlay" data-alt="Abstract macro shot of metallic car paint with deep emerald green reflections and water droplets, creating a premium and luxurious texture." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuASbISjc65QqGDj_M-QGazaeAfX8dROQ9xx9Yq0cnsbxnXlseSAnJlAuyKht3eoSsGQWmA0ieWRrGnQCUpYd3z-UeuA0HmnGkV8S64ZaWwqOtHNh9iDg_KhUN5qt_TqYXFX-7fegA8X8hM0qrJYHz2ra0fibFbS7tzlO-lbOqQWFNu3CQ-7xLHezbIVMdwHizOTbyxJXJ-vpWWKfU_k2TX_ZEqKmCh_vdcmCpeZ5_Oz-ViB_Lokp6wYlA')"></div>
+</div>
+<!-- Smaller Action Card -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 shadow-soft flex flex-col justify-between min-h-[200px] border-l-4 border-tertiary-container">
+<div>
+<div class="w-10 h-10 rounded-full bg-tertiary-container/10 flex items-center justify-center text-tertiary-container mb-3">
+<span class="material-symbols-outlined">workspace_premium</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Gói Thành Viên VIP</h3>
+<p class="font-caption text-caption text-secondary">Ưu tiên đặt lịch, miễn phí rửa xe định kỳ.</p>
+</div>
+<button class="text-primary font-label-md text-label-md flex items-center gap-1 hover:underline mt-4">
+                         Tìm hiểu thêm <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-surface-container-lowest/90 backdrop-blur-md shadow-nav rounded-t-[1.5rem] border-t border-surface-variant/50">
+<!-- Home (Active) -->
+<a class="flex flex-col items-center justify-center gap-1 min-w-[64px]" href="#">
+<div class="px-4 py-1 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center mb-1">
+<span class="material-symbols-outlined icon-fill">home</span>
+</div>
+<span class="font-caption text-caption text-primary font-semibold">Home</span>
+</a>
+<!-- Bookings -->
+<a class="flex flex-col items-center justify-center gap-1 min-w-[64px] text-secondary hover:text-primary transition-colors" href="#">
+<div class="px-4 py-1 rounded-full flex items-center justify-center mb-1">
+<span class="material-symbols-outlined">calendar_today</span>
+</div>
+<span class="font-caption text-caption">Bookings</span>
+</a>
+<!-- Check-in -->
+<a class="flex flex-col items-center justify-center gap-1 min-w-[64px] text-secondary hover:text-primary transition-colors" href="#">
+<div class="px-4 py-1 rounded-full flex items-center justify-center mb-1">
+<span class="material-symbols-outlined">qr_code_scanner</span>
+</div>
+<span class="font-caption text-caption">Check-in</span>
+</a>
+<!-- Account -->
+<a class="flex flex-col items-center justify-center gap-1 min-w-[64px] text-secondary hover:text-primary transition-colors" href="#">
+<div class="px-4 py-1 rounded-full flex items-center justify-center mb-1">
+<span class="material-symbols-outlined">person</span>
+</div>
+<span class="font-caption text-caption">Account</span>
+</a>
+</nav>
+<!-- iOS Home Indicator Area placeholder (visual only) -->
+<div class="md:hidden fixed bottom-0 w-full h-6 flex justify-center items-end pb-2 pointer-events-none z-[60]">
+<div class="w-1/3 h-1 bg-on-surface/20 rounded-full"></div>
+</div>
+
+
+
+</body></html>

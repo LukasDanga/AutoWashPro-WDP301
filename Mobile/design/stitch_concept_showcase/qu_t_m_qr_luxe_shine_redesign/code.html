@@ -1,0 +1,246 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>QR Check-in - Luxe Shine</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-fixed-variant": "#574500",
+                      "on-tertiary-container": "#4f3d00",
+                      "surface-container-high": "#e7e8e9",
+                      "on-tertiary-fixed": "#241a00",
+                      "on-secondary-fixed-variant": "#474746",
+                      "on-primary-container": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-background": "#191c1d",
+                      "surface-tint": "#006c47",
+                      "surface": "#f8f9fa",
+                      "on-surface-variant": "#3e4942",
+                      "on-primary-fixed-variant": "#005235",
+                      "on-primary": "#ffffff",
+                      "secondary-fixed-dim": "#c8c6c5",
+                      "primary-container": "#00875a",
+                      "on-primary-fixed": "#002113",
+                      "inverse-on-surface": "#f0f1f2",
+                      "on-error": "#ffffff",
+                      "on-secondary-container": "#636262",
+                      "inverse-surface": "#2e3132",
+                      "tertiary-fixed": "#ffe088",
+                      "secondary": "#5f5e5e",
+                      "secondary-fixed": "#e5e2e1",
+                      "surface-variant": "#e1e3e4",
+                      "primary-fixed-dim": "#71dba6",
+                      "on-error-container": "#93000a",
+                      "error": "#ba1a1a",
+                      "surface-dim": "#d9dadb",
+                      "on-secondary-fixed": "#1c1b1b",
+                      "on-secondary": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "primary": "#006b47",
+                      "outline-variant": "#bdcac0",
+                      "tertiary": "#735c00",
+                      "tertiary-fixed-dim": "#e9c349",
+                      "surface-bright": "#f8f9fa",
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#191c1d",
+                      "outline": "#6e7a71",
+                      "secondary-container": "#e2dfde",
+                      "background": "#f8f9fa",
+                      "surface-container-low": "#f3f4f5",
+                      "tertiary-container": "#cca730",
+                      "surface-container-highest": "#e1e3e4",
+                      "inverse-primary": "#71dba6",
+                      "surface-container": "#edeeef",
+                      "primary-fixed": "#8df7c1"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "container-padding": "20px",
+                      "section-margin": "32px",
+                      "card-gap": "12px",
+                      "base": "8px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "headline-sm": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Manrope"
+                      ],
+                      "caption": [
+                              "Manrope"
+                      ],
+                      "headline-lg": [
+                              "Manrope"
+                      ],
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Manrope"
+                      ],
+                      "label-md": [
+                              "Manrope"
+                      ],
+                      "display-lg": [
+                              "Manrope"
+                      ]
+              },
+              "fontSize": {
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "caption": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "800"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+          body { font-family: 'Manrope', sans-serif; }
+      </style>
+</head>
+<body class="bg-surface text-on-surface antialiased pb-24 h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-background docked full-width top-0 flex justify-between items-center px-container-padding py-base w-full max-w-7xl mx-auto z-40 sticky">
+<button class="p-2 -ml-2 text-primary dark:text-primary-fixed hover:bg-surface-container-low transition-colors rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Auto Wash Pro</h1>
+<button class="p-2 -mr-2 text-primary dark:text-primary-fixed hover:bg-surface-container-low transition-colors rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">help</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col px-container-padding py-base w-full max-w-md mx-auto">
+<!-- Segmented Control -->
+<div class="bg-surface-container-low p-1 rounded-full flex mb-section-margin shadow-sm">
+<button class="flex-1 py-2 text-center rounded-full font-label-md text-label-md text-secondary transition-colors">Xem QR</button>
+<button class="flex-1 py-2 text-center rounded-full font-label-md text-label-md bg-primary-container text-on-primary-container shadow-sm transition-colors">Quét QR</button>
+<button class="flex-1 py-2 text-center rounded-full font-label-md text-label-md text-secondary transition-colors">Nhập mã</button>
+</div>
+<!-- Scanner Area -->
+<div class="relative w-full aspect-square bg-surface-container-highest rounded-xl mb-section-margin overflow-hidden flex flex-col items-center justify-center shadow-inner border border-surface-variant">
+<!-- Corner Accents (Simulated Scanner Frame) -->
+<div class="absolute top-4 left-4 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+<div class="absolute top-4 right-4 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+<div class="absolute bottom-4 left-4 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+<div class="absolute bottom-4 right-4 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+<!-- Permission Required State -->
+<div class="flex flex-col items-center justify-center text-center p-6 z-10">
+<span class="material-symbols-outlined text-4xl text-error mb-4" style="font-variation-settings: 'FILL' 1;">warning</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-2">Không có quyền camera</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Vui lòng cấp quyền camera trong Cài đặt thiết bị để sử dụng tính năng quét mã.</p>
+<button class="mt-6 px-6 py-2 bg-surface border border-outline text-primary font-label-md text-label-md rounded-lg shadow-sm hover:bg-surface-container-low transition-colors">
+                    Mở Cài đặt
+                </button>
+</div>
+<!-- Hidden Background Image for context if needed, currently obscured by the permission state -->
+<div class="absolute inset-0 opacity-10 blur-sm mix-blend-overlay pointer-events-none" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB9qOJwyNgw3FYd74p-LIvkihPhNrwGwlcr_wChMGkxS_lLL-hW-uPQmZpWzqqUkT957Ub28pCM2H2mz5VVkLtQw8AAWpenoXGCwY4_KHvp35SMD9yMc8YwWOhU7w7ya9uz0giP5-7AfhZANXRxGZ4PEJCIVRKx6mnEea_0nZI9ukCgbRXyLVPi1oAsvbfeVyOuEdBzbIveDf8ZVY6td_3onS4HYWVzniN97ceVmTmGJpTkFdjNVi4fb3S0kH4BFHbmjHQ'); background-size: cover; background-position: center;"></div>
+</div>
+<!-- Manual Entry Divider -->
+<div class="flex items-center justify-center mb-6">
+<div class="h-px bg-surface-variant flex-grow"></div>
+<span class="px-4 font-caption text-caption text-secondary uppercase tracking-wider">Hoặc</span>
+<div class="h-px bg-surface-variant flex-grow"></div>
+</div>
+<!-- Manual Entry Area -->
+<div class="flex flex-col gap-4">
+<div class="flex flex-col">
+<label class="font-label-md text-label-md text-on-surface-variant mb-2" for="bookingId">Nhập mã booking (ObjectId 24 ký tự)</label>
+<input class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 font-body-md text-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" id="bookingId" placeholder="VD: 5f9b3b3b3b3b3b3b3b3b3b3b" type="text">
+</div>
+<button class="w-full bg-surface-variant text-on-surface-variant font-label-md text-label-md py-4 rounded-lg opacity-50 cursor-not-allowed" disabled="">
+                Check-in với mã này
+            </button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center bg-surface dark:bg-surface-container-lowest px-4 py-3 pb-safe z-50 rounded-t-xl shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] md:hidden">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-fixed-variant hover:text-primary-container transition-colors group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-caption text-caption">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-fixed-variant hover:text-primary-container transition-colors group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">calendar_month</span>
+<span class="font-caption text-caption">Bookings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-bold scale-95 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">qr_code_scanner</span>
+<span class="font-caption text-caption">Check-in</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-fixed-variant hover:text-primary-container transition-colors group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-caption text-caption">Account</span>
+</a>
+</nav>
+
+
+</body></html>

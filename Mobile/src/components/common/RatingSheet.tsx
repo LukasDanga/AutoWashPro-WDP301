@@ -140,7 +140,7 @@ export const RatingSheet: React.FC<RatingSheetProps> = ({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={[styles.star, { color: s <= rating ? '#F59E0B' : colors.border }]}>★</Text>
+                  <Text style={[styles.star, { color: s <= rating ? colors.warning : colors.border }]}>★</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
+    ...typography.h4,
     fontWeight: '700',
   },
   closeBtn: {
@@ -244,22 +244,23 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   label: {
+    ...typography.label,
     textAlign: 'center',
     fontWeight: '600',
     marginBottom: spacing.md,
   },
   input: {
+    ...typography.body,
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
     padding: spacing.md,
-    fontSize: 14,
     minHeight: 100,
     textAlignVertical: 'top',
   },
   charCount: {
+    ...typography.caption,
     textAlign: 'right',
     marginTop: 4,
-    fontSize: 12,
   },
   errorBox: {
     padding: spacing.sm,

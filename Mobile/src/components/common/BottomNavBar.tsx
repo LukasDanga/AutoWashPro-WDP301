@@ -9,8 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { Icon, Icons } from './Icon';
 import { Text } from './Text';
-import { colors } from '../../theme/colors';
+import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
+import { spacing, layout } from '../../theme/spacing';
 
 interface TabItem {
   label: string;
@@ -31,6 +32,7 @@ export function BottomNavBar() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
+  const colors = useColors();
 
   const isActive = (route: string) => {
     if (route === '/(tabs)') return pathname === '/' || pathname === '/(tabs)' || pathname === '/(tabs)/index';
@@ -43,7 +45,10 @@ export function BottomNavBar() {
         styles.tabBar,
         {
           height: 68 + insets.bottom,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : layout.floatingTabBottomOffset,
+          backgroundColor: colors.surfaceElevated,
+          borderTopColor: colors.border,
+          shadowColor: colors.textPrimary,
         },
       ]}
     >
@@ -71,9 +76,8 @@ export function BottomNavBar() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#FFFFFF',
     borderTopWidth: 0,
-    paddingTop: 12,
+    paddingTop: layout.floatingTabBottomOffset,
     elevation: 0,
     position: 'absolute',
     bottom: 0,
@@ -82,14 +86,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     ...Platform.select({
       ios: {
-        shadowColor: '#1A1A1A',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.04,
         shadowRadius: 16,
       },
       android: {
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: '#E5E7EB',
       },
       default: {},
     }),
@@ -98,12 +100,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
   tabLabel: {
-    ...typography.caption,
-    fontWeight: '500',
-    marginTop: 4,
-    fontSize: 12,
+    ...typography.labelSmall,
+    marginTop: spacing.xs,
   },
 });

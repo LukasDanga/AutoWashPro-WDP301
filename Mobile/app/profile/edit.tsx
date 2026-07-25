@@ -16,8 +16,8 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -134,7 +134,7 @@ export default function EditProfileScreen() {
   const renderAvatar = () => {
     const sourceUri = avatarUri || (user?.avatar ? getImageUrl(user.avatar) : null);
     if (sourceUri) {
-      return <Image source={{ uri: sourceUri }} style={styles.avatarImage} />;
+      return <Image source={sourceUri} style={styles.avatarImage} cachePolicy="memory-disk" />;
     }
     return (
       <AppText variant="h1" color="textInverse" weight="700">

@@ -29,10 +29,10 @@ export default function BookingTabScreen() {
   // Animations
   const fadeAnim1 = useRef(new Animated.Value(0)).current;
   const slideAnim1 = useRef(new Animated.Value(30)).current;
-  
+
   const fadeAnim2 = useRef(new Animated.Value(0)).current;
   const slideAnim2 = useRef(new Animated.Value(30)).current;
-  
+
   const fadeAnim3 = useRef(new Animated.Value(0)).current;
   const slideAnim3 = useRef(new Animated.Value(30)).current;
 
@@ -66,10 +66,10 @@ export default function BookingTabScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerContent}>
-          <AppText style={styles.headerTitle} color="#1A1A1A">
+          <AppText variant="h2" color="textPrimary">
             Đặt lịch dịch vụ
           </AppText>
-          <AppText style={styles.headerSubtitle} color="#6B7280">
+          <AppText variant="body" color="textSecondary">
             Chọn giải pháp chăm sóc xe phù hợp
           </AppText>
         </View>
@@ -88,16 +88,16 @@ export default function BookingTabScreen() {
             accessibilityLabel="Đặt lịch thường"
             style={styles.pressable}
           >
-            <Card accentBlob pressFeedback="none" padding={0}>
+            <Card accentBlob padding={0}>
               <View style={styles.cardRow}>
                 <View style={styles.iconContainer}>
                   <Icon name={Icons.carOutline} size={28} color={colors.primary} />
                 </View>
                 <View style={styles.cardText}>
-                  <AppText style={styles.cardTitle} color="#1A1A1A">
+                  <AppText variant="h4" color="textPrimary">
                     Đặt lịch thường
                   </AppText>
-                  <AppText style={styles.cardDescription} color="#6B7280">
+                  <AppText variant="body" color="textSecondary">
                     Rửa xe đơn lẻ, nhanh chóng & tiện lợi
                   </AppText>
                 </View>
@@ -116,16 +116,16 @@ export default function BookingTabScreen() {
             accessibilityLabel="Đặt lịch định kỳ"
             style={styles.pressable}
           >
-            <Card accentBlob pressFeedback="none" padding={0}>
+            <Card accentBlob padding={0}>
               <View style={styles.cardRow}>
                 <View style={styles.iconContainer}>
                   <Icon name={Icons.refresh} size={28} color={colors.primary} />
                 </View>
                 <View style={styles.cardText}>
-                  <AppText style={styles.cardTitle} color="#1A1A1A">
+                  <AppText variant="h4" color="textPrimary">
                     Đặt lịch định kỳ
                   </AppText>
-                  <AppText style={styles.cardDescription} color="#6B7280">
+                  <AppText variant="body" color="textSecondary">
                     Lên lịch tự động hàng tuần, tiết kiệm thời gian
                   </AppText>
                 </View>
@@ -146,8 +146,8 @@ export default function BookingTabScreen() {
           >
             <View style={{ position: 'relative' }}>
               <View style={styles.badgeContainer}>
-                <View style={styles.badge}>
-                  <AppText style={styles.badgeText}>Best Value</AppText>
+                <View style={[styles.badge, { backgroundColor: colors.infoLight }]}>
+                  <AppText variant="labelSmall" style={{ color: colors.info }}>Best Value</AppText>
                 </View>
               </View>
               <LinearGradient
@@ -162,10 +162,10 @@ export default function BookingTabScreen() {
                     <Icon name={Icons.voucher} size={28} color={colors.accent} />
                   </View>
                   <View style={styles.cardText}>
-                    <AppText style={styles.cardTitle} color="#1A1A1A">
+                    <AppText variant="h4" color="textPrimary">
                       Gói lượt
                     </AppText>
-                    <AppText style={styles.cardDescription} color="#6B7280">
+                    <AppText variant="body" color="textSecondary">
                       Mua gói nhiều lượt để nhận giá ưu đãi tốt nhất
                     </AppText>
                   </View>
@@ -189,16 +189,6 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     gap: 4,
-  },
-  headerTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 26,
-    color: '#1A1A1A',
-  },
-  headerSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 14,
-    color: '#6B7280',
   },
 
   // Scroll content
@@ -266,17 +256,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  cardTitle: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 18,
-    color: '#1A1A1A',
-  },
-  cardDescription: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6B7280',
-  },
 
   // Slot pack card specific
   slotPackCard: {
@@ -305,15 +284,8 @@ const styles = StyleSheet.create({
     }),
   },
   badge: {
-    backgroundColor: '#0EA5E9',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-  },
-  badgeText: {
-    fontFamily: 'Outfit_600SemiBold',
-    color: '#FFFFFF',
-    fontSize: 11,
-    letterSpacing: 0.3,
   },
 });

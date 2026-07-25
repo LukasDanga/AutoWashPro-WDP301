@@ -470,7 +470,7 @@ export default function PaymentSelectScreen() {
           </View>
         ) : null}
         {isDepositAlreadyPaid ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.infoSubtle || colors.infoLight, borderColor: colors.info, padding: 6, borderRadius: 24 }]}>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: (colors as any).infoSubtle || (colors as any).infoLight || colors.primary, borderColor: colors.info, padding: 6, borderRadius: 24 }]}>
             <View style={styles.doubleBezelInner}>
               <Icon name="information-circle-outline" size={20} color={colors.info} />
               <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
@@ -480,7 +480,7 @@ export default function PaymentSelectScreen() {
           </View>
         ) : null}
         {isZeroDeposit && payableType === 'deposit' ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningSubtle || colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: (colors as any).warningSubtle || (colors as any).warningLight || colors.warning, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
             <View style={styles.doubleBezelInner}>
               <Icon name="alert-circle-outline" size={20} color={colors.warning} />
               <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
@@ -490,7 +490,7 @@ export default function PaymentSelectScreen() {
           </View>
         ) : null}
         {isRemainingNotEligible ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningSubtle || colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
+          <View style={[styles.doubleBezelOuter, { backgroundColor: (colors as any).warningSubtle || (colors as any).warningLight || colors.warning, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
             <View style={styles.doubleBezelInner}>
               <Icon name="alert-circle-outline" size={20} color={colors.warning} />
               <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
@@ -561,11 +561,11 @@ export default function PaymentSelectScreen() {
                     </AppText>
                   </View>
                   {selectedMethod === option.id ? (
-                    <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
+                    <View style={[styles.optionCheck, { backgroundColor: (colors as any).primary }]}>
                       <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>
                     </View>
                   ) : (
-                    <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
+                    <View style={[styles.optionCheckEmpty, { borderColor: (colors as any).border }]} />
                   )}
                 </View>
               </View>

@@ -111,7 +111,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
       {...rest}
       onPress={handlePress}
       disabled={disabled}
-      accessibilityRole={accessibilityRole}
+      accessibilityRole={accessibilityRole || 'button'}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled }}
@@ -134,7 +134,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
       <Icon name={name} size={size} color={variantStyle.fg} />
       {typeof badge === 'number' && badge > 0 && (
         <View style={[styles.badge, { backgroundColor: colors.error }]}>
-          <View style={styles.badgeDot} />
+          <View style={[styles.badgeDot, { backgroundColor: colors.textInverse }]} />
         </View>
       )}
     </Pressable>
@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FFFFFF',
   },
 });
 

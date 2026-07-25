@@ -23,42 +23,11 @@ import { Icon, Icons } from '../../src/components/common';
 import { formatCurrency } from '../../src/utils';
 import { getTierTheme } from '../../src/utils/tierHelper';
 import { shadows, layout } from '../../src/theme/spacing';
+import { useColors } from '../../src/theme/ThemeContext';
+import { Text as AppText } from '../../src/components/common';
 import type { Branch, Package } from '../../src/types';
 
-const COLORS = {
-  primary: '#0050cb',
-  primaryContainer: '#0066ff',
-  onPrimary: '#ffffff',
-  onPrimaryContainer: '#f8f7ff',
-  secondary: '#00677f',
-  secondaryContainer: '#00ccf9',
-  onSecondary: '#ffffff',
-  onSecondaryContainer: '#005266',
-  surface: '#f9f9fc',
-  surfaceContainerLowest: '#ffffff',
-  surfaceContainerLow: '#f3f3f6',
-  surfaceContainer: '#eeeef0',
-  surfaceContainerHigh: '#e8e8ea',
-  onSurface: '#1a1c1e',
-  onSurfaceVariant: '#424656',
-  outline: '#727687',
-  outlineVariant: '#c2c6d8',
-  error: '#ba1a1a',
-  primaryFixedDim: '#b3c5ff',
-  secondaryFixed: '#b7eaff',
-  info: '#00ccf9',
-  success: '#10b981',
-  warning: '#f59e0b',
-  errorLight: '#fef2f2',
-  infoLight: '#e0f2fe',
-  successLight: '#d1fae5',
-  warningLight: '#fef3c7',
-  orangeLight: '#fff7ed',
-  greenLight: '#f0fdf4',
-  purpleLight: '#faf5ff',
-  cyanLight: '#ecfeff',
-  roseLight: '#fff1f2',
-};
+
 
 const SPACING = {
   xs: 4,
@@ -108,15 +77,16 @@ const LoyaltyCard: React.FC<LoyaltyCardProps> = ({
 
         {/* Text column */}
         <View style={styles.loyaltyTextCol}>
-          <Text style={styles.loyaltyLabel} numberOfLines={1}>{label}</Text>
-          <Text
+          <AppText variant="labelSmall" style={styles.loyaltyLabel} numberOfLines={2}>{label}</AppText>
+          <AppText
+            variant="h3"
             style={[styles.loyaltyValue, { color: textColor }]}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.7}
           >
             {value}
-          </Text>
+          </AppText>
         </View>
       </LinearGradient>
     </TouchableOpacity>
@@ -127,6 +97,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const { unreadCount } = useNotifications();
+  const colors = useColors();
 
   const [packages, setPackages] = useState<Package[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,14 +127,39 @@ export default function HomeScreen() {
       let cancelled = false;
       const checkPending = async () => {
         try {
-          const [extras, recurring] = await Promise.all([
+          const [extrasStr, recurringStr] = await Promise.all([
             AsyncStorage.getItem('aw_checkout_extras'),
             AsyncStorage.getItem('aw_recurring_draft')
           ]);
           if (cancelled) return;
-          if (recurring) {
+
+          const now = Date.now();
+          const EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+
+          let hasRecurring = false;
+          let hasExtras = false;
+
+          if (recurringStr) {
+            const parsed = JSON.parse(recurringStr);
+            if (!parsed.timestamp || (now - parsed.timestamp > EXPIRY_MS)) {
+              await AsyncStorage.removeItem('aw_recurring_draft');
+            } else {
+              hasRecurring = true;
+            }
+          }
+
+          if (extrasStr) {
+            const parsed = JSON.parse(extrasStr);
+            if (!parsed.timestamp || (now - parsed.timestamp > EXPIRY_MS)) {
+              await AsyncStorage.removeItem('aw_checkout_extras');
+            } else {
+              hasExtras = true;
+            }
+          }
+
+          if (hasRecurring) {
             setPendingCheckoutUrl('/payment/checkout?type=recurring');
-          } else if (extras) {
+          } else if (hasExtras) {
             setPendingCheckoutUrl('/payment/checkout');
           } else {
             setPendingCheckoutUrl(null);
@@ -208,8 +204,8 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -217,28 +213,28 @@ export default function HomeScreen() {
         {/* Top App Bar */}
         <View style={styles.topAppBar}>
           <View style={styles.topAppBarLeft}>
-            <View style={styles.avatar}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
               <Text style={styles.avatarText}>
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </Text>
             </View>
             <View>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.userName}>
+              <AppText variant="labelSmall" color="textSecondary">{getGreeting()}</AppText>
+              <AppText variant="h3" color="primary">
                 {user?.name || 'Premium Car Wash'}
-              </Text>
+              </AppText>
             </View>
           </View>
           <TouchableOpacity
             style={styles.notificationBtn}
             onPress={() => router.push('/notifications')}
           >
-            <Icon name={Icons.notificationsOutline} size={22} color={COLORS.primary} />
+            <Icon name={Icons.notificationsOutline} size={22} color={colors.primary} />
             {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
+              <View style={[styles.badge, { backgroundColor: colors.error }]}>
+                <AppText style={styles.badgeText}>
                   {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
+                </AppText>
               </View>
             )}
           </TouchableOpacity>
@@ -247,41 +243,41 @@ export default function HomeScreen() {
         {/* Pending Checkout Banner */}
         {pendingCheckoutUrl && (
           <TouchableOpacity 
-            style={[styles.promoCard, { backgroundColor: COLORS.warningLight, borderColor: COLORS.warning, marginTop: SPACING.sm, marginBottom: 0 }]}
+            style={[styles.promoCard, { backgroundColor: colors.warningLight, borderColor: colors.warning, marginTop: SPACING.sm, marginBottom: 0 }]}
             onPress={() => router.push(pendingCheckoutUrl as any)}
             activeOpacity={0.8}
           >
             <View style={styles.promoContent}>
-              <View style={[styles.promoTag, { backgroundColor: COLORS.warning }]}>
-                <Text style={[styles.promoTagText, { color: '#000' }]}>Chưa hoàn tất</Text>
+              <View style={[styles.promoTag, { backgroundColor: colors.warning }]}>
+                <AppText style={[styles.promoTagText, { color: '#000' }]}>Chưa hoàn tất</AppText>
               </View>
-              <Text style={[styles.promoTitle, { color: COLORS.onSurface }]}>Tiếp tục thanh toán 💳</Text>
-              <Text style={[styles.promoSubtitle, { color: COLORS.onSurfaceVariant }]}>Bạn có một giao dịch thanh toán đang dở dang.</Text>
+              <AppText variant="h4" style={{ color: colors.textPrimary, marginTop: 8 }}>Tiếp tục thanh toán 💳</AppText>
+              <AppText variant="bodySmall" style={{ color: colors.textSecondary, marginTop: 2 }}>Bạn có một giao dịch thanh toán đang dở dang.</AppText>
             </View>
-            <Icon name={Icons.chevronRight} size={24} color={COLORS.onSurface} />
+            <Icon name={Icons.chevronRight} size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         )}
 
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <LinearGradient
-            colors={['#0050cb', '#0ea5e9']}
+            colors={[colors.primary, colors.primarySubtle || '#10b981']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1.2 }}
             style={styles.heroGradient}
           >
             <View style={styles.heroContent}>
               <View style={styles.heroTextSection}>
-                <Text style={styles.heroTitle}>Đặt lịch rửa xe ngay</Text>
-                <Text style={styles.heroSubtitle}>
+                <AppText variant="h2" style={styles.heroTitle}>Đặt lịch rửa xe ngay</AppText>
+                <AppText variant="bodySmall" style={styles.heroSubtitle}>
                   Tiết kiệm thời gian, an toàn và tiện lợi cho xế cưng.
-                </Text>
+                </AppText>
                 <TouchableOpacity
                   style={styles.heroBtn}
                   onPress={() => router.push('/booking')}
                 >
-                  <Text style={styles.heroBtnText}>Đặt ngay</Text>
-                  <Icon name={Icons.chevronRight} size={18} color={COLORS.primary} />
+                  <AppText variant="button" style={{ color: colors.primary }}>Đặt ngay</AppText>
+                  <Icon name={Icons.chevronRight} size={18} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               <View style={styles.heroImageSection}>
@@ -300,11 +296,11 @@ export default function HomeScreen() {
               icon={Icons.sparkle}
               label="ĐIỂM TÍCH LŨY"
               value={(user.loyaltyPoints || 0).toLocaleString('vi-VN')}
-              textColor={COLORS.primary}
-              iconBgColor={`${COLORS.primary}1A`}
-              borderColor={`${COLORS.primary}33`}
-              gradientHint="#EFF6FF"
-              accentBg={`${COLORS.primary}10`}
+              textColor={colors.primary}
+              iconBgColor={`${colors.primary}1A`}
+              borderColor={`${colors.primary}33`}
+              gradientHint={colors.primaryLight}
+              accentBg={`${colors.primary}10`}
               onPress={() => router.push('/(tabs)/rewards' as any)}
             />
             <LoyaltyCard
@@ -313,9 +309,9 @@ export default function HomeScreen() {
               value={tierTheme.label}
               textColor={tierTheme.textColor}
               iconBgColor={`${tierTheme.textColor}1A`}
-              borderColor={tierTheme.borderColor}
-              gradientHint={tierTheme.bgColor}
-              accentBg={`${tierTheme.textColor}10`}
+              borderColor={`${colors.primary}33`}
+              gradientHint={colors.primaryLight}
+              accentBg={`${colors.primary}10`}
               onPress={() => router.push('/(tabs)/rewards' as any)}
             />
           </View>
@@ -324,8 +320,8 @@ export default function HomeScreen() {
         {/* Quick Services */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Dịch vụ nhanh</Text>
-            <Text style={styles.sectionSubtitle}>Truy cập nhanh các tính năng</Text>
+            <AppText variant="h3" color="textPrimary">Dịch vụ nhanh</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: 2 }}>Truy cập nhanh các tính năng</AppText>
           </View>
         </View>
 
@@ -333,58 +329,58 @@ export default function HomeScreen() {
           <QuickService
             icon={Icons.carOutline}
             label="Đặt lịch"
-            bgColor={COLORS.infoLight}
-            iconColor={COLORS.primary}
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/booking')}
           />
           <QuickService
             icon={Icons.voucherOutline}
             label="Voucher"
-            bgColor={COLORS.orangeLight}
-            iconColor='#f97316'
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/rewards')}
           />
           <QuickService
             icon={Icons.listOutline}
             label="Lịch sử"
-            bgColor={COLORS.greenLight}
-            iconColor='#22c55e'
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/history')}
           />
           <QuickService
             icon={Icons.qrCodeOutline}
             label="Check-in QR"
-            bgColor={COLORS.purpleLight}
-            iconColor='#a855f7'
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/checkin')}
           />
           <QuickService
             icon={Icons.chatBot}
             label="Chat AI"
-            bgColor={COLORS.cyanLight}
-            iconColor='#06b6d4'
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/chat')}
           />
           <QuickService
             icon={Icons.locationOutline}
             label="Chi nhánh"
-            bgColor={COLORS.roseLight}
-            iconColor='#f43f5e'
+            bgColor={colors.primarySubtle}
+            iconColor={colors.primary}
             onPress={() => router.push('/branch')}
           />
         </View>
 
         {/* Promo Banner */}
-        <View style={styles.promoCard}>
+        <View style={[styles.promoCard, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryLight }]}>
           <View style={styles.promoContent}>
-            <View style={styles.promoTag}>
-              <Text style={styles.promoTagText}>Khuyến mãi mới</Text>
+            <View style={[styles.promoTag, { backgroundColor: colors.primary }]}>
+              <AppText style={[styles.promoTagText, { color: colors.textInverse }]}>Khuyến mãi mới</AppText>
             </View>
-            <Text style={styles.promoTitle}>Tặng 20% cho xe Sedan</Text>
-            <Text style={styles.promoSubtitle}>Áp dụng cho gói vệ sinh nội thất cao cấp.</Text>
+            <AppText variant="h4" color="primary" style={{ marginTop: 8 }}>Tặng 20% cho xe Sedan</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: 2 }}>Áp dụng cho gói vệ sinh nội thất cao cấp.</AppText>
           </View>
           <View style={styles.promoImageSection}>
-            <Icon name={Icons.carOutline} size={40} color={COLORS.primary} />
+            <Icon name={Icons.carOutline} size={40} color={colors.primary} />
           </View>
         </View>
       </ScrollView>
@@ -428,7 +424,7 @@ const QuickService: React.FC<QuickServiceProps> = ({ icon, label, bgColor, iconC
           <Icon name={icon as any} size={26} color={iconColor} />
         </View>
 
-        <Text style={styles.serviceLabel}>{label}</Text>
+        <AppText variant="labelSmall" style={styles.serviceLabel}>{label}</AppText>
       </LinearGradient>
     </TouchableOpacity>
   );
@@ -437,17 +433,14 @@ const QuickService: React.FC<QuickServiceProps> = ({ icon, label, bgColor, iconC
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.surface,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.outline,
   },
   scrollView: {
     flex: 1,
@@ -463,7 +456,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surfaceContainerLowest,
+    backgroundColor: 'transparent',
   },
   topAppBarLeft: {
     flexDirection: 'row',
@@ -474,24 +467,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.onPrimary,
-  },
-  greeting: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
-  },
-  userName: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 18,
-    color: COLORS.primary,
+    color: '#FFF',
   },
   notificationBtn: {
     width: 40,
@@ -507,7 +489,6 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: COLORS.error,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -515,7 +496,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.onPrimary,
+    color: '#FFF',
   },
 
   // Hero Card
@@ -539,32 +520,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 22,
-    color: COLORS.onPrimaryContainer,
-    lineHeight: 28,
+    color: '#FFF',
   },
   heroSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 14,
     color: 'rgba(255,255,255,0.9)',
-    lineHeight: 20,
   },
   heroBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.onPrimary,
+    backgroundColor: '#FFF',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 999,
     alignSelf: 'flex-start',
     marginTop: 4,
     gap: 4,
-  },
-  heroBtnText: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 14,
-    color: COLORS.primary,
   },
   heroImageSection: {
     width: 120,
@@ -595,6 +565,7 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   loyaltyGradient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
@@ -623,11 +594,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   loyaltyLabel: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 10,
     color: '#64748B',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
   },
   loyaltyValue: {
     fontFamily: 'Outfit_700Bold',
@@ -636,7 +603,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Section Header
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -644,22 +610,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
-  },
-  sectionTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 20,
-    color: COLORS.onSurface,
-  },
-  sectionSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    marginTop: 2,
-  },
-  sectionAction: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 14,
-    color: COLORS.primary,
   },
 
   // Services Grid
@@ -701,9 +651,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   serviceLabel: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 13,
-    color: COLORS.onSurface,
     textAlign: 'center',
     letterSpacing: 0.1,
   },
@@ -712,9 +659,7 @@ const styles = StyleSheet.create({
   promoCard: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.sm,
-    backgroundColor: COLORS.secondaryContainer + '15',
     borderWidth: 1,
-    borderColor: COLORS.secondaryContainer + '30',
     borderRadius: layout.cardRadius,
     padding: SPACING.md,
     flexDirection: 'row',
@@ -727,7 +672,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   promoTag: {
-    backgroundColor: COLORS.secondaryContainer,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 999,
@@ -736,21 +680,6 @@ const styles = StyleSheet.create({
   promoTagText: {
     fontFamily: 'Outfit_600SemiBold',
     fontSize: 11,
-    color: COLORS.onSecondaryContainer,
-  },
-  promoTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 18,
-    color: COLORS.onSecondaryContainer,
-    marginTop: 8,
-  },
-  promoSubtitle: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
-    // Default sits on the light cyan promoCard tint; onSurfaceVariant (#424656)
-    // gives a clean WCAG-AA contrast instead of washing out like onSecondary white.
-    color: COLORS.onSurfaceVariant,
-    marginTop: 2,
   },
   promoImageSection: {
     width: 80,

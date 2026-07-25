@@ -8,7 +8,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
-import { spacing } from '../../theme/spacing';
+import { spacing, borderRadius, layout } from '../../theme/spacing';
 import { Icon, Icons } from './Icon';
 
 type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'default' | 'primary';
@@ -103,9 +103,9 @@ export const BookingStatusBadge: React.FC<{ status: string }> = ({ status }) => 
   const getStatusConfig = () => {
     const statusMap: Record<string, { variant: BadgeVariant; label: string }> = {
       pending: { variant: 'warning', label: 'Chờ xác nhận' },
-      confirmed: { variant: 'info', label: 'Đã xác nhận' },
+      confirmed: { variant: 'primary', label: 'Đã xác nhận' },
       checked_in: { variant: 'primary', label: 'Đã check-in' },
-      in_progress: { variant: 'info', label: 'Đang rửa' },
+      in_progress: { variant: 'primary', label: 'Đang rửa' },
       completed: { variant: 'success', label: 'Hoàn thành' },
       cancelled: { variant: 'error', label: 'Đã hủy' },
     };
@@ -179,13 +179,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: borderRadius.full,
     alignSelf: 'flex-start',
-    gap: 4,
+    gap: spacing.xs,
   },
   containerSmall: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   text: {
     ...typography.caption,
