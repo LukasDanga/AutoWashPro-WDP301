@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"/><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">try{
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#574500",
+                        "on-tertiary-container": "#4f3d00",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-fixed": "#241a00",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-primary-container": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-background": "#191c1d",
+                        "surface-tint": "#006c47",
+                        "surface": "#f8f9fa",
+                        "on-surface-variant": "#3e4942",
+                        "on-primary-fixed-variant": "#005235",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "primary-container": "#00875a",
+                        "on-primary-fixed": "#002113",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#636262",
+                        "inverse-surface": "#2e3132",
+                        "tertiary-fixed": "#ffe088",
+                        "secondary": "#5f5e5e",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-variant": "#e1e3e4",
+                        "primary-fixed-dim": "#71dba6",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#d9dadb",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-secondary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "primary": "#006b47",
+                        "outline-variant": "#bdcac0",
+                        "tertiary": "#735c00",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "surface-bright": "#f8f9fa",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1d",
+                        "outline": "#6e7a71",
+                        "secondary-container": "#e2dfde",
+                        "background": "#f8f9fa",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-container": "#cca730",
+                        "surface-container-highest": "#e1e3e4",
+                        "inverse-primary": "#71dba6",
+                        "surface-container": "#edeeef",
+                        "primary-fixed": "#8df7c1"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-padding": "20px",
+                        "section-margin": "32px",
+                        "card-gap": "12px",
+                        "base": "8px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "caption": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "display-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }]
+                    }
+                }
+            }
+        }
+    }catch(_e){}</script></head><body class="bg-surface text-on-surface min-h-screen flex flex-col relative pb-24 md:pb-0 font-['Manrope']">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-background docked full-width top-0 z-40 sticky border-b border-surface-variant">
+<div class="flex justify-between items-center px-container-padding py-base w-full max-w-7xl mx-auto h-16">
+<button aria-label="Go back" class="text-on-surface hover:bg-surface-container-low transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined" data-original-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface">Check-in</h1>
+<button aria-label="Help" class="text-on-surface hover:bg-surface-container-low transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow w-full max-w-lg mx-auto px-container-padding pt-6 flex flex-col items-center">
+<!-- Segmented Control -->
+<div class="flex w-full mb-section-margin relative border-b border-surface-variant">
+<button class="flex-1 py-3 px-4 font-label-md text-label-md text-primary-container border-b-2 border-primary-container z-10 transition-all duration-300">Xem QR</button>
+<button class="flex-1 py-3 px-4 font-label-md text-label-md text-secondary hover:text-primary transition-all duration-300 z-10 border-b-2 border-transparent">Quét QR</button>
+<button class="flex-1 py-3 px-4 font-label-md text-label-md text-secondary hover:text-primary transition-all duration-300 z-10 border-b-2 border-transparent">Nhập mã</button>
+</div>
+<!-- Premium QR Area Empty State -->
+<div class="flex flex-col items-center justify-center w-full mb-8">
+<div class="bg-white rounded-2xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center w-full max-w-[280px] aspect-square relative mb-6">
+<!-- Elegant Corners -->
+<div class="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-primary-container rounded-tl-lg pointer-events-none"></div>
+<div class="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-primary-container rounded-tr-lg pointer-events-none"></div>
+<div class="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-primary-container rounded-bl-lg pointer-events-none"></div>
+<div class="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-primary-container rounded-br-lg pointer-events-none"></div>
+<!-- Sophisticated Empty State Icon -->
+<div class="w-20 h-20 bg-surface-container-low rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-4xl text-primary-container opacity-80">qr_code_2</span>
+</div>
+<p class="font-label-md text-label-md text-on-surface-variant text-center opacity-70">Chưa có mã QR</p>
+</div>
+<!-- Descriptive Text -->
+<p class="font-body-md text-body-md text-on-surface-variant text-center max-w-[280px]">
+        Chưa chọn lịch hẹn. Bạn có thể quét mã QR hoặc nhập mã booking để check-in.
+    </p>
+</div>
+<!-- Secondary Action Button -->
+<button class="w-full bg-surface-container text-primary-container border border-surface-variant font-label-md text-label-md py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-surface-container-high transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined fill text-xl">keyboard</span>
+    Nhập mã Booking
+</button>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center bg-white dark:bg-surface-container-lowest px-2 py-2 pb-safe shadow-[0px_-4px_20px_rgba(0,0,0,0.03)] border-t border-surface-variant z-50">
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary-container transition-colors w-16 py-1" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-caption text-[10px] font-semibold">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary-container transition-colors w-16 py-1" href="#">
+<span class="material-symbols-outlined mb-1">calendar_month</span>
+<span class="font-caption text-[10px] font-semibold">Bookings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary-container font-bold w-16 py-1 relative" href="#">
+<div class="absolute -top-1 w-8 h-1 bg-primary-container rounded-full"></div>
+<span class="material-symbols-outlined fill mb-1">qr_code_scanner</span>
+<span class="font-caption text-[10px] font-semibold">Check-in</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary-container transition-colors w-16 py-1" href="#">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="font-caption text-[10px] font-semibold">Profile</span>
+</a>
+</nav>
+<!-- Safe area padding for iOS -->
+<style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    </style>
+</body></html>

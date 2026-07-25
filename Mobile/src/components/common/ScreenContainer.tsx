@@ -19,6 +19,7 @@ import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors, useTheme } from '../../theme/ThemeContext';
 import { toGradientColors, getGradients } from '../../theme/gradients';
+import { spacing } from '../../theme/spacing';
 
 interface ScreenContainerProps {
   children: ReactNode;
@@ -57,7 +58,7 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   };
 
   const paddingStyle: ViewStyle = padded
-    ? { paddingHorizontal: 20 }
+    ? { paddingHorizontal: spacing.screenPadding }
     : {};
 
   const content = scroll ? (
@@ -102,7 +103,7 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
       <View style={containerStyle}>
         <StatusBar {...statusBarProps} />
         <LinearGradient
-          colors={toGradientColors(gradients.hero)}
+          colors={toGradientColors(gradients.hero) as unknown as readonly [string, string, ...string[]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.flex, style]}

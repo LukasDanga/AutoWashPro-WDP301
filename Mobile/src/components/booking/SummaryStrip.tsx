@@ -13,12 +13,15 @@
  */
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { useColors } from '../../../theme/ThemeContext';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { Icon, Icons } from '../common/Icon';
+import { useColors } from '../../theme/ThemeContext';
+import { spacing, borderRadius } from '../../theme/spacing';
+import { formatCurrency } from '../../utils';
+import { Button } from '../common/Button';
 import { Text } from '../common/Text';
+import { useBooking } from '../../contexts/BookingContext';
+import { Icon, Icons } from '../common/Icon';
 import { PressableScale } from '../common/PressableScale';
-import type { BookingStep } from '../../../contexts/BookingContext';
+import type { BookingStep } from '../../contexts/BookingContext';
 
 export interface SummaryItem {
   step: BookingStep;

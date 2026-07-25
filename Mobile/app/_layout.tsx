@@ -41,6 +41,8 @@ function RootLayoutContent() {
           animation: 'slide_from_right',
         }}
       >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+
         {/* Auth Stack */}
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
 

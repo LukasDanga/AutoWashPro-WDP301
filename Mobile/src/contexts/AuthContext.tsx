@@ -7,6 +7,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { authApi } from '../api/auth';
+import { setAccessTokenCache, clearAccessTokenCache } from '../api/client';
 import type { User, RegisterRequest } from '../types';
 
 // Storage keys
@@ -47,6 +48,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
 
         if (accessToken) {
+          setAccessTokenCache(accessToken);
           // Try to get user profile
           try {
             const user = await authApi.getProfile();
@@ -82,11 +84,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clearTokens = async () => {
     await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    clearAccessTokenCache();
   };
 
   const storeTokens = async (accessToken: string, refreshToken: string) => {
     await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    setAccessTokenCache(accessToken);
   };
 
   const login = useCallback(async (identifier: string, password: string) => {
@@ -203,7 +207,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const value: AuthContextType = {
+  const value: AuthContextType = React.useMemo(() => ({
     ...state,
     login,
     loginWithGoogle,
@@ -211,7 +215,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     updateProfile,
     refreshTokens,
-  };
+  }), [state, login, loginWithGoogle, register, logout, updateProfile, refreshTokens]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

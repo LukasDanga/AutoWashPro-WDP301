@@ -237,6 +237,10 @@ export default function HistoryScreen() {
         data={filteredBookings}
         renderItem={renderBookingCard}
         keyExtractor={(item) => item._id}
+        initialNumToRender={10}
+        windowSize={5}
+        maxToRenderPerBatch={10}
+        removeClippedSubviews={true}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={

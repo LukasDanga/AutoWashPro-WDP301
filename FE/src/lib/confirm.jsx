@@ -12,6 +12,7 @@ export function confirmDialog({
   confirmLabel = 'Xác nhận',
   cancelLabel = 'Huỷ',
   danger = false,
+  hideCancel = false,
 } = {}) {
   return new Promise((resolve) => {
     const host = document.createElement('div');
@@ -31,6 +32,7 @@ export function confirmDialog({
         confirmLabel={confirmLabel}
         cancelLabel={cancelLabel}
         danger={danger}
+        hideCancel={hideCancel}
         onConfirm={() => close(true)}
         onCancel={() => close(false)}
       />,

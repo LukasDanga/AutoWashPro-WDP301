@@ -190,44 +190,44 @@ export default function VoucherPickerScreen() {
           isSelected && { shadowColor: colors.primary, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
         ]}>
           <View style={styles.cardRow}>
-            <View style={[styles.discountBadge, { backgroundColor: isPercentage ? '#dcfce7' : '#dbeafe' }]}>
-              <Text style={[styles.discountValue, { color: isPercentage ? '#16a34a' : '#2563eb' }]}>
+            <View style={[styles.discountBadge, { backgroundColor: isPercentage ? '#dcfce7' : '#ecfdf5' }]}>
+              <AppText variant="h3" style={{ color: isPercentage ? '#16a34a' : '#10b981' }}>
                 {isPercentage ? `-${item.value}%` : `-${formatCurrency(item.value!)}`}
-              </Text>
+              </AppText>
               {savings > 0 && (
-                <Text style={[styles.discountHint, { color: isPercentage ? '#16a34a' : '#2563eb' }]}>
+                <AppText variant="labelSmall" style={{ color: isPercentage ? '#16a34a' : '#10b981', marginTop: 2 }}>
                   ≈ -{formatCurrency(savings)}
-                </Text>
+                </AppText>
               )}
             </View>
             <View style={styles.cardBody}>
-              <Text style={[styles.voucherName, { color: colors.textPrimary }]} numberOfLines={1}>
+              <AppText variant="subtitle1" color="textPrimary" numberOfLines={1}>
                 {item.name || item.code}
-              </Text>
+              </AppText>
               {item.description ? (
-                <Text style={[styles.voucherDesc, { color: colors.textSecondary }]} numberOfLines={2}>
+                <AppText variant="bodySmall" color="textSecondary" numberOfLines={2}>
                   {item.description}
-                </Text>
+                </AppText>
               ) : null}
               <View style={styles.cardMeta}>
                 {item.minOrder && item.minOrder > 0 ? (
                   <View style={styles.metaChip}>
-                    <Text style={[styles.metaText, { color: colors.textTertiary }]}>
+                    <AppText variant="labelSmall" color="textTertiary">
                       Đơn từ {formatCurrency(item.minOrder)}
-                    </Text>
+                    </AppText>
                   </View>
                 ) : null}
                 {expiryText ? (
-                  <Text style={[styles.expiryText, { color: colors.textTertiary }]} numberOfLines={1}>
+                  <AppText variant="labelSmall" color="textTertiary" numberOfLines={1}>
                     {expiryText}
-                  </Text>
+                  </AppText>
                 ) : null}
               </View>
             </View>
             <View style={[styles.applyBtn, { backgroundColor: isSelected ? colors.primary : colors.primaryLight }]}>
-              <Text style={[styles.applyBtnText, { color: isSelected ? '#fff' : colors.primary }]}>
+              <AppText variant="button" style={{ color: isSelected ? '#fff' : colors.primary }}>
                 {isSelected ? '✓' : 'Chọn'}
-              </Text>
+              </AppText>
             </View>
           </View>
         </View>
@@ -241,7 +241,7 @@ export default function VoucherPickerScreen() {
         <Header showBack title="Chọn ưu đãi" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Đang tải ưu đãi...</Text>
+          <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: spacing.md }}>Đang tải ưu đãi...</AppText>
         </View>
       </ScreenContainer>
     );
@@ -281,9 +281,9 @@ export default function VoucherPickerScreen() {
             disabled={manualLoading}
             style={[styles.manualCodeBtn, { backgroundColor: colors.primary }]}
           >
-            <Text style={styles.manualCodeBtnText}>
+            <AppText variant="button" style={{ color: '#fff' }}>
               {manualLoading ? '...' : 'Áp dụng'}
-            </Text>
+            </AppText>
           </TouchableOpacity>
         </View>
         {manualMsg ? (
@@ -294,12 +294,9 @@ export default function VoucherPickerScreen() {
               borderColor: manualMsg.startsWith('✓') ? '#bbf7d0' : '#fecaca',
             },
           ]}>
-            <Text style={[
-              styles.manualMsgText,
-              { color: manualMsg.startsWith('✓') ? '#16a34a' : '#dc2626' },
-            ]}>
+            <AppText variant="bodySmall" style={{ color: manualMsg.startsWith('✓') ? '#16a34a' : '#dc2626' }}>
               {manualMsg}
-            </Text>
+            </AppText>
           </View>
         ) : null}
         <SectionList
@@ -308,7 +305,7 @@ export default function VoucherPickerScreen() {
           renderItem={renderVoucher}
           renderSectionHeader={({ section: { title } }) => (
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
+              <AppText variant="label" color="textSecondary" style={styles.sectionTitle}>{title}</AppText>
             </View>
           )}
           contentContainerStyle={styles.listContent}
@@ -334,7 +331,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
     fontSize: 14,
-    fontWeight: '600',
     letterSpacing: 0.5,
   },
   manualCodeBtn: {
@@ -405,28 +401,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  discountValue: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  discountHint: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 2,
-  },
   cardBody: {
     flex: 1,
     marginRight: spacing.sm,
-  },
-  voucherName: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  voucherDesc: {
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 4,
   },
   cardMeta: {
     flexDirection: 'row',
@@ -440,14 +417,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     backgroundColor: '#f1f5f9',
-  },
-  metaText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  expiryText: {
-    fontSize: 10,
-    flexShrink: 1,
   },
   applyBtn: {
     width: 48,

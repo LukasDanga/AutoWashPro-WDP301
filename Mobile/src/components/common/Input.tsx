@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
-import { spacing } from '../../theme/spacing';
+import { spacing, layout } from '../../theme/spacing';
 import { Icon, Icons } from './Icon';
 
 interface InputProps extends TextInputProps {
@@ -31,7 +31,7 @@ interface InputProps extends TextInputProps {
   inputStyle?: TextStyle;
 }
 
-export const Input: React.FC<InputProps> = ({
+export const Input = React.forwardRef<TextInput, InputProps>(({
   label,
   error,
   hint,
@@ -42,7 +42,7 @@ export const Input: React.FC<InputProps> = ({
   secureTextEntry,
   inputStyle,
   ...props
-}) => {
+}, ref) => {
   const colors = useColors();
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -81,6 +81,7 @@ export const Input: React.FC<InputProps> = ({
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
 
         <TextInput
+          ref={ref}
           style={[
             styles.input,
             { color: colors.textPrimary },
@@ -149,7 +150,7 @@ export const Input: React.FC<InputProps> = ({
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: layout.inputRadius,
     minHeight: 52,
   },
   input: {

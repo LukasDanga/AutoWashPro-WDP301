@@ -111,6 +111,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
             </div>
           ),
           confirmLabel: 'Đã hiểu',
+          hideCancel: true,
         });
       } else {
         alert(e.message);

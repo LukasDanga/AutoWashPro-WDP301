@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Auto Wash Pro - Schedule Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "tertiary": "#735c00",
+                        "outline": "#6e7a71",
+                        "primary-container": "#00875a",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#d9dadb",
+                        "surface-tint": "#006c47",
+                        "on-tertiary-container": "#4f3d00",
+                        "on-primary-container": "#ffffff",
+                        "secondary": "#5f5e5e",
+                        "on-primary-fixed-variant": "#005235",
+                        "on-background": "#191c1d",
+                        "tertiary-container": "#cca730",
+                        "on-secondary-fixed-variant": "#474746",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "tertiary-fixed": "#ffe088",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "on-surface-variant": "#3e4942",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e7e8e9",
+                        "secondary-container": "#e2dfde",
+                        "surface-bright": "#f8f9fa",
+                        "primary": "#006b47",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "outline-variant": "#bdcac0",
+                        "on-tertiary-fixed": "#241a00",
+                        "error": "#ba1a1a",
+                        "secondary-fixed": "#e5e2e1",
+                        "primary-fixed-dim": "#71dba6",
+                        "surface-variant": "#e1e3e4",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "surface": "#f8f9fa",
+                        "primary-fixed": "#8df7c1",
+                        "on-surface": "#191c1d",
+                        "surface-container": "#edeeef",
+                        "on-primary-fixed": "#002113",
+                        "background": "#f8f9fa",
+                        "on-secondary-container": "#636262",
+                        "inverse-primary": "#71dba6",
+                        "surface-container-highest": "#e1e3e4",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "surface-container-low": "#f3f4f5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-padding": "20px",
+                        "base": "8px",
+                        "section-margin": "32px",
+                        "gutter": "16px",
+                        "card-gap": "12px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "caption": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "headline-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-[100px] flex flex-col items-center">
+<!-- TopAppBar -->
+<header class="w-full max-w-md mx-auto sticky top-0 z-50 bg-surface/90 backdrop-blur-md shadow-sm border-b border-outline-variant/30 px-gutter py-base flex justify-between items-center h-16">
+<button class="text-on-surface-variant hover:bg-surface-variant p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Đặt lịch định kỳ</h1>
+<div class="w-10"></div> <!-- Placeholder for balance -->
+</header>
+<!-- Main Content -->
+<main class="w-full max-w-md mx-auto px-container-padding pt-6 flex-grow flex flex-col gap-section-margin">
+<!-- Progress Stepper -->
+<div class="flex justify-between items-center relative z-0 before:content-[''] before:absolute before:top-1/2 before:-translate-y-1/2 before:left-6 before:right-6 before:h-0.5 before:bg-surface-variant before:-z-10">
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 16px;">check</span>
+</div>
+<span class="font-caption text-caption text-primary">Chi nhánh</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 16px;">check</span>
+</div>
+<span class="font-caption text-caption text-primary">Gói</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 16px;">check</span>
+</div>
+<span class="font-caption text-caption text-primary">Xe</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-label-md text-label-md shadow-md ring-4 ring-primary-container/20">
+                    4
+                </div>
+<span class="font-caption text-caption text-primary font-bold">Lịch</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center text-on-surface-variant font-label-md text-label-md">
+                    5
+                </div>
+<span class="font-caption text-caption text-on-surface-variant">Xác nhận</span>
+</div>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-6">Cấu hình lịch định kỳ</h2>
+<!-- Day Selection -->
+<section class="mb-section-margin">
+<div class="flex justify-between items-baseline mb-4">
+<h3 class="font-label-md text-label-md text-on-surface">Chọn thứ trong tuần</h3>
+<span class="font-caption text-caption text-on-surface-variant">Có thể chọn nhiều thứ</span>
+</div>
+<div class="flex flex-wrap gap-3">
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-primary text-on-primary shadow-md transition-transform active:scale-95">T2</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">T3</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">T4</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">T5</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">T6</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-primary text-on-primary shadow-md transition-transform active:scale-95">T7</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center font-label-md text-label-md bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">CN</button>
+</div>
+</section>
+<!-- Time Selection -->
+<section class="mb-section-margin">
+<h3 class="font-label-md text-label-md text-on-surface mb-4">Khung giờ cố định</h3>
+<div class="mb-6">
+<h4 class="font-caption text-caption text-on-surface-variant mb-3 uppercase tracking-wider">Buổi sáng</h4>
+<div class="grid grid-cols-4 gap-2">
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">07:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-primary text-on-primary font-body-md text-body-md shadow-md ring-2 ring-primary ring-offset-1 ring-offset-background transition-transform active:scale-95">07:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">08:00</button>
+<div class="py-1 px-1 rounded-lg text-center bg-surface-container/50 opacity-60 flex flex-col items-center justify-center border border-dashed border-outline-variant">
+<span class="font-body-md text-body-md text-on-surface-variant line-through text-xs">08:30</span>
+<span class="text-[9px] text-tertiary font-bold mt-0.5">VIP</span>
+</div>
+<div class="py-1 px-1 rounded-lg text-center bg-surface-container/50 opacity-60 flex flex-col items-center justify-center border border-dashed border-outline-variant">
+<span class="font-body-md text-body-md text-on-surface-variant line-through text-xs">09:00</span>
+<span class="text-[9px] text-tertiary font-bold mt-0.5">VIP</span>
+</div>
+<div class="py-1 px-1 rounded-lg text-center bg-surface-container/50 opacity-60 flex flex-col items-center justify-center border border-dashed border-outline-variant">
+<span class="font-body-md text-body-md text-on-surface-variant line-through text-xs">09:30</span>
+<span class="text-[9px] text-tertiary font-bold mt-0.5">VIP</span>
+</div>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">10:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">10:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">11:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">11:30</button>
+</div>
+</div>
+<div>
+<h4 class="font-caption text-caption text-on-surface-variant mb-3 uppercase tracking-wider">Buổi chiều</h4>
+<div class="grid grid-cols-4 gap-2">
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">12:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">12:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">13:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">13:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">14:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">14:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">15:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">15:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">16:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">16:30</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">17:00</button>
+<button class="py-2.5 px-1 rounded-lg text-center bg-surface-container-high text-on-surface font-body-md text-body-md hover:bg-surface-variant transition-colors">17:30</button>
+</div>
+</div>
+</section>
+<!-- Repeat Weeks -->
+<section class="mb-section-margin">
+<div class="flex justify-between items-baseline mb-4">
+<h3 class="font-label-md text-label-md text-on-surface">Số tuần lặp lại</h3>
+<span class="font-caption text-caption text-on-surface-variant">4 tuần · 8 buổi dự kiến</span>
+</div>
+<div class="flex overflow-x-auto gap-3 pb-2 hide-scrollbar">
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-surface-container border border-outline-variant/30 text-on-surface hover:bg-surface-variant transition-colors">1</button>
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-surface-container border border-outline-variant/30 text-on-surface hover:bg-surface-variant transition-colors">2</button>
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-surface-container border border-outline-variant/30 text-on-surface hover:bg-surface-variant transition-colors">3</button>
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-primary text-on-primary shadow-md shadow-primary/20 transition-transform active:scale-95 font-bold">4</button>
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-surface-container border border-outline-variant/30 text-on-surface hover:bg-surface-variant transition-colors">6</button>
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-surface-container border border-outline-variant/30 text-on-surface hover:bg-surface-variant transition-colors">8</button>
+<button class="flex-shrink-0 w-14 h-12 rounded-xl flex items-center justify-center font-body-md text-body-md bg-surface-container border border-outline-variant/30 text-on-surface hover:bg-surface-variant transition-colors">12</button>
+</div>
+</section>
+<!-- Summary Card -->
+<section class="bg-surface-container-low rounded-2xl p-5 mb-8 border border-outline-variant/20 shadow-sm relative overflow-hidden">
+<!-- Decorative background blur -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+<div class="relative z-10 flex justify-between items-start mb-6">
+<div>
+<h4 class="font-caption text-caption text-on-surface-variant mb-1">Tổng số buổi ước tính</h4>
+<div class="font-headline-lg text-headline-lg text-primary">8 buổi</div>
+<div class="font-caption text-caption text-on-surface-variant mt-1">2 thứ × 4 tuần · lúc 07:30</div>
+</div>
+<div class="w-12 h-12 rounded-full bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">event_available</span>
+</div>
+</div>
+<div class="border-t border-outline-variant/20 pt-4">
+<h5 class="font-label-md text-label-md text-on-surface mb-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">calendar_month</span>
+                        Lịch dự kiến (8 buổi)
+                    </h5>
+<div class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-2 hide-scrollbar">
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0">
+<span class="font-label-md text-label-md text-primary">T7</span>
+<span class="font-body-md text-body-md text-on-surface">25/07/2026</span>
+</div>
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0">
+<span class="font-label-md text-label-md text-primary">T2</span>
+<span class="font-body-md text-body-md text-on-surface">27/07/2026</span>
+</div>
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0">
+<span class="font-label-md text-label-md text-primary">T7</span>
+<span class="font-body-md text-body-md text-on-surface">01/08/2026</span>
+</div>
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0">
+<span class="font-label-md text-label-md text-primary">T2</span>
+<span class="font-body-md text-body-md text-on-surface">03/08/2026</span>
+</div>
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0">
+<span class="font-label-md text-label-md text-primary">T7</span>
+<span class="font-body-md text-body-md text-on-surface">08/08/2026</span>
+</div>
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0">
+<span class="font-label-md text-label-md text-primary">T2</span>
+<span class="font-body-md text-body-md text-on-surface">10/08/2026</span>
+</div>
+<div class="flex justify-between items-center py-1.5 border-b border-surface-variant last:border-0 opacity-60">
+<span class="font-label-md text-label-md text-primary">...</span>
+<span class="font-body-md text-body-md text-on-surface">...</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Fixed Bottom Action Bar -->
+<div class="fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-lg border-t border-outline-variant/30 p-4 pb-safe flex justify-center z-50">
+<button class="w-full max-w-md h-14 rounded-xl bg-primary text-on-primary font-headline-sm text-headline-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:bg-surface-tint transition-colors active:scale-[0.98]">
+            Tiếp tục
+            <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</body></html>

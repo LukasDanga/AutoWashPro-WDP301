@@ -681,6 +681,7 @@ export default function BookingScreen() {
         await AsyncStorage.setItem('aw_checkout_extras', JSON.stringify({
           voucherCode: voucherToSend,
           selectedSubServices,
+          timestamp: Date.now(),
         }));
         router.replace('/payment/checkout?type=deposit' as any);
       } else {
@@ -1653,7 +1654,7 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
               borderColor: selected ? colors.primary : colors.textTertiary,
             }
           ]}>
-            {selected && <Icon name={Icons.check} size={14} color={colors.textInverse} />}
+            {selected && <Icon name={Icons.checkmark} size={14} color={colors.textInverse} />}
           </View>
         </View>
       </Card>

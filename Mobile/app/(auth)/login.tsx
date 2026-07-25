@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   SafeAreaView,
@@ -17,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { AlertDialog, GoogleLogo } from '../../src/components/common';
+import { AlertDialog, GoogleLogo, Input, Button, ScreenContainer, Text } from '../../src/components/common';
 import { colors } from '../../src/theme/colors';
 
 export default function LoginScreen() {
@@ -103,112 +102,83 @@ export default function LoginScreen() {
 
       {/* Heading */}
       <View style={s.heading}>
-        <Text style={s.title}>Đăng nhập</Text>
-        <Text style={s.subtitle}>
+        <Text variant="h2" weight="700" style={s.title}>Đăng nhập</Text>
+        <Text variant="body" color="textSecondary" style={s.subtitle}>
           Rất vui được gặp lại bạn! Vui lòng nhập thông tin để tiếp tục.
         </Text>
       </View>
 
       {/* Form */}
-      <View style={s.fieldWrap}>
-        <Text style={s.fieldLabel}>Email / Số điện thoại</Text>
-        <View style={[s.inputBox, !!errors.email && s.inputBoxError]}>
-          <TextInput
-            ref={emailRef}
-            style={s.textInput}
-            placeholder="Nhập email hoặc số điện thoại"
-            placeholderTextColor={colors.textTertiary}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={formData.email}
-            onChangeText={v => updateField('email', v)}
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-        </View>
-        {errors.email ? <Text style={s.errMsg}>{errors.email}</Text> : null}
-      </View>
+      <View style={s.form}>
+        <Input
+          ref={emailRef as any}
+          label="Email / Số điện thoại"
+          placeholder="Nhập email hoặc số điện thoại"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={formData.email}
+          onChangeText={v => updateField('email', v)}
+          error={errors.email}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
+        />
 
-      <View style={s.fieldWrap}>
-        <Text style={s.fieldLabel}>Mật khẩu</Text>
-        <View style={[s.inputBox, !!errors.password && s.inputBoxError]}>
-          <View style={s.rowInput}>
-            <TextInput
-              ref={passwordRef}
-              style={[s.textInput, s.textInputFlex]}
-              placeholder="Nhập mật khẩu của bạn"
-              placeholderTextColor={colors.textTertiary}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              value={formData.password}
-              onChangeText={v => updateField('password', v)}
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(p => !p)}
-              style={s.eyeBtn}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-        {errors.password ? <Text style={s.errMsg}>{errors.password}</Text> : null}
-      </View>
+        <Input
+          ref={passwordRef as any}
+          label="Mật khẩu"
+          placeholder="Nhập mật khẩu của bạn"
+          secureTextEntry
+          autoCapitalize="none"
+          value={formData.password}
+          onChangeText={v => updateField('password', v)}
+          error={errors.password}
+          returnKeyType="done"
+          onSubmitEditing={handleLogin}
+        />
 
-      <TouchableOpacity 
-        style={s.forgot} 
-        activeOpacity={0.7}
-        onPress={() => router.push('/(auth)/forgot-password')}
-      >
-        <Text style={s.forgotText}>Quên mật khẩu?</Text>
-      </TouchableOpacity>
+        <TouchableOpacity 
+          style={s.forgot} 
+          activeOpacity={0.7}
+          onPress={() => router.push('/(auth)/forgot-password')}
+        >
+          <Text variant="body" weight="600" color="primary">Quên mật khẩu?</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Actions */}
       <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.cta, isLoading && s.ctaDisabled]}
+        <Button
+          title="Đăng nhập"
+          variant="primary"
+          size="large"
+          fullWidth
+          loading={isLoading}
           onPress={handleLogin}
-          disabled={isLoading}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark] as const}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={s.ctaGradient}
-          >
-            {/* Decorative blob for depth */}
-            <View style={s.ctaBlob} />
-            {isLoading
-              ? <ActivityIndicator color="#FFF" />
-              : <Text style={s.ctaText}>Đăng nhập</Text>
-            }
-          </LinearGradient>
-        </TouchableOpacity>
+        />
 
         <View style={s.dividerWrap}>
           <View style={s.dividerLine} />
-          <Text style={s.dividerText}>HOẶC</Text>
+          <Text variant="labelSmall" weight="700" color="textTertiary" style={s.dividerText}>HOẶC</Text>
           <View style={s.dividerLine} />
         </View>
 
-        <TouchableOpacity
-          style={[s.googleBtn, isLoading && s.ctaDisabled]}
+        <Button
+          title="Đăng nhập bằng Google"
+          variant="outline"
+          size="large"
+          fullWidth
+          loading={isLoading}
           onPress={handleGoogleLogin}
-          disabled={isLoading}
-          activeOpacity={0.7}
-        >
-          <GoogleLogo size={22} />
-          <Text style={s.googleBtnText}>Đăng nhập bằng Google</Text>
-        </TouchableOpacity>
+          icon={<GoogleLogo size={22} />}
+          style={s.googleBtn}
+          textStyle={s.googleBtnText}
+        />
 
-        <Text style={s.footerNote}>
+        <Text variant="body" align="center" color="textSecondary" style={s.footerNote}>
           Chưa có tài khoản?{' '}
           <Link href="/(auth)/register" asChild>
-            <Text style={s.footerLink}>Đăng ký ngay</Text>
+            <Text variant="body" weight="700" color="primary">Đăng ký ngay</Text>
           </Link>
         </Text>
       </View>
@@ -250,91 +220,22 @@ const s = StyleSheet.create({
   topbar: { height: 44, justifyContent: 'center', marginBottom: 24 },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceDark, justifyContent: 'center', alignItems: 'center' },
 
-  heading: { marginBottom: 40 },
-  title: { fontFamily: 'Outfit_700Bold', fontSize: 36, color: colors.textPrimary, letterSpacing: -1, marginBottom: 8 },
-  subtitle: { fontFamily: 'Outfit_400Regular', fontSize: 16, color: colors.textSecondary, lineHeight: 24 },
-
-  fieldWrap: { marginBottom: 24 },
-  fieldLabel: { fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: colors.textPrimary, marginBottom: 10 },
+  heading: { marginBottom: 32 },
+  title: { letterSpacing: -1, marginBottom: 8 },
+  subtitle: { lineHeight: 24 },
   
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 60,
-    backgroundColor: colors.surfaceDark,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  inputBoxError: { 
-    borderColor: colors.error, 
-    backgroundColor: colors.errorLight 
-  },
-  
-  textInput: {
-    fontFamily: 'Outfit_500Medium',
-    flex: 1,
-    height: 60,
-    fontSize: 16,
-    color: colors.textPrimary,
-    paddingVertical: 0,
-  },
-  textInputFlex: { flex: 1 },
-  rowInput: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  eyeBtn: { marginLeft: 10, padding: 4 },
-  errMsg: { fontFamily: 'Outfit_500Medium', marginTop: 8, marginLeft: 4, fontSize: 13, color: colors.error },
+  form: { marginBottom: 8 },
+  forgot: { alignSelf: 'flex-end', marginTop: 4, paddingVertical: 8 },
 
-  forgot: { alignSelf: 'flex-end', marginTop: -4, marginBottom: 32, paddingVertical: 8 },
-  forgotText: { fontFamily: 'Outfit_600SemiBold', color: colors.primary, fontSize: 15 },
-
-  actions: { marginTop: 8 },
-  cta: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 6,
-  },
-  ctaGradient: {
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  ctaBlob: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    top: -60,
-    right: -40,
-  },
-  ctaDisabled: { opacity: 0.7 },
-  ctaText: { fontFamily: 'Outfit_700Bold', color: '#FFFFFF', fontSize: 17, letterSpacing: 0.2 },
+  actions: { marginTop: 16 },
   
   dividerWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 32 },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { marginHorizontal: 16, color: colors.textTertiary, fontSize: 13, fontFamily: 'Outfit_700Bold' },
+  dividerText: { marginHorizontal: 16 },
 
   googleBtn: {
-    height: 60,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
@@ -342,12 +243,8 @@ const s = StyleSheet.create({
     elevation: 2,
   },
   googleBtnText: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 16,
     color: colors.textPrimary,
-    marginLeft: 12,
   },
   
-  footerNote: { fontFamily: 'Outfit_400Regular', marginTop: 32, textAlign: 'center', fontSize: 15, color: colors.textSecondary },
-  footerLink: { fontFamily: 'Outfit_700Bold', color: colors.primary },
+  footerNote: { marginTop: 32 },
 });

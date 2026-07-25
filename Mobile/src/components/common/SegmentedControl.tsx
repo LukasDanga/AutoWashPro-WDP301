@@ -89,7 +89,7 @@ export function SegmentedControl<T extends string = string>({
             <Text
               variant="label"
               weight={selected ? '600' : '500'}
-              color={selected ? '#FFFFFF' : 'textSecondary'}
+              color={selected ? 'textInverse' : 'textSecondary'}
             >
               {opt.label}
             </Text>
@@ -99,7 +99,7 @@ export function SegmentedControl<T extends string = string>({
                   styles.countBadge,
                   {
                     backgroundColor: selected
-                      ? '#FFFFFF'
+                      ? colors.background
                       : colors.surfaceDark,
                   },
                 ]}
@@ -156,7 +156,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentActive: {
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.12,
     shadowRadius: 3,

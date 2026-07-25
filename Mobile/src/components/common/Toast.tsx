@@ -141,6 +141,7 @@ const ToastItem: React.FC<ToastItemProps> = ({
           backgroundColor: variantCfg.bg,
           transform: [{ translateY }],
           opacity: opacityVal,
+          shadowColor: colors.textPrimary,
         },
       ]}
       accessible
@@ -289,7 +290,6 @@ const styles = StyleSheet.create({
     minHeight: 56,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   },
   description: {
     ...typography.caption,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   actionButton: {
     paddingHorizontal: 10,
@@ -318,8 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionText: {
-    fontWeight: '700',
-    fontSize: 14,
+    ...typography.buttonSmall,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

@@ -8,17 +8,17 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useColors, useTheme } from '../../../theme/ThemeContext';
-import { toGradientColors, getGradients } from '../../../theme/gradients';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { typography } from '../../../theme/typography';
+import { useColors, useTheme } from '../../theme/ThemeContext';
+import { toGradientColors, getGradients } from '../../theme/gradients';
+import { spacing, borderRadius } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
 import { Icon, Icons } from '../common/Icon';
 import { Text } from '../common/Text';
 import { PressableScale } from '../common/PressableScale';
 import { Chip } from '../common/Chip';
 import { Card } from '../common/Card';
-import { formatCurrency } from '../../../utils';
-import type { Package, PackageCategory } from '../../../types';
+import { formatCurrency } from '../../utils';
+import type { Package, PackageCategory } from '../../types';
 
 interface PackageCardProps {
   pkg: Package;
@@ -87,7 +87,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
         >
           {/* Gradient hero with category icon */}
           <LinearGradient
-            colors={toGradientColors(gradientStops)}
+            colors={toGradientColors(gradientStops) as unknown as readonly [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.hero}
@@ -151,7 +151,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
                 size="small"
                 variant="default"
               />
-              <View style={styles.dotSep} />
+              <View style={[styles.dotSep, { backgroundColor: colors.borderLight }]} />
               <Icon
                 name={Icons.timeOutline}
                 size={12}
@@ -164,7 +164,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
 
             <View style={styles.priceRow}>
               <Text
-                style={[styles.price, typography.price]}
+                style={[styles.price, typography.price, { color: colors.primary }]}
                 numberOfLines={1}
               >
                 {formatCurrency(pkg.price)}
@@ -225,7 +225,6 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#CBD5E1',
   },
   priceRow: {
     flexDirection: 'row',
@@ -233,9 +232,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  price: {
-    color: '#2563EB',
-  },
+  price: {},
   selectedPill: {
     flexDirection: 'row',
     alignItems: 'center',
