@@ -47,9 +47,12 @@ async function main() {
   console.log('Connected to MongoDB');
 
   // ── Resolve existing IDs ──────────────────────────────────────────────────
-  const customers = await User.find({ role: 'customer' }).sort({ createdAt: 1 }).limit(5);
+  const customers = await User.find({ role: 'customer' }).sort({ createdAt: 1 });
   if (customers.length < 5) { console.error('Need at least 5 customers. Run seed-full.js first.'); process.exit(1); }
   const custIds = customers.map(u => u._id);
+
+  // Log for debugging
+  customers.forEach((u,i) => console.log(`  Customer[${i}]: ${u.email}`));
 
   const branches = await Branch.find({ status: 'active' }).limit(5);
   if (branches.length < 5) { console.error('Need at least 5 active branches.'); process.exit(1); }
@@ -59,7 +62,7 @@ async function main() {
   if (packages.length < 20) { console.error('Need at least 20 packages.'); process.exit(1); }
   const pkgList = packages;
 
-  const vehicles = await Vehicle.find().limit(10);
+  const vehicles = await Vehicle.find();
   if (vehicles.length < 10) { console.error('Need at least 10 vehicles.'); process.exit(1); }
   const vehicleList = vehicles;
 
@@ -147,6 +150,40 @@ async function main() {
     });
   }
 
+  // ── Huongne-specific bookings (full schema, no shorthand) ──────────────────
+  const huongSpecs = [
+    // (pkgIdx, branchIdx, vehicleIdx, daysAgo, startTime, endTime, subServiceNames, voucherCode, discountAmt, rating, feedback)
+    { p: 3, b: 2, v: 12, d: 1, s: '08:00', e: '08:30', subs: ['Hút bụi nội thất ô tô', 'Xịt nước hoa cabin'], vc: '', da: 0, rt: 5, fb: 'Rửa sạch, hút bụi kỹ!' },
+    { p: 8, b: 3, v: 12, d: 3, s: '10:00', e: '11:00', subs: ['Vệ sinh khoang máy bằng hơi nước'], vc: 'SUMMER50K', da: 50000, rt: 5, fb: 'Phủ Nano bóng đẹp, thêm vệ sinh máy nữa là chuẩn.' },
+  ];
+  for (const spec of huongSpecs) {
+    const pkg = pkgList[spec.p];
+    const allSubServices = pkg.subServices || [];
+    const selectedSubServices = [
+      ...allSubServices.filter(s => s.isOptional === false).map(s => ({ name: s.name, price: s.price, duration: s.duration })),
+      ...allSubServices.filter(s => s.isOptional && spec.subs.includes(s.name)).map(s => ({ name: s.name, price: s.price, duration: s.duration })),
+    ];
+    const optionalPrice = selectedSubServices.filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
+    const discount = spec.da || 0;
+    const finalPrice = Math.max(0, pkg.price + optionalPrice - discount);
+    const depositAmount = Math.round(finalPrice * 0.3 / 1000) * 1000;
+    const bookingDate = daysAgo(spec.d);
+    const startH = parseInt(spec.s.split(':')[0], 10);
+    bookingEntries.push({
+      userId: custIds[7], branchId: branchIds[spec.b], packageId: pkg._id,
+      packageName: pkg.name, packageDuration: pkg.duration,
+      vehicleId: vehicleList[spec.v]._id,
+      bookingDate, startTime: spec.s, endTime: spec.e,
+      status: 'completed', bookingType: 'single', bookingCode: generateCode(),
+      selectedSubServices, voucherCode: spec.vc || undefined, discountAmount: discount,
+      finalPrice, depositAmount, depositPaid: true, depositPaidAt: daysAgo(spec.d, startH - 1),
+      paymentStatus: 'paid', paymentMethod: 'bank',
+      paidAt: daysAgo(spec.d, startH - 1),
+      checkInTime: daysAgo(spec.d, startH), checkOutTime: daysAgo(spec.d, startH + 1),
+      rating: spec.rt, feedback: spec.fb, feedbackAt: daysAgo(spec.d, startH + 2),
+      priority: 1,
+    });
+  }
   // Add 2 confirmed (not yet completed) bookings with sub-services
   bookingEntries.push(
     {
@@ -184,6 +221,25 @@ async function main() {
       paymentStatus: 'deposit_paid', paymentMethod: 'momo',
       confirmedAt: daysAgo(2),
       priority: 3,
+    },
+    // huongne confirmed: pkg[17] Đánh bóng sơn + Phủ wax — ready to rebook
+    {
+      userId: custIds[7], branchId: branchIds[4], packageId: pkgList[17]._id,
+      packageName: pkgList[17].name, packageDuration: pkgList[17].duration,
+      vehicleId: vehicleList[12]._id,
+      bookingDate: daysFromNow(1), startTime: '14:00', endTime: '15:00',
+      status: 'confirmed', bookingType: 'single', bookingCode: generateCode(),
+      selectedSubServices: [
+        ...pkgList[17].subServices.filter(s => !s.isOptional).map(s => ({ name: s.name, price: s.price, duration: s.duration })),
+        { name: 'Phủ wax bảo vệ sơn', price: 80000, duration: 15 },
+      ],
+      voucherCode: '', discountAmount: 0,
+      finalPrice: pkgList[17].price + 80000,
+      depositAmount: Math.round((pkgList[17].price + 80000) * 0.3 / 1000) * 1000,
+      depositPaid: true, depositPaidAt: daysAgo(0, 12),
+      paymentStatus: 'deposit_paid', paymentMethod: 'vnpay',
+      confirmedAt: daysAgo(0, 12),
+      priority: 1,
     }
   );
 
