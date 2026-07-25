@@ -1762,18 +1762,13 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   const branch = src.branchId;
   if (!branch || branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh không còn hoạt động'), { statusCode: 400 });
 
-  // Lấy thời lượng gói dịch vụ — ưu tiên stored value, fallback lookup, fallback 30 phút
-  let pkgDuration = src.packageDuration;
-  let pkgName = src.packageName;
+  // Luôn lấy dữ liệu gói mới nhất (giá, tên, thời lượng hiện tại)
   let pkg = null;
-  if (!pkgDuration || !pkgName) {
-    try {
-      pkg = await Package.findById(src.packageId);
-      if (pkg) { pkgDuration = pkg.duration; pkgName = pkgName || pkg.name; }
-    } catch (_) { /* ignore lookup failure */ }
-  }
-  pkgDuration = pkgDuration || 30;
-  pkgName = pkgName || 'Gói dịch vụ';
+  try {
+    pkg = await Package.findById(src.packageId);
+  } catch (_) { /* ignore lookup failure */ }
+  let pkgDuration = pkg?.duration || src.packageDuration || 30;
+  let pkgName = pkg?.name || src.packageName || 'Gói dịch vụ';
   // Use passed sub-services or fall back to original booking's selection
   const effectiveSubServices = selectedSubServices || src.selectedSubServices || [];
   const totalDuration = pkgDuration + effectiveSubServices.reduce((s, ss) => s + (ss.duration || 0), 0);
