@@ -270,7 +270,10 @@ exports.createBooking = async (data) => {
       slotPackId: slotPackId || undefined,
       bookingType,
       paymentStatus,
+      packageName: pkg.name,
+      packageDuration: pkg.duration,
     });
+
     await booking.save({ session });
 
     // Reserve voucher khi tạo booking (trừ remaining + tạo VoucherUsage)
@@ -1434,6 +1437,8 @@ exports.createRecurringBooking = async (data) => {
         finalPrice: computedFinalPrice,
         depositAmount: isFirstInGroup ? groupDepositAmount : 0,
         selectedSubServices: validSubServices,
+        packageName: pkg.name,
+        packageDuration: pkg.duration,
       });
       await booking.save({ session });
       await session.commitTransaction();
@@ -1743,7 +1748,6 @@ exports.replyToFeedback = async (bookingId, managerId, reply) => {
 // ─── Rebook: clone a booking with new date/time ───────────────────────────────
 exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime }) => {
   const src = await Booking.findById(bookingId)
-    .populate('packageId')
     .populate('branchId');
   if (!src) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
 
@@ -1755,13 +1759,21 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     throw Object.assign(new Error('Chỉ có thể đặt lại đơn đã hoàn thành hoặc đã hủy'), { statusCode: 400 });
   }
 
-  const pkg = src.packageId;
   const branch = src.branchId;
-  if (!pkg || pkg.status === 'inactive') throw Object.assign(new Error('Gói dịch vụ không còn hoạt động'), { statusCode: 400 });
   if (!branch || branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh không còn hoạt động'), { statusCode: 400 });
 
-  // Compute endTime
-  const totalDuration = pkg.duration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
+  // Lấy thời lượng gói dịch vụ — ưu tiên stored value, fallback lookup, fallback 30 phút
+  let pkgDuration = src.packageDuration;
+  let pkgName = src.packageName;
+  if (!pkgDuration || !pkgName) {
+    try {
+      const pkg = await Package.findById(src.packageId);
+      if (pkg) { pkgDuration = pkg.duration; pkgName = pkgName || pkg.name; }
+    } catch (_) { /* ignore lookup failure */ }
+  }
+  pkgDuration = pkgDuration || 30;
+  pkgName = pkgName || 'Gói dịch vụ';
+  const totalDuration = pkgDuration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
   const endTime = computeEndTime(startTime, totalDuration);
 
   // Check slot conflict
@@ -1781,10 +1793,14 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   const user = await User.findById(src.userId);
   const priority = TIER_PRIORITY[user?.tier] || 1;
 
+  const pkgName = src.packageName || 'Gói dịch vụ';
+
   const newBooking = await Booking.create({
     userId: src.userId,
     branchId: src.branchId,
     packageId: src.packageId,
+    packageName: pkgName,
+    packageDuration: pkgDuration,
     vehicleId: src.vehicleId,
     bookingDate: bookingDateObj,
     startTime,
@@ -1807,7 +1823,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   notificationService.send(
     src.userId,
     'Đặt lại lịch thành công',
-    `Lịch hẹn mới của bạn: ${pkg.name} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
+    `Lịch hẹn mới của bạn: ${pkgName} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
     'booking_created',
     { bookingId: newBooking._id }
   ).catch(() => {});
@@ -1816,7 +1832,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   notificationService.sendToAdminAndManager(
     src.branchId?._id || src.branchId,
     'Đặt lại lịch mới',
-    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkg.name} lúc ${startTime}.`,
+    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkgName} lúc ${startTime}.`,
     'booking_created',
     { bookingId: newBooking._id, branchId: src.branchId?._id || src.branchId }
   ).catch(() => {});
