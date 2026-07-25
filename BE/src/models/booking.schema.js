@@ -6,8 +6,6 @@ const bookingSchema = new mongoose.Schema(
     bookingCode: { type: String, unique: true, sparse: true },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', required: true },
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', required: true },
-    packageName: { type: String },
-    packageDuration: { type: Number },
     vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
     bookingDate: { type: Date, required: true },
     startTime: { type: String, required: true },
