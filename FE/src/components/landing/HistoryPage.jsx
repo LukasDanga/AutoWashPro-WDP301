@@ -660,11 +660,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   // Poll rebook provisional payment → khi paid thì tạo rebook
   useEffect(() => {
     if (rebookQrStep !== 'qr' || !rebookDepositPayment) return;
-    rebookPollRef.current = setInterval(async () => {
+      rebookPollRef.current = setInterval(async () => {
       try {
         const pid = rebookDepositPayment._id || rebookDepositPayment.id;
         if (!pid) return;
-        const res = await fetch(`${apiBase || API_BASE}/payments/booking/${pid}`, {
+        const res = await fetch(`${apiBase || API_BASE}/payments/${pid}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -959,7 +959,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       try {
         const payment = qbDepositPayment;
         const pid = payment._id || payment.id;
-        const res = await fetch(`${apiBase || API_BASE}/payments/booking/${pid}`, {
+        const res = await fetch(`${apiBase || API_BASE}/payments/${pid}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;

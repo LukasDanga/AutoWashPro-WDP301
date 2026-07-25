@@ -1765,9 +1765,10 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   // Lấy thời lượng gói dịch vụ — ưu tiên stored value, fallback lookup, fallback 30 phút
   let pkgDuration = src.packageDuration;
   let pkgName = src.packageName;
+  let pkg = null;
   if (!pkgDuration || !pkgName) {
     try {
-      const pkg = await Package.findById(src.packageId);
+      pkg = await Package.findById(src.packageId);
       if (pkg) { pkgDuration = pkg.duration; pkgName = pkgName || pkg.name; }
     } catch (_) { /* ignore lookup failure */ }
   }
