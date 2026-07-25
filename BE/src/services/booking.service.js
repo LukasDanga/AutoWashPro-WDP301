@@ -1793,6 +1793,8 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   const user = await User.findById(src.userId);
   const priority = TIER_PRIORITY[user?.tier] || 1;
 
+  const pkgName = src.packageName || 'Gói dịch vụ';
+
   const newBooking = await Booking.create({
     userId: src.userId,
     branchId: src.branchId,
