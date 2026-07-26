@@ -1,8 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle } from '@phosphor-icons/react';
+import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, TrendUp, TrendDown, Minus } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import useSSE from '@/hooks/useSSE';
+
+// --- Helper Component ---
+function ListTrend({ current, previous }) {
+  if (previous == null) return null; // No trend data for "all time"
+
+  const diff = current - previous;
+  const trend = previous === 0 ? (current > 0 ? 100 : 0) : Math.round((diff / previous) * 100);
+
+  if (trend > 0) {
+    return (
+      <span className="flex items-center gap-0.5 text-[10px] text-emerald-500 font-medium">
+        <TrendUp weight="bold" /> {trend}%
+      </span>
+    );
+  } else if (trend < 0) {
+    return (
+      <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-medium">
+        <TrendDown weight="bold" /> {Math.abs(trend)}%
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-0.5 text-[10px] text-slate-400 font-medium">
+      <Minus weight="bold" /> 0%
+    </span>
+  );
+}
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -127,17 +154,20 @@ export default function ManagerFeedbacks() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState({ total: 0, avgRating: '—', repliedCount: 0 });
+  const [previousStats, setPreviousStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [starFilter, setStarFilter] = useState('');
+  const [period, setPeriod] = useState('all');
   const [replyTarget, setReplyTarget] = useState(null);
   const token = getStoredToken();
 
-  const load = useCallback(async (rating = starFilter, pg = 1) => {
+  const load = useCallback(async (rating = starFilter, pg = 1, prd = period) => {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams({ page: pg, limit: PAGE_SIZE });
       if (rating) params.set('rating', rating);
+      if (prd !== 'all') params.set('period', prd);
       const res = await api(`/bookings/feedbacks?${params}`);
       if (!res.ok) throw new Error('Không thể tải đánh giá');
       const p = await res.json();
@@ -148,26 +178,22 @@ export default function ManagerFeedbacks() {
       setPage(data?.page ?? pg);
       setTotalPages(data?.totalPages ?? 1);
 
-      // stats: only on unfiltered first load
-      if (!rating && pg === 1) {
-        const withRating = list.filter((f) => f.rating);
-        const avg = withRating.length
-          ? (withRating.reduce((s, f) => s + f.rating, 0) / withRating.length).toFixed(1)
-          : '—';
-        setStats({ total: data?.total ?? list.length, avgRating: avg, repliedCount: list.filter(f => f.managerReply).length });
+      if (data?.stats) {
+        setStats(data.stats);
+        setPreviousStats(data.previousStats || null);
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [starFilter]); 
+  }, [starFilter, period]); 
 
-  useEffect(() => { load('', 1); }, [load]);
-  useSSE(token, 'feedback_new', () => load(starFilter, 1));
+  useEffect(() => { load('', 1, period); }, [load, period]);
+  useSSE(token, 'feedback_new', () => load(starFilter, 1, period));
 
-  const handleStarFilter = (v) => { setStarFilter(v); setPage(1); load(v, 1); };
-  const handlePage = (pg) => { setPage(pg); load(starFilter, pg); };
+  const handleStarFilter = (v) => { setStarFilter(v); setPage(1); load(v, 1, period); };
+  const handlePage = (pg) => { setPage(pg); load(starFilter, pg, period); };
 
   function handleReplied(updated) {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
@@ -178,16 +204,36 @@ export default function ManagerFeedbacks() {
   return (
     <div className="space-y-6">
 
+      <div className="flex items-center gap-2 mb-4 bg-white p-1.5 rounded-xl border border-slate-200 w-max shadow-sm">
+        {[
+          { id: 'today', label: 'Hôm nay' },
+          { id: 'month', label: 'Tháng này' },
+          { id: 'all', label: 'Tất cả thời gian' },
+        ].map(p => (
+          <button key={p.id} onClick={() => setPeriod(p.id)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              period === p.id ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Tổng đánh giá', value: stats.total },
-          { label: 'Điểm trung bình', value: stats.avgRating === '—' ? '—' : `${stats.avgRating} ⭐` },
-          { label: 'Đã phản hồi', value: `${stats.repliedCount}/${stats.total}` },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-center">
+          { label: 'Tổng đánh giá', value: stats.total, prevValue: previousStats?.total },
+          { label: 'Điểm trung bình', value: stats.avgRating === '—' ? '—' : `${stats.avgRating} ⭐`, prevValue: parseFloat(previousStats?.avgRating || 0) },
+          { label: 'Đã phản hồi', value: `${stats.repliedCount}/${stats.total}`, prevValue: previousStats?.repliedCount },
+        ].map(({ label, value, prevValue }) => (
+          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-center relative flex flex-col items-center justify-center">
             <p className="text-2xl font-bold text-slate-800">{value}</p>
             <p className="text-xs text-slate-500 mt-1">{label}</p>
+            {period !== 'all' && (
+              <div className="absolute top-3 right-4">
+                <ListTrend current={parseFloat(value) || 0} previous={prevValue} />
+              </div>
+            )}
           </div>
         ))}
       </div>

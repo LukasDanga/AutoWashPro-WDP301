@@ -64,8 +64,8 @@ exports.getVoucherUsage = catchAsync(async (req, res) => {
 });
 
 exports.getVoucherUsageReport = catchAsync(async (req, res) => {
-  const report = await voucherService.getVoucherUsageReport();
-  success(res, report, 'Voucher usage report retrieved');
+  const report = await voucherService.getVoucherUsageReport(req.query);
+  success(res, report, 'Voucher usage report retrieved successfully');
 });
 
 exports.getUserVouchers = catchAsync(async (req, res) => {

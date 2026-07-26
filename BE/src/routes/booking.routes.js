@@ -342,6 +342,7 @@ router.post('/:id/rebook', authenticate, authorize(ROLES.CUSTOMER), [
   param('id').isMongoId(),
   body('bookingDate').notEmpty().withMessage('bookingDate is required'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
+  body('voucherCode').optional().trim().isLength({ max: 50 }),
 ], validate, bookingController.rebookBooking);
 
 /**

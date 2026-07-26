@@ -4,6 +4,7 @@ import {
   CheckCircle,
   ArrowClockwise,
   TrendUp,
+  TrendDown,
   Clock,
 } from '@phosphor-icons/react';
 import {
@@ -29,16 +30,38 @@ function Spinner() {
   );
 }
 
-function StatCard({ icon, label, value, sub, color }) {
+function StatCard({ icon, label, value, sub, color, trend }) {
+  let trendUi = null;
+  if (trend !== undefined) {
+    if (trend > 0) {
+      trendUi = (
+        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+          <TrendUp weight="bold" />
+          <span>{trend}% so với hôm qua</span>
+        </div>
+      );
+    } else if (trend < 0) {
+      trendUi = (
+        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-red-500">
+          <TrendDown weight="bold" />
+          <span>{Math.abs(trend)}% so với hôm qua</span>
+        </div>
+      );
+    } else {
+      trendUi = <div className="mt-1 text-[11px] text-slate-400">Không đổi so với hôm qua</div>;
+    }
+  }
+
   return (
     <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${color}`}>
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${color}`}>
         {icon}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-2xl font-bold text-slate-800">{value ?? '—'}</p>
         <p className="truncate text-xs text-slate-500">{label}</p>
         {sub && <p className="truncate text-[11px] text-slate-400">{sub}</p>}
+        {trendUi}
       </div>
     </div>
   );
@@ -78,11 +101,26 @@ export default function ManagerOverview() {
 
   const now = new Date();
   const todayStr = now.toDateString();
+  const yesterdayStr = new Date(now.getTime() - 86400000).toDateString();
+
   const today = bookings.filter((b) => new Date(b.bookingDate).toDateString() === todayStr);
+  const yesterday = bookings.filter((b) => new Date(b.bookingDate).toDateString() === yesterdayStr);
+
   const pending = today.filter((b) => b.status === 'pending').length;
   const inProgress = today.filter((b) => b.status === 'in_progress').length;
   const completed = today.filter((b) => b.status === 'completed').length;
   const cancelled = today.filter((b) => b.status === 'cancelled').length;
+
+  const yPending = yesterday.filter((b) => b.status === 'pending').length;
+  const yInProgress = yesterday.filter((b) => b.status === 'in_progress').length;
+  const yCompleted = yesterday.filter((b) => b.status === 'completed').length;
+  const yCancelled = yesterday.filter((b) => b.status === 'cancelled').length;
+
+  const getTrend = (curr, prev) => {
+    if (prev === 0 && curr > 0) return 100;
+    if (prev === 0 && curr === 0) return 0;
+    return Math.round(((curr - prev) / prev) * 100);
+  };
 
   // ── 7-day bar chart data ──
   const last7 = Array.from({ length: 7 }, (_, i) => {
@@ -129,13 +167,13 @@ export default function ManagerOverview() {
       {/* today's stat cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard icon={<CalendarCheck size={20} weight="duotone" className="text-blue-500" />}
-          label="Đặt lịch hôm nay" value={today.length} sub="Tổng số lịch hẹn" color="bg-blue-50" />
+          label="Đặt lịch hôm nay" value={today.length} sub="Tổng số lịch hẹn" color="bg-blue-50" trend={getTrend(today.length, yesterday.length)} />
         <StatCard icon={<Clock size={20} weight="duotone" className="text-amber-500" />}
-          label="Chờ xác nhận" value={pending} sub="Cần xử lý" color="bg-amber-50" />
+          label="Chờ xác nhận" value={pending} sub="Cần xử lý" color="bg-amber-50" trend={getTrend(pending, yPending)} />
         <StatCard icon={<TrendUp size={20} weight="duotone" className="text-violet-500" />}
-          label="Đang thực hiện" value={inProgress} sub="Đang rửa xe" color="bg-violet-50" />
+          label="Đang thực hiện" value={inProgress} sub="Đang rửa xe" color="bg-violet-50" trend={getTrend(inProgress, yInProgress)} />
         <StatCard icon={<CheckCircle size={20} weight="duotone" className="text-emerald-500" />}
-          label="Hoàn thành" value={completed} sub={cancelled > 0 ? `${cancelled} đã hủy` : undefined} color="bg-emerald-50" />
+          label="Hoàn thành" value={completed} sub={cancelled > 0 ? `${cancelled} đã hủy` : undefined} color="bg-emerald-50" trend={getTrend(completed, yCompleted)} />
       </div>
 
       {loading ? (

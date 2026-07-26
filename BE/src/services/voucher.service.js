@@ -399,66 +399,110 @@ exports.getVoucherUsage = async (voucherId, filters = {}) => {
   };
 };
 
-exports.getVoucherUsageReport = async () => {
-  const pipeline = [
-    {
-      $group: {
-        _id: { userId: '$userId', voucherId: '$voucherId' },
-        count: { $sum: 1 },
-        totalDiscount: { $sum: '$discountAmount' }
-      }
-    },
-    {
-      $lookup: {
-        from: 'vouchers',
-        localField: '_id.voucherId',
-        foreignField: '_id',
-        as: 'voucher'
-      }
-    },
-    { $unwind: { path: '$voucher', preserveNullAndEmptyArrays: true } },
-    {
-      $group: {
-        _id: '$_id.userId',
-        totalUsedVouchers: { $sum: '$count' },
-        totalDiscountAmount: { $sum: '$totalDiscount' },
-        vouchersUsed: {
-          $push: {
-            voucherId: '$_id.voucherId',
-            code: '$voucher.code',
-            name: '$voucher.name',
-            count: '$count',
-            totalDiscount: '$totalDiscount'
+exports.getVoucherUsageReport = async (filters = {}) => {
+  const now = new Date();
+  let startOfPeriod = null;
+  let endOfPeriod = null;
+  let startOfPrev = null;
+  let endOfPrev = null;
+
+  if (filters.period === 'today') {
+    startOfPeriod = new Date(now.setHours(0, 0, 0, 0));
+    endOfPeriod = new Date(now.setHours(23, 59, 59, 999));
+    startOfPrev = new Date(startOfPeriod); startOfPrev.setDate(startOfPrev.getDate() - 1);
+    endOfPrev = new Date(endOfPeriod); endOfPrev.setDate(endOfPrev.getDate() - 1);
+  } else if (filters.period === 'month') {
+    startOfPeriod = new Date(now.getFullYear(), now.getMonth(), 1);
+    endOfPeriod = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    startOfPrev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    endOfPrev = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  }
+
+  const buildPipeline = (startDate, endDate) => {
+    const matchStage = {};
+    if (startDate && endDate) {
+      matchStage.usedAt = { $gte: startDate, $lte: endDate };
+    }
+    return [
+      ...(Object.keys(matchStage).length ? [{ $match: matchStage }] : []),
+      {
+        $group: {
+          _id: { userId: '$userId', voucherId: '$voucherId' },
+          count: { $sum: 1 },
+          totalDiscount: { $sum: '$discountAmount' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'vouchers',
+          localField: '_id.voucherId',
+          foreignField: '_id',
+          as: 'voucher'
+        }
+      },
+      { $unwind: { path: '$voucher', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: '$_id.userId',
+          totalUsedVouchers: { $sum: '$count' },
+          totalDiscountAmount: { $sum: '$totalDiscount' },
+          vouchersUsed: {
+            $push: {
+              voucherId: '$_id.voucherId',
+              code: '$voucher.code',
+              name: '$voucher.name',
+              count: '$count',
+              totalDiscount: '$totalDiscount'
+            }
           }
         }
-      }
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'user'
-      }
-    },
-    { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 0,
-        userId: '$_id',
-        'user.name': 1,
-        'user.email': 1,
-        'user.phone': 1,
-        'user.tier': 1,
-        totalUsedVouchers: 1,
-        totalDiscountAmount: 1,
-        vouchersUsed: 1
-      }
-    },
-    { $sort: { totalUsedVouchers: -1 } }
-  ];
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          userId: '$_id',
+          'user.name': 1,
+          'user.email': 1,
+          'user.phone': 1,
+          'user.tier': 1,
+          totalUsedVouchers: 1,
+          totalDiscountAmount: 1,
+          vouchersUsed: 1
+        }
+      },
+      { $sort: { totalUsedVouchers: -1 } }
+    ];
+  };
 
-  return VoucherUsage.aggregate(pipeline);
+  const [data, prevData] = await Promise.all([
+    VoucherUsage.aggregate(buildPipeline(startOfPeriod, endOfPeriod)),
+    (startOfPrev && endOfPrev) ? VoucherUsage.aggregate(buildPipeline(startOfPrev, endOfPrev)) : Promise.resolve([])
+  ]);
+
+  const calcStats = (reportData) => {
+    let totalDiscount = 0;
+    let totalUsed = 0;
+    reportData.forEach(item => {
+      totalDiscount += item.totalDiscountAmount || 0;
+      totalUsed += item.totalUsedVouchers || 0;
+    });
+    return { totalDiscount, totalUsed, uniqueUsers: reportData.length };
+  };
+
+  return {
+    data,
+    stats: calcStats(data),
+    previousStats: calcStats(prevData)
+  };
 };
 
 exports.getUserVouchers = async (userId) => {
