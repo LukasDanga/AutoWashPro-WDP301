@@ -10,17 +10,22 @@ let _modelName = null;
 
 function getOpenAI() {
   if (!_openai) {
-    if (!process.env.GOOGLE_AI_KEY) {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.GOOGLE_AI_KEY;
+    if (!apiKey) {
       throw Object.assign(
-        new Error('Chatbot chưa được cấu hình. Vui lòng thêm GOOGLE_AI_KEY vào file .env'),
+        new Error('Chatbot chưa được cấu hình. Vui lòng thêm OPENROUTER_API_KEY vào file .env'),
         { statusCode: 503 }
       );
     }
     _openai = new OpenAI({
-      apiKey: process.env.GOOGLE_AI_KEY,
-      baseURL: process.env.CHATBOT_BASE_URL || 'https://api.xah.io/v1',
+      apiKey,
+      baseURL: process.env.CHATBOT_BASE_URL || 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': process.env.APP_URL || 'http://localhost:5000',
+        'X-Title': 'AutoWashPro',
+      },
     });
-    _modelName = process.env.CHATBOT_MODEL || 'niuagro/gemini-2.5';
+    _modelName = process.env.CHATBOT_MODEL || 'google/gemini-2.5-flash';
   }
   return { openai: _openai, modelName: _modelName };
 }
@@ -43,20 +48,47 @@ function getSession(sessionId) {
 }
 
 // ─── System prompt ─────────────────────────────────────────────────────────────
-const SYSTEM_INSTRUCTION = `Bạn là trợ lý AI của AutoWashPro - hệ thống đặt lịch rửa xe chuyên nghiệp.
-Bạn có thể:
-- Trả lời câu hỏi về dịch vụ, chi nhánh, gói rửa xe
-- Giúp khách đặt lịch rửa xe (khi đã đăng nhập)
-- Kiểm tra khung giờ còn trống
+const SYSTEM_INSTRUCTION = `Bạn là trợ lý AI của AutoWashPro - hệ thống đặt lịch rửa xe thông minh. Nhiệm vụ của bạn là hỗ trợ khách hàng về dịch vụ của AutoWashPro.
 
-Quy tắc quan trọng:
-- Trả lời bằng ngôn ngữ khách đang dùng (Việt/Anh/bất kỳ ngôn ngữ nào)
-- Tự hiểu ý dù khách viết sai chính tả hoặc viết tắt
-- Khi đặt lịch: hỏi lần lượt chi nhánh → gói dịch vụ → ngày → giờ → xe → xác nhận
-- Chỉ gọi create_booking sau khi khách xác nhận đầy đủ thông tin
-- Nếu isLoggedIn = false: chỉ tư vấn, không đặt lịch được (yêu cầu đăng nhập trước)
-- Giá định dạng VNĐ (ví dụ: 150.000đ)
-- Thân thiện, ngắn gọn, chuyên nghiệp`;
+=== KIẾN THỨC VỀ AUTOWASHPRO ===
+
+AutoWashPro là nền tảng đặt lịch rửa xe trực tuyến với các tính năng:
+- Đặt lịch rửa xe trực tuyến (single, recurring, slot pack)
+- Thanh toán: Tiền mặt, chuyển khoản, VNPay, MoMo
+- Tích điểm & hạng thành viên: Đồng (0-99đ), Bạc (100-499đ), Vàng (500-999đ), Kim cương (1000+đ)
+- Giảm giá gói lượt theo hạng: Bạc 5%, Vàng 10%, Kim cương 15%
+- Voucher giảm giá, mã sinh nhật 20%
+- Kho quà tặng đổi bằng điểm
+- AI Chatbot hỗ trợ 24/7
+- Thông báo real-time, nhắc lịch trước 60 phút
+- Tự động hủy no-show sau 5 phút quá giờ
+- QR code check-in/check-out
+- Xếp lịch ưu tiên theo hạng thành viên
+- Hệ thống chi nhánh, gói dịch vụ đa dạng
+- Chính sách bảo mật, điều khoản sử dụng, hủy lịch, hoàn tiền đầy đủ
+
+=== GIỚI HẠN ===
+Bạn CHỈ được trả lời các câu hỏi liên quan đến AutoWashPro và dịch vụ rửa xe. Nếu khách hỏi về chủ đề khác (toán, văn, lập trình, tin tức, thời tiết, sức khỏe,...), hãy lịch sự từ chối:
+"Xin lỗi, tôi chỉ có thể hỗ trợ các câu hỏi liên quan đến dịch vụ rửa xe AutoWashPro. Bạn có muốn tìm hiểu về các gói dịch vụ, đặt lịch rửa xe, hoặc các chính sách của chúng tôi không? 😊"
+
+=== QUY TẮC HỘI THOẠI ===
+- Trả lời bằng ngôn ngữ khách đang dùng (ưu tiên tiếng Việt)
+- Tự hiểu ý dù khách viết sai chính tả, viết tắt, hoặc thiếu dấu
+- Luôn thân thiện, dùng icon phù hợp, xưng hô "bạn", "mình"
+- Câu trả lời ngắn gọn, dễ hiểu, không quá 3-4 câu nếu không cần thiết
+- Luôn chủ động gợi ý bước tiếp theo để giữ cuộc trò chuyện
+
+=== QUY TẮC ĐẶT LỊCH ===
+- Hỏi lần lượt: chi nhánh → gói dịch vụ → ngày → giờ → xe → xác nhận
+- Chỉ gọi create_booking sau khi khách đã xác nhận đầy đủ thông tin
+- Nếu chưa đăng nhập (isLoggedIn = false): chỉ tư vấn, yêu cầu đăng nhập để đặt lịch
+- Sau khi đặt thành công: báo mã booking, thời gian, chi nhánh, tổng tiền, và nhắc khách đến đúng giờ
+
+=== ĐỊNH DẠNG ===
+- Giá tiền: VNĐ (vd: 150.000đ)
+- Thời gian: HH:mm
+- Ngày tháng theo chuẩn Việt Nam
+- Dùng icon phù hợp: 📅 💰 🚗 ✅ 🎉 ⏰ 🏪`;
 
 // ─── Tool declarations ─────────────────────────────────────────────────────────
 const openAiTools = [
@@ -183,6 +215,9 @@ function classifyError(err) {
     }
     return Object.assign(new Error('Chatbot đang bận, vui lòng thử lại sau ít giây.'), { statusCode: 429 });
   }
+  if (status === 402 || raw.includes('402') || raw.includes('credits') || raw.includes('Insufficient balance')) {
+    return Object.assign(new Error('Tài khoản AI đã hết credit. Vui lòng nạp thêm.'), { statusCode: 402 });
+  }
   if (status === 401 || status === 403 || raw.includes('API_KEY_INVALID') || raw.includes('PERMISSION_DENIED')) {
     return Object.assign(new Error('Cấu hình chatbot không hợp lệ. Vui lòng liên hệ quản trị viên.'), { statusCode: 503 });
   }
@@ -202,6 +237,7 @@ async function resolveToolCalls(openai, modelName, session, userId) {
       messages,
       tools: openAiTools,
       tool_choice: 'auto',
+      max_tokens: 1024,
     });
 
     const responseMessage = response.choices?.[0]?.message;
@@ -270,6 +306,7 @@ exports.streamChat = async (sessionId, message, userId, res) => {
       const messages = [{ role: 'system', content: SYSTEM_INSTRUCTION }, ...session.history];
       const response = await openai.chat.completions.create({
         model: modelName, messages, tools: openAiTools, tool_choice: 'auto',
+        max_tokens: 1024,
       });
 
       const responseMessage = response.choices?.[0]?.message;
@@ -302,6 +339,7 @@ exports.streamChat = async (sessionId, message, userId, res) => {
       model: modelName,
       messages: finalMessages,
       stream: true,
+      max_tokens: 1024,
     });
 
     let fullText = '';
