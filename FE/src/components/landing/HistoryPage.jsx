@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
+<<<<<<< HEAD
 import { RefreshCw, Copy, Check, Sun, Sunset } from 'lucide-react';
+=======
+import { RefreshCw, Copy, Check, X } from 'lucide-react';
+>>>>>>> main
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
 import QuickBookModal from '../customer/QuickBookModal.jsx';
 import VoucherPicker from '../VoucherPicker.jsx';
+<<<<<<< HEAD
 
+=======
+>>>>>>> main
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATUS_MAP = {
@@ -234,10 +241,16 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [rebookQrLoading, setRebookQrLoading] = useState(false);
   const [rebookVnpayLoading, setRebookVnpayLoading] = useState(false);
   const rebookPollRef = useRef(null);
+<<<<<<< HEAD
   const [rebookSubServices, setRebookSubServices] = useState([]);
   const [rebookAvailableSubServices, setRebookAvailableSubServices] = useState([]);
   const [rebookAppliedVoucher, setRebookAppliedVoucher] = useState(null); // null | voucher object
 
+=======
+  const [rebookVoucherCode, setRebookVoucherCode] = useState('');
+  const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
+  const [showRebookVoucherModal, setShowRebookVoucherModal] = useState(false);
+>>>>>>> main
 
   // Quick book modal
   const [showQuickBookModal, setShowQuickBookModal] = useState(false);
@@ -413,20 +426,41 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }, [showRecurringGroupModal, recurringGroupTarget, loadRecurringGroup]);
 
-  /* ── SSE: auto-refresh on notification ── */
-  useSSE(token, 'notification', useCallback(() => {
-    const gbr = viewMode === 'list';
-    doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
-  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]));
+  const [refreshSignal, setRefreshSignal] = useState(0);
 
-  useSSE(token, 'my_bookings_updated', useCallback(() => {
+  const handleSSEUpdate = useCallback(() => {
     const gbr = viewMode === 'list';
     doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
-  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]));
+    setRefreshSignal(s => s + 1);
+  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]);
+
+  useSSE(token, 'notification', handleSSEUpdate);
+  useSSE(token, 'my_bookings_updated', handleSSEUpdate);
+
+  useEffect(() => {
+    if (refreshSignal > 0 && showRecurringGroupModal && recurringGroupTarget) {
+      loadRecurringGroup();
+    }
+  }, [refreshSignal]);
 
   function resetFilters() { setKeyword(''); setStatusFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setSort('-createdAt'); setPage(1); }
   function onFilterChange(setter, value) { setter(value); setPage(1); }
   function openReview(b) { setReviewTarget(b); setRating(b.rating || 0); setFeedbackText(b.feedback || ''); setShowReviewModal(true); }
+
+  useEffect(() => {
+    if (detailBooking) {
+      const bInList = bookings.find(b => b._id === detailBooking._id || b.id === detailBooking._id);
+      if (bInList) {
+        setDetailBooking(bInList);
+        return;
+      }
+      const bInGroup = recurringGroupBookings.find(b => b._id === detailBooking._id || b.id === detailBooking._id);
+      if (bInGroup) {
+        setDetailBooking(bInGroup);
+        return;
+      }
+    }
+  }, [bookings, recurringGroupBookings]);
 
   async function handleSubmitReview(e) {
     e.preventDefault();
@@ -506,7 +540,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setRebookQrStep('form');
     setRebookQrLoading(false);
     setRebookVnpayLoading(false);
+<<<<<<< HEAD
     setRebookAppliedVoucher(null);
+=======
+    setRebookVoucherCode('');
+    setRebookVoucherDiscount(0);
+>>>>>>> main
     if (rebookPollRef.current) clearInterval(rebookPollRef.current);
     // Fetch package sub-services from the original booking's package
     const pkgId = b.packageId?._id || b.packageId?.id || b.packageId;
@@ -560,6 +599,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
     setRebookLoading(true);
     try {
+<<<<<<< HEAD
       const basePrice = rebookTarget.packageId?.price || rebookTarget.finalPrice || 0;
       const subServiceTotal = rebookSubServices.filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
       const voucherDiscount = computeVoucherDiscount(rebookAppliedVoucher, basePrice + subServiceTotal);
@@ -567,6 +607,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
       const amount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
       const vCode = rebookAppliedVoucher?.code || undefined;
+=======
+      const bId = rebookTarget._id || rebookTarget.id;
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, voucherCode: rebookVoucherCode || undefined }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
+      const payload = await res.json();
+      const newBooking = payload?.data || payload;
+      const depositAmt = newBooking.depositAmount || 0;
+>>>>>>> main
 
       // Lưu draft để sau payment mới tạo booking
       setRebookDraft({
@@ -1103,17 +1155,15 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       if (res.ok) {
         const data = await res.json();
         const allPackages = data.data || [];
+        const currentPackage = allPackages.find(p => p._id === (b.packageId?._id || b.packageId));
         const allSubs = [];
-        const alreadySelected = b.selectedSubServices?.map(s => s.name) || [];
-        allPackages.forEach(p => {
-          if (p.subServices) {
-            p.subServices.forEach(s => {
-              if (!alreadySelected.includes(s.name) && !allSubs.some(x => x.name === s.name)) {
-                allSubs.push(s);
-              }
-            });
-          }
-        });
+        if (currentPackage && currentPackage.subServices) {
+          currentPackage.subServices.forEach(s => {
+            if (s.isOptional !== false && s.price > 0 && !allSubs.some(x => x.name === s.name)) {
+              allSubs.push(s);
+            }
+          });
+        }
         setAvailableSubServices(allSubs);
       }
     } catch (err) {
@@ -1139,7 +1189,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       showToast('Đã thêm dịch vụ thành công!', 'success');
       setShowAddService(null);
       setSelectedNewSubs([]);
+<<<<<<< HEAD
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+=======
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list'); // refresh
+>>>>>>> main
       if (detailBooking && (detailBooking._id === bId || detailBooking.id === bId)) {
          setDetailBooking(null);
       }
@@ -1147,6 +1201,29 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       showToast(err.message, 'error');
     } finally {
       setAddingService(false);
+    }
+  };
+
+  const handleRemoveSubService = async (b, subName) => {
+    try {
+      const bId = b._id || b.id;
+      const updatedSubs = (b.selectedSubServices || []).filter(s => s.name !== subName).map(s => s.name || s);
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/sub-services`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ subServices: updatedSubs })
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Lỗi khi xóa dịch vụ');
+      }
+      showToast('Đã xóa dịch vụ thành công!', 'success');
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list'); // refresh
+      if (detailBooking && (detailBooking._id === bId || detailBooking.id === bId)) {
+         setDetailBooking(null);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
     }
   };
 
@@ -1407,7 +1484,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               {b.vehicleId && <span>🚗 {b.vehicleId.licensePlate || ''}</span>}
                               {b.recurringGroupId && <span className="text-indigo-500">Định kỳ</span>}
                               {b.selectedSubServices && b.selectedSubServices.length > 0 && b.selectedSubServices.map((sub, idx) => (
-                                <span key={idx} className="text-indigo-500">+{sub.name}</span>
+                                <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(b, sub.name); }} className="group inline-flex items-center gap-1 cursor-pointer transition-colors hover:text-red-600">
+                                  <span className="text-indigo-500 font-bold group-hover:hidden">+</span>
+                                  <span className="text-red-500 font-bold hidden group-hover:inline">-</span>
+                                  <span className="text-indigo-500 group-hover:text-red-600">{sub.name}</span>
+                                </div>
                               ))}
                               {hasReview && <span className="text-amber-500">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
                             </div>
@@ -1640,7 +1721,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     
                     if (b.isGroup) {
                       return (
-                        <div key={bId} onClick={() => { setRecurringGroupTarget(b); setDetailBooking(b); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
+                        <div key={bId} onClick={() => { setRecurringGroupTarget(b); setShowRecurringGroupModal(true); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
                           <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
                           <div className="flex items-start justify-between gap-4 pl-3">
                             <div className="min-w-0 flex-1">
@@ -1667,6 +1748,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           <div className="mt-4 pl-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
                             {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="font-semibold text-slate-800">{b.vehicleId.licensePlate || ''}</span></span>}
                             <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">Cập nhật lần cuối: {formatDate(b.createdAt)}</span></span>
+                            {b.recurringGroupId && <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">#{(b.recurringGroupId || '').slice(-6).toUpperCase()}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 pl-3">
+                            <button className="px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1.5">
+                              <span>Xem chi tiết {b.groupCount} đơn lẻ</span>
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            </button>
                           </div>
                         </div>
                       );
@@ -1713,9 +1801,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           {b.bookingCode && <span className="font-mono text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">#{b.bookingCode}</span>}
                           {b.recurringGroupId && <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
                           {b.selectedSubServices && b.selectedSubServices.length > 0 && b.selectedSubServices.map((sub, idx) => (
-                            <span key={idx} className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">
-                              + {sub.name}
-                            </span>
+                            <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(b, sub.name); }} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 cursor-pointer">
+                              <span className="font-bold text-[11px] group-hover:hidden">+</span>
+                              <span className="font-bold text-[11px] hidden group-hover:inline">-</span>
+                              <span className="text-[11px] font-bold">{sub.name}</span>
+                            </div>
                           ))}
                           {hasReview && <span className="text-amber-500 font-medium">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
                         </div>
@@ -1879,13 +1969,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {/* Header */}
               <div className="flex justify-between items-start mb-12">
                 <div>
-                  <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Receipt</h2>
+                  <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Biên lai</h2>
                   <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
-                    <div className="font-semibold text-black">Invoice number</div>
+                    <div className="font-semibold text-black">Mã hóa đơn</div>
                     <div className="text-black">AWP-{displayInvoiceNumber}</div>
-                    <div className="font-semibold text-black">Receipt number</div>
+                    <div className="font-semibold text-black">Mã biên lai</div>
                     <div className="text-black">{displayId}</div>
-                    <div className="font-semibold text-black">Date paid</div>
+                    <div className="font-semibold text-black">Ngày thanh toán</div>
                     <div className="text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
                   </div>
                 </div>
@@ -1909,7 +1999,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold text-black mb-1">Bill to</div>
+                  <div className="font-semibold text-black mb-1">Khách hàng</div>
                   <div className="text-black">
                     {detailBooking.userId?.name || 'Khách hàng'} ({detailBooking.userId?.phone || ''})<br/>
                     Biển số: {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
@@ -1921,18 +2011,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {/* Big Payment Status */}
               <div className="mb-10">
                 <h3 className="text-2xl font-bold text-black mb-3">
-                  {formatCurrency(displayTotal)} {detailBooking.paymentStatus === 'paid' ? `paid on ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `due on ${formatDate(detailBooking.bookingDate)}`}
+                  {formatCurrency(displayTotal)} {detailBooking.paymentStatus === 'paid' ? `đã thanh toán vào ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `cần thanh toán vào ${formatDate(detailBooking.bookingDate)}`}
                 </h3>
                 <p className="text-[13px] text-black max-w-xl leading-relaxed">
-                  While we prefer electronic payment methods,<br/>
-                  any checks must be sent to the address below, NOT to our branch office.<br/>
+                  Cảm ơn quý khách đã sử dụng dịch vụ của AutoWash Pro.<br/>
+                  Quý khách có thể thanh toán bằng tiền mặt, chuyển khoản hoặc sử dụng thẻ thành viên.<br/>
                   --------------------------------<br/>
-                  PAYMENT ADDRESS:<br/>
+                  ĐỊA CHỈ THANH TOÁN:<br/>
                   AutoWash Pro<br/>
-                  Hồ Chí Minh, Vietnam
+                  Hồ Chí Minh, Việt Nam
                 </p>
                 <p className="text-[13px] text-black mt-4">
-                  VAT is calculated on the gross invoice amount using the formula: VAT = (sales price / (1 - 10%)) × 10%
+                  Giá đã bao gồm 10% VAT.
                 </p>
               </div>
 
@@ -1941,11 +2031,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="py-2 text-left font-normal text-black w-1/2">Description</th>
-                      <th className="py-2 text-right font-normal text-black">Qty</th>
-                      <th className="py-2 text-right font-normal text-black">Unit price</th>
-                      <th className="py-2 text-right font-normal text-black">Tax</th>
-                      <th className="py-2 text-right font-normal text-black">Amount</th>
+                      <th className="py-2 text-left font-normal text-black w-1/2">Mô tả</th>
+                      <th className="py-2 text-right font-normal text-black">SL</th>
+                      <th className="py-2 text-right font-normal text-black">Đơn giá</th>
+                      <th className="py-2 text-right font-normal text-black">Thuế</th>
+                      <th className="py-2 text-right font-normal text-black">Thành tiền</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1996,29 +2086,35 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 <div className="flex justify-end mt-6">
                   <div className="w-[300px] text-[13px]">
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Subtotal</span>
-                      <span className="text-black">{formatCurrency(displayTotal)}</span>
+                      <span className="text-black">Tạm tính</span>
+                      <span className="text-black">{formatCurrency(displayTotal + (detailBooking.discountAmount || 0))}</span>
                     </div>
+                    {detailBooking.voucherCode && (
+                      <div className="flex justify-between py-1 border-b border-slate-200">
+                        <span className="text-emerald-600 font-medium">Voucher ({detailBooking.voucherCode})</span>
+                        <span className="text-emerald-600 font-medium">-{formatCurrency(detailBooking.discountAmount || 0)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Total excluding tax</span>
+                      <span className="text-black">Tổng tiền (chưa VAT)</span>
                       <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">VAT - Vietnam (10% on {formatCurrency(Math.round((displayTotal) * 0.9))})</span>
+                      <span className="text-black">Thuế VAT (10%)</span>
                       <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="font-normal text-black">Total</span>
+                      <span className="font-normal text-black">Tổng cộng</span>
                       <span className="font-normal text-black">{formatCurrency(displayTotal)}</span>
                     </div>
                     {detailBooking.paymentStatus === 'deposit_paid' && (
                       <div className="flex justify-between py-1 border-b border-slate-200">
-                        <span className="font-normal text-black">Deposit Paid</span>
+                        <span className="font-normal text-black">Đã đặt cọc</span>
                         <span className="font-normal text-black">-{formatCurrency(displayDeposit || 0)}</span>
                       </div>
                     )}
                     <div className="flex justify-between py-1.5 border-b border-black">
-                      <span className="font-bold text-black">Amount {detailBooking.paymentStatus === 'paid' ? 'paid' : 'due'}</span>
+                      <span className="font-bold text-black">Số tiền {detailBooking.paymentStatus === 'paid' ? 'đã thanh toán' : 'cần thanh toán'}</span>
                       <span className="font-bold text-black">
                         {detailBooking.paymentStatus === 'paid' 
                           ? formatCurrency(displayTotal)
@@ -2034,20 +2130,20 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
               {/* Payment History */}
               <div>
-                <h3 className="text-xl font-bold text-black mb-4">Payment history</h3>
+                <h3 className="text-xl font-bold text-black mb-4">Lịch sử thanh toán</h3>
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="py-2 text-left font-normal text-black">Payment method</th>
-                      <th className="py-2 text-left font-normal text-black">Date</th>
-                      <th className="py-2 text-right font-normal text-black">Amount paid</th>
-                      <th className="py-2 text-right font-normal text-black">Receipt number</th>
+                      <th className="py-2 text-left font-normal text-black">Phương thức</th>
+                      <th className="py-2 text-left font-normal text-black">Ngày</th>
+                      <th className="py-2 text-right font-normal text-black">Số tiền</th>
+                      <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b border-slate-200">
                       <td className="py-3 text-left text-black">
-                        {detailBooking.paymentStatus === 'paid' ? 'Bank Transfer' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Deposit' : 'Pending')}
+                        {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
                       </td>
                       <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
                       <td className="py-3 text-right text-black">
@@ -2064,7 +2160,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {/* Status Badge & Feedback for Service Info */}
               <div className="mt-12 flex items-center justify-between border-t border-slate-200 pt-8">
                 <div className="flex items-center gap-4">
-                  <span className="text-[13px] font-semibold text-black">Service Status:</span>
+                  <span className="text-[13px] font-semibold text-black">Trạng thái:</span>
                   <StatusBadge status={detailBooking.status} />
                 </div>
                 {detailBooking.feedback && (
@@ -2139,27 +2235,29 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       {showAddService && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !addingService && setShowAddService(null)}>
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ con</h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ</h3>
             <p className="text-xs text-slate-500 mb-4">Bạn có thể chọn thêm các dịch vụ phát sinh. Hệ thống sẽ tự động tính lại tổng tiền.</p>
             
             <div className="max-h-60 overflow-y-auto space-y-2 mb-4 pr-2">
               {availableSubServices.length === 0 ? (
                 <p className="text-sm text-slate-500">Đang tải hoặc không có dịch vụ nào thêm...</p>
               ) : availableSubServices.map((sub, i) => {
-                const checked = selectedNewSubs.some(s => s.name === sub.name);
+                const alreadyHas = showAddService?.selectedSubServices?.some(s => s.name === sub.name);
+                const checked = alreadyHas || selectedNewSubs.some(s => s.name === sub.name);
                 return (
-                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${alreadyHas ? 'opacity-60 cursor-not-allowed bg-slate-50 border-slate-200' : checked ? 'border-emerald-400 bg-emerald-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'}`}>
                     <div className="flex items-center gap-3">
-                      <input type="checkbox" className="hidden" checked={checked} onChange={() => {
+                      <input type="checkbox" className="hidden" checked={checked} disabled={alreadyHas} onChange={() => {
+                        if (alreadyHas) return;
                         if (checked) setSelectedNewSubs(prev => prev.filter(s => s.name !== sub.name));
                         else setSelectedNewSubs(prev => [...prev, sub]);
                       }} />
-                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300'}`}>
+                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? (alreadyHas ? 'bg-slate-400 border-slate-400' : 'bg-emerald-600 border-emerald-600') + ' text-white' : 'border-slate-300'}`}>
                         {checked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                       </div>
-                      <span className={`text-sm font-medium ${checked ? 'text-emerald-800' : 'text-slate-700'}`}>{sub.name}</span>
+                      <span className={`text-sm font-medium ${checked ? (alreadyHas ? 'text-slate-500' : 'text-emerald-800') : 'text-slate-700'}`}>{sub.name}</span>
                     </div>
-                    <span className={`text-sm font-bold ${checked ? 'text-emerald-600' : 'text-slate-900'}`}>+{formatCurrency(sub.price || 0)}</span>
+                    <span className={`text-sm font-bold ${checked ? (alreadyHas ? 'text-slate-400' : 'text-emerald-600') : 'text-slate-900'}`}>{alreadyHas ? 'Đã có' : `+${formatCurrency(sub.price || 0)}`}</span>
                   </label>
                 )
               })}
@@ -2314,7 +2412,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       <div key={bId} onClick={() => setDetailBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <div className="font-semibold text-slate-800 text-sm">{formatDate(b.bookingDate)} · {b.startTime}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800 text-sm">{formatDate(b.bookingDate)} · {b.startTime}</span>
+                              {b.bookingCode && <span className="font-mono text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">#{b.bookingCode}</span>}
+                            </div>
                             <div className="text-xs text-slate-500 mt-1">{b.branchId?.name || b.branchName || ''}</div>
                           </div>
                           <StatusBadge status={b.status} />
@@ -2599,6 +2700,39 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           <span className="block font-semibold">Thanh toán 100%</span>
                           <span className="text-xs opacity-70">{totalPrice.toLocaleString('vi-VN')}₫</span>
                         </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Voucher section */}
+                  {rebookTarget?.bookingType !== 'slot_pack_usage' && (
+                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex justify-between items-center cursor-pointer transition-colors hover:bg-emerald-100/50" onClick={() => setShowRebookVoucherModal(true)}>
+                      <div>
+                        <h4 className="text-emerald-800 font-bold text-sm">VOUCHER & ƯU ĐÃI</h4>
+                        {rebookVoucherCode ? <p className="text-emerald-600 font-medium text-xs mt-1">Đã áp dụng: {rebookVoucherCode}</p> : <p className="text-emerald-600 font-medium text-xs mt-1">Bấm để chọn ưu đãi</p>}
+                      </div>
+                      <span className="text-emerald-600 text-xs font-bold border border-emerald-200 px-3 py-1.5 rounded-full bg-white shadow-sm">Chọn</span>
+                    </div>
+                  )}
+
+                  {/* Financial Breakdown */}
+                  {rebookTarget?.bookingType !== 'slot_pack_usage' && (
+                    <div className="space-y-2.5 py-2">
+                      <div className="flex justify-between text-sm text-slate-500">
+                        <span>Giá dịch vụ</span>
+                        <span className="font-semibold">{formatCurrency((rebookTarget?.packageId?.price || 0) + (rebookTarget?.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0))}</span>
+                      </div>
+                      {rebookVoucherDiscount > 0 && (
+                        <div className="flex justify-between text-sm text-emerald-600">
+                          <span>Mã giảm giá</span>
+                          <span>-{formatCurrency(rebookVoucherDiscount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-slate-100">
+                        <span className="text-base font-bold text-slate-800">Thành tiền</span>
+                        <span className="text-xl font-extrabold text-emerald-600">
+                          {formatCurrency(Math.max(0, (rebookTarget?.packageId?.price || 0) + (rebookTarget?.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0) - rebookVoucherDiscount))}
+                        </span>
                       </div>
                     </div>
                   )}

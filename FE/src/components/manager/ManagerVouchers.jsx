@@ -13,9 +13,39 @@ import {
   PencilSimple,
   ClockCounterClockwise,
   Gift,
+  TrendUp, 
+  TrendDown, 
+  Minus,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+
+// --- Helper Component ---
+function ListTrend({ current, previous }) {
+  if (previous == null) return null;
+
+  const diff = current - previous;
+  const trend = previous === 0 ? (current > 0 ? 100 : 0) : Math.round((diff / previous) * 100);
+
+  if (trend > 0) {
+    return (
+      <span className="flex items-center gap-0.5 text-[10px] text-emerald-500 font-medium">
+        <TrendUp weight="bold" /> {trend}%
+      </span>
+    );
+  } else if (trend < 0) {
+    return (
+      <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-medium">
+        <TrendDown weight="bold" /> {Math.abs(trend)}%
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-0.5 text-[10px] text-slate-400 font-medium">
+      <Minus weight="bold" /> 0%
+    </span>
+  );
+}
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -298,24 +328,79 @@ function VoucherUsageModal({ voucherId, onClose }) {
 /* ── voucher usage report tab ── */
 function VoucherUsageReportTab() {
   const [report, setReport] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [previousStats, setPreviousStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [period, setPeriod] = useState('all');
 
   useEffect(() => {
     let mounted = true;
-    api('/vouchers/usage-report')
+    setLoading(true);
+    
+    const params = new URLSearchParams();
+    if (period !== 'all') params.set('period', period);
+    
+    api(`/vouchers/usage-report?${params}`)
       .then(res => { if (!res.ok) throw new Error('Failed to load report'); return res.json(); })
-      .then(p => { if (mounted) { setReport(p?.data ?? []); setLoading(false); } })
+      .then(p => { 
+        if (mounted) { 
+          setReport(p?.data?.data || p?.data || []); 
+          setStats(p?.data?.stats || null);
+          setPreviousStats(p?.data?.previousStats || null);
+          setLoading(false); 
+        } 
+      })
       .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
     return () => { mounted = false; };
-  }, []);
-
-  if (loading) return <div className="flex justify-center py-24 text-slate-400"><Spinner size={24} /></div>;
-  if (error) return <div className="text-red-500 text-center py-10 flex flex-col items-center gap-2"><Warning size={24} />{error}</div>;
-  if (report.length === 0) return <div className="text-slate-500 text-center py-10">Chưa có dữ liệu sử dụng voucher.</div>;
+  }, [period]);
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
+
+      <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 w-max shadow-sm">
+        {[
+          { id: 'today', label: 'Hôm nay' },
+          { id: 'month', label: 'Tháng này' },
+          { id: 'all', label: 'Tất cả thời gian' },
+        ].map(p => (
+          <button key={p.id} onClick={() => setPeriod(p.id)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              period === p.id ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {stats && (
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          {[
+            { label: 'Tổng số Voucher đã dùng', value: stats.totalUsed, prevValue: previousStats?.totalUsed },
+            { label: 'Tổng tiền khuyến mãi', value: `${Number(stats.totalDiscount || 0).toLocaleString('vi-VN')}₫`, prevValue: previousStats?.totalDiscount },
+            { label: 'Khách hàng sử dụng', value: stats.uniqueUsers, prevValue: previousStats?.uniqueUsers },
+          ].map(({ label, value, prevValue }) => (
+            <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-center relative flex flex-col items-center justify-center">
+              <p className="text-2xl font-bold text-slate-800">{value}</p>
+              <p className="text-xs text-slate-500 mt-1">{label}</p>
+              {period !== 'all' && (
+                <div className="absolute top-3 right-4">
+                  <ListTrend current={parseFloat(value?.toString().replace(/[^\d.-]/g, '')) || 0} previous={prevValue} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-24 text-slate-400"><Spinner size={24} /></div>
+      ) : error ? (
+        <div className="text-red-500 text-center py-10 flex flex-col items-center gap-2"><Warning size={24} />{error}</div>
+      ) : report.length === 0 ? (
+        <div className="text-slate-500 text-center py-10">Chưa có dữ liệu sử dụng voucher.</div>
+      ) : (
+        <div className="space-y-4">
       {report.map(item => (
         <div key={item.userId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-4 pb-4 border-b border-slate-100">
@@ -349,6 +434,8 @@ function VoucherUsageReportTab() {
           </div>
         </div>
       ))}
+      </div>
+    )}
     </div>
   );
 }
@@ -516,7 +603,24 @@ export default function ManagerVouchers({ user }) {
                         {v.type === 'percentage' ? `${v.value}%` : `${Number(v.value).toLocaleString('vi-VN')}₫`}
                         {v.maxDiscount > 0 && <span className="text-[11px] text-slate-400"> (tối đa {Number(v.maxDiscount).toLocaleString('vi-VN')}₫)</span>}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{v.remaining ?? v.quantity}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 text-slate-600">
+                          <span>{v.remaining ?? v.quantity}</span>
+                          {v.quantity > 0 && (v.remaining ?? v.quantity) < v.quantity ? (
+                            <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-medium" title={`Đã sử dụng ${v.quantity - (v.remaining ?? v.quantity)}`}>
+                              <TrendDown weight="bold" /> {v.quantity - (v.remaining ?? v.quantity)}
+                            </span>
+                          ) : (v.remaining ?? v.quantity) > v.quantity ? (
+                            <span className="flex items-center gap-0.5 text-[10px] text-emerald-500 font-medium" title={`Tăng thêm ${(v.remaining ?? v.quantity) - v.quantity}`}>
+                              <TrendUp weight="bold" /> {(v.remaining ?? v.quantity) - v.quantity}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-0.5 text-[10px] text-slate-300">
+                              <Minus weight="bold" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {formatDate(v.startDate)} – {formatDate(v.endDate)}
                       </td>

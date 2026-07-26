@@ -9,6 +9,9 @@ import {
   Money,
   Bank,
   Eye,
+  Car,
+  TrendUp,
+  TrendDown
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import TierBadge from '@/components/ui/TierBadge';
@@ -28,18 +31,70 @@ function Spinner() {
   );
 }
 
-function StatCard({ icon, label, value, color }) {
+function StatCard({ icon, label, value, sub, color, currentRaw, prevRaw, hideTrend }) {
+  let trendUi = null;
+  if (!hideTrend && prevRaw !== undefined && prevRaw !== null) {
+    let percent = 0;
+    if (prevRaw === 0 && currentRaw > 0) percent = 100;
+    else if (prevRaw > 0) percent = ((currentRaw - prevRaw) / prevRaw) * 100;
+
+    const isUp = percent > 0;
+    const isDown = percent < 0;
+    const isNeutral = percent === 0;
+
+    if (!isNeutral) {
+      trendUi = (
+        <div className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>
+          {isUp ? <TrendUp weight="bold" /> : <TrendDown weight="bold" />}
+          <span>{Math.abs(percent).toFixed(1)}% so với kỳ trước</span>
+        </div>
+      );
+    } else {
+      trendUi = <div className="mt-1 text-[11px] text-slate-400">Không đổi so với kỳ trước</div>;
+    }
+  }
+
   return (
     <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${color}`}>
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${color}`}>
         {icon}
       </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-slate-800">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-2xl font-bold text-slate-800">{value ?? '—'}</p>
         <p className="truncate text-xs text-slate-500">{label}</p>
+        {sub && <p className="truncate text-[11px] text-slate-400">{sub}</p>}
+        {trendUi}
       </div>
     </div>
   );
+}
+
+const getPrev = (list, id) => list?.find(x => x._id === id)?.totalRevenue || 0;
+
+function ListTrend({ currentRaw, prevRaw, hideTrend }) {
+  if (hideTrend || currentRaw === undefined || prevRaw === undefined) return null;
+  let trend = 0;
+  if (prevRaw === 0 && currentRaw > 0) trend = 100;
+  else if (prevRaw === 0 && currentRaw === 0) trend = 0;
+  else trend = Math.round(((currentRaw - prevRaw) / prevRaw) * 100);
+
+  let content;
+  if (trend > 0) {
+    content = (
+      <span className="flex items-center gap-0.5 text-[10px] text-emerald-500 font-medium">
+        <TrendUp weight="bold" /> {trend}%
+      </span>
+    );
+  } else if (trend < 0) {
+    content = (
+      <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-medium">
+        <TrendDown weight="bold" /> {Math.abs(trend)}%
+      </span>
+    );
+  } else {
+    content = <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">— 0%</span>;
+  }
+  return <div className="mt-1 flex justify-end">{content}</div>;
 }
 
 export default function ManagerRevenue() {
@@ -53,14 +108,9 @@ export default function ManagerRevenue() {
     try {
       let query = '';
       if (filter === 'today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        query = `?startDate=${today.toISOString()}`;
+        query = `?period=today`;
       } else if (filter === 'month') {
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        query = `?startDate=${startOfMonth.toISOString()}`;
+        query = `?period=month`;
       }
 
       const res = await api(`/reports/revenue${query}`);
@@ -92,6 +142,12 @@ export default function ManagerRevenue() {
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${viewMode === 'customers' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
           >
             Danh sách khách hàng
+          </button>
+          <button
+            onClick={() => setViewMode('vehicles')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${viewMode === 'vehicles' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            Danh sách xe
           </button>
         </div>
         <div className="flex gap-2">
@@ -128,28 +184,40 @@ export default function ManagerRevenue() {
               label="Tổng doanh thu"
               value={`${(data.totalRevenue || 0).toLocaleString('vi-VN')}đ`}
               color="bg-emerald-50"
+              currentRaw={data.totalRevenue || 0}
+              prevRaw={data.previousTotals?.totalRevenue}
+              hideTrend={filter === 'all'}
             />
             <StatCard
               icon={<Money size={24} weight="duotone" className="text-green-500" />}
               label="Tiền mặt"
               value={`${(data.cashRevenue || 0).toLocaleString('vi-VN')}đ`}
               color="bg-green-50"
+              currentRaw={data.cashRevenue || 0}
+              prevRaw={data.previousTotals?.cashRevenue}
+              hideTrend={filter === 'all'}
             />
             <StatCard
               icon={<Bank size={24} weight="duotone" className="text-indigo-500" />}
               label="Chuyển khoản"
               value={`${(data.transferRevenue || 0).toLocaleString('vi-VN')}đ`}
               color="bg-indigo-50"
+              currentRaw={data.transferRevenue || 0}
+              prevRaw={data.previousTotals?.transferRevenue}
+              hideTrend={filter === 'all'}
             />
             <StatCard
               icon={<Receipt size={24} weight="duotone" className="text-blue-500" />}
               label="Số lượt thanh toán"
               value={data.totalBookings || 0}
               color="bg-blue-50"
+              currentRaw={data.totalBookings || 0}
+              prevRaw={data.previousTotals?.totalBookings}
+              hideTrend={filter === 'all'}
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             {/* By Customer */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3.5 flex items-center justify-between">
@@ -181,6 +249,7 @@ export default function ManagerRevenue() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold text-emerald-600">{(c.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+                          <ListTrend currentRaw={c.totalRevenue} prevRaw={getPrev(data.previousByCustomer, c._id)} hideTrend={filter === 'all'} />
                         </div>
                       </div>
                     ))}
@@ -208,6 +277,64 @@ export default function ManagerRevenue() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold text-emerald-600">{(p.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+                          <ListTrend currentRaw={p.totalRevenue} prevRaw={getPrev(data.previousByPackage, p._id)} hideTrend={filter === 'all'} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* By Vehicle */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3.5 flex items-center gap-2">
+                <Car size={16} className="text-slate-500" />
+                <h2 className="text-sm font-semibold text-slate-700">Doanh thu theo xe</h2>
+              </div>
+              <div className="p-0">
+                {(!data.byVehicle || data.byVehicle.length === 0) ? (
+                  <div className="p-8 text-center text-sm text-slate-400">Không có dữ liệu</div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {data.byVehicle.slice(0, 5).map((v, i) => (
+                      <div key={v._id || i} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-800 uppercase">{v.vehicle?.licensePlate || 'Chưa cập nhật'}</p>
+                          <p className="truncate text-xs text-slate-500">{v.vehicle?.brand} {v.vehicle?.model}</p>
+                          <p className="truncate text-xs text-slate-400">{v.bookingsCount} lượt đặt</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-emerald-600">{(v.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+                          <ListTrend currentRaw={v.totalRevenue} prevRaw={getPrev(data.previousByVehicle, v._id)} hideTrend={filter === 'all'} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* By Vehicle Type */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3.5 flex items-center gap-2">
+                <Car size={16} className="text-slate-500" />
+                <h2 className="text-sm font-semibold text-slate-700">Doanh thu theo loại xe</h2>
+              </div>
+              <div className="p-0">
+                {(!data.byVehicleType || data.byVehicleType.length === 0) ? (
+                  <div className="p-8 text-center text-sm text-slate-400">Không có dữ liệu</div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {data.byVehicleType.map((vt, i) => (
+                      <div key={vt._id || i} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-800 capitalize">{vt._id === 'unknown' ? 'Chưa phân loại' : vt._id}</p>
+                          <p className="truncate text-xs text-slate-500">{vt.bookingsCount} lượt đặt</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-emerald-600">{(vt.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+                          <ListTrend currentRaw={vt.totalRevenue} prevRaw={getPrev(data.previousByVehicleType, vt._id)} hideTrend={filter === 'all'} />
                         </div>
                       </div>
                     ))}
@@ -217,7 +344,7 @@ export default function ManagerRevenue() {
             </div>
           </div>
         </>
-      ) : (
+      ) : viewMode === 'customers' ? (
         <div className="space-y-4 animate-in fade-in">
           {/* Full List of Customers Tab */}
           <div className="flex items-center justify-between mb-4">
@@ -255,6 +382,7 @@ export default function ManagerRevenue() {
                       </td>
                       <td className="px-5 py-4 text-right">
                         <p className="font-semibold text-emerald-600">{(c.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+                        <ListTrend currentRaw={c.totalRevenue} prevRaw={getPrev(data.previousByCustomer, c._id)} hideTrend={filter === 'all'} />
                       </td>
                     </tr>
                   ))
@@ -263,8 +391,53 @@ export default function ManagerRevenue() {
             </table>
           </div>
         </div>
-        )
-      ) : (
+      ) : viewMode === 'vehicles' ? (
+        <div className="space-y-4 animate-in fade-in">
+          {/* Full List of Vehicles Tab */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-800">Danh sách xe ({data?.byVehicle?.length || 0})</h2>
+            <button onClick={() => setViewMode('overview')} className="text-sm text-blue-600 font-medium hover:underline">
+              Quay lại tổng quan
+            </button>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-100 bg-slate-50/50 text-slate-500">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Xe</th>
+                  <th className="px-5 py-3 font-semibold text-center">Số lượt đặt</th>
+                  <th className="px-5 py-3 font-semibold text-right">Doanh thu mang lại</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(!data?.byVehicle || data.byVehicle.length === 0) ? (
+                  <tr>
+                    <td colSpan={3} className="p-8 text-center text-slate-400">Không có dữ liệu</td>
+                  </tr>
+                ) : (
+                  data.byVehicle.map((v, i) => (
+                    <tr key={v._id || i} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col gap-1">
+                          <p className="text-sm font-bold text-slate-800 uppercase">{v.vehicle?.licensePlate || 'Chưa cập nhật'}</p>
+                          <p className="text-xs text-slate-500 capitalize">{v.vehicle?.vehicleType === 'unknown' ? 'Khác' : v.vehicle?.vehicleType} {v.vehicle?.brand ? `· ${v.vehicle?.brand}` : ''} {v.vehicle?.model ? `· ${v.vehicle?.model}` : ''}</p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className="font-semibold text-slate-700">{v.bookingsCount}</span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <p className="font-semibold text-emerald-600">{(v.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+                        <ListTrend currentRaw={v.totalRevenue} prevRaw={getPrev(data.previousByVehicle, v._id)} hideTrend={filter === 'all'} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null) : (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400">
           <CalendarBlank size={48} weight="thin" className="mb-2" />
           <p>Không thể tải dữ liệu báo cáo</p>
