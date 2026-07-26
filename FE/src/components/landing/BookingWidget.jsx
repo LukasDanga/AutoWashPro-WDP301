@@ -635,6 +635,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           weekdays: pb?.selectedDays || selectedDays,
           weeks: pb?.weeks || weeks,
           voucherCode: pb?.appliedVoucher?.code || appliedVoucher?.code,
+          discountAmount: discount,
           selectedSubServices: pb?.selectedSubServices || currentSubServices,
           isRecurring: isRec,
           finalPrice: fullPrice,
@@ -908,7 +909,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     if (!pId) return defaultIncluded;
     const selectedForPkg = selectedSubServices[pId];
     if (selectedForPkg === undefined) return defaultIncluded;
-    return Array.from(new Set([...defaultIncluded, ...selectedForPkg]));
+    return selectedForPkg;
   }, [pkg, selectedSubServices, defaultIncluded]);
   let extraDuration = 0, extraPrice = 0;
   if (pkg && pkg.subServices) {
@@ -1544,7 +1545,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                   key={sub.name}
                                   onClick={() => {
                                     setSelectedSubServices(prev => {
-                                      const current = prev[pId] || [];
+                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
                                       return { 
                                         ...prev, 
                                         [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
@@ -2164,43 +2165,47 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       {/* Sub-services summary: Included & Optional */}
                       <div className="pb-6 border-b border-dashed border-slate-200 space-y-4">
                         {/* Dịch vụ đã bao gồm trong gói */}
-                        {pkg?.subServices?.filter(s => !s.isOptional).length > 0 && (
-                          <div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
-                              <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> Dịch vụ có sẵn (Đã bao gồm)
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                              {pkg.subServices.filter(s => !s.isOptional).map(sub => (
-                                <span key={sub.name} className="text-xs font-semibold px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 flex items-center gap-1.5">
-                                  <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
-                                  {sub.name}
-                                  {sub.duration > 0 && <span className="text-[10px] text-emerald-600 font-normal">({sub.duration}p)</span>}
-                                </span>
-                              ))}
+                        {(() => {
+                          const keptIncluded = (pkg?.subServices || []).filter(s => !s.isOptional && currentSubServices.includes(s.name));
+                          if (keptIncluded.length === 0) return null;
+                          return (
+                            <div>
+                              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> Dịch vụ có sẵn (Đã bao gồm)
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {keptIncluded.map(sub => (
+                                  <span key={sub.name} className="text-xs font-semibold px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 flex items-center gap-1.5">
+                                    <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                                    {sub.name}
+                                    {sub.duration > 0 && <span className="text-[10px] text-emerald-600 font-normal">({sub.duration}p)</span>}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Dịch vụ chọn thêm */}
-                        {currentSubServices.length > 0 && (
-                          <div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Dịch vụ chọn thêm (Tùy chọn)
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                              {currentSubServices.map(subName => {
-                                const subObj = pkg?.subServices?.find(s => s.name === subName);
-                                const price = subObj?.price || 0;
-                                return (
-                                  <span key={subName} className="text-xs font-semibold px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 flex items-center gap-1">
-                                    <span>+ {subName}</span>
-                                    <span className="text-[10px] text-indigo-600 font-bold">({price > 0 ? `+${formatCurrency(price)}` : 'Miễn phí'})</span>
+                        {(() => {
+                          const addedOptional = (pkg?.subServices || []).filter(s => s.isOptional && currentSubServices.includes(s.name));
+                          if (addedOptional.length === 0) return null;
+                          return (
+                            <div>
+                              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Dịch vụ chọn thêm (Tùy chọn)
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {addedOptional.map(sub => (
+                                  <span key={sub.name} className="text-xs font-semibold px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 flex items-center gap-1">
+                                    <span>+ {sub.name}</span>
+                                    <span className="text-[10px] text-indigo-600 font-bold">({sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'})</span>
                                   </span>
-                                );
-                              })}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       {/* Payment Options */}
@@ -2281,16 +2286,20 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         </div>
 
                         {/* Included sub-services (Dịch vụ có sẵn trong gói - Miễn phí) */}
-                        {pkg?.subServices?.filter(s => !s.isOptional).length > 0 && (
-                          <div className="pl-3 space-y-1 my-1">
-                            {pkg.subServices.filter(s => !s.isOptional).map(sub => (
-                              <div key={sub.name} className="flex justify-between text-xs text-slate-500">
-                                <span>+ {sub.name}</span>
-                                <span className="text-slate-400 font-medium">Miễn phí</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {(() => {
+                          const keptIncluded = (pkg?.subServices || []).filter(s => !s.isOptional && currentSubServices.includes(s.name));
+                          if (keptIncluded.length === 0) return null;
+                          return (
+                            <div className="pl-3 space-y-1 my-1">
+                              {keptIncluded.map(sub => (
+                                <div key={sub.name} className="flex justify-between text-xs text-slate-500">
+                                  <span>+ {sub.name}</span>
+                                  <span className="text-slate-400 font-medium">Miễn phí</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
 
                         {/* Optional added sub-services (Dịch vụ chọn thêm - Trả phí) */}
                         {(() => {
