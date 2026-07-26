@@ -154,7 +154,7 @@ const bookingValidators = {
   slots: [
     query('branchId').isString().notEmpty().withMessage('Invalid branch ID'),
     query('date').isISO8601().withMessage('Invalid date format'),
-    query('packageId').isString().notEmpty().withMessage('Invalid package ID'),
+    query('packageId').optional().isString().withMessage('Invalid package ID'),
   ],
   cancel: [
     param('id').isMongoId().withMessage('Invalid booking ID'),

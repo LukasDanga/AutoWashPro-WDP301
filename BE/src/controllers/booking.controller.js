@@ -221,8 +221,8 @@ exports.replyToFeedback = catchAsync(async (req, res) => {
 });
 
 exports.rebookBooking = catchAsync(async (req, res) => {
-  const { bookingDate, startTime, voucherCode } = req.body;
-  const booking = await bookingService.rebookBooking(req.params.id, req.userId, req.user.role, { bookingDate, startTime, voucherCode });
+  const { bookingDate, startTime, selectedSubServices, voucherCode } = req.body;
+  const booking = await bookingService.rebookBooking(req.params.id, req.userId, req.user.role, { bookingDate, startTime, selectedSubServices, voucherCode });
   success(res, booking, 'Booking rebooked', 201);
 });
 

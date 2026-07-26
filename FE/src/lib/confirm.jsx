@@ -8,9 +8,11 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 export function confirmDialog({
   title = 'Xác nhận',
   message = '',
+  content = null,
   confirmLabel = 'Xác nhận',
   cancelLabel = 'Huỷ',
   danger = false,
+  hideCancel = false,
 } = {}) {
   return new Promise((resolve) => {
     const host = document.createElement('div');
@@ -26,9 +28,11 @@ export function confirmDialog({
         open
         title={title}
         message={message}
+        content={content}
         confirmLabel={confirmLabel}
         cancelLabel={cancelLabel}
         danger={danger}
+        hideCancel={hideCancel}
         onConfirm={() => close(true)}
         onCancel={() => close(false)}
       />,

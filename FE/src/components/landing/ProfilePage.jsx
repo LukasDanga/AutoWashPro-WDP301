@@ -82,10 +82,36 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
       setVehicles(prev => prev.filter(v => (v._id || v.id) !== vId));
     } catch (e) {
       if (e.message.includes('lịch hẹn đang hoạt động')) {
+        const shortMsg = e.message.replace(/^Không thể xóa xe này vì đã có /i, '');
+        const [countLine, ...codeLines] = shortMsg.includes('Mã:') ? shortMsg.split('Mã:') : [shortMsg, ''];
+        const codesRaw = (codeLines.join('') || '').trim();
+        const bookingItems = codesRaw.split(/,\s*/).filter(Boolean);
+        const bookings = bookingItems.map(item => {
+          const m = item.match(/(\S+)\s*\((.+?)\s+(\S+)\)/);
+          return m ? { code: m[1], date: m[2], time: m[3] } : { code: item, date: '', time: '' };
+        });
+        const count = countLine.match(/(\d+)/)?.[1] || bookings.length;
         await confirmDialog({
-          title: 'Không thể xóa xe',
-          message: e.message + '\n\nVui lòng hoàn thành hoặc hủy các lịch hẹn trước khi xóa xe.',
+          title: 'Không thể xóa phương tiện',
+          message: `Xe này hiện có ${count} lịch hẹn đang hoạt động. Vui lòng hoàn thành hoặc hủy các lịch hẹn này trước khi thực hiện xóa xe.`,
+          content: (
+            <div className="rounded-xl border border-slate-200 overflow-hidden text-sm mt-3">
+              <div className="grid grid-cols-[1fr_1fr] bg-slate-50 border-b border-slate-200 px-4 py-2">
+                <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wide">Mã lịch hẹn</span>
+                <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wide text-right">Thời gian</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {bookings.map((b, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr] px-4 py-2.5 hover:bg-slate-50">
+                    <span className="font-semibold text-slate-800">{b.code}</span>
+                    <span className="text-slate-600 text-right">{[b.date, b.time].filter(Boolean).join(' ')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ),
           confirmLabel: 'Đã hiểu',
+          hideCancel: true,
         });
       } else {
         alert(e.message);

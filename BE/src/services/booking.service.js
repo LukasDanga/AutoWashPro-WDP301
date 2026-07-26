@@ -270,7 +270,10 @@ exports.createBooking = async (data) => {
       slotPackId: slotPackId || undefined,
       bookingType,
       paymentStatus,
+      packageName: pkg.name,
+      packageDuration: pkg.duration,
     });
+
     await booking.save({ session });
 
     // Reserve voucher khi tạo booking (trừ remaining + tạo VoucherUsage)
@@ -1183,13 +1186,10 @@ exports.deleteAllBookings = async () => {
 exports.getAvailableSlots = async (branchId, date, packageId) => {
   const [branch, pkg] = await Promise.all([
     Branch.findById(branchId),
-    Package.findOne({ _id: packageId, isDeleted: { $ne: true } }),
+    Package.findById(packageId),
   ]);
   if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-  if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-  if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
-    throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
-  }
+  const duration = pkg ? pkg.duration : 30;
 
   const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
   const { gte, lte } = getDayBounds(dateStr);
@@ -1199,7 +1199,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime');
 
-  const slots = buildSlots(pkg.duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
 
@@ -1457,6 +1457,8 @@ exports.createRecurringBooking = async (data) => {
         finalPrice: computedFinalPrice,
         depositAmount: isFirstInGroup ? groupDepositAmount : 0,
         selectedSubServices: validSubServices,
+        packageName: pkg.name,
+        packageDuration: pkg.duration,
       });
       await booking.save({ session });
       await session.commitTransaction();
@@ -1823,9 +1825,8 @@ exports.replyToFeedback = async (bookingId, managerId, reply) => {
 };
 
 // ─── Rebook: clone a booking with new date/time ───────────────────────────────
-exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime, voucherCode }) => {
+exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, startTime, selectedSubServices, voucherCode }) => {
   const src = await Booking.findById(bookingId)
-    .populate('packageId')
     .populate('branchId');
   if (!src) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
 
@@ -1837,13 +1838,19 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     throw Object.assign(new Error('Chỉ có thể đặt lại đơn đã hoàn thành hoặc đã hủy'), { statusCode: 400 });
   }
 
-  const pkg = src.packageId;
   const branch = src.branchId;
-  if (!pkg || pkg.status === 'inactive') throw Object.assign(new Error('Gói dịch vụ không còn hoạt động'), { statusCode: 400 });
   if (!branch || branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh không còn hoạt động'), { statusCode: 400 });
 
-  // Compute endTime
-  const totalDuration = pkg.duration + (src.selectedSubServices || []).reduce((s, ss) => s + (ss.duration || 0), 0);
+  // Luôn lấy dữ liệu gói mới nhất (giá, tên, thời lượng hiện tại)
+  let pkg = null;
+  try {
+    pkg = await Package.findById(src.packageId);
+  } catch (_) { /* ignore lookup failure */ }
+  let pkgDuration = pkg?.duration || src.packageDuration || 30;
+  let pkgName = pkg?.name || src.packageName || 'Gói dịch vụ';
+  // Use passed sub-services or fall back to original booking's selection
+  const effectiveSubServices = selectedSubServices || src.selectedSubServices || [];
+  const totalDuration = pkgDuration + effectiveSubServices.reduce((s, ss) => s + (ss.duration || 0), 0);
   const endTime = computeEndTime(startTime, totalDuration);
 
   // Check slot conflict
@@ -1863,43 +1870,65 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   const user = await User.findById(src.userId);
   const priority = TIER_PRIORITY[user?.tier] || 1;
 
-  let computedDiscountAmount = 0;
-  const extraPrice = (src.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0);
-  let computedFinalPrice = pkg.price + extraPrice;
-
-  if (voucherCode) {
-    const voucherResult = await voucherService.validateVoucher(voucherCode, { packageId: pkg._id, branchId: branch._id, amount: computedFinalPrice }, src.userId);
-    computedDiscountAmount = voucherResult.discountAmount || voucherResult.savings || 0;
-    computedFinalPrice = voucherResult.finalAmount || Math.max(0, computedFinalPrice - computedDiscountAmount);
+  // ── Price re-computation ─────────────────────────────────────────────
+  // Base: package price (fallback to src.finalPrice)
+  const pkgPrice = pkg?.price || src.finalPrice || 0;
+  // Add optional sub-service prices (only those with price > 0, i.e. not bundled-in)
+  const optionalSubPrice = effectiveSubServices
+    .filter(ss => ss.price > 0)
+    .reduce((s, ss) => s + (ss.price || 0), 0);
+  let computedFinalPrice = pkgPrice + optionalSubPrice;
+  let computedDiscount = 0;
+  let validatedVoucherCode = undefined;
+  // Validate voucher if provided
+  if (voucherCode && String(voucherCode).trim()) {
+    try {
+      const Voucher = require('../models/voucher.schema');
+      const v = await Voucher.findOne({ code: String(voucherCode).trim().toUpperCase() });
+      if (v && v.status === 'active') {
+        const now = new Date();
+        if ((!v.startDate || v.startDate <= now) && (!v.endDate || v.endDate >= now)) {
+          if (v.usageLimit === undefined || v.usedCount < v.usageLimit) {
+            validatedVoucherCode = v.code;
+            computedDiscount = v.type === 'percentage'
+              ? Math.min(Math.round(computedFinalPrice * v.value / 100), v.maxDiscount || Infinity)
+              : v.value;
+          }
+        }
+      }
+    } catch (_) { /* voucher validation failed silently */ }
   }
+  computedFinalPrice = Math.max(0, computedFinalPrice - computedDiscount);
 
   const newBooking = await Booking.create({
     userId: src.userId,
     branchId: src.branchId,
     packageId: src.packageId,
+    packageName: pkgName,
+    packageDuration: pkgDuration,
     vehicleId: src.vehicleId,
     bookingDate: bookingDateObj,
     startTime,
     endTime,
     bookingCode: generateBookingCode(),
     bookingType: src.bookingType === 'recurring' ? 'single' : src.bookingType,
-    selectedSubServices: src.selectedSubServices || [],
+    selectedSubServices: effectiveSubServices,
     note: src.note,
     priority,
     rebookedFromId: src._id,
     finalPrice: computedFinalPrice,
-    discountAmount: computedDiscountAmount,
+    discountAmount: computedDiscount,
     depositAmount: src.bookingType === 'slot_pack_usage'
       ? 0
       : Math.round(((computedFinalPrice || 0) * DEPOSIT_RATE) / 1000) * 1000,
-    voucherCode: voucherCode || undefined,
+    voucherCode: validatedVoucherCode,
     paymentStatus: 'unpaid',
   });
 
   notificationService.send(
     src.userId,
     'Đặt lại lịch thành công',
-    `Lịch hẹn mới của bạn: ${pkg.name} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
+    `Lịch hẹn mới của bạn: ${pkgName} vào lúc ${startTime} ngày ${bookingDateObj.toLocaleDateString('vi-VN')}.`,
     'booking_created',
     { bookingId: newBooking._id }
   ).catch(() => {});
@@ -1908,7 +1937,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
   notificationService.sendToAdminAndManager(
     src.branchId?._id || src.branchId,
     'Đặt lại lịch mới',
-    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkg.name} lúc ${startTime}.`,
+    `${src.userId?.name || 'Khách hàng'} vừa đặt lại lịch ${pkgName} lúc ${startTime}.`,
     'booking_created',
     { bookingId: newBooking._id, branchId: src.branchId?._id || src.branchId }
   ).catch(() => {});
