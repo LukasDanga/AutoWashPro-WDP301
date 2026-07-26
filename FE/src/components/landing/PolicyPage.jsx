@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
@@ -88,6 +88,25 @@ const POLICIES = [
     ],
   },
   {
+    id: 'insurance',
+    title: 'Chính sách bảo hiểm & bồi thường',
+    icon: '🤝',
+    content: [
+      { subtitle: '1. Phạm vi bảo hiểm',
+        body: 'AutoWashPro áp dụng bảo hiểm trách nhiệm dịch vụ cho toàn bộ quy trình rửa xe tại tất cả chi nhánh. Bảo hiểm này chi trả trong trường hợp xe của khách hàng bị trầy xước, móp méo, vỡ kính hoặc hư hỏng ngoại thất phát sinh trực tiếp từ quy trình rửa và chăm sóc xe của nhân viên AutoWashPro. Bảo hiểm không áp dụng cho các hư hỏng có sẵn trước khi nhận xe hoặc hư hỏng do nguyên nhân khách quan (thiên tai, trộm cắp).' },
+      { subtitle: '2. Quy trình kiểm tra xe trước khi rửa',
+        body: 'Trước khi tiến hành rửa, nhân viên AutoWashPro và khách hàng sẽ cùng kiểm tra tình trạng xe hiện tại. Mọi vết trầy xước, vết lõm, hoặc hư hỏng có sẵn sẽ được ghi nhận bằng hình ảnh và biên bản bàn giao. Quy trình này nhằm bảo vệ quyền lợi cả hai bên và là căn cứ xác định trách nhiệm khi có sự cố phát sinh. Khách hàng vui lòng dành 3-5 phút để cùng kiểm tra và ký xác nhận.' },
+      { subtitle: '3. Quy trình xử lý khi có sự cố',
+        body: 'Ngay khi phát hiện hư hỏng, khách hàng thông báo cho nhân viên hoặc quản lý chi nhánh trong vòng 24 giờ kể từ khi rời khỏi chi nhánh. AutoWashPro sẽ tiến hành: (1) lập biên bản ghi nhận sự cố có chữ ký hai bên, (2) chụp ảnh hiện trường, (3) định giá thiệt hại tại garage hoặc trung tâm sửa chữa uy tín do hai bên thỏa thuận. Thời gian xử lý yêu cầu tối đa 48 giờ làm việc.' },
+      { subtitle: '4. Mức bồi thường',
+        body: 'AutoWashPro cam kết bồi thường 100% chi phí sửa chữa, khắc phục hư hỏng tại garage được hai bên thống nhất. Trường hợp hư hỏng không thể khắc phục, mức bồi thường tối đa dựa trên giá trị thị trường của bộ phận bị hư hỏng tại thời điểm xảy ra sự cố. Mức bồi thường tối đa cho mỗi sự cố là 50.000.000đ. Bồi thường được thực hiện trong vòng 7 ngày làm việc sau khi hai bên thống nhất mức bồi thường.' },
+      { subtitle: '5. Xử lý xe sang, xe đắt tiền',
+        body: 'Đối với các dòng xe sang, siêu sang (Mercedes-Benz, BMW, Audi, Lexus, Porsche, Rolls-Royce, Bentley, Ferrari, Lamborghini, McLaren và các thương hiệu tương đương), AutoWashPro áp dụng quy trình rửa tay chuyên biệt bởi đội ngũ kỹ thuật viên có chứng chỉ chăm sóc xe hạng sang. Khách hàng sở hữu xe sang nên đặt lịch tại các chi nhánh có trang bị khu vực rửa xe riêng biệt (VIP Zone). Nếu có thiệt hại phát sinh, hạn mức bồi thường tối đa cho xe sang có thể lên đến 200.000.000đ mỗi sự cố, tùy theo đánh giá của bên giám định độc lập.' },
+      { subtitle: '6. Trường hợp từ chối bồi thường',
+        body: 'AutoWashPro có quyền từ chối bồi thường trong các trường hợp: (1) hư hỏng có sẵn trước khi rửa nhưng không được ghi nhận trong biên bản bàn giao, (2) hư hỏng do lỗi kỹ thuật của xe hoặc do xe đã có sẵn tình trạng xuống cấp, (3) khách hàng không thông báo trong vòng 24 giờ, (4) hư hỏng phát sinh sau khi xe đã rời khỏi chi nhánh và không thể xác định nguyên nhân, (5) khách hàng yêu cầu dịch vụ trái với quy trình hoặc từ chối kiểm tra xe trước khi rửa.' },
+    ],
+  },
+  {
     id: 'booking',
     title: 'Chính sách đặt lịch',
     icon: '📅',
@@ -136,15 +155,15 @@ const POLICIES = [
   },
 ];
 
-function Sidebar({ activeSection }) {
+function Sidebar({ activeSection, onSelect }) {
   return (
     <nav className="space-y-1 sticky top-24">
       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 pb-2">Danh sách chính sách</p>
       {POLICIES.map(p => (
-        <a
+        <button
           key={p.id}
-          href={`#${p.id}`}
-          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          onClick={() => onSelect(p.id)}
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left cursor-pointer ${
             activeSection === p.id
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-xs'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
@@ -152,7 +171,7 @@ function Sidebar({ activeSection }) {
         >
           <span className="text-base shrink-0">{p.icon}</span>
           <span className="truncate">{p.title}</span>
-        </a>
+        </button>
       ))}
     </nav>
   );
@@ -166,31 +185,8 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
     const hash = location.hash?.replace('#', '');
     if (hash && POLICIES.some(p => p.id === hash)) {
       setActiveSection(hash);
-      setTimeout(() => {
-        document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
     }
   }, [location.hash]);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        });
-      },
-      { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
-    );
-
-    POLICIES.forEach(p => {
-      const el = document.getElementById(p.id);
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div className="bg-white min-h-screen">
@@ -215,8 +211,8 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
               Chính sách dịch vụ
             </h1>
             <p className="text-white/70 mt-3 md:mt-4 text-sm md:text-base max-w-2xl leading-relaxed">
-              Các chính sách và điều khoản của AutoWashPro được xây dựng nhằm đảm bảo quyền lợi cho khách hàng
-              và minh bạch trong quá trình cung cấp dịch vụ.
+              AutoWashPro cam kết minh bạch trong cung cấp dịch vụ và bảo vệ quyền lợi khách hàng với chính sách bảo hiểm
+              bồi thường thiệt hại phát sinh trong quá trình rửa xe, bao gồm cả dòng xe sang và siêu sang.
             </p>
           </div>
         </div>
@@ -228,7 +224,7 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
           {/* Sidebar - desktop */}
           <aside className="hidden md:block w-64 lg:w-72 shrink-0">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-              <Sidebar activeSection={activeSection} />
+              <Sidebar activeSection={activeSection} onSelect={(id) => { setActiveSection(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
             </div>
           </aside>
 
@@ -238,11 +234,7 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
             <div className="md:hidden mb-6">
               <select
                 value={activeSection}
-                onChange={e => {
-                  const id = e.target.value;
-                  setActiveSection(id);
-                  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-                }}
+                onChange={e => { setActiveSection(e.target.value); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 className="w-full h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               >
                 {POLICIES.map(p => (
@@ -252,11 +244,11 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
             </div>
 
             <div className="space-y-10">
-              {POLICIES.map((policy, idx) => (
+              {POLICIES.filter(p => p.id === activeSection).map(policy => (
                 <section
                   key={policy.id}
                   id={policy.id}
-                  className={`scroll-mt-28 ${idx > 0 ? 'pt-4' : ''}`}
+                  className="scroll-mt-28"
                 >
                   <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-200">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-xl">
