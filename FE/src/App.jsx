@@ -13,6 +13,7 @@ import HistoryPage from './components/landing/HistoryPage.jsx';
 import PaymentHistoryPage from './components/landing/PaymentHistoryPage.jsx';
 import NotificationsPage from './components/landing/NotificationsPage.jsx';
 import CustomerLayout from './components/landing/CustomerLayout.jsx';
+import PolicyPage from './components/landing/PolicyPage.jsx';
 import {
   clearSession as clearStoredSession,
   getApiBaseUrl,
@@ -291,6 +292,10 @@ export default function App() {
 
   if (path === '/about') {
     return <AboutPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+  }
+
+  if (path === '/policies') {
+    return <PolicyPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;

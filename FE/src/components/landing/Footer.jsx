@@ -27,15 +27,13 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="text-emerald-600 text-sm font-semibold mb-4">Hệ thống</h4>
+            <h4 className="text-emerald-600 text-sm font-semibold mb-4">Chính sách</h4>
             <ul className="space-y-3">
-              {['Trung tâm trợ giúp', 'Liên hệ', 'Điều khoản sử dụng', 'Chính sách bảo mật'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-slate-600 text-sm hover:text-emerald-600 transition-colors duration-200">
-                    {item}
-                  </a>
-                </li>
-              ))}
+              <li><a href="/policies#privacy" className="text-slate-600 text-sm hover:text-emerald-600 transition-colors duration-200">🔒 Chính sách bảo mật</a></li>
+              <li><a href="/policies#terms" className="text-slate-600 text-sm hover:text-emerald-600 transition-colors duration-200">📋 Điều khoản sử dụng</a></li>
+              <li><a href="/policies#payment" className="text-slate-600 text-sm hover:text-emerald-600 transition-colors duration-200">💳 Chính sách thanh toán</a></li>
+              <li><a href="/policies#cancellation" className="text-slate-600 text-sm hover:text-emerald-600 transition-colors duration-200">❌ Chính sách hủy lịch</a></li>
+              <li><a href="/policies#refund" className="text-slate-600 text-sm hover:text-emerald-600 transition-colors duration-200">🔙 Chính sách hoàn tiền</a></li>
             </ul>
           </div>
 
