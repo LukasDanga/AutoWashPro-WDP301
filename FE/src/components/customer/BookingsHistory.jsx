@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import VoucherPicker from '../VoucherPicker.jsx';
 import { Percent, Ticket } from 'lucide-react';
@@ -97,6 +98,7 @@ function getFirstDayOfMonth(year, month) {
 }
 
 export default function BookingsHistory({ apiBase, token }) {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -384,14 +386,8 @@ export default function BookingsHistory({ apiBase, token }) {
     setDetailBooking((prev) => (prev && prev._id === updated._id ? { ...prev, ...updated } : prev));
   }
 
-  async function handleRebook(b) {
-    setRebookTarget(b);
-    setRebookDate('');
-    setRebookTime('');
-    setRebookError('');
-    setRebookVoucherCode('');
-    setRebookVoucherDiscount(0);
-    setShowRebookModal(true);
+  function handleRebook(b) {
+    navigate('/booking', { state: { rebookData: b } });
   }
 
   async function submitRebook() {
@@ -1062,141 +1058,7 @@ export default function BookingsHistory({ apiBase, token }) {
         </div>
       )}
 
-      {/* ═══ REBOOK MODAL ═══ */}
-      {showRebookModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => { if (!rebookLoading) { setShowRebookModal(false); setRebookTarget(null); setRebookError(''); } }}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{
-              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Đặt lại lịch</div>
-              <div style={{ fontSize: 13, color: '#e2e8f0', marginTop: 4, fontWeight: 600 }}>
-                {rebookTarget?.packageName || rebookTarget?.packageId?.name || ''}
-              </div>
-              {rebookTarget?.selectedSubServices && rebookTarget.selectedSubServices.length > 0 && (
-                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {rebookTarget.selectedSubServices.map((sub, idx) => (
-                    <span key={idx} style={{ padding: '2px 8px', borderRadius: 12, background: 'rgba(255,255,255,0.1)', color: '#cbd5e1', fontSize: 11, border: '1px solid rgba(255,255,255,0.2)' }}>
-                      + {sub.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                  Ngày mới <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input type="date"
-                  value={rebookDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={(e) => setRebookDate(e.target.value)}
-                  style={{
-                    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-                    fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit',
-                    background: '#f8fafc', boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
-                />
-              </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                  Giờ mới <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input type="time"
-                  value={rebookTime}
-                  onChange={(e) => setRebookTime(e.target.value)}
-                  style={{
-                    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-                    fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit',
-                    background: '#f8fafc', boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
-                />
-              </div>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 16px 0' }}>
-                💡 Nhập ngày và giờ bạn muốn đặt lại. Ngày phải từ hôm nay trở đi.
-              </p>
-              
-              {/* VOUCHER BUTTON */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                  Voucher / Ưu đãi
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowRebookVoucherModal(true)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 14px', borderRadius: 10, border: rebookVoucherCode ? '1px solid #10b981' : '1px dashed #cbd5e1',
-                    background: rebookVoucherCode ? '#ecfdf5' : '#f8fafc',
-                    cursor: 'pointer', transition: 'all 0.15s'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 8,
-                      background: rebookVoucherCode ? '#10b981' : '#e2e8f0',
-                      color: rebookVoucherCode ? '#fff' : '#64748b',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      {rebookVoucherCode ? <Percent size={14} strokeWidth={3} /> : <Ticket size={14} />}
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: rebookVoucherCode ? '#065f46' : '#64748b' }}>
-                        {rebookVoucherCode ? rebookVoucherCode : 'Chọn voucher (tùy chọn)'}
-                      </div>
-                      {rebookVoucherCode && (
-                        <div style={{ fontSize: 11, color: '#059669', marginTop: 2, fontWeight: 500 }}>
-                          Giảm thêm {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(rebookVoucherDiscount)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 600 }}>
-                    {rebookVoucherCode ? 'Đổi' : 'Chọn'}
-                  </div>
-                </button>
-              </div>
-              {rebookError && (
-                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13, marginTop: 8 }}>
-                  {rebookError}
-                </div>
-              )}
-            </div>
-            <div style={{ padding: '0 24px 20px', display: 'flex', gap: 10 }}>
-              <button
-                onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookError(''); }}
-                disabled={rebookLoading}
-                style={{
-                  flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
-                  background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                }}
-              >Hủy</button>
-              <button
-                onClick={submitRebook}
-                disabled={rebookLoading}
-                style={{
-                  flex: 2, padding: '12px 0', borderRadius: 12, border: 'none',
-                  background: rebookLoading ? '#6ee7b7' : '#10b981', color: '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: rebookLoading ? 'not-allowed' : 'pointer',
-                  opacity: rebookLoading ? 0.7 : 1,
-                }}
-              >{rebookLoading ? 'Đang đặt lại...' : '🔄 Xác nhận đặt lại'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* ═══ REFUND REQUEST MODAL ═══ */}
       {showRefundModal && (
