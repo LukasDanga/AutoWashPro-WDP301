@@ -803,7 +803,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   // Sub-services
   const pkg = selectedPackage;
-  const currentSubServices = selectedSubServices[pkg?._id || pkg?.id] || [];
+  const currentSubServices = selectedSubServices[pkg?._id || pkg?.id] !== undefined
+    ? selectedSubServices[pkg?._id || pkg?.id]
+    : (pkg?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
   let extraDuration = 0, extraPrice = 0;
   if (pkg && pkg.subServices) {
     for (const sub of pkg.subServices) {
@@ -1376,25 +1378,50 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <h4 className="text-sm font-bold text-slate-700">Dịch vụ đã bao gồm</h4>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {selectedPackage.subServices.filter(sub => !sub.isOptional).map(sub => (
-                              <div key={sub.name} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-white opacity-80 cursor-default text-slate-600">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-100 border border-slate-300">
-                                    <Check className="w-3.5 h-3.5 stroke-[3] text-slate-400" />
+                            {selectedPackage.subServices.filter(sub => !sub.isOptional).map(sub => {
+                              const pId = selectedPackage._id || selectedPackage.id;
+                              const checked = currentSubServices.includes(sub.name);
+                              return (
+                                <button
+                                  type="button"
+                                  key={sub.name}
+                                  onClick={() => {
+                                    setSelectedSubServices(prev => {
+                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
+                                      return { 
+                                        ...prev, 
+                                        [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
+                                      };
+                                    });
+                                  }}
+                                  className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all duration-300 ${
+                                    checked
+                                      ? 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium'
+                                      : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                                  } cursor-pointer`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                                      checked 
+                                        ? 'bg-emerald-600 border-emerald-600 text-white' 
+                                        : 'border-slate-300 bg-white'
+                                    }`}>
+                                      {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                    </div>
+                                    <span className="text-sm font-medium">{sub.name}</span>
                                   </div>
-                                  <span className="text-sm font-medium">{sub.name}</span>
-                                </div>
-                                {sub.duration > 0 && (
-                                  <span className="text-xs font-medium text-slate-400">{sub.duration} phút</span>
-                                )}
-                              </div>
-                            ))}
+                                  <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
+                                    {sub.duration > 0 ? `${sub.duration} phút` : 'Bao gồm'}
+                                  </span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
 
                       {/* Optional extra services */}
-                      {selectedPackage.subServices.filter(sub => sub.isOptional).length > 0 && (
+                      {selectedPackage.subServices.filter(sub => sub.isOptional && sub.price > 0).length > 0 && (
                         <div>
                           <div className="flex items-center gap-2 mb-4">
                             <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -1402,7 +1429,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           </div>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {selectedPackage.subServices.filter(sub => sub.isOptional).map(sub => {
+                            {selectedPackage.subServices.filter(sub => sub.isOptional && sub.price > 0).map(sub => {
                               const pId = selectedPackage._id || selectedPackage.id;
                               const checked = currentSubServices.includes(sub.name);
                               return (

@@ -653,7 +653,7 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
 
   const [data, total] = await Promise.all([
     Payment.find(query)
-      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId finalPrice' })
+      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -667,9 +667,10 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
     sixMonthsAgo.setDate(1);
     sixMonthsAgo.setHours(0,0,0,0);
-    
+    const uid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
     const rawStats = await Payment.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(userId), status: 'paid', createdAt: { $gte: sixMonthsAgo } } },
+      { $match: { userId: uid, status: 'paid', createdAt: { $gte: sixMonthsAgo } } },
       {
         $group: {
           _id: {
@@ -683,10 +684,75 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
     ]);
     
     // Format stats for charting
-    stats = rawStats.map(s => ({
+    const formattedStats = rawStats.map(s => ({
       label: `Th${s._id.month}/${s._id.year.toString().slice(-2)}`,
       totalAmount: s.totalAmount
     }));
+
+    // Vehicle Stats
+    const rawVehicleStats = await Payment.aggregate([
+      { $match: { userId: uid, status: 'paid' } },
+      {
+        $lookup: {
+          from: 'bookings',
+          localField: 'bookingId',
+          foreignField: '_id',
+          as: 'booking',
+        },
+      },
+      { $unwind: { path: '$booking', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'vehicles',
+          localField: 'booking.vehicleId',
+          foreignField: '_id',
+          as: 'vehicle',
+        },
+      },
+      { $unwind: { path: '$vehicle', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: {
+            vehicleId: '$vehicle._id',
+            licensePlate: '$vehicle.licensePlate',
+            vehicleType: '$vehicle.vehicleType',
+            brand: '$vehicle.brand'
+          },
+          totalAmount: { $sum: "$amount" }
+        }
+      },
+      { $sort: { "totalAmount": -1 } }
+    ]);
+    const vehicleStats = rawVehicleStats.map(s => ({
+      vehicleId: s._id.vehicleId,
+      licensePlate: s._id.licensePlate || 'Chưa cập nhật',
+      vehicleType: s._id.vehicleType || 'unknown',
+      brand: s._id.brand || '',
+      totalAmount: s.totalAmount
+    }));
+
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    
+    const [currentRes, prevRes] = await Promise.all([
+      Payment.aggregate([
+        { $match: { userId: uid, status: 'paid', createdAt: { $gte: currentMonthStart } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+      Payment.aggregate([
+        { $match: { userId: uid, status: 'paid', createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ])
+    ]);
+
+    stats = {
+      months: formattedStats,
+      vehicles: vehicleStats,
+      currentMonthTotal: currentRes[0]?.total || 0,
+      previousMonthTotal: prevRes[0]?.total || 0,
+    };
   }
 
   return {

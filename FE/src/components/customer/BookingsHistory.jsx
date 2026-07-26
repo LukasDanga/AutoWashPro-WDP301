@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { showToast } from '@/lib/toast';
+import VoucherPicker from '../VoucherPicker.jsx';
+import { Percent, Ticket } from 'lucide-react';
 
 const DAYS_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
@@ -131,6 +133,9 @@ export default function BookingsHistory({ apiBase, token }) {
   const [rebookDate, setRebookDate] = useState('');
   const [rebookTime, setRebookTime] = useState('');
   const [rebookError, setRebookError] = useState('');
+  const [rebookVoucherCode, setRebookVoucherCode] = useState('');
+  const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
+  const [showRebookVoucherModal, setShowRebookVoucherModal] = useState(false);
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
@@ -384,6 +389,8 @@ export default function BookingsHistory({ apiBase, token }) {
     setRebookDate('');
     setRebookTime('');
     setRebookError('');
+    setRebookVoucherCode('');
+    setRebookVoucherDiscount(0);
     setShowRebookModal(true);
   }
 
@@ -402,7 +409,7 @@ export default function BookingsHistory({ apiBase, token }) {
       const res = await fetch(`${apiBase}/bookings/${bId}/rebook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime }),
+        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, voucherCode: rebookVoucherCode }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
       setShowRebookModal(false);
@@ -1117,9 +1124,50 @@ export default function BookingsHistory({ apiBase, token }) {
                   onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
                 />
               </div>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 4px 0' }}>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 16px 0' }}>
                 💡 Nhập ngày và giờ bạn muốn đặt lại. Ngày phải từ hôm nay trở đi.
               </p>
+              
+              {/* VOUCHER BUTTON */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                  Voucher / Ưu đãi
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowRebookVoucherModal(true)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '12px 14px', borderRadius: 10, border: rebookVoucherCode ? '1px solid #10b981' : '1px dashed #cbd5e1',
+                    background: rebookVoucherCode ? '#ecfdf5' : '#f8fafc',
+                    cursor: 'pointer', transition: 'all 0.15s'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 8,
+                      background: rebookVoucherCode ? '#10b981' : '#e2e8f0',
+                      color: rebookVoucherCode ? '#fff' : '#64748b',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      {rebookVoucherCode ? <Percent size={14} strokeWidth={3} /> : <Ticket size={14} />}
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: rebookVoucherCode ? '#065f46' : '#64748b' }}>
+                        {rebookVoucherCode ? rebookVoucherCode : 'Chọn voucher (tùy chọn)'}
+                      </div>
+                      {rebookVoucherCode && (
+                        <div style={{ fontSize: 11, color: '#059669', marginTop: 2, fontWeight: 500 }}>
+                          Giảm thêm {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(rebookVoucherDiscount)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 600 }}>
+                    {rebookVoucherCode ? 'Đổi' : 'Chọn'}
+                  </div>
+                </button>
+              </div>
               {rebookError && (
                 <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13, marginTop: 8 }}>
                   {rebookError}
@@ -1284,6 +1332,54 @@ export default function BookingsHistory({ apiBase, token }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══ VOUCHER PICKER MODAL (FOR REBOOK) ═══ */}
+      {showRebookVoucherModal && rebookTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(4px)', padding: 16,
+        }} onClick={() => setShowRebookVoucherModal(false)}>
+          <div style={{
+            background: '#fff', borderRadius: 24, width: '100%', maxWidth: 450, maxHeight: '85vh',
+            display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ flexShrink: 0, borderBottom: '1px solid #f1f5f9', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: 18 }}>Chọn Ưu Đãi</h3>
+              <button
+                onClick={() => setShowRebookVoucherModal(false)}
+                style={{
+                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 8, background: '#f8fafc', color: '#94a3b8', border: 'none', cursor: 'pointer',
+                }}
+              >✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+              <VoucherPicker
+                apiBase={apiBase}
+                token={token}
+                selected={{ code: rebookVoucherCode }}
+                onSelect={(voucher) => {
+                  if (voucher) {
+                    setRebookVoucherCode(voucher.code);
+                    setRebookVoucherDiscount(
+                      voucher.type === 'percentage'
+                        ? Math.min((voucher.maxDiscount || 9999999), Math.floor(((rebookTarget?.packageId?.price || 0) + (rebookTarget?.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0)) * voucher.value / 100))
+                        : voucher.value
+                    );
+                  } else {
+                    setRebookVoucherCode('');
+                    setRebookVoucherDiscount(0);
+                  }
+                  setShowRebookVoucherModal(false);
+                }}
+                orderAmount={(rebookTarget?.packageId?.price || 0) + (rebookTarget?.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0)}
+                compact
+                branchId={rebookTarget?.branchId?._id || rebookTarget?.branchId}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
