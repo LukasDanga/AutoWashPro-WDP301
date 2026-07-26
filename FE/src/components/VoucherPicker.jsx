@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { confirmDialog } from '@/lib/confirm';
 import useSSE from '@/hooks/useSSE';
+import { showToast } from '@/lib/toast';
 
 const TIER_META = {
   bronze:  { icon: '🥉', label: 'Đồng',  color: '#cd7f32', bg: 'rgba(205,127,50,0.10)',  ring: 'rgba(205,127,50,0.25)' },
@@ -215,9 +216,9 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
         if (!res.ok) throw new Error(json.message || 'Lỗi đổi điểm');
         const realVoucher = json.data;
         onSelect(realVoucher);
-        window.alert(`Đổi điểm thành công! Mã của bạn là: ${realVoucher.code}`);
+        showToast(`Đổi điểm thành công! Mã của bạn là: ${realVoucher.code}`);
         load();
-      } catch (e) { window.alert(e.message); }
+      } catch (e) { showToast(e.message); }
       finally { setLoading(false); }
     } else { onSelect(voucher); }
   }
