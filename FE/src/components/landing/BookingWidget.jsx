@@ -1283,9 +1283,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const dayLabel = (value) => WEEKDAY_OPTIONS.find(o => o.value === value)?.label || String(value);
 
   return (
-    <section id="booking" className="relative bg-white min-h-[calc(100dvh-64px)] overflow-hidden pt-16">
+    <section id="booking" className="relative bg-white min-h-[calc(100dvh-64px)] pt-16">
 
-      <div className="max-w-[1000px] mx-auto px-6 md:px-12 py-6">
+      <div className="max-w-[1000px] mx-auto px-6 md:px-12 py-6 pb-40">
 
         <div className="bg-white/80 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] rounded-3xl p-6 md:p-8">
 
@@ -2443,103 +2443,113 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
 
-                  {/* Actions */}
-                  <div className="text-center pt-4">
-                    {tab === 'regular' ? (
-                      <button 
-                        type="button"
-                        onClick={confirmBooking} 
-                        disabled={bookingLoading}
-                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
-                      >
-                        {bookingLoading ? (
-                          <>
-                            <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>Đang tạo lịch hẹn...</span>
-                          </>
-                        ) : isLoggedIn ? (
-                          'Xác nhận đặt chỗ ngay'
-                        ) : (
-                          'Đăng nhập để đặt lịch'
-                        )}
-                      </button>
-                    ) : (
-                      <button 
-                        type="button"
-                        onClick={confirmRecurringBooking} 
-                        disabled={bookingLoading || previewDates.length === 0}
-                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
-                      >
-                        {bookingLoading ? (
-                          <>
-                            <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>Đang tạo lịch hẹn...</span>
-                          </>
-                        ) : isLoggedIn ? (
-                          `Xác nhận ${previewDates.length} buổi đặt định kỳ`
-                        ) : (
-                          'Đăng nhập để đặt lịch định kỳ'
-                        )}
-                      </button>
-                    )}
-                    
-                    {!isLoggedIn && (
-                      <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3 text-left">
-                        <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Bạn cần đăng nhập để hoàn tất đặt chỗ. Thông tin xe bạn nhập ở bước trước sẽ được tự động lưu vào tài khoản sau khi đăng nhập thành công.
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  {/* Actions have been moved to sticky footer */}
                 </motion.div>
               )}
             </>
           )}
 
-          {/* ── Shared Navigation ── */}
-          {(tab !== 'slot_pack' || isLoggedIn) && (
-            <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-100">
-              {step > 1 ? (
+          {/* ── Shared Navigation is rendered outside to escape backdrop-filter containing block ── */}
+        </div>
+      </div>
+
+      {/* ── Shared Navigation ── */}
+      {(tab !== 'slot_pack' || isLoggedIn) && (
+        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-3 w-full max-w-[calc(100%-2rem)] sm:w-auto">
+          
+          {/* Info Banner floating independently above the pill */}
+          {!isLoggedIn && step === totalSteps && (
+            <div className="pointer-events-auto w-full max-w-[600px] p-3 sm:p-4 rounded-3xl bg-amber-50/90 backdrop-blur-xl border border-amber-200/50 flex items-start gap-3 text-left shadow-[0_10px_30px_-10px_rgba(0,0,0,0.1)]">
+              <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm text-amber-700 leading-relaxed font-medium">
+                Bạn cần đăng nhập để hoàn tất đặt chỗ. Thông tin xe bạn nhập ở bước trước sẽ được tự động lưu vào tài khoản sau khi đăng nhập thành công.
+              </p>
+            </div>
+          )}
+
+          {/* Navigation Pill */}
+          <div className="pointer-events-auto bg-white/10 sm:bg-white/5 backdrop-blur-[64px] border border-white/20 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] rounded-[2rem] sm:rounded-full p-2 flex flex-col sm:flex-row items-center gap-2 w-full sm:w-max">
+            
+            {step > 1 && (
+              <button 
+                type="button"
+                onClick={() => setStep(step - 1)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[1.5rem] sm:rounded-full border border-white/30 bg-white/20 text-slate-700 text-sm font-bold hover:bg-white/40 hover:text-slate-900 transition-colors active:scale-[0.98]"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Quay lại
+              </button>
+            )}
+            
+            {step === totalSteps && (
+              <button 
+                type="button"
+                onClick={reset}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[1.5rem] sm:rounded-full border border-white/30 bg-white/20 text-slate-600 text-sm font-bold hover:bg-white/40 hover:text-slate-800 transition-colors active:scale-[0.98]"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Đặt lại
+              </button>
+            )}
+            
+            {step < totalSteps ? (
+              <button 
+                type="button"
+                onClick={() => setStep(step + 1)} 
+                disabled={!canNextStep()}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-[1.5rem] sm:rounded-full text-sm font-bold transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30"
+                style={{
+                  backgroundColor: canNextStep() ? '#10b981' : 'rgba(255,255,255,0.2)',
+                  color: canNextStep() ? '#ffffff' : '#94a3b8',
+                  cursor: canNextStep() ? 'pointer' : 'not-allowed',
+                  border: canNextStep() ? 'none' : '1px solid rgba(255,255,255,0.4)'
+                }}
+              >
+                <span>Tiếp theo</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              tab === 'regular' ? (
                 <button 
                   type="button"
-                  onClick={() => setStep(step - 1)}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-800 transition-colors active:scale-[0.98]"
+                  onClick={confirmBooking} 
+                  disabled={bookingLoading}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-[1.5rem] sm:rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  Quay lại
-                </button>
-              ) : <div />}
-              
-              {step < totalSteps ? (
-                <button 
-                  type="button"
-                  onClick={() => setStep(step + 1)} 
-                  disabled={!canNextStep()}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] bg-emerald-600 text-white shadow-md shadow-emerald-500/10 hover:bg-emerald-505"
-                  style={{
-                    backgroundColor: canNextStep() ? '#10b981' : '#f1f5f9',
-                    color: canNextStep() ? '#ffffff' : '#94a3b8',
-                    cursor: canNextStep() ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  <span>Tiếp theo</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {bookingLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang xử lý...</span>
+                    </>
+                  ) : isLoggedIn ? (
+                    'Xác nhận đặt chỗ ngay'
+                  ) : (
+                    'Đăng nhập để đặt lịch'
+                  )}
                 </button>
               ) : (
                 <button 
                   type="button"
-                  onClick={reset}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-500 text-sm font-bold hover:bg-slate-50 hover:text-slate-700 transition-colors active:scale-[0.98]"
+                  onClick={confirmRecurringBooking} 
+                  disabled={bookingLoading || previewDates.length === 0}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-[1.5rem] sm:rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  Đặt lại từ đầu
+                  {bookingLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang xử lý...</span>
+                    </>
+                  ) : isLoggedIn ? (
+                    `Xác nhận ${previewDates.length} buổi`
+                  ) : (
+                    'Đăng nhập để đặt lịch'
+                  )}
                 </button>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <AnimatePresence>
         {showSuccessModal && lastBooking && (
