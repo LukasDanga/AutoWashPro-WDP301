@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { RefreshCw, Copy, Check, Sun, Sunset, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
@@ -157,11 +157,12 @@ function PackCard({ pack, onQuickBook, onCancelPack }) {
 
 export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [] }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
-  const limit = 50;
+  const limit = 10;
 
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -169,9 +170,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [sort, setSort] = useState('-createdAt'); // Mới nhất default
-  const [viewMode, setViewMode] = useState('list');
+  const viewModeFromUrl = searchParams.get('view');
+  const [viewMode, setViewMode] = useState(viewModeFromUrl || 'list');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [slotPacks, setSlotPacks] = useState([]);
   const [slotPacksLoading, setSlotPacksLoading] = useState(false);
+
+  // Sync viewMode with URL ?view= param
+  useEffect(() => {
+    const viewFromUrl = searchParams.get('view');
+    if (viewFromUrl && ['calendar', 'week', 'list', 'slot_packs'].includes(viewFromUrl)) {
+      setViewMode(viewFromUrl);
+    }
+  }, [searchParams]);
 
   const now = new Date();
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -1230,82 +1241,35 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     return s;
   }, [bookings]);
 
-  const hasActiveFilters = keyword || statusFilter || dateFrom || dateTo;
+  const hasActiveFilters = Boolean(keyword || statusFilter || typeFilter || dateFrom || dateTo || (sort && sort !== '-createdAt'));
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* header */}
-      <header className="awp-hist-header sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-            Quay lại
-          </button>
-          <h1 className="text-sm font-bold text-slate-800">Lịch sử đặt</h1>
-          <div className="w-20" />
-        </div>
-      </header>
-
+    <div className="space-y-6">
       {toast.show && (
         <div className="awp-toast-container">
           <div className={`awp-toast-message ${toast.type === 'error' ? 'awp-toast-error' : 'awp-toast-success'}`}>{toast.message}</div>
         </div>
       )}
 
-      <main className="max-w-4xl mx-auto px-6 py-10 space-y-5">
-        {/* stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <main className="w-full space-y-5">
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Chờ xử lý', value: stats.pending, color: '#f59e0b', bg: '#fffbeb' },
-            { label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff' },
-            { label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5' },
-            { label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb' },
+            { label: 'Chờ xử lý', value: stats.pending, color: '#f59e0b', bg: '#fffbeb', icon: '⏳' },
+            { label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff', icon: '✅' },
+            { label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5', icon: '🎉' },
+            { label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb', icon: '❌' },
           ].map(s => (
-            <div key={s.label} className="rounded-2xl p-4" style={{ background: s.bg, border: `1px solid ${s.color}20` }}>
-              <div className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</div>
-              <div className="text-2xl font-extrabold mt-1" style={{ color: s.color }}>{s.value}</div>
+            <div key={s.label} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg" style={{ background: s.bg }}>
+                {s.icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xl font-bold text-slate-800">{s.value}</p>
+                <p className="truncate text-xs text-slate-500">{s.label}</p>
+              </div>
             </div>
           ))}
-        </div>
-
-        {/* view toggle */}
-        <div className="flex gap-2 p-1 rounded-2xl flex-wrap sm:flex-nowrap" style={{ background: '#f1f5f9' }}>
-          <button onClick={() => setViewMode('calendar')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'calendar' ? '#fff' : 'transparent',
-              color: viewMode === 'calendar' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'calendar' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            📅 Lịch tháng
-          </button>
-          <button onClick={() => setViewMode('week')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'week' ? '#fff' : 'transparent',
-              color: viewMode === 'week' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'week' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            📆 Lịch tuần
-          </button>
-          <button onClick={() => setViewMode('list')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'list' ? '#fff' : 'transparent',
-              color: viewMode === 'list' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'list' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            📋 Lịch sử
-          </button>
-          <button onClick={() => setViewMode('slot_packs')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'slot_packs' ? '#fff' : 'transparent',
-              color: viewMode === 'slot_packs' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'slot_packs' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            🎫 Gói lượt
-          </button>
         </div>
 
         {/* ── CALENDAR VIEW ── */}
@@ -1577,40 +1541,105 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         {/* ── LIST VIEW ── */}
         {viewMode === 'list' && (
           <>
-            {/* filters */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                <div className="relative md:col-span-2">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
-                  <input type="text" value={keyword} onChange={e => onFilterChange(setKeyword, e.target.value)}
-                    placeholder="Tìm gói dịch vụ hoặc chi nhánh..."
-                    className="w-full h-10 rounded-xl border border-slate-200 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+            {/* Filter Bar Panel */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              {/* Row 1: Search + Status + Date range */}
+              <div className="flex flex-col gap-3">
+                {/* Search Input */}
+                <div className="relative w-full">
+                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={keyword}
+                    onChange={e => onFilterChange(setKeyword, e.target.value)}
+                    placeholder="Tìm theo gói dịch vụ, tên chi nhánh..."
+                    className="w-full h-9 rounded-xl border border-slate-200 pl-10 pr-9 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-slate-50/50"
+                  />
+                  {keyword && (
+                    <button
+                      onClick={() => onFilterChange(setKeyword, '')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
-                <select value={statusFilter} onChange={e => onFilterChange(setStatusFilter, e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
-                  {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <select value={typeFilter} onChange={e => onFilterChange(setTypeFilter, e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
-                  <option value="">Tất cả loại lịch</option>
-                  <option value="single">Lịch thường</option>
-                  <option value="recurring">Lịch định kỳ</option>
-                </select>
-                <select value={sort} onChange={e => onFilterChange(setSort, e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
-                  <option value="-createdAt">Mới nhất</option>
-                  <option value="createdAt">Cũ nhất</option>
-                  <option value="-bookingDate">Gần đây nhất (Ngày hẹn)</option>
-                </select>
-                <div className="flex gap-2">
-                  <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom, e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
-                  <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo, e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+
+                {/* Status + Date range on same row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trạng thái</label>
+                    <select
+                      value={statusFilter}
+                      onChange={e => onFilterChange(setStatusFilter, e.target.value)}
+                      className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+                    >
+                      {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Khoảng ngày hẹn</label>
+                    <div className="flex items-center gap-1.5">
+                      <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom, e.target.value)}
+                        className="flex-1 min-w-0 h-9 rounded-xl border border-slate-200 px-2 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer" />
+                      <span className="text-slate-300 text-[10px] font-bold shrink-0">đến</span>
+                      <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo, e.target.value)}
+                        className="flex-1 min-w-0 h-9 rounded-xl border border-slate-200 px-2 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer" />
+                    </div>
+                  </div>
                 </div>
               </div>
-              {hasActiveFilters && (
-                <button onClick={resetFilters} className="px-5 h-9 rounded-xl border border-slate-200 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Xóa bộ lọc</button>
+
+              {/* Advanced filter toggle + clear */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors"
+                >
+                  <svg className={`w-3.5 h-3.5 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                  {showAdvancedFilters ? 'Ẩn bộ lọc nâng cao' : 'Lọc nâng cao'}
+                </button>
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 text-[11px] font-bold transition-colors flex items-center gap-1"
+                  >
+                    ✕ Xóa bộ lọc
+                  </button>
+                )}
+              </div>
+
+              {/* Advanced filters: Type + Sort */}
+              {showAdvancedFilters && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Loại lịch</label>
+                    <select
+                      value={typeFilter}
+                      onChange={e => onFilterChange(setTypeFilter, e.target.value)}
+                      className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="">Tất cả loại lịch</option>
+                      <option value="single">Lịch thường</option>
+                      <option value="recurring">Lịch định kỳ</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sắp xếp</label>
+                    <select
+                      value={sort}
+                      onChange={e => onFilterChange(setSort, e.target.value)}
+                      className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="-createdAt">Mới nhất (Ngày tạo)</option>
+                      <option value="createdAt">Cũ nhất</option>
+                      <option value="-bookingDate">Gần đây nhất (Ngày hẹn)</option>
+                    </select>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1829,22 +1858,51 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               </div>
             )}
 
-            {/* pagination */}
+            {/* Pagination Controls */}
             {pagination && pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <button disabled={!pagination.hasPrevPage} onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">‹ Trước</button>
-                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => setPage(p)}
-                    className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${page === p ? 'bg-emerald-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{p}</button>
-                ))}
-                <button disabled={!pagination.hasNextPage} onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Sau ›</button>
-              </div>
-            )}
-            {pagination && (
-              <div className="text-center mt-4">
-                <p className="text-xs text-slate-400">Hiển thị {(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)} trên {pagination.total} lịch hẹn</p>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-4 border-t border-slate-200">
+                <p className="text-xs font-medium text-slate-500">
+                  Hiển thị <span className="font-bold text-slate-800">{(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)}</span> trên tổng số <span className="font-bold text-emerald-600">{pagination.total}</span> lịch hẹn
+                </p>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    disabled={!pagination.hasPrevPage}
+                    onClick={() => setPage(p => p - 1)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    ‹ Trang trước
+                  </button>
+
+                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === pagination.totalPages || Math.abs(p - page) <= 1)
+                    .map((p, idx, arr) => {
+                      const showEllipsis = idx > 0 && p - arr[idx - 1] > 1;
+                      return (
+                        <React.Fragment key={p}>
+                          {showEllipsis && <span className="px-1 text-xs text-slate-400 font-bold">...</span>}
+                          <button
+                            onClick={() => setPage(p)}
+                            className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${
+                              page === p
+                                ? 'bg-emerald-600 text-white shadow-sm scale-105'
+                                : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <button
+                    disabled={!pagination.hasNextPage}
+                    onClick={() => setPage(p => p + 1)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Trang sau ›
+                  </button>
+                </div>
               </div>
             )}
           </>
