@@ -42,10 +42,10 @@ const AUTO_WELCOME =
   'Xin chào! Tôi là trợ lý AI của AutoWashPro. Tôi có thể giúp bạn:\n• Tư vấn dịch vụ rửa xe\n• Kiểm tra khung giờ còn trống\n• Đặt lịch rửa xe ngay\n\nBạn cần hỗ trợ gì hôm nay?';
 
 const SUGGESTIONS = [
-  { icon: Icons.locationOutline, text: 'Chi nhánh gần nhất' },
-  { icon: Icons.sparkle, text: 'Dịch vụ rửa xe' },
-  { icon: Icons.calendarOutline, text: 'Đặt lịch hôm nay' },
-  { icon: Icons.voucherOutline, text: 'Voucher giảm giá' },
+  { icon: Icons.locationOutline, text: 'Các chi nhánh của AutoWashPro' },
+  { icon: Icons.sparkle, text: 'Các gói dịch vụ rửa xe' },
+  { icon: Icons.calendarOutline, text: 'Hướng dẫn đặt lịch rửa xe' },
+  { icon: Icons.voucherOutline, text: 'Chính sách ưu đãi và voucher' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,7 +401,7 @@ function ChatContent() {
           ref={flatListRef}
           data={messages}
           keyExtractor={(_, i) => i.toString()}
-          renderItem={({ item }) => <MessageBubble message={item} />}
+          renderItem={({ item }) => <MessageBubble message={item} isLoading={item.role === 'model' && item.text === ''} />}
           contentContainerStyle={styles.messageList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() =>
