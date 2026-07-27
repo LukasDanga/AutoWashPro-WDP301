@@ -683,7 +683,8 @@ export default function BookingScreen() {
           selectedSubServices,
           timestamp: Date.now(),
         }));
-        router.replace('/payment/checkout?type=deposit' as any);
+        returningFromSubScreen.current = true;
+        router.push('/payment/checkout?type=deposit' as any);
       } else {
         // Slot pack or free booking: create booking directly (no payment step).
         const response = await bookingApi.createBooking({

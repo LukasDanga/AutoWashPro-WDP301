@@ -576,7 +576,7 @@ export default function RecurringBookingScreen() {
         ...recurringDraft,
         timestamp: Date.now(),
       }));
-      router.replace('/payment/checkout?type=recurring' as any);
+      router.push('/payment/checkout?type=recurring' as any);
     } catch (error: any) {
       const apiMessage =
         error?.response?.data?.message || error?.message || 'Không thể tạo lịch định kỳ';
