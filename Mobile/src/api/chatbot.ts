@@ -82,8 +82,15 @@ export const sendMessageStream = async (
     throw new Error(`HTTP ${response.status}`);
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Streaming not supported');
+  // React Native's fetch polyfill does not support response.body.getReader()
+  // If not supported, fallback to non-streaming API
+  const reader = typeof response.body?.getReader === 'function' ? response.body.getReader() : null;
+  if (!reader) {
+    const normalRes = await sendMessage(message, sessionId);
+    const replyText = normalRes.reply || '';
+    onEvent({ type: 'token', token: replyText });
+    return replyText;
+  }
 
   const decoder = new TextDecoder();
   let buffer = '';
