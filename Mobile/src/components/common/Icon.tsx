@@ -174,6 +174,8 @@ export const Icons = {
   chatBot: 'chatbubbles',
   voucher: 'pricetag',
   voucherOutline: 'pricetag-outline',
+  ticket: 'ticket',
+  ticketOutline: 'ticket-outline',
   menu: 'menu',
   cart: 'cart',
   cartOutline: 'cart-outline',

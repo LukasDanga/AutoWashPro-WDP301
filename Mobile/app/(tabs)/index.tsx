@@ -228,13 +228,15 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={styles.notificationBtn}
             onPress={() => router.push('/notifications')}
+            activeOpacity={0.7}
+            accessibilityLabel="Thông báo"
           >
             <Icon name={Icons.notificationsOutline} size={22} color={colors.primary} />
             {unreadCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: colors.error }]}>
-                <AppText style={styles.badgeText}>
+              <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
+                <Text style={styles.badgeText}>
                   {unreadCount > 9 ? '9+' : unreadCount}
-                </AppText>
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -481,22 +483,28 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   badge: {
     position: 'absolute',
-    top: 4,
+    top: 2,
     right: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    borderWidth: 1.5,
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#FFF',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 12,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 
   // Hero Card

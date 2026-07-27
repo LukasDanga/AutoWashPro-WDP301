@@ -125,6 +125,7 @@ export default function HistoryScreen() {
 
   // List dropdown filters (mirror web HistoryPage.jsx)
   const [keyword, setKeyword] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [sort, setSort] = useState<string>('-createdAt');
@@ -512,8 +513,7 @@ export default function HistoryScreen() {
         loadRecurringGroup((b as any).recurringGroupId);
         return;
       }
-      setDetailBooking(b);
-      loadDetail(b._id);
+      router.push(`/booking/${b._id}` as any);
     };
 
     return (
@@ -629,65 +629,117 @@ export default function HistoryScreen() {
             <View>
               {/* Stats Summary */}
               <View style={styles.statsRow}>
-                <View style={[styles.statCard, { backgroundColor: colors.warningLight }]}>
-                  <AppText variant="h3" color="warning">{stats.pending}</AppText>
-                  <AppText variant="caption" color="warning" style={{ textAlign: 'center' }}>Chờ xử lý</AppText>
-                </View>
-                <View style={[styles.statCard, { backgroundColor: colors.primarySubtle }]}>
-                  <AppText variant="h3" color="primary">{stats.confirmed}</AppText>
-                  <AppText variant="caption" color="primary" style={{ textAlign: 'center' }}>Đã xác nhận</AppText>
-                </View>
-                <View style={[styles.statCard, { backgroundColor: colors.successLight }]}>
-                  <AppText variant="h3" color="success">{stats.completed}</AppText>
-                  <AppText variant="caption" color="success" style={{ textAlign: 'center' }}>Hoàn thành</AppText>
-                </View>
-                <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-                  <AppText variant="h3" color="textSecondary">{stats.cancelled}</AppText>
-                  <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>Đã hủy</AppText>
-                </View>
+                {/* 1. Chờ xử lý */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => { setStatusFilter('pending'); setViewMode('list'); }}
+                  style={[
+                    styles.statCard,
+                    {
+                      backgroundColor: '#FFF7ED',
+                      borderColor: '#FDBA74',
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#EA580C' }}>{stats.pending}</AppText>
+                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#C2410C', textAlign: 'center', marginTop: 2 }}>Chờ xử lý</AppText>
+                </TouchableOpacity>
+
+                {/* 2. Đã xác nhận */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => { setStatusFilter('confirmed'); setViewMode('list'); }}
+                  style={[
+                    styles.statCard,
+                    {
+                      backgroundColor: '#EFF6FF',
+                      borderColor: '#93C5FD',
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#2563EB' }}>{stats.confirmed}</AppText>
+                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8', textAlign: 'center', marginTop: 2 }}>Đã xác nhận</AppText>
+                </TouchableOpacity>
+
+                {/* 3. Hoàn thành */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => { setStatusFilter('completed'); setViewMode('list'); }}
+                  style={[
+                    styles.statCard,
+                    {
+                      backgroundColor: '#ECFDF5',
+                      borderColor: '#A7F3D0',
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#059669' }}>{stats.completed}</AppText>
+                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#047857', textAlign: 'center', marginTop: 2 }}>Hoàn thành</AppText>
+                </TouchableOpacity>
+
+                {/* 4. Đã hủy */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => { setStatusFilter('cancelled'); setViewMode('list'); }}
+                  style={[
+                    styles.statCard,
+                    {
+                      backgroundColor: '#F8FAFC',
+                      borderColor: '#CBD5E1',
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#64748B' }}>{stats.cancelled}</AppText>
+                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#475569', textAlign: 'center', marginTop: 2 }}>Đã hủy</AppText>
+                </TouchableOpacity>
               </View>
 
-              {/* View toggle — mirrors web HistoryPage 4 tabs (Lịch tháng /
-                  Lịch tuần / Danh sách / Gói lượt). Wraps horizontally on
-                  narrow screens so all 4 stay reachable. */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.toggleRow}
-              >
-                <TouchableOpacity
-                  onPress={() => setViewMode('calendar')}
-                  style={[styles.toggleBtn, viewMode === 'calendar' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
-                  activeOpacity={0.7}
-                >
-                  <Icon name={Icons.calendarOutline} size={16} color={viewMode === 'calendar' ? colors.primary : colors.textTertiary} />
-                  <AppText variant="labelSmall" color={viewMode === 'calendar' ? 'primary' : 'textTertiary'}>Lịch tháng</AppText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setViewMode('week')}
-                  style={[styles.toggleBtn, viewMode === 'week' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
-                  activeOpacity={0.7}
-                >
-                  <Icon name={Icons.calendarOutline} size={16} color={viewMode === 'week' ? colors.primary : colors.textTertiary} />
-                  <AppText variant="labelSmall" color={viewMode === 'week' ? 'primary' : 'textTertiary'}>Lịch tuần</AppText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setViewMode('list')}
-                  style={[styles.toggleBtn, viewMode === 'list' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
-                  activeOpacity={0.7}
-                >
-                  <Icon name={Icons.listOutline} size={16} color={viewMode === 'list' ? colors.primary : colors.textTertiary} />
-                  <AppText variant="labelSmall" color={viewMode === 'list' ? 'primary' : 'textTertiary'}>Danh sách</AppText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setViewMode('slot_packs')}
-                  style={[styles.toggleBtn, viewMode === 'slot_packs' && { backgroundColor: colors.background, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) }]}
-                  activeOpacity={0.7}
-                >
-                  <Icon name={Icons.voucherOutline} size={16} color={viewMode === 'slot_packs' ? colors.primary : colors.textTertiary} />
-                  <AppText variant="labelSmall" color={viewMode === 'slot_packs' ? 'primary' : 'textTertiary'}>Gói lượt</AppText>
-                </TouchableOpacity>
-              </ScrollView>
+              {/* View toggle tabs */}
+              <View style={[styles.toggleContainer, { backgroundColor: '#F1F5F9', borderColor: colors.border }]}>
+                {[
+                  { key: 'calendar', label: 'Lịch tháng', icon: Icons.calendarOutline },
+                  { key: 'week', label: 'Lịch tuần', icon: Icons.calendarOutline },
+                  { key: 'list', label: 'Danh sách', icon: Icons.listOutline },
+                  { key: 'slot_packs', label: 'Gói lượt', icon: Icons.voucherOutline },
+                ].map((tab) => {
+                  const isSelected = viewMode === tab.key;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      onPress={() => setViewMode(tab.key as ViewMode)}
+                      activeOpacity={0.75}
+                      style={[
+                        styles.toggleBtn,
+                        isSelected && [
+                          styles.toggleBtnActive,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: '#A7F3D0',
+                          },
+                        ],
+                      ]}
+                    >
+                      <Icon
+                        name={tab.icon}
+                        size={15}
+                        color={isSelected ? colors.primary : '#64748B'}
+                      />
+                      <AppText
+                        numberOfLines={1}
+                        style={[
+                          styles.toggleBtnText,
+                          {
+                            color: isSelected ? colors.primary : '#64748B',
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}
+                      >
+                        {tab.label}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
               {/* Calendar view */}
               {viewMode === 'calendar' && (
@@ -992,16 +1044,40 @@ export default function HistoryScreen() {
                   {/* Dropdown filters — mirror web HistoryPage list filters
                       (keyword + status + type + sort + date range). */}
                   <View style={styles.dropdownFilters}>
-                    <View style={styles.searchRow}>
-                      <Icon name={Icons.search} size={16} color={colors.textTertiary} />
+                    <View
+                      style={[
+                        styles.searchRow,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: (isSearchFocused || keyword) ? colors.primary : colors.border,
+                          borderWidth: 1.5,
+                        },
+                      ]}
+                    >
+                      <Icon
+                        name={Icons.search}
+                        size={18}
+                        color={(isSearchFocused || keyword) ? colors.primary : colors.textTertiary}
+                      />
                       <TextInput
                         value={keyword}
                         onChangeText={(t) => { setKeyword(t); setPage(1); }}
-                        placeholder="Tìm gói dịch vụ hoặc chi nhánh..."
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
+                        placeholder="Nhập gói dịch vụ, chi nhánh để tìm..."
                         placeholderTextColor={colors.textTertiary}
                         style={[styles.searchInput, { color: colors.textPrimary }]}
                         accessibilityLabel="Tìm kiếm đặt lịch"
                       />
+                      {keyword ? (
+                        <TouchableOpacity
+                          onPress={() => { setKeyword(''); setPage(1); }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={styles.searchClearBtn}
+                        >
+                          <AppText style={{ fontSize: 11, fontWeight: '700', color: colors.textTertiary }}>✕</AppText>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                     <ScrollView
                       horizontal
@@ -1035,22 +1111,20 @@ export default function HistoryScreen() {
                           colors={colors}
                         />
                       </View>
-                      <View style={[styles.dateRangeWrap]}>
-                        <TextInput
+                      <View style={styles.dropdownWrap}>
+                        <DatePickerField
+                          label="Từ ngày"
                           value={dateFrom}
-                          onChangeText={(v) => { setDateFrom(v); setPage(1); }}
-                          placeholder="Từ ngày"
-                          placeholderTextColor={colors.textTertiary}
-                          style={[styles.dateInput, { backgroundColor: dateFrom ? 'rgba(59, 130, 246, 0.08)' : colors.surface, borderColor: dateFrom ? colors.primary : colors.border, color: dateFrom ? colors.primary : colors.textPrimary }]}
-                          accessibilityLabel="Từ ngày"
+                          onChange={(v) => { setDateFrom(v); setPage(1); }}
+                          colors={colors}
                         />
-                        <TextInput
+                      </View>
+                      <View style={styles.dropdownWrap}>
+                        <DatePickerField
+                          label="Đến ngày"
                           value={dateTo}
-                          onChangeText={(v) => { setDateTo(v); setPage(1); }}
-                          placeholder="Đến ngày"
-                          placeholderTextColor={colors.textTertiary}
-                          style={[styles.dateInput, { backgroundColor: dateTo ? 'rgba(59, 130, 246, 0.08)' : colors.surface, borderColor: dateTo ? colors.primary : colors.border, color: dateTo ? colors.primary : colors.textPrimary }]}
-                          accessibilityLabel="Đến ngày"
+                          onChange={(v) => { setDateTo(v); setPage(1); }}
+                          colors={colors}
                         />
                       </View>
                     </ScrollView>
@@ -1545,14 +1619,33 @@ const PickerField: React.FC<PickerFieldProps> = ({ label, value, options, onChan
         activeOpacity={0.7}
         style={[
           styles.pickerField,
-          { backgroundColor: isActive ? 'rgba(59, 130, 246, 0.08)' : colors.surface, borderColor: isActive ? colors.primary : colors.border },
+          {
+            backgroundColor: isActive ? '#ECFDF5' : colors.surface,
+            borderColor: isActive ? colors.primary : colors.border,
+            borderWidth: 1.5,
+          },
         ]}
         accessibilityLabel={label}
       >
-        <AppText variant="bodySmall" color={isActive ? "primary" : "textTertiary"}>{label}</AppText>
-        <AppText variant="body" color={isActive ? "primary" : "textPrimary"} numberOfLines={1} style={{ fontWeight: '600', marginTop: 2 }}>
-          {selectedLabel}
+        <AppText variant="caption" color={isActive ? "primary" : "textTertiary"} style={{ fontWeight: '700', fontSize: 10, letterSpacing: 0.5 }}>
+          {label.toUpperCase()}
         </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+          <AppText
+            variant="body"
+            color={isActive ? "primary" : "textPrimary"}
+            numberOfLines={1}
+            style={{ fontWeight: isActive ? '700' : '600', fontSize: 13, flex: 1, marginRight: 4 }}
+          >
+            {selectedLabel}
+          </AppText>
+          <Icon
+            name={Icons.forward}
+            size={13}
+            color={isActive ? colors.primary : colors.textTertiary}
+            style={{ transform: [{ rotate: '90deg' }] }}
+          />
+        </View>
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity
@@ -1603,6 +1696,210 @@ const PickerField: React.FC<PickerFieldProps> = ({ label, value, options, onChan
   );
 };
 
+const DatePickerField: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  colors: any;
+}> = ({ label, value, onChange, colors }) => {
+  const [open, setOpen] = useState(false);
+
+  const initialDate = useMemo(() => (value ? parseISO(value) : new Date()), [value]);
+  const [calMonth, setCalMonth] = useState(initialDate.getMonth());
+  const [calYear, setCalYear] = useState(initialDate.getFullYear());
+
+  useEffect(() => {
+    if (open) {
+      const d = value ? parseISO(value) : new Date();
+      setCalMonth(d.getMonth());
+      setCalYear(d.getFullYear());
+    }
+  }, [open, value]);
+
+  const displayDateText = useMemo(() => {
+    if (!value) return 'Chọn ngày';
+    try {
+      return format(parseISO(value), 'dd/MM/yyyy');
+    } catch {
+      return value;
+    }
+  }, [value]);
+
+  const isActive = !!value;
+
+  const daysInMonth = getDaysInMonth(new Date(calYear, calMonth));
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+
+  const calDays = useMemo(() => {
+    const arr: { date: Date; isCurrentMonth: boolean; dateStr: string }[] = [];
+    const prevMonthDays = getDaysInMonth(new Date(calYear, calMonth === 0 ? 11 : calMonth - 1));
+
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const m = calMonth === 0 ? 11 : calMonth - 1;
+      const y = calMonth === 0 ? calYear - 1 : calYear;
+      const d = new Date(y, m, prevMonthDays - i);
+      arr.push({ date: d, isCurrentMonth: false, dateStr: localDateKey(d) });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(calYear, calMonth, d);
+      arr.push({ date: dateObj, isCurrentMonth: true, dateStr: localDateKey(dateObj) });
+    }
+    const remaining = 42 - arr.length;
+    for (let d = 1; d <= remaining; d++) {
+      const m = calMonth === 11 ? 0 : calMonth + 1;
+      const y = calMonth === 11 ? calYear + 1 : calYear;
+      const dateObj = new Date(y, m, d);
+      arr.push({ date: dateObj, isCurrentMonth: false, dateStr: localDateKey(dateObj) });
+    }
+    return arr;
+  }, [calYear, calMonth, firstDay, daysInMonth]);
+
+  const prevCalMonth = () => {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+    else { setCalMonth(m => m - 1); }
+  };
+
+  const nextCalMonth = () => {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+    else { setCalMonth(m => m + 1); }
+  };
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+        style={[
+          styles.pickerField,
+          {
+            backgroundColor: isActive ? 'rgba(59, 130, 246, 0.08)' : colors.surface,
+            borderColor: isActive ? colors.primary : colors.border,
+            minWidth: 120,
+          },
+        ]}
+        accessibilityLabel={label}
+      >
+        <AppText variant="bodySmall" color={isActive ? "primary" : "textTertiary"}>{label}</AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+          <AppText variant="body" color={isActive ? "primary" : "textTertiary"} style={{ fontWeight: isActive ? '700' : '500', fontSize: 13 }}>
+            {displayDateText}
+          </AppText>
+          {isActive ? (
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                onChange('');
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <AppText style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginLeft: 4 }}>✕</AppText>
+            </TouchableOpacity>
+          ) : (
+            <Icon name={Icons.calendarOutline} size={14} color={colors.textTertiary} style={{ marginLeft: 4 }} />
+          )}
+        </View>
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setOpen(false)}>
+          <TouchableOpacity style={[styles.datePickerModal, { backgroundColor: colors.background }]} activeOpacity={1}>
+            <View style={styles.datePickerHeader}>
+              <AppText variant="label" color="textSecondary" style={{ fontWeight: '700', letterSpacing: 0.5 }}>
+                {label.toUpperCase()}
+              </AppText>
+              <TouchableOpacity onPress={() => setOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <AppText style={{ color: colors.textTertiary, fontSize: 18 }}>✕</AppText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Month Navigation */}
+            <View style={styles.datePickerNav}>
+              <TouchableOpacity onPress={prevCalMonth} style={styles.calNavBtn}>
+                <Icon name={Icons.back} size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <AppText variant="body" color="textPrimary" style={{ fontWeight: '700' }}>
+                Tháng {calMonth + 1}/{calYear}
+              </AppText>
+              <TouchableOpacity onPress={nextCalMonth} style={styles.calNavBtn}>
+                <Icon name={Icons.forward} size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Weekday Labels */}
+            <View style={styles.dowRow}>
+              {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((d) => (
+                <View key={d} style={styles.dowCell}>
+                  <AppText style={styles.dowText}>{d}</AppText>
+                </View>
+              ))}
+            </View>
+
+            {/* Calendar Grid */}
+            <View style={styles.calGrid}>
+              {calDays.map((item, idx) => {
+                const isSelected = item.dateStr === value;
+                const isToday = isSameDay(item.date, new Date());
+
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    disabled={!item.isCurrentMonth}
+                    onPress={() => {
+                      onChange(item.dateStr);
+                      setOpen(false);
+                    }}
+                    style={styles.dayCell}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.dayNumber,
+                        isSelected && { backgroundColor: colors.primary },
+                        !isSelected && isToday && { borderWidth: 1.5, borderColor: colors.primary },
+                      ]}
+                    >
+                      <AppText
+                        style={[
+                          styles.dayNumberText,
+                          {
+                            color: isSelected
+                              ? '#FFFFFF'
+                              : !item.isCurrentMonth
+                              ? colors.textTertiary
+                              : colors.textPrimary,
+                            fontWeight: isSelected || isToday ? '700' : '500',
+                          },
+                        ]}
+                      >
+                        {item.date.getDate()}
+                      </AppText>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Footer Clear Button */}
+            {isActive ? (
+              <TouchableOpacity
+                onPress={() => {
+                  onChange('');
+                  setOpen(false);
+                }}
+                style={[styles.datePickerClearBtn, { borderColor: colors.border }]}
+              >
+                <AppText variant="bodySmall" color="error" style={{ fontWeight: '600', textAlign: 'center' }}>
+                  Xóa lọc ngày này
+                </AppText>
+              </TouchableOpacity>
+            ) : null}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </>
+  );
+};
+
 const styles = StyleSheet.create({
   // Header
   header: {
@@ -1626,22 +1923,37 @@ const styles = StyleSheet.create({
   },
 
   // View toggle
-  toggleRow: {
+  toggleContainer: {
     flexDirection: 'row',
     marginHorizontal: spacing.screenPadding,
     marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
-    padding: 3,
-    gap: 3,
+    borderRadius: 16,
+    padding: 4,
+    borderWidth: 1,
+    gap: 4,
   },
   toggleBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.md,
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  toggleBtnActive: {
+    borderWidth: 1.5,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  toggleBtnText: {
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 12,
   },
 
   // Calendar
@@ -1927,11 +2239,17 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: 12,
     paddingHorizontal: 4,
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   // Week view
@@ -1964,29 +2282,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(0,0,0,0.04)',
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    height: 48,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
     height: 48,
-    fontSize: 15,
+    fontSize: 14,
     padding: 0,
+  },
+  searchClearBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   dropdownScroll: {
     gap: spacing.sm,
   },
   dropdownWrap: {
-    minWidth: 130,
+    minWidth: 136,
   },
   dateRangeWrap: {
     flexDirection: 'row',
     gap: 4,
   },
   dateInput: {
-    height: 60,
-    borderRadius: borderRadius.lg,
+    height: 54,
+    borderRadius: 14,
     borderWidth: 1.5,
     paddingHorizontal: spacing.md,
     fontSize: 14,
@@ -2001,10 +2332,10 @@ const styles = StyleSheet.create({
   },
   pickerField: {
     borderWidth: 1.5,
-    borderRadius: borderRadius.lg,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.md,
-    height: 60,
+    borderRadius: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    height: 54,
     justifyContent: 'center',
   },
   pickerModal: {
@@ -2022,6 +2353,33 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.md,
+  },
+  datePickerModal: {
+    marginHorizontal: spacing.md,
+    marginTop: 'auto',
+    marginBottom: 'auto',
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  datePickerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
+  datePickerClearBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
   },
 
   // Pagination

@@ -456,15 +456,43 @@ export default function BookingDetailScreen() {
           icon={Icons.sparkle}
           iconBg={colors.warningLight}
           iconColor={colors.warning}
-          title="Dịch vụ"
+          title="Dịch vụ & Gói chăm sóc"
         >
-          <AppText variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>
+          <AppText variant="body" style={{ fontWeight: '700' }} numberOfLines={2}>
             {packageName}
           </AppText>
           {packageDuration ? (
-            <AppText variant="caption" color="textSecondary">
-              {packageDuration} phút
+            <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+              ⏱️ Thời gian thực hiện: {packageDuration} phút
             </AppText>
+          ) : null}
+          {typeof booking.packageId === 'object' && (booking.packageId as any)?.description ? (
+            <AppText variant="caption" color="textSecondary" style={{ marginTop: 4, lineHeight: 18 }}>
+              {(booking.packageId as any).description}
+            </AppText>
+          ) : null}
+          {booking.selectedSubServices && booking.selectedSubServices.length > 0 ? (
+            <View style={{ marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+              <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
+                Dịch vụ đính kèm ({booking.selectedSubServices.length}):
+              </AppText>
+              {booking.selectedSubServices.map((sub: any, idx: number) => {
+                const subName = typeof sub === 'object' ? sub.name : sub;
+                const subPrice = typeof sub === 'object' ? sub.price : undefined;
+                return (
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                    <AppText variant="caption" color="textSecondary">
+                      • {subName}
+                    </AppText>
+                    {subPrice ? (
+                      <AppText variant="caption" color="textPrimary" style={{ fontWeight: '600' }}>
+                        +{formatCurrency(subPrice)}
+                      </AppText>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
           ) : null}
         </InfoCard>
 

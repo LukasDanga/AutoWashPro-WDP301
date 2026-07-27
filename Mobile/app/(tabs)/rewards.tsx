@@ -455,6 +455,12 @@ const sh = StyleSheet.create({
   subtitle: { fontFamily: 'Outfit_400Regular', fontSize: 13, color: '#94A3B8', marginTop: 2 },
 });
 
+const formatDiscountBadge = (type?: string, value?: number): string => {
+  if (value === undefined || value === null) return '0đ';
+  if (type === 'percentage') return `${value}%`;
+  return formatCurrency(value).replace(/\s+/g, '');
+};
+
 // ─── Voucher Card ──────────────────────────────────────────────────────────────
 const VoucherCard: React.FC<{
   voucher: Voucher;
@@ -478,10 +484,13 @@ const VoucherCard: React.FC<{
           style={vc.discountSection}
         >
           <View style={vc.discountBlob} />
-          <Text style={vc.discountValue}>
-            {voucher.type === 'percentage'
-              ? `${voucher.value}%`
-              : formatCurrency(voucher.value)}
+          <Text
+            style={vc.discountValue}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+          >
+            {formatDiscountBadge(voucher.type, voucher.value)}
           </Text>
           <Text style={vc.discountLabel}>GIẢM</Text>
           {/* Perforation notches */}
@@ -540,7 +549,16 @@ const MyVoucherCard: React.FC<{
   onPress: () => void;
 }> = ({ voucher, onPress }) => {
   const colors = useColors();
-  const isUsed = !!voucher.used;
+  
+  const rawV = voucher as any;
+  const vObj = (rawV.voucherId && typeof rawV.voucherId === 'object') ? rawV.voucherId : rawV;
+
+  const isUsed = !!(rawV.usedAt || rawV.isUsed || rawV.used || rawV.status === 'used');
+  const code = vObj.code || rawV.code || '';
+  const name = vObj.name || code || 'Voucher';
+  const type = vObj.type || rawV.type || 'fixed';
+  const value = vObj.value ?? rawV.discountAmount ?? rawV.value ?? 0;
+  const endDate = vObj.endDate || rawV.endDate;
 
   return (
     <PressableScale onPress={onPress} accessibilityRole="button">
@@ -552,10 +570,13 @@ const MyVoucherCard: React.FC<{
             { backgroundColor: isUsed ? '#CBD5E1' : colors.primary },
           ]}
         >
-          <Text style={vc.discountValue}>
-            {voucher.type === 'percentage'
-              ? `${voucher.value}%`
-              : formatCurrency(voucher.value)}
+          <Text
+            style={vc.discountValue}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+          >
+            {formatDiscountBadge(type, value)}
           </Text>
           <Text style={vc.discountLabel}>{isUsed ? 'ĐÃ DÙNG' : 'GIẢM'}</Text>
           <View style={[vc.notchTop, { backgroundColor: colors.background }]} />
@@ -567,16 +588,16 @@ const MyVoucherCard: React.FC<{
         {/* Right: details */}
         <View style={vc.infoSection}>
           <View style={vc.myVoucherHeader}>
-            <Text style={vc.voucherName} numberOfLines={1}>{voucher.name || voucher.code}</Text>
+            <Text style={vc.voucherName} numberOfLines={1}>{name}</Text>
             <Badge label={isUsed ? 'Đã dùng' : 'Còn hạn'} variant={isUsed ? 'default' : 'success'} size="small" />
           </View>
-          <Text style={vc.description} numberOfLines={1}>Mã: {voucher.code}</Text>
-          {voucher.usedAt ? (
-            <Text style={vc.usedAt}>Đã dùng: {formatDate(voucher.usedAt)}</Text>
+          <Text style={vc.description} numberOfLines={1}>Mã: {code}</Text>
+          {rawV.usedAt ? (
+            <Text style={vc.usedAt}>Đã dùng: {formatDate(rawV.usedAt)}</Text>
           ) : null}
           <View style={vc.expiryRow}>
             <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
-            <Text style={vc.expiry}>HSD: {formatDate(voucher.endDate)}</Text>
+            <Text style={vc.expiry}>HSD: {formatDate(endDate)}</Text>
           </View>
         </View>
       </View>
@@ -597,12 +618,13 @@ const vc = StyleSheet.create({
   },
   cardUsed: { opacity: 0.65 },
   discountSection: {
-    width: 92,
+    width: 96,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     position: 'relative',
-    paddingVertical: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
   },
   discountBlob: {
     position: 'absolute',
@@ -615,9 +637,10 @@ const vc = StyleSheet.create({
   },
   discountValue: {
     fontFamily: 'Outfit_700Bold',
-    fontSize: 22,
+    fontSize: 16,
     color: '#FFFFFF',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
   discountLabel: {
     fontFamily: 'Outfit_700Bold',
@@ -874,7 +897,7 @@ export default function RewardsScreen() {
                     : isPercent
                       ? `Giảm ${g.value}%`
                       : isFixed
-                        ? `Giảm ${formatCurrency(g.value ?? 0)}`
+                        ? `Giảm ${formatCurrency(g.value ?? 0).replace(/\s+/g, '')}`
                         : (g.name || 'Phần thưởng');
                 const probability = typeof g.probability === 'number' ? g.probability : null;
                 const accent = g.color || colors.primary;
@@ -1008,7 +1031,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 20,
-    paddingBottom: 48,
+    paddingBottom: 110,
   },
   voucherList: {
     paddingTop: 8,
