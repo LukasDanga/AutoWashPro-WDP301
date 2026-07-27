@@ -78,16 +78,16 @@ export default function PaymentDetailScreen() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('vi-VN', {
-      weekday: 'long',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    if (isNaN(date.getTime())) return dateStr;
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${hours}:${minutes}, ${day}/${month}/${year}`;
   };
 
   const getMethodLabel = (method: string) => {
@@ -181,8 +181,8 @@ Cảm ơn bạn đã sử dụng dịch vụ AutoWashPro!
           </AppText>
 
           <View style={styles.infoRow}>
-            <AppText variant="body" color="textSecondary">Mã giao dịch</AppText>
-            <AppText variant="body" style={styles.infoValue}>
+            <AppText variant="body" color="textSecondary" style={styles.infoLabel}>Mã giao dịch</AppText>
+            <AppText variant="body" style={styles.infoValue} numberOfLines={1}>
               #{payment._id.slice(-8).toUpperCase()}
             </AppText>
           </View>
@@ -190,7 +190,7 @@ Cảm ơn bạn đã sử dụng dịch vụ AutoWashPro!
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
           <View style={styles.infoRow}>
-            <AppText variant="body" color="textSecondary">Phương thức</AppText>
+            <AppText variant="body" color="textSecondary" style={styles.infoLabel}>Phương thức</AppText>
             <View style={styles.methodValue}>
               <Icon
                 name={METHOD_ICONS[payment.method] || Icons.cardOutline}
@@ -207,8 +207,8 @@ Cảm ơn bạn đã sử dụng dịch vụ AutoWashPro!
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
           <View style={styles.infoRow}>
-            <AppText variant="body" color="textSecondary">Ngày giao dịch</AppText>
-            <AppText variant="body" style={styles.infoValue}>
+            <AppText variant="body" color="textSecondary" style={styles.infoLabel}>Ngày giao dịch</AppText>
+            <AppText variant="body" style={styles.infoValue} numberOfLines={1}>
               {formatDate(payment.createdAt)}
             </AppText>
           </View>
@@ -249,8 +249,10 @@ Cảm ơn bạn đã sử dụng dịch vụ AutoWashPro!
             </AppText>
 
             <View style={styles.infoRow}>
-              <AppText variant="body" color="textSecondary">Mã giao dịch {payment.method}</AppText>
-              <AppText variant="bodySmall" style={styles.infoValue}>
+              <AppText variant="body" color="textSecondary" style={styles.infoLabel}>
+                Mã {getMethodLabel(payment.method)}
+              </AppText>
+              <AppText variant="bodySmall" style={styles.infoValue} numberOfLines={1} ellipsizeMode="middle">
                 {payment.transactionId}
               </AppText>
             </View>
@@ -355,9 +357,15 @@ content: {
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  infoLabel: {
+    flexShrink: 0,
   },
   infoValue: {
     fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
   },
   divider: {
     height: 1,

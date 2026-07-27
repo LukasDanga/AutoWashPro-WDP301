@@ -22,6 +22,7 @@ import {
   Header,
   ScreenContainer,
 } from '../../src/components/common';
+import { AlertDialog } from '../../src/components/common/AlertDialog';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
@@ -97,27 +98,40 @@ export default function VoucherPickerScreen() {
     };
 
     if (item.requiredPoints && item.requiredPoints > 0) {
-      Alert.alert(
-        'Đổi điểm',
-        `Bạn muốn đổi ${item.requiredPoints} điểm lấy voucher này?`,
-        [
-          { text: 'Hủy', style: 'cancel' },
+      AlertDialog.show({
+        title: 'Xác nhận đổi điểm',
+        subtitle: 'Dùng điểm tích lũy',
+        message: `Bạn có muốn dùng ${item.requiredPoints} điểm tích lũy để đổi lấy voucher "${item.name || item.code}"?`,
+        variant: 'confirm',
+        iconName: Icons.star,
+        actions: [
           {
-            text: 'Đổi điểm',
+            text: 'Hủy',
+            style: 'cancel',
+            variant: 'ghost',
+          },
+          {
+            text: 'Đổi điểm ngay',
+            variant: 'primary',
             onPress: async () => {
               setIsLoading(true);
               try {
                 await voucherApi.redeemPoints(item._id);
                 applyVoucher();
               } catch (error) {
-                Alert.alert('Lỗi', 'Đổi điểm thất bại hoặc không đủ điểm.');
+                AlertDialog.show({
+                  title: 'Đổi điểm thất bại',
+                  message: 'Rất tiếc, điểm tích lũy của bạn không đủ hoặc voucher đã hết lượt đổi.',
+                  variant: 'danger',
+                  actions: [{ text: 'Đóng', variant: 'primary' }],
+                });
               } finally {
                 setIsLoading(false);
               }
-            }
-          }
-        ]
-      );
+            },
+          },
+        ],
+      });
       return;
     }
 
@@ -168,12 +182,16 @@ export default function VoucherPickerScreen() {
   const renderVoucher = ({ item }: { item: VoucherItem }) => {
     const isSelected = selectedCode === item.code;
     const isPercentage = item.type === 'percentage';
-    const savings = item.type === 'percentage'
-      ? Math.min(Math.floor(orderAmount * item.value! / 100), item.maxDiscount || Infinity)
+    const savings = isPercentage
+      ? Math.min(Math.floor(orderAmount * (item.value || 0) / 100), item.maxDiscount || Infinity)
       : Math.min(item.value || 0, orderAmount);
     const expiryText = item.endDate
       ? `HSD: ${new Date(item.endDate).toLocaleDateString('vi-VN')}`
       : null;
+
+    const discountMainText = isPercentage
+      ? `-${item.value}%`
+      : `-${formatCurrency(item.value || 0).replace(/\s+/g, '')}`;
 
     return (
       <TouchableOpacity
@@ -190,44 +208,68 @@ export default function VoucherPickerScreen() {
           isSelected && { shadowColor: colors.primary, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
         ]}>
           <View style={styles.cardRow}>
-            <View style={[styles.discountBadge, { backgroundColor: isPercentage ? '#dcfce7' : '#ecfdf5' }]}>
-              <AppText variant="h3" style={{ color: isPercentage ? '#16a34a' : '#10b981' }}>
-                {isPercentage ? `-${item.value}%` : `-${formatCurrency(item.value!)}`}
-              </AppText>
-              {savings > 0 && (
-                <AppText variant="labelSmall" style={{ color: isPercentage ? '#16a34a' : '#10b981', marginTop: 2 }}>
-                  ≈ -{formatCurrency(savings)}
-                </AppText>
+            {/* Left Discount Badge */}
+            <View style={[styles.discountBadge, { backgroundColor: isPercentage ? '#ECFDF5' : '#F0FDF4' }]}>
+              <Text
+                style={styles.discountBadgeMain}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
+                {discountMainText}
+              </Text>
+              {isPercentage && savings > 0 ? (
+                <Text style={styles.discountBadgeSub}>
+                  ≈ -{formatCurrency(savings).replace(/\s+/g, '')}
+                </Text>
+              ) : (
+                <Text style={styles.discountBadgeSubLabel}>
+                  GIẢM
+                </Text>
               )}
             </View>
+
+            {/* Middle Details */}
             <View style={styles.cardBody}>
-              <AppText variant="subtitle1" color="textPrimary" numberOfLines={1}>
+              <AppText variant="h4" color="textPrimary" numberOfLines={1} style={{ fontWeight: '700' }}>
                 {item.name || item.code}
               </AppText>
               {item.description ? (
-                <AppText variant="bodySmall" color="textSecondary" numberOfLines={2}>
+                <AppText variant="caption" color="textSecondary" numberOfLines={2} style={{ marginTop: 2 }}>
                   {item.description}
                 </AppText>
               ) : null}
               <View style={styles.cardMeta}>
                 {item.minOrder && item.minOrder > 0 ? (
                   <View style={styles.metaChip}>
-                    <AppText variant="labelSmall" color="textTertiary">
-                      Đơn từ {formatCurrency(item.minOrder)}
+                    <AppText variant="labelSmall" color="primary" style={{ fontSize: 11, fontWeight: '600' }}>
+                      Đơn từ {formatCurrency(item.minOrder).replace(/\s+/g, '')}
                     </AppText>
                   </View>
                 ) : null}
                 {expiryText ? (
-                  <AppText variant="labelSmall" color="textTertiary" numberOfLines={1}>
+                  <AppText variant="caption" color="textTertiary" numberOfLines={1} style={{ fontSize: 11 }}>
                     {expiryText}
                   </AppText>
                 ) : null}
               </View>
             </View>
-            <View style={[styles.applyBtn, { backgroundColor: isSelected ? colors.primary : colors.primaryLight }]}>
-              <AppText variant="button" style={{ color: isSelected ? '#fff' : colors.primary }}>
-                {isSelected ? '✓' : 'Chọn'}
-              </AppText>
+
+            {/* Right Action Button */}
+            <View style={[
+              styles.applyBtn,
+              {
+                backgroundColor: isSelected ? colors.primary : colors.primarySubtle,
+                borderColor: colors.primary,
+                borderWidth: isSelected ? 0 : 1,
+              }
+            ]}>
+              <Text style={[
+                styles.applyBtnText,
+                { color: isSelected ? '#FFFFFF' : colors.primary }
+              ]}>
+                {isSelected ? 'Đã chọn' : 'Chọn'}
+              </Text>
             </View>
           </View>
         </View>
@@ -266,7 +308,7 @@ export default function VoucherPickerScreen() {
           <TextInput
             value={manualCode}
             onChangeText={(t) => { setManualCode(t.toUpperCase()); setManualMsg(''); }}
-            placeholder="NHẬP MÃ COUPON..."
+            placeholder="Nhập mã ưu đãi / coupon..."
             placeholderTextColor={colors.textTertiary}
             autoCapitalize="characters"
             returnKeyType="go"
@@ -394,12 +436,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   discountBadge: {
-    width: 80,
+    width: 86,
     height: 72,
     borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.md,
+    paddingHorizontal: 4,
+    marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  discountBadgeMain: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 16,
+    color: '#059669',
+    textAlign: 'center',
+  },
+  discountBadgeSub: {
+    fontFamily: 'Outfit_600SemiBold',
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  discountBadgeSubLabel: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 10,
+    color: '#059669',
+    letterSpacing: 0.8,
+    marginTop: 2,
+    textAlign: 'center',
   },
   cardBody: {
     flex: 1,
@@ -410,23 +476,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    marginTop: 2,
+    marginTop: 4,
   },
   metaChip: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#ECFDF5',
   },
   applyBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   applyBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 13,
   },
 });

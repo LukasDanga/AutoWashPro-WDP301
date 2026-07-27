@@ -680,6 +680,7 @@ export default function BookingScreen() {
         // Persist extra fields not in BookingContext for checkout to read.
         await AsyncStorage.setItem('aw_checkout_extras', JSON.stringify({
           voucherCode: voucherToSend,
+          voucherDiscount: isPayingWithPack ? 0 : voucherDiscount,
           selectedSubServices,
           timestamp: Date.now(),
         }));
@@ -1410,7 +1411,15 @@ export default function BookingScreen() {
                 `!isPayingWithPack`). */}
             {!isPayingWithPack ? (
               <TouchableOpacity
-                style={[styles.voucherButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                activeOpacity={0.8}
+                style={[
+                  styles.voucherButton,
+                  {
+                    backgroundColor: voucherCode ? '#ECFDF5' : '#F0FDF4',
+                    borderColor: voucherCode ? colors.primary : '#A7F3D0',
+                    borderWidth: 1.5,
+                  },
+                ]}
                 onPress={() => {
                   returningFromSubScreen.current = true;
                   router.push(
@@ -1419,27 +1428,57 @@ export default function BookingScreen() {
                 }}
               >
                 <View style={styles.voucherButtonContent}>
-                  <Text style={{ fontSize: 20, marginRight: spacing.sm }}>🏷️</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, letterSpacing: 0.5 }}>VOUCHER & ƯU ĐÃI</Text>
+                  {/* Icon Avatar Badge */}
+                  <View style={[
+                    styles.voucherIconBadge,
+                    { backgroundColor: voucherCode ? colors.primary : '#10B981' }
+                  ]}>
+                    <Icon
+                      name={voucherCode ? Icons.checkmarkCircle : Icons.ticketOutline}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  </View>
+
+                  {/* Text Details */}
+                  <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                    <Text style={[
+                      styles.voucherTagText,
+                      { color: voucherCode ? '#059669' : colors.primaryDark }
+                    ]}>
+                      {voucherCode ? 'ĐÃ ÁP DỤNG VOUCHER' : 'VOUCHER & ƯU ĐÃI'}
+                    </Text>
+
                     {voucherCode ? (
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary, marginTop: 2 }}>
+                      <Text style={styles.voucherSelectedText} numberOfLines={1}>
                         {voucherCode}
+                        {voucherDiscount > 0 ? ` — Tiết kiệm ${formatCurrency(voucherDiscount)}` : ''}
                       </Text>
                     ) : (
-                      <Text style={{ fontSize: 14, color: colors.textTertiary, marginTop: 2 }}>Chọn voucher để tiết kiệm thêm</Text>
+                      <Text style={styles.voucherPlaceholderText}>
+                        Chọn voucher để tiết kiệm thêm ✨
+                      </Text>
                     )}
                   </View>
+
+                  {/* Right Action Button */}
                   {voucherCode ? (
                     <TouchableOpacity
-                      onPress={() => { setVoucherCode(''); setVoucherDiscount(0); }}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{ marginLeft: spacing.sm }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setVoucherCode('');
+                        setVoucherDiscount(0);
+                      }}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={styles.voucherClearBtn}
+                      accessibilityLabel="Xóa voucher"
                     >
-                      <Text style={{ fontSize: 20, color: colors.textTertiary }}>✕</Text>
+                      <Icon name={Icons.close} size={14} color="#DC2626" />
                     </TouchableOpacity>
                   ) : (
-                    <Text style={{ fontSize: 22, color: colors.textTertiary, marginLeft: spacing.sm }}>›</Text>
+                    <View style={styles.voucherArrowBadge}>
+                      <Icon name={Icons.chevronForward} size={16} color={colors.primary} />
+                    </View>
                   )}
                 </View>
               </TouchableOpacity>
@@ -2058,13 +2097,60 @@ const styles = StyleSheet.create({
   bottomPrimaryButton: { flex: 1 },
   voucherButton: {
     marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   voucherButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  voucherIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voucherTagText: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.6,
+  },
+  voucherSelectedText: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 14,
+    color: '#047857',
+    marginTop: 2,
+  },
+  voucherPlaceholderText: {
+    fontFamily: 'Outfit_500Medium',
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+  },
+  voucherClearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+  voucherArrowBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
   },
 
 });

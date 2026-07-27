@@ -209,12 +209,11 @@ export default function PaymentCheckoutScreen() {
   }, [vnpayResultParam, bookingId]);
 
   // Compute amounts from booking (existing) or draft (provisional)
-  const totalAmount = useMemo(() => {
+  const baseServiceAmount = useMemo(() => {
     if (isProvisional) {
       if (isRecurringType && recurringDraft) {
         return recurringDraft.totalAmount ?? 0;
       }
-      // Single booking provisional: compute from BookingContext draft
       const pkg = bookingCtx?.selectedPackage;
       const basePrice = pkg?.price ?? 0;
       const extras = checkoutExtras || {};
@@ -222,17 +221,35 @@ export default function PaymentCheckoutScreen() {
         const subService = (pkg as any)?.subServices?.find((s: any) => s.name === sub);
         return sum + (subService?.price ?? 0);
       }, 0);
-      const voucherDiscount = bookingCtx?.voucher?.discountAmount ?? 0;
-      return Math.max(0, basePrice + subTotal - voucherDiscount);
+      return basePrice + subTotal;
     }
-    // Existing booking mode
+    if (!booking) return 0;
+    return booking.totalPrice ?? booking.finalPrice ?? 0;
+  }, [booking, isProvisional, isRecurringType, recurringDraft, bookingCtx?.selectedPackage, checkoutExtras]);
+
+  const activeVoucherDiscount = useMemo(() => {
+    if (isProvisional) {
+      const extras = checkoutExtras || {};
+      return extras.voucherDiscount ?? bookingCtx?.voucher?.discountAmount ?? 0;
+    }
+    if (!booking) return 0;
+    return booking.discountAmount ?? 0;
+  }, [booking, isProvisional, checkoutExtras, bookingCtx?.voucher]);
+
+  const totalAmount = useMemo(() => {
+    if (isProvisional) {
+      if (isRecurringType && recurringDraft) {
+        return recurringDraft.totalAmount ?? 0;
+      }
+      return Math.max(0, baseServiceAmount - activeVoucherDiscount);
+    }
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
     if (beDeposit > 0) {
       return Math.round(beDeposit / 0.3 / 1000) * 1000;
     }
     return booking.finalPrice ?? booking.totalPrice ?? 0;
-  }, [booking, isProvisional, isRecurringType, recurringDraft, bookingCtx?.selectedPackage, bookingCtx?.voucher, checkoutExtras]);
+  }, [booking, isProvisional, isRecurringType, recurringDraft, baseServiceAmount, activeVoucherDiscount]);
 
   const depositAmount = useMemo(() => {
     if (isProvisional) {
@@ -961,9 +978,40 @@ export default function PaymentCheckoutScreen() {
                 Tổng dịch vụ
               </AppText>
               <AppText variant="body" style={styles.summaryValue}>
-                {formatCurrency(totalAmount)}
+                {formatCurrency(baseServiceAmount > 0 ? baseServiceAmount : totalAmount)}
               </AppText>
             </View>
+
+            {activeVoucherDiscount > 0 ? (
+              <>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" style={{ color: '#059669', fontWeight: '600' }}>
+                    Voucher giảm giá {checkoutExtras?.voucherCode ? `(${checkoutExtras.voucherCode})` : ''}
+                  </AppText>
+                  <AppText variant="body" style={{ color: '#059669', fontWeight: '700' }}>
+                    -{formatCurrency(activeVoucherDiscount)}
+                  </AppText>
+                </View>
+              </>
+            ) : null}
+
+            {activeVoucherDiscount > 0 ? (
+              <>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" style={{ fontWeight: '700', color: colors.textPrimary }}>
+                    Thành tiền
+                  </AppText>
+                  <AppText variant="body" style={{ fontWeight: '700', color: colors.textPrimary }}>
+                    {formatCurrency(totalAmount)}
+                  </AppText>
+                </View>
+              </>
+            ) : null}
+
+            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+
             {paymentMode === 'deposit' ? (
               <>
                 <View style={styles.summaryRow}>
