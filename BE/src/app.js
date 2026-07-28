@@ -15,6 +15,7 @@ const extraOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim
 const allowedOrigins = [config.APP_URL, config.API_URL, config.FE_URL, ...extraOrigins].filter(Boolean);
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors({
