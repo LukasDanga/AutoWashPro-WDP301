@@ -619,12 +619,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           if (!vnpRes.ok) throw new Error(vnpData.message || 'Tạo thanh toán VNPay thất bại');
           const vnpUrl = vnpData?.data?.paymentUrl || vnpData?.paymentUrl || vnpData?.url;
           if (vnpUrl) {
-            window.open(vnpUrl, '_blank');
-            showToastMsg('Vui lòng thanh toán VNPay trong cửa sổ mới. Sau khi thanh toán xong, đặt lại sẽ được hoàn tất.');
-            // Lưu payment object và chuyển sang màn chờ để poll
+            // Lưu draft vào sessionStorage để xử lý sau khi VNPay redirect về
             const paymentData = vnpData?.data?.payment || vnpData?.data;
-            setRebookDepositPayment(paymentData);
-            setRebookQrStep('qr');
+            sessionStorage.setItem('aw_rebookVnpayDraft', JSON.stringify({
+              rebookTargetId: rebookTarget._id || rebookTarget.id,
+              bookingDate: rebookDate,
+              startTime: rebookTime,
+              selectedSubServices: rebookSubServices,
+              voucherCode: rebookAppliedVoucher?.code || null,
+              paymentMode: rebookPaymentMode,
+              depositPayment: { _id: paymentData._id || paymentData.id, ...paymentData },
+              draft: { bookingId: rebookTarget._id || rebookTarget.id, bookingDate: rebookDate, startTime: rebookTime, amount, paymentMode: rebookPaymentMode, selectedSubServices: rebookSubServices, voucherCode: rebookAppliedVoucher?.code || undefined },
+            }));
+            window.location.href = vnpUrl;
           } else {
             setRebookFormError('Không nhận được đường dẫn thanh toán VNPay');
           }
@@ -657,6 +664,42 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     finally { setRebookLoading(false); }
   }
 
+  // Xử lý VNPay return cho rebook (sau khi redirect từ tab hiện tại)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('rebook_vnpay') === 'true') {
+      const draftStr = sessionStorage.getItem('aw_rebookVnpayDraft');
+      const resultStr = sessionStorage.getItem('aw_rebookVnpayResult');
+      sessionStorage.removeItem('aw_rebookVnpayDraft');
+      sessionStorage.removeItem('aw_rebookVnpayResult');
+      const url2 = new URL(window.location);
+      url2.searchParams.delete('rebook_vnpay');
+      window.history.replaceState({}, '', url2);
+      if (draftStr && resultStr) {
+        try {
+          const draft = JSON.parse(draftStr);
+          const parsed = JSON.parse(decodeURIComponent(resultStr));
+          const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
+          if (success && draft.draft) {
+            // Payment confirmed by BE — tạo rebook ngay
+            executeRebookAfterPayment(draft.draft);
+          } else {
+            // Trả về form để user thấy lỗi
+            setRebookTarget({ _id: draft.rebookTargetId });
+            setRebookDate(draft.bookingDate || '');
+            setRebookTime(draft.startTime || '');
+            setRebookSubServices(draft.selectedSubServices || []);
+            setRebookAppliedVoucher(draft.voucherCode ? { code: draft.voucherCode } : null);
+            setRebookFormError(parsed?.message || 'Thanh toán VNPay thất bại hoặc bị hủy');
+            setShowRebookModal(true);
+          }
+        } catch (e2) {
+          console.error('Parse rebook vnpay result error:', e2);
+        }
+      }
+    }
+  }, []);
+
   // Poll rebook provisional payment → khi paid thì tạo rebook
   useEffect(() => {
     if (rebookQrStep !== 'qr' || !rebookDepositPayment) return;
@@ -683,9 +726,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   }, [rebookQrStep, rebookDepositPayment, rebookDraft, apiBase, token]);
 
   // Tạo rebook sau khi thanh toán thành công
-  async function executeRebookAfterPayment() {
-    if (!rebookDraft) return;
-    const d = rebookDraft;
+  async function executeRebookAfterPayment(draftOverride) {
+    const d = draftOverride || rebookDraft;
+    if (!d) return;
     setRebookQrLoading(true);
     try {
       const res = await fetch(`${apiBase || API_BASE}/bookings/${d.bookingId}/rebook`, {
@@ -2687,6 +2730,22 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       {(rebookDepositPayment.amount || 0).toLocaleString('vi-VN')}₫
                     </p>
                     <p className="text-xs text-slate-400">Số tiền cần chuyển</p>
+                  </div>
+                )}
+
+                      {rebookAppliedVoucher && voucherDiscount > 0 && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 mb-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-amber-700 font-medium">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        Mã giảm giá: <span className="font-bold uppercase tracking-wide">{rebookAppliedVoucher.code}</span>
+                      </span>
+                      <span className="text-amber-600 font-bold">
+                        -{voucherDiscount.toLocaleString('vi-VN')}₫
+                      </span>
+                    </div>
                   </div>
                 )}
 

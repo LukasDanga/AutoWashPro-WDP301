@@ -361,9 +361,9 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         const deepLinkId = mobileBookingId || result.data.txnRef || '';
         return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
       }
-      // Provisional & slot pack đều redirect về /booking (nơi BookingWidget render)
+      // Provisional & slot pack đều redirect về / (App routing handles dispatch)
       if (payment && (!payment.bookingId || payment.slotPackId)) {
-        return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
+        return res.redirect(302, `${feUrl}/?vnpay_result=${encoded}`);
       }
     } catch (err) {
       console.error('Confirm payment error:', err.message);

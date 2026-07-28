@@ -100,7 +100,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                 <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wide">Mã lịch hẹn</span>
                 <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wide text-right">Thời gian</span>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
                 {bookings.map((b, i) => (
                   <div key={i} className="grid grid-cols-[1fr_1fr] px-4 py-2.5 hover:bg-slate-50">
                     <span className="font-semibold text-slate-800">{b.code}</span>

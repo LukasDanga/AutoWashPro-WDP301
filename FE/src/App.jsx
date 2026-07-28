@@ -129,6 +129,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // VNPay return routing: provisional payments redirect to /? →
+  // detect rebook vs regular booking and route accordingly
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const vnpayResult = params.get('vnpay_result');
+    if (!vnpayResult) return;
+    const rebookDraft = sessionStorage.getItem('aw_rebookVnpayDraft');
+    if (rebookDraft) {
+      // Already on /history — no redirect needed (Handled by HistoryPage)
+      if (location.pathname.startsWith('/history')) return;
+      // Rebook flow → save result for HistoryPage, navigate to /history
+      sessionStorage.setItem('aw_rebookVnpayResult', vnpayResult);
+      navigate('/history?rebook_vnpay=true', { replace: true });
+    } else {
+      // Already on /booking — no redirect needed (Handled by BookingWidget)
+      if (location.pathname.startsWith('/booking')) return;
+      // Regular booking flow → forward to /booking where BookingWidget handles it
+      navigate('/booking?vnpay_result=' + encodeURIComponent(vnpayResult), { replace: true });
+    }
+  }, [location]);
+
   async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
