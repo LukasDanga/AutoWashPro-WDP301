@@ -60,6 +60,12 @@ const slotPackSchema = new mongoose.Schema(
       enum: ['unpaid', 'paid'],
       default: 'unpaid',
     },
+    refundStatus: {
+      type: String,
+      enum: ['none', 'pending', 'completed'],
+      default: 'none',
+    },
+    refundAmount: { type: Number, default: 0 },
     paidAt: { type: Date },
   },
   { timestamps: true }

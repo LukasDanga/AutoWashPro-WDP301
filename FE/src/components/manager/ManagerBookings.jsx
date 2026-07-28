@@ -153,6 +153,23 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
     } finally { setBusy(false); }
   };
 
+  const handleCompleteRefund = async () => {
+    setBusy(true);
+    try {
+      const res = await api(`/bookings/${bookingId}/refund-complete`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const payload = await res.json();
+      onUpdated(payload?.data ?? payload);
+      notify('Đã xác nhận hoàn tiền', 'success');
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="relative">
@@ -938,6 +955,49 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Ghi chú</h3>
             <p className="text-sm text-slate-600 italic">{booking.note || 'Không có ghi chú'}</p>
           </div>
+          
+          {booking.status === 'cancelled' && (
+            <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-100">
+              <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <span className="text-sm">🗑️</span> Lý do hủy
+              </h3>
+              <p className="text-sm text-red-700 font-medium">
+                {booking.cancellationReason || 'Không có lý do'}
+              </p>
+              {booking.cancelledAt && (
+                <p className="text-xs text-red-500 mt-1">
+                  Đã hủy lúc: {new Date(booking.cancelledAt).toLocaleString('vi-VN')}
+                </p>
+              )}
+
+              {/* Phần hoàn tiền */}
+              {booking.refundStatus && booking.refundStatus !== 'none' && (
+                <div className="mt-3 pt-3 border-t border-red-200">
+                  <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <span className="text-sm">💵</span> Thông tin hoàn tiền
+                  </h3>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="text-sm font-semibold text-slate-800">
+                      {booking.refundAmount?.toLocaleString('vi-VN')}₫
+                    </div>
+                    {booking.refundStatus === 'pending' ? (
+                      <button 
+                        disabled={busy}
+                        onClick={handleCompleteRefund}
+                        className="rounded-lg bg-orange-100 text-orange-700 px-3 py-1.5 text-xs font-bold hover:bg-orange-200 transition-colors disabled:opacity-50"
+                      >
+                        {busy ? 'Đang xử lý...' : 'Xác nhận đã hoàn'}
+                      </button>
+                    ) : (
+                      <span className="rounded-lg bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-bold">
+                        Đã hoàn tiền
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── INVOICE (completed only) ── */}

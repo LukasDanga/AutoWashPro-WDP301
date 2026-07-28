@@ -570,10 +570,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       } else {
         // Booking đã tồn tại (VD: định kỳ) — tạo payment ngay
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+        let bkId = pendingDeposit._id || pendingDeposit.id;
+        if (!bkId && pendingDeposit.bookings && pendingDeposit.bookings.length > 0) {
+          bkId = pendingDeposit.bookings[0]._id || pendingDeposit.bookings[0].id;
+        }
+
         const res = await fetch(`${apiBase}/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ bookingId: pendingDeposit._id, method: depositMethod, paymentType: paymentMode, amount: actualAmount }),
+          body: JSON.stringify({ bookingId: bkId, method: depositMethod, paymentType: paymentMode, amount: actualAmount }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Lỗi thanh toán');
@@ -704,10 +709,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       } else {
         // Booking đã tồn tại — tạo VNPay payment bình thường
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+        let bkId = pendingDeposit._id || pendingDeposit.id;
+        if (!bkId && pendingDeposit.bookings && pendingDeposit.bookings.length > 0) {
+          bkId = pendingDeposit.bookings[0]._id || pendingDeposit.bookings[0].id;
+        }
         const res = await fetch(`${apiBase}/payments/vnpay-create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
-          body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: paymentMode, amount: actualAmount }),
+          body: JSON.stringify({ bookingId: bkId, paymentType: paymentMode, amount: actualAmount }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
@@ -754,7 +763,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
       if (pendingDeposit.isDraft) {
         const bk = await executeCreateBooking({ tab: pendingDeposit.tab || 'regular' });
-        const bkId = bk._id || bk.id;
+        let bkId = bk._id || bk.id;
+        if (!bkId && bk.created && bk.created.length > 0) {
+          bkId = bk.created[0]._id || bk.created[0].id;
+        }
 
         const payRes = await fetch(`${apiBase}/payments`, {
           method: 'POST',
@@ -779,10 +791,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           paymentMode,
         });
       } else {
+        let bkId = pendingDeposit._id || pendingDeposit.id;
+        if (!bkId && pendingDeposit.bookings && pendingDeposit.bookings.length > 0) {
+          bkId = pendingDeposit.bookings[0]._id || pendingDeposit.bookings[0].id;
+        }
         const payRes = await fetch(`${apiBase}/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ bookingId: pendingDeposit._id, method: 'wallet', paymentType: paymentMode, amount: actualAmount }),
+          body: JSON.stringify({ bookingId: bkId, method: 'wallet', paymentType: paymentMode, amount: actualAmount }),
         });
         const payData = await payRes.json();
         if (!payRes.ok) throw new Error(payData.message || 'Thanh toán ví thất bại');
@@ -1276,7 +1292,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const reset = () => {
     sessionStorage.removeItem('aw_booking_state');
-    setStep(initialBranchId ? 2 : 1);
+    setStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     setSelectedVehicle('');
     setSelectedPackage(null);
     setSelectedSubServices({});

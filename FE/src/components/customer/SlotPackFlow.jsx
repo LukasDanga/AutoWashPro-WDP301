@@ -914,73 +914,76 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       )}
 
       {/* Success Modal */}
-      <AnimatePresence>
-        {(showSuccessModal && buyResult) && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6"
-            onClick={() => { setShowSuccessModal(false); setBuyResult(null); }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[1.5rem] w-full max-w-lg p-8 shadow-xl max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}>
-              <div className="text-center mb-6">
-                <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-7 h-7 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
-                  </svg>
+      {createPortal(
+        <AnimatePresence>
+          {(showSuccessModal && buyResult) && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6"
+              onClick={() => { setShowSuccessModal(false); setBuyResult(null); setStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-[1.5rem] w-full max-w-lg p-8 shadow-xl max-h-[90vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900">Mua gói thành công!</h3>
+                  <p className="text-sm text-slate-500 mt-1">Mã gói: <span className="font-mono font-semibold text-emerald-600">{buyResult.packCode}</span></p>
                 </div>
-                <h3 className="text-xl font-bold text-slate-900">Mua gói thành công!</h3>
-                <p className="text-sm text-slate-500 mt-1">Mã gói: <span className="font-mono font-semibold text-emerald-600">{buyResult.packCode}</span></p>
-              </div>
-
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-500">Chi nhánh</span>
-                  <span className="font-medium text-slate-800">{branchObj?.name || 'Toàn hệ thống'}</span>
-                </div>
-                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-500">Gói dịch vụ</span>
-                  <span className="font-medium text-slate-800">{pkg?.name || '—'}</span>
-                </div>
-                <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-500">Số lần</span>
-                  <span className="font-medium text-slate-800">{buyResult.totalSlots || slotCount} lần</span>
-                </div>
-                {buyResult.discountPercent > 0 && (
+  
+                <div className="space-y-3 text-sm">
                   <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-slate-500">Chiết khấu</span>
-                    <span className="font-medium text-emerald-600">-{buyResult.discountPercent}%</span>
+                    <span className="text-slate-500">Chi nhánh</span>
+                    <span className="font-medium text-slate-800">{branchObj?.name || 'Toàn hệ thống'}</span>
+                  </div>
+                  <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-slate-500">Gói dịch vụ</span>
+                    <span className="font-medium text-slate-800">{pkg?.name || '—'}</span>
+                  </div>
+                  <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-slate-500">Số lần</span>
+                    <span className="font-medium text-slate-800">{buyResult.totalSlots || slotCount} lần</span>
+                  </div>
+                  {buyResult.discountPercent > 0 && (
+                    <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500">Chiết khấu</span>
+                      <span className="font-medium text-emerald-600">-{buyResult.discountPercent}%</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <span className="text-emerald-700 font-semibold">Tổng thanh toán</span>
+                    <span className="text-emerald-700 font-bold">{formatCurrency(buyResult.finalPriceAfterVoucher ?? buyResult.finalPrice ?? finalTotal)}</span>
+                  </div>
+                </div>
+  
+                {buyResult.paymentStatus === 'paid' ? (
+                  <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center text-sm text-emerald-700 font-semibold">
+                    ✓ Đã thanh toán — mã <span className="font-mono font-bold">{buyResult.packCode}</span> đã sẵn sàng sử dụng.
+                  </div>
+                ) : (
+                  <div className="mt-4 p-4 rounded-xl bg-sky-50 border border-sky-200 text-center text-sm text-sky-700">
+                    Đưa mã <span className="font-mono font-bold">{buyResult.packCode}</span> cho nhân viên khi đến rửa xe.
                   </div>
                 )}
-                <div className="flex justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-emerald-700 font-semibold">Tổng thanh toán</span>
-                  <span className="text-emerald-700 font-bold">{formatCurrency(buyResult.finalPriceAfterVoucher ?? buyResult.finalPrice ?? finalTotal)}</span>
+  
+                <div className="flex gap-3 mt-8">
+                  <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); setStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                    Đóng
+                  </button>
+                  <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); setStep(1); onGoToHistory?.('slot_packs'); }}
+                    className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">
+                    Lịch sử gói lượt
+                  </button>
                 </div>
-              </div>
-
-              {buyResult.paymentStatus === 'paid' ? (
-                <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center text-sm text-emerald-700 font-semibold">
-                  ✓ Đã thanh toán — mã <span className="font-mono font-bold">{buyResult.packCode}</span> đã sẵn sàng sử dụng.
-                </div>
-              ) : (
-                <div className="mt-4 p-4 rounded-xl bg-sky-50 border border-sky-200 text-center text-sm text-sky-700">
-                  Đưa mã <span className="font-mono font-bold">{buyResult.packCode}</span> cho nhân viên khi đến rửa xe.
-                </div>
-              )}
-
-              <div className="flex gap-3 mt-8">
-                <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); }}
-                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                  Đóng
-                </button>
-                <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); onGoToHistory?.('slot_packs'); }}
-                  className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">
-                  Lịch sử gói lượt
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* QR Payment Modal */}
       {createPortal(

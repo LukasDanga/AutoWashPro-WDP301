@@ -142,6 +142,17 @@ router.post('/:id/cancel', authenticate, [
 ], validate, slotPackController.cancelSlotPack);
 
 /**
+ * @swagger
+ * /api/slot-packs/{id}/refund-complete:
+ *   post:
+ *     summary: Xác nhận đã hoàn tiền thủ công cho gói lượt
+ *     tags: [SlotPacks]
+ */
+router.post('/:id/refund-complete', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId().withMessage('Invalid slot pack ID'),
+], validate, slotPackController.refundComplete);
+
+/**
  * POST /api/slot-packs/:id/pay — Thanh toán gói slot (bank hoặc vnpay)
  */
 router.post('/:id/pay', authenticate, authorize(ROLES.CUSTOMER, ROLES.ADMIN, ROLES.MANAGER), [

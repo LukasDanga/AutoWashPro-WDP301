@@ -143,6 +143,8 @@ export default function BookingsHistory({ apiBase, token }) {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelError, setCancelError] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelStep, setCancelStep] = useState(1);
+  const [cancelOtp, setCancelOtp] = useState('');
 
   // Refund request modal
   const [refundRequests, setRefundRequests] = useState([]);
@@ -319,10 +321,12 @@ export default function BookingsHistory({ apiBase, token }) {
     setCancelTarget(id);
     setCancelError('');
     setCancelReason('');
+    setCancelStep(1);
+    setCancelOtp('');
     setShowCancelConfirm(true);
   }
 
-  async function confirmCancel() {
+  async function requestCancelOtp() {
     if (!cancelTarget) return;
     if (!cancelReason.trim()) {
       setCancelError('Vui lòng nhập lý do hủy đơn');
@@ -331,17 +335,45 @@ export default function BookingsHistory({ apiBase, token }) {
     setCancelLoading(true);
     setCancelError('');
     try {
+      const res = await fetch(`${apiBase}/bookings/${cancelTarget}/cancel-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể yêu cầu OTP'); }
+      setCancelStep(2);
+    } catch (e) {
+      setCancelError(e.message);
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    if (cancelStep === 2 && !cancelOtp.trim()) {
+      setCancelError('Vui lòng nhập mã OTP');
+      return;
+    }
+    setCancelLoading(true);
+    setCancelError('');
+    try {
       const res = await fetch(`${apiBase}/bookings/${cancelTarget}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cancellationReason: cancelReason.trim() }),
+        body: JSON.stringify({ cancellationReason: cancelReason.trim(), otp: cancelOtp.trim() }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể hủy đơn'); }
+      
+      const resData = await res.json().catch(() => ({}));
+      const updatedBooking = resData.data || resData;
       setDetailBooking((prev) => ({ ...prev, status: 'cancelled' }));
       setBookings((prev) => prev.map((b) => b._id === cancelTarget ? { ...b, status: 'cancelled' } : b));
       setShowCancelConfirm(false);
       setCancelTarget(null);
       setCancelReason('');
+      setCancelOtp('');
+      setCancelStep(1);
+      showToast('Đã hủy lịch thành công');
     } catch (e) {
       setCancelError(e.message);
     } finally {
@@ -1000,50 +1032,78 @@ export default function BookingsHistory({ apiBase, token }) {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); } }}>
+        }} onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); } }}>
           <div style={{
             width: '100%', maxWidth: 380, background: '#fff', borderRadius: 20, overflow: 'hidden',
             boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: '24px', textAlign: 'center' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>Xác nhận hủy đơn</div>
-              <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, margin: 0, marginBottom: 16 }}>
-                Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.
-              </p>
-              <div style={{ textAlign: 'left', marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
-                  Lý do hủy <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  rows={3}
-                  maxLength={500}
-                  placeholder="Nhập lý do hủy..."
-                  style={{
-                    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0',
-                    fontSize: 13, color: '#0f172a', outline: 'none', resize: 'none', background: '#f8fafc',
-                    fontFamily: 'inherit'
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.border = '1px solid #3b82f6'; e.currentTarget.style.background = '#fff'; }}
-                  onBlur={(e) => { e.currentTarget.style.border = '1px solid #e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-                />
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{cancelStep === 1 ? '🗑️' : '📩'}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
+                {cancelStep === 1 ? 'Xác nhận hủy đơn' : 'Nhập mã xác thực OTP'}
               </div>
+              <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, margin: 0, marginBottom: 16 }}>
+                {cancelStep === 1 
+                  ? 'Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.' 
+                  : 'Chúng tôi đã gửi mã OTP gồm 6 chữ số đến email của bạn. Vui lòng kiểm tra hộp thư.'}
+              </p>
+
+              {cancelStep === 1 ? (
+                <div style={{ textAlign: 'left', marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
+                    Lý do hủy <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="Nhập lý do hủy..."
+                    style={{
+                      width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0',
+                      fontSize: 13, color: '#0f172a', outline: 'none', resize: 'none', background: '#f8fafc',
+                      fontFamily: 'inherit'
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.border = '1px solid #3b82f6'; e.currentTarget.style.background = '#fff'; }}
+                    onBlur={(e) => { e.currentTarget.style.border = '1px solid #e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                  />
+                </div>
+              ) : (
+                <div style={{ textAlign: 'left', marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
+                    Mã OTP <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={cancelOtp}
+                    onChange={(e) => setCancelOtp(e.target.value)}
+                    placeholder="Nhập mã 6 số"
+                    style={{
+                      width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0',
+                      fontSize: 18, color: '#0f172a', outline: 'none', background: '#f8fafc',
+                      fontFamily: 'inherit', textAlign: 'center', letterSpacing: '5px', fontWeight: 'bold'
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.border = '1px solid #3b82f6'; e.currentTarget.style.background = '#fff'; }}
+                    onBlur={(e) => { e.currentTarget.style.border = '1px solid #e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                  />
+                </div>
+              )}
+
               {cancelError && (
                 <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>{cancelError}</div>
               )}
+
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                 <button
-                  onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); }}
+                  onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); }}
                   disabled={cancelLoading}
                   style={{
                     flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
                     background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                   }}
-                >Không, giữ lại</button>
+                >Đóng</button>
                 <button
-                  onClick={confirmCancel}
+                  onClick={cancelStep === 1 ? requestCancelOtp : confirmCancel}
                   disabled={cancelLoading}
                   style={{
                     flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
@@ -1051,7 +1111,7 @@ export default function BookingsHistory({ apiBase, token }) {
                     fontSize: 14, fontWeight: 700, cursor: cancelLoading ? 'not-allowed' : 'pointer',
                     opacity: cancelLoading ? 0.7 : 1,
                   }}
-                >{cancelLoading ? 'Đang hủy...' : 'Xác nhận hủy'}</button>
+                >{cancelLoading ? 'Đang xử lý...' : (cancelStep === 1 ? 'Lấy mã OTP' : 'Xác nhận hủy')}</button>
               </div>
             </div>
           </div>
