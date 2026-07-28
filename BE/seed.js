@@ -141,7 +141,7 @@ async function main() {
       _id: adminId,
       name: 'Admin AutoWash',
       email: 'admin@washpro.vn',
-      password: hash('Admin123!'),
+      password: hash('123456'),
       phone: '0901000001',
       role: 'admin',
       status: 'active',
@@ -153,7 +153,7 @@ async function main() {
       _id: mgr1Id,
       name: 'Nguyễn Quản Lý 1',
       email: 'manager1@washpro.vn',
-      password: hash('Manager@123'),
+      password: hash('123456'),
       phone: '0901000002',
       role: 'manager',
       status: 'active',
@@ -166,7 +166,7 @@ async function main() {
       _id: mgr2Id,
       name: 'Trần Quản Lý 2',
       email: 'manager2@washpro.vn',
-      password: hash('Manager@123'),
+      password: hash('123456'),
       phone: '0901000003',
       role: 'manager',
       status: 'active',
@@ -179,7 +179,7 @@ async function main() {
       _id: c1Id,
       name: 'Nguyễn Văn An',
       email: 'an.nguyen@gmail.com',
-      password: hash('Customer@123'),
+      password: hash('123456'),
       phone: '0912111001',
       role: 'customer',
       status: 'active',
@@ -192,7 +192,7 @@ async function main() {
       _id: c2Id,
       name: 'Trần Thị Bích',
       email: 'bich.tran@gmail.com',
-      password: hash('Customer@123'),
+      password: hash('123456'),
       phone: '0912111002',
       role: 'customer',
       status: 'active',
@@ -205,7 +205,7 @@ async function main() {
       _id: c3Id,
       name: 'Lê Văn Cường',
       email: 'cuong.le@gmail.com',
-      password: hash('Customer@123'),
+      password: hash('123456'),
       phone: '0912111003',
       role: 'customer',
       status: 'active',
@@ -218,8 +218,8 @@ async function main() {
       // Born today → birthday voucher will be seeded
       _id: c4Id,
       name: 'Phạm Thị Dung',
-      email: 'dung.pham@gmail.com',
-      password: hash('Customer@123'),
+      email: 'binhtntse182370@fpt.edu.vn',
+      password: hash('123456'),
       phone: '0912111004',
       role: 'customer',
       status: 'active',
@@ -232,7 +232,7 @@ async function main() {
       _id: c5Id,
       name: 'Hoàng Văn Em',
       email: 'em.hoang@gmail.com',
-      password: hash('Customer@123'),
+      password: hash('123456'),
       phone: '0912111005',
       role: 'customer',
       status: 'active',
@@ -846,39 +846,39 @@ async function main() {
   console.log('══════════════════════════════════════════════════════════════');
   console.log('  [ADMIN]');
   console.log('    Email    : admin@washpro.vn');
-  console.log('    Password : Admin123!');
+  console.log('    Password : 123456');
   console.log('');
   console.log('  [MANAGER — Chi nhánh Quận 1]');
   console.log('    Email    : manager1@washpro.vn');
-  console.log('    Password : Manager@123');
+  console.log('    Password : 123456');
   console.log('');
   console.log('  [MANAGER — Chi nhánh Thủ Đức]');
   console.log('    Email    : manager2@washpro.vn');
-  console.log('    Password : Manager@123');
+  console.log('    Password : 123456');
   console.log('');
   console.log('  [CUSTOMER — Bronze] Nguyễn Văn An');
   console.log('    Email    : an.nguyen@gmail.com');
-  console.log('    Password : Customer@123');
+  console.log('    Password : 123456');
   console.log('    Phone    : 0912111001');
   console.log('');
   console.log('  [CUSTOMER — Silver] Trần Thị Bích');
   console.log('    Email    : bich.tran@gmail.com');
-  console.log('    Password : Customer@123');
+  console.log('    Password : 123456');
   console.log('    Phone    : 0912111002');
   console.log('');
   console.log('  [CUSTOMER — Gold] Lê Văn Cường');
   console.log('    Email    : cuong.le@gmail.com');
-  console.log('    Password : Customer@123');
+  console.log('    Password : 123456');
   console.log('    Phone    : 0912111003');
   console.log('');
   console.log('  [CUSTOMER — Diamond] Phạm Thị Dung  ← sinh nhật hôm nay!');
-  console.log('    Email    : dung.pham@gmail.com');
-  console.log('    Password : Customer@123');
+  console.log('    Email    : binhtntse182370@fpt.edu.vn');
+  console.log('    Password : 123456');
   console.log('    Phone    : 0912111004');
   console.log('');
   console.log('  [CUSTOMER — Bronze] Hoàng Văn Em');
   console.log('    Email    : em.hoang@gmail.com');
-  console.log('    Password : Customer@123');
+  console.log('    Password : 123456');
   console.log('    Phone    : 0912111005');
   console.log('');
   console.log('══════════════════════════════════════════════════════════════');
