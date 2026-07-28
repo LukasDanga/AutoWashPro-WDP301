@@ -1178,7 +1178,7 @@ export default function BookingsHistory({ apiBase, token }) {
                   </div>
                   <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                   {(b.status === 'completed' || b.status === 'cancelled') && (
-                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8 }}>
                       <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                         disabled={rebookLoading}
                         style={{
@@ -1188,6 +1188,28 @@ export default function BookingsHistory({ apiBase, token }) {
                       }}>
                         {rebookLoading ? '...' : '🔄 Đặt lại'}
                       </button>
+                      
+                      {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
+                        const existing = findRefundRequest(b._id);
+                        if (existing?.status === 'pending') {
+                          return (
+                            <div style={{
+                              padding: '6px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a',
+                              fontSize: 12, fontWeight: 600, color: '#b45309', display: 'flex', alignItems: 'center'
+                            }}>
+                              ⏳ Đang chờ hoàn tiền
+                            </div>
+                          );
+                        }
+                        return (
+                          <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }} style={{
+                            padding: '6px 14px', borderRadius: 8, border: '1px solid #fecaca',
+                            background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          }}>
+                            💸 Yêu cầu hoàn tiền
+                          </button>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

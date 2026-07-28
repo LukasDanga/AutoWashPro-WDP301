@@ -7,7 +7,7 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo'];
+const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo', 'wallet'];
 
 /**
  * Khi thanh toán TOÀN BỘ (full) cho 1 booking thuộc nhóm ĐỊNH KỲ, tiền đã bao gồm
@@ -180,11 +180,28 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     }
   }
 
-  // Cash: auto-confirm ngay lập tức
-  if (method === 'cash') {
+  // Cash or Wallet: auto-confirm ngay lập tức
+  if (method === 'cash' || method === 'wallet') {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
+      if (method === 'wallet') {
+        const user = await mongoose.model('User').findById(targetUserId).session(session);
+        if (!user || user.walletBalance < amount) {
+          throw Object.assign(new Error('Số dư ví không đủ để thanh toán'), { statusCode: 400, code: 'INSUFFICIENT_BALANCE' });
+        }
+        user.walletBalance -= amount;
+        await user.save({ session });
+        
+        await mongoose.model('WalletTransaction').create([{
+          userId: targetUserId,
+          amount,
+          type: 'debit',
+          reason: `Thanh toán ${isDeposit ? 'tiền cọc' : 'đơn'} cho lịch hẹn`,
+          bookingId: booking._id
+        }], { session });
+      }
+
       payment.status = 'paid';
       payment.paidAt = new Date();
       await payment.save({ session });
@@ -218,7 +235,8 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     }
 
     const label = isDeposit ? 'tiền cọc' : 'phần còn lại';
-    notificationService.send(booking.userId, 'Thanh toán thành công', `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng tiền mặt.`, 'payment_confirmed', { bookingId, paymentId: payment._id }).catch(() => {});
+    const methodLabel = method === 'wallet' ? 'Ví AutoWash' : 'tiền mặt';
+    notificationService.send(booking.userId, 'Thanh toán thành công', `Đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ bằng ${methodLabel}.`, 'payment_confirmed', { bookingId, paymentId: payment._id }).catch(() => {});
     notificationService.sendToAdminAndManager(booking.branchId, isDeposit ? 'Khách đã đặt cọc' : 'Thanh toán hoàn tất', `Khách hàng đã thanh toán ${label} ${amount.toLocaleString('vi-VN')}đ cho lịch hẹn.`, 'payment_confirmed', { bookingId, branchId: booking.branchId }).catch(() => {});
     sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: booking._id });
     return payment;
@@ -324,6 +342,30 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       return payment;
     }
 
+    if (!payment.bookingId && !payment.slotPackId) {
+      payment.status = 'paid';
+      payment.paidAt = new Date();
+      payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+      await payment.save({ session });
+
+      if (payment.paymentType === 'topup') {
+        const user = await mongoose.model('User').findById(payment.userId).session(session);
+        if (user) {
+          user.walletBalance = (user.walletBalance || 0) + payment.amount;
+          await user.save({ session });
+          await mongoose.model('WalletTransaction').create([{
+            userId: payment.userId,
+            amount: payment.amount,
+            type: 'credit',
+            reason: 'Nạp tiền vào ví'
+          }], { session });
+          sseService.sendToUser(payment.userId, 'wallet_topup_success', { amount: payment.amount });
+        }
+      }
+      await session.commitTransaction();
+      return payment;
+    }
+
     const booking = await Booking.findById(payment.bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
@@ -422,6 +464,21 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         payment.paidAt = new Date();
         payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
         await payment.save({ session });
+
+        if (payment.paymentType === 'topup') {
+          const user = await mongoose.model('User').findById(payment.userId).session(session);
+          if (user) {
+            user.walletBalance = (user.walletBalance || 0) + payment.amount;
+            await user.save({ session });
+            await mongoose.model('WalletTransaction').create([{
+              userId: payment.userId,
+              amount: payment.amount,
+              type: 'credit',
+              reason: 'Nạp tiền vào ví'
+            }], { session });
+            sseService.sendToUser(payment.userId, 'wallet_topup_success', { amount: payment.amount });
+          }
+        }
       } else {
         payment.status = 'failed';
         await payment.save({ session });
@@ -798,6 +855,21 @@ exports.refundPayment = async (bookingId) => {
 
     if (booking.voucherCode) {
       await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, bookingId, session);
+    }
+
+    // Tự động hoàn tiền vào Ví AutoWash của khách hàng
+    const user = await mongoose.model('User').findById(payment.userId).session(session);
+    if (user) {
+      user.walletBalance = (user.walletBalance || 0) + payment.amount;
+      await user.save({ session });
+      
+      await mongoose.model('WalletTransaction').create([{
+        userId: user._id,
+        amount: payment.amount,
+        type: 'credit',
+        reason: `Hoàn tiền cho đơn đặt lịch #${bookingId}`,
+        bookingId: booking._id
+      }], { session });
     }
 
     await session.commitTransaction();

@@ -275,7 +275,7 @@ exports.simulatePayment = catchAsync(async (req, res) => {
 });
 
 exports.createVnpayProvisional = catchAsync(async (req, res) => {
-  const { amount } = req.body;
+  const { amount, paymentType } = req.body;
   if (!amount || amount <= 0) {
     return res.status(400).json({ success: false, message: 'Invalid amount' });
   }
@@ -289,7 +289,7 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
     userId: req.userId,
     amount,
     method: 'vnpay',
-    paymentType: 'full',
+    paymentType: paymentType || 'full',
     status: 'pending',
     transactionId,
   });
