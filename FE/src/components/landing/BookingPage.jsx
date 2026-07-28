@@ -3,7 +3,7 @@ import Navbar from './Navbar';
 import BookingWidget from './BookingWidget';
 import Footer from './Footer';
 
-export default function BookingPage({ onOpenAuth, user, vehicles, apiBase, token, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
+export default function BookingPage({ onOpenAuth, user, vehicles, apiBase, token, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate }) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const initialBranchId = searchParams.get('branchId') || undefined;
@@ -13,7 +13,7 @@ export default function BookingPage({ onOpenAuth, user, vehicles, apiBase, token
   return (
     <div className="bg-white min-h-screen">
       <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
-      <BookingWidget onOpenAuth={onOpenAuth} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onGoToHistory={onGoToHistory} pendingBooking={pendingBooking} onSetPendingBooking={onSetPendingBooking} onVehicleCreated={onVehicleCreated} initialBranchId={initialBranchId} initialTab={initialTab} rebookData={rebookData} />
+      <BookingWidget onOpenAuth={onOpenAuth} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onGoToHistory={onGoToHistory} pendingBooking={pendingBooking} onSetPendingBooking={onSetPendingBooking} onVehicleCreated={onVehicleCreated} onUserUpdate={onUserUpdate} initialBranchId={initialBranchId} initialTab={initialTab} rebookData={rebookData} />
       <Footer />
     </div>
   );
