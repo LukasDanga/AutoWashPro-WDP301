@@ -271,7 +271,7 @@ export default function App() {
   if (path === '/history' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
-        <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} />
+        <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} user={user} onUserUpdate={handleUserUpdate} />
       </CustomerLayout>
     );
   }

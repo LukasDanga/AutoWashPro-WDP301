@@ -172,15 +172,6 @@ function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
               Hủy gói
             </button>
           )}
-          {canQuickBook && onQuickBook && (
-            <button
-              type="button"
-              onClick={() => onQuickBook(pack)}
-              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 active:scale-[0.98]"
-            >
-              ⚡ Đặt lịch nhanh
-            </button>
-          )}
         </div>
       </div>
 
@@ -271,7 +262,7 @@ function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
   );
 }
 
-export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [] }) {
+export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [], user, onUserUpdate }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
@@ -486,10 +477,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
   const findRefundRequest = (bId) => refunds.find(r => r.bookingId === bId || r.bookingId?._id === bId);
   const isRefundExpired = (b) => {
-    if (b.status !== 'completed') return false;
-    const date = b.updatedAt || b.bookingDate;
-    if (!date) return false;
-    return (Date.now() - new Date(date).getTime()) > 48 * 60 * 60 * 1000;
+    if (b.status !== 'completed') return true;
+    const ts = b.updatedAt;
+    if (!ts) return true;
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return true;
+    return (Date.now() - d.getTime()) > 24 * 60 * 60 * 1000;
   };
   const openRefundRequest = (b) => { setRefundTarget(b); setRefundReason(''); setShowRefundModal(true); };
   const submitRefundRequest = async () => {
@@ -667,8 +660,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ cancellationReason: cancelReason.trim() }),
       });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Hủy thất bại'); }
-      showToastMsg('Đã hủy đơn thành công');
+      const cancelPayload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(cancelPayload.message || 'Hủy thất bại');
+      const refundAmount = cancelPayload?.data?.refundAmount || 0;
+      if (refundAmount > 0 && onUserUpdate) {
+        onUserUpdate({ walletBalance: (user?.walletBalance || 0) + refundAmount });
+      }
+      showToastMsg(refundAmount > 0 ? `Đã hủy đơn thành công, hoàn ${refundAmount.toLocaleString('vi-VN')}đ vào ví` : 'Đã hủy đơn thành công');
       setShowCancelConfirm(false); setCancelTarget(null); setCancelReason('');
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
       if (showRecurringGroupModal) loadRecurringGroup();
@@ -1636,27 +1634,21 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                                 className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-500 border-none bg-transparent cursor-pointer">
                                 Thêm dịch vụ
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); openQuickBookFromBooking(b); }}
-                                className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 border-none bg-transparent cursor-pointer">
-                                Đặt lịch nhanh
-                              </button>
                             </div>
                           )}
-                          {(b.status === 'completed' || b.status === 'cancelled') && (
+                          {b.status === 'completed' && (
                             <div className="flex gap-2 mt-2 pt-2 border-t border-slate-100">
                               <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                                 disabled={rebookLoading}
                                 className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 border-none bg-transparent cursor-pointer disabled:opacity-50">
                                 🔄 Đặt lại
                               </button>
-                              {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
+                              {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
                                 const existing = findRefundRequest(b._id || b.id);
                                 if (existing?.status === 'pending') return <span className="text-[11px] font-semibold text-amber-600">⏳ Chờ hoàn tiền</span>;
                                 return (
                                   <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }}
-                                    disabled={isRefundExpired(b)}
-                                    title={isRefundExpired(b) ? 'Đã quá 48h kể từ khi hoàn thành đơn' : ''}
-                                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-500 border-none bg-transparent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-500 border-none bg-transparent cursor-pointer">
                                     💸 Hoàn tiền
                                   </button>
                                 );
@@ -2017,20 +2009,14 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                                 </button>
                               </>
                             )}
-                            {(b.status === 'pending' || b.status === 'confirmed') && (
-                              <button onClick={(e) => { e.stopPropagation(); openQuickBookFromBooking(b); }}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors">
-                                ⚡ Đặt lịch nhanh
-                              </button>
-                            )}
-                            {(b.status === 'completed' || b.status === 'cancelled') && (
+                            {b.status === 'completed' && (
                               <>
                                 <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                                   disabled={rebookLoading}
                                   className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
                                   🔄 Đặt lại
                                 </button>
-                                {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
+                                {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
                                   const existing = findRefundRequest(b._id || b.id);
                                   if (existing?.status === 'pending') {
                                     return (
@@ -2041,9 +2027,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                                   }
                                   return (
                                     <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }}
-                                      disabled={isRefundExpired(b)}
-                                      title={isRefundExpired(b) ? 'Đã quá 48h kể từ khi hoàn thành đơn' : ''}
-                                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors">
                                       💸 Yêu cầu hoàn tiền
                                     </button>
                                   );
@@ -2419,10 +2403,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 text-center">
                     Hủy đơn
                   </button>
-                  <button onClick={() => { setDetailBooking(null); openQuickBookFromBooking(detailBooking); }}
-                    className="flex-1 px-4 py-2.5 rounded-lg border border-emerald-200 bg-white text-emerald-600 text-sm font-semibold hover:bg-emerald-50 transition-colors text-center">
-                    ⚡ Đặt lịch nhanh
-                  </button>
                   <button onClick={() => { setDetailBooking(null); handleShowQR(detailBooking); }}
                     className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center">
                     Mã QR
@@ -2441,13 +2421,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   </button>
                 </>
               )}
-              {(detailBooking.status === 'completed' || detailBooking.status === 'cancelled') && (
+              {detailBooking.status === 'completed' && (
                 <>
                   <button onClick={() => { setDetailBooking(null); handleRebook(detailBooking); }} disabled={rebookLoading}
                     className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-black text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 text-center">
                     Đặt lại
                   </button>
-                  {detailBooking.status === 'completed' && ['paid', 'deposit_paid'].includes(detailBooking.paymentStatus) && (() => {
+                  {detailBooking.status === 'completed' && ['paid', 'deposit_paid'].includes(detailBooking.paymentStatus) && !isRefundExpired(detailBooking) && (() => {
                     const existing = findRefundRequest(detailBooking._id || detailBooking.id);
                     if (existing?.status === 'pending') {
                       return (
@@ -2458,9 +2438,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     }
                     return (
                       <button onClick={() => { setDetailBooking(null); openRefundRequest(detailBooking); }}
-                        disabled={isRefundExpired(detailBooking)}
-                        title={isRefundExpired(detailBooking) ? 'Đã quá 48h kể từ khi hoàn thành đơn' : ''}
-                        className="flex-1 px-4 py-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        className="flex-1 px-4 py-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition-colors text-center">
                         Yêu cầu hoàn tiền
                       </button>
                     );
@@ -2688,7 +2666,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               </button>
                             </>
                           )}
-                          {(b.status === 'completed' || b.status === 'cancelled') && (
+                          {b.status === 'completed' && (
                             <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                               className="px-2.5 py-1 rounded text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors">
                               Đặt lại

@@ -12,10 +12,10 @@ exports.createRequest = async (bookingId, userId, userRole, reason) => {
     throw Object.assign(new Error('Chỉ có thể yêu cầu hoàn tiền cho đơn đã thanh toán'), { statusCode: 400, code: 'NOT_PAID' });
   }
 
-  if (booking.status === 'completed' && booking.updatedAt) {
+    if (booking.status === 'completed' && booking.updatedAt) {
     const hoursSinceCompletion = (Date.now() - new Date(booking.updatedAt).getTime()) / (1000 * 60 * 60);
-    if (hoursSinceCompletion > 48) {
-      throw Object.assign(new Error('Chỉ có thể yêu cầu hoàn tiền trong vòng 48 giờ kể từ khi hoàn thành đơn'), { statusCode: 400, code: 'TIME_EXPIRED' });
+    if (hoursSinceCompletion > 24) {
+      throw Object.assign(new Error('Chỉ có thể yêu cầu hoàn tiền trong vòng 24 giờ kể từ khi hoàn thành đơn'), { statusCode: 400, code: 'TIME_EXPIRED' });
     }
   }
 
