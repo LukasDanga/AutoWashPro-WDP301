@@ -295,8 +295,9 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
   });
   await payment.save();
 
+  const client = req.body.client || 'web';
   const baseReturnUrl = process.env.VNP_RETURN_URL;
-  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=mobile` : undefined;
+  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=${client}` : undefined;
 
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount,
@@ -334,9 +335,10 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
 
   // Tạo payment record trước
   const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, 'vnpay', paymentType || 'deposit', amount);
+  const client = req.body.client || 'web';
   const baseReturnUrl = process.env.VNP_RETURN_URL;
   const targetReturnUrl = baseReturnUrl 
-    ? `${baseReturnUrl}?client=mobile&bookingId=${encodeURIComponent(bookingId)}`
+    ? `${baseReturnUrl}?client=${client}&bookingId=${encodeURIComponent(bookingId)}`
     : (returnUrl || undefined);
 
   const vnpayUrl = vnpayService.createPaymentUrl({
