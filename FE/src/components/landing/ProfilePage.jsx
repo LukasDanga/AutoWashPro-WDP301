@@ -16,7 +16,21 @@ const FALLBACK_TIER_MAP = {
 
 export default function ProfilePage({ user, vehicles: initialVehicles, onLogout, apiBase, token, onBack, onUserUpdate }) {
   const isLoggedIn = !!user && !!token;
-  const [activeTab, setActiveTab] = useState('info');
+
+  const getTabFromUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    return ['info', 'benefits', 'vehicles', 'wallet'].includes(tab) ? tab : 'info';
+  };
+
+  const [activeTab, setActiveTab] = useState(getTabFromUrl);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState({}, '', url);
+  };
   const [vehicles, setVehicles] = useState(initialVehicles || []);
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [form, setForm] = useState({ licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '' });
@@ -332,7 +346,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
 
             <div className="flex gap-1 bg-slate-100 rounded-xl p-1 flex-wrap mb-8">
               {['info', 'benefits', 'vehicles', 'wallet'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)}
+                <button key={tab} onClick={() => handleTabChange(tab)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}>

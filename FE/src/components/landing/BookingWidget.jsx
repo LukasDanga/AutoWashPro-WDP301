@@ -64,18 +64,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
-  const [tab, setTab] = useState(initialTab || 'regular');
-  const [step, setStep] = useState(1);
-  const [spCanAdvance, setSpCanAdvance] = useState(false);
+  const getUrlParam = (key, fallback) => {
+    try { const p = new URLSearchParams(window.location.search); return p.get(key) || fallback; } catch { return fallback; }
+  };
+  const syncUrlParam = (key, value) => {
+    try { const url = new URL(window.location); if (value) url.searchParams.set(key, value); else url.searchParams.delete(key); window.history.replaceState({}, '', url); } catch {}
+  };
 
-  // Data from API
-  const [branches, setBranches] = useState([]);
-  const [packages, setPackages] = useState([]);
-  const [mySlotPacks, setMySlotPacks] = useState([]);
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [todaySlots, setTodaySlots] = useState([]);
-  const [todaySlotsLoading, setTodaySlotsLoading] = useState(false);
+  const [tab, setTab] = useState(getUrlParam('tab', initialTab || 'regular'));
+  const [step, setStep] = useState(Number(getUrlParam('step', 1)));
+  const [spCanAdvance, setSpCanAdvance] = useState(false);
 
   // Selections
   const [selectedBranch, setSelectedBranch] = useState(null);
@@ -92,6 +90,46 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   // Guest vehicle form
   const [guestVehicle, setGuestVehicle] = useState({ licensePlate: '', brand: '', model: '', type: 'sedan' });
   const [vehicleError, setVehicleError] = useState('');
+
+  useEffect(() => { syncUrlParam('step', step > 1 ? String(step) : ''); }, [step]);
+  useEffect(() => { syncUrlParam('tab', tab !== 'regular' ? tab : ''); }, [tab]);
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('aw_booking_state');
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.selectedBranch) setSelectedBranch(s.selectedBranch);
+        if (s.selectedVehicle) setSelectedVehicle(s.selectedVehicle);
+        if (s.selectedPackage) setSelectedPackage(s.selectedPackage);
+        if (s.selectedSubServices && Object.keys(s.selectedSubServices).length) setSelectedSubServices(s.selectedSubServices);
+        if (s.selectedDate) setSelectedDate(s.selectedDate);
+        if (s.selectedTime) setSelectedTime(s.selectedTime);
+        if (s.selectedDays && s.selectedDays.length) setSelectedDays(s.selectedDays);
+        if (s.weeks) setWeeks(s.weeks);
+        if (s.appliedVoucher) setAppliedVoucher(s.appliedVoucher);
+        if (s.selectedSlotPack) setSelectedSlotPack(s.selectedSlotPack);
+        if (s.guestVehicle?.licensePlate) setGuestVehicle(s.guestVehicle);
+      }
+    } catch {}
+  }, []);
+
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    if (!isMountedRef.current) { isMountedRef.current = true; return; }
+    if (step < 2) return;
+    const toSave = { selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle };
+    try { sessionStorage.setItem('aw_booking_state', JSON.stringify(toSave)); } catch {}
+  }, [step, selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle]);
+
+  // Data from API
+  const [branches, setBranches] = useState([]);
+  const [packages, setPackages] = useState([]);
+  const [mySlotPacks, setMySlotPacks] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [todaySlots, setTodaySlots] = useState([]);
+  const [todaySlotsLoading, setTodaySlotsLoading] = useState(false);
 
   // Booking state
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -136,20 +174,22 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const data = payload?.data || payload || [];
         const branchList = Array.isArray(data) ? data : [];
         setBranches(branchList);
-
-        if (branchList.length > 0) {
-          const targetBranchId = rebookData?.branchId?._id || rebookData?.branchId?.id || rebookData?.branchId;
-          const targetBranchName = rebookData?.branchId?.name || rebookData?.branchName || rebookData?.branch;
-          const found = branchList.find(b => 
-            (targetBranchId && String(b._id || b.id) === String(targetBranchId)) ||
-            (targetBranchName && String(b.name || '').trim().toLowerCase() === String(targetBranchName).trim().toLowerCase())
-          );
-          setSelectedBranch(found || branchList[0]);
-        }
       } catch (e) { console.error('Failed to load branches', e); }
     }
     loadBranches();
   }, []);
+
+  // Auto-select first branch after branches load (only if nothing restored)
+  useEffect(() => {
+    if (branches.length === 0 || selectedBranch) return;
+    const targetBranchId = rebookData?.branchId?._id || rebookData?.branchId?.id || rebookData?.branchId;
+    const targetBranchName = rebookData?.branchId?.name || rebookData?.branchName || rebookData?.branch;
+    const found = branches.find(b => 
+      (targetBranchId && String(b._id || b.id) === String(targetBranchId)) ||
+      (targetBranchName && String(b.name || '').trim().toLowerCase() === String(targetBranchName).trim().toLowerCase())
+    );
+    setSelectedBranch(found || branches[0]);
+  }, [branches, selectedBranch]);
 
   // Load packages when branch changes
   useEffect(() => {
@@ -1190,6 +1230,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   };
 
   const reset = () => {
+    sessionStorage.removeItem('aw_booking_state');
     setStep(initialBranchId ? 2 : 1);
     setSelectedVehicle('');
     setSelectedPackage(null);
