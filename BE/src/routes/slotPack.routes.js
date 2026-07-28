@@ -146,7 +146,7 @@ router.post('/:id/cancel', authenticate, [
  */
 router.post('/:id/pay', authenticate, authorize(ROLES.CUSTOMER, ROLES.ADMIN, ROLES.MANAGER), [
   param('id').isMongoId().withMessage('Invalid slot pack ID'),
-  body('method').isIn(['bank', 'vnpay']).withMessage('Method must be bank or vnpay'),
+  body('method').isIn(['bank', 'vnpay', 'wallet']).withMessage('Method must be bank, vnpay or wallet'),
 ], validate, slotPackController.paySlotPack);
 
 /**

@@ -137,6 +137,7 @@ export default function App() {
     const params = new URLSearchParams(location.search);
     const vnpayResult = params.get('vnpay_result');
     if (!vnpayResult) return;
+    if (location.pathname.startsWith('/profile')) return;
     const rebookDraft = sessionStorage.getItem('aw_rebookVnpayDraft');
     if (rebookDraft) {
       // Already on /history — no redirect needed (Handled by HistoryPage)
@@ -304,7 +305,7 @@ export default function App() {
   }
 
   if (path === '/booking') {
-    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} onUserUpdate={handleUserUpdate} />;
   }
 
   if (path === '/packages') {

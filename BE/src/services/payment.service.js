@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 const QRCode = require('qrcode');
 const { Payment, Booking } = require('../models');
 const notificationService = require('./notification.service');
@@ -85,25 +85,25 @@ const pollSepayTransaction = async (transactionId, amount) => {
 
 exports.createPayment = async (bookingId, requesterId, userRole, method, paymentType = 'full', overrideAmount) => {
   if (!VALID_METHODS.includes(method)) {
-    throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
+    throw Object.assign(new Error('Phương thức thanh toán không hợp lệ'), { statusCode: 400, code: 'INVALID_METHOD' });
   }
   if (!['deposit', 'remaining', 'full'].includes(paymentType)) {
-    throw Object.assign(new Error('Invalid payment type'), { statusCode: 400, code: 'INVALID_PAYMENT_TYPE' });
+    throw Object.assign(new Error('Loại thanh toán không hợp lệ'), { statusCode: 400, code: 'INVALID_PAYMENT_TYPE' });
   }
 
   const booking = await Booking.findById(bookingId).populate('packageId');
-  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   if (userRole === 'customer' && String(booking.userId) !== String(requesterId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   if (booking.status === 'cancelled') {
-    throw Object.assign(new Error('Booking is cancelled'), { statusCode: 400, code: 'BOOKING_CANCELLED' });
+    throw Object.assign(new Error('Lịch hẹn đã bị hủy'), { statusCode: 400, code: 'BOOKING_CANCELLED' });
   }
   if (!booking.packageId) {
-    throw Object.assign(new Error('Package not found'), { statusCode: 400, code: 'PACKAGE_NOT_FOUND' });
+    throw Object.assign(new Error('Gói dịch vụ không tồn tại'), { statusCode: 400, code: 'PACKAGE_NOT_FOUND' });
   }
   if (booking.paymentStatus === 'paid') {
-    throw Object.assign(new Error('Booking already paid'), { statusCode: 409, code: 'ALREADY_PAID' });
+    throw Object.assign(new Error('Lịch hẹn đã được thanh toán'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
   // Với booking ĐỊNH KỲ (recurring): tiền cọc được gộp toàn nhóm vào buổi đầu
@@ -144,7 +144,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     ? ['pending', 'confirmed']
     : ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
   if (!allowedStatuses.includes(booking.status)) {
-    throw Object.assign(new Error(`Cannot create payment for booking with status '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
+    throw Object.assign(new Error(`Không thể tạo thanh toán cho lịch hẹn ở trạng thái '${booking.status}'`), { statusCode: 400, code: 'INVALID_BOOKING_STATUS' });
   }
 
   const targetUserId = booking.userId;
@@ -253,7 +253,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
 exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
   const slotPack = await mongoose.model('SlotPack').findById(slotPackId);
-  if (!slotPack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'NOT_FOUND' });
+  if (!slotPack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'NOT_FOUND' });
 
   const existingPending = await Payment.findOne({ slotPackId, status: 'pending' });
   if (existingPending) return existingPending;
@@ -311,7 +311,7 @@ exports.getPaymentBySlotPack = async (slotPackId) => {
     .populate('slotPackId', 'packCode finalPrice paymentStatus')
     .populate('userId', 'name email');
 
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
 
   // Auto-poll SePay
   if (payment.status !== 'paid' && payment.method === 'bank') {
@@ -335,7 +335,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     const payment = await Payment.findOne({ transactionId }).session(session);
     if (!payment) {
       await session.abortTransaction();
-      throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+      throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     }
     if (payment.status === 'paid') {
       await session.commitTransaction();
@@ -369,15 +369,15 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     const booking = await Booking.findById(payment.bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
-      throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+      throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
     }
     if (!VALID_METHODS.includes(method)) {
       await session.abortTransaction();
-      throw Object.assign(new Error('Invalid payment method'), { statusCode: 400, code: 'INVALID_METHOD' });
+      throw Object.assign(new Error('Phương thức thanh toán không hợp lệ'), { statusCode: 400, code: 'INVALID_METHOD' });
     }
     if (booking.status === 'cancelled') {
       await session.abortTransaction();
-      throw Object.assign(new Error('Cannot confirm payment for a cancelled booking'), { statusCode: 400, code: 'BOOKING_CANCELLED' });
+      throw Object.assign(new Error('Không thể xác nhận thanh toán cho lịch hẹn đã hủy'), { statusCode: 400, code: 'BOOKING_CANCELLED' });
     }
 
     payment.status = 'paid';
@@ -426,7 +426,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     const payment = await Payment.findOne({ transactionId }).session(session);
     if (!payment) {
       await session.abortTransaction();
-      throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+      throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     }
 
     if (payment.slotPackId) {
@@ -434,7 +434,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       const slotPack = await mongoose.model('SlotPack').findById(payment.slotPackId).session(session);
       if (!slotPack) {
         await session.abortTransaction();
-        throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'NOT_FOUND' });
+        throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'NOT_FOUND' });
       }
 
       if (success) {
@@ -442,6 +442,21 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         payment.paidAt = new Date();
         payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
         await payment.save({ session });
+
+        if (payment.method === 'wallet') {
+          const user = await mongoose.model('User').findById(payment.userId).session(session);
+          if (!user || user.walletBalance < payment.amount) {
+            throw Object.assign(new Error('Số dư ví không đủ để thanh toán'), { statusCode: 400, code: 'INSUFFICIENT_BALANCE' });
+          }
+          user.walletBalance -= payment.amount;
+          await user.save({ session });
+          await mongoose.model('WalletTransaction').create([{
+            userId: payment.userId,
+            amount: payment.amount,
+            type: 'debit',
+            reason: 'Thanh toán gói lượt rửa xe',
+          }], { session });
+        }
 
         await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
       } else {
@@ -490,7 +505,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     const booking = await Booking.findById(payment.bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
-      throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+      throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
     }
 
     if (success) {
@@ -539,9 +554,9 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   let payment = await Payment.findOne({ bookingId })
     .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
     .populate('userId', 'name email phone');
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
 
   // Tự động kiểm tra trên SePay nếu chưa thanh toán (để hỗ trợ local testing giống Flutter polling)
@@ -564,7 +579,7 @@ exports.getPaymentById = async (id) => {
     .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
     .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
     .populate('userId', 'name email phone tier');
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
 
   // Auto-poll SePay if pending & bank method
   if (payment.status !== 'paid' && payment.method === 'bank') {
@@ -583,10 +598,10 @@ exports.getPaymentById = async (id) => {
 
 exports.markPaymentViewed = async (id, userRole) => {
   if (userRole === 'customer') {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   const payment = await Payment.findByIdAndUpdate(id, { viewedAt: new Date() }, { new: true });
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   return payment;
 };
 
@@ -843,12 +858,12 @@ exports.refundPayment = async (bookingId) => {
     );
     if (!payment) {
       await session.abortTransaction();
-      throw Object.assign(new Error('Only paid payments can be refunded'), { statusCode: 400, code: 'INVALID_REFUND' });
+      throw Object.assign(new Error('Chỉ có thể hoàn tiền cho thanh toán đã được thanh toán'), { statusCode: 400, code: 'INVALID_REFUND' });
     }
 
     if (booking.status === 'in_progress') {
       await session.abortTransaction();
-      throw Object.assign(new Error('Cannot refund a booking in progress'), { statusCode: 400, code: 'BOOKING_IN_PROGRESS' });
+      throw Object.assign(new Error('Không thể hoàn tiền cho lịch hẹn đang thực hiện'), { statusCode: 400, code: 'BOOKING_IN_PROGRESS' });
     }
 
     await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled', paymentStatus: 'refunded' }).session(session);
@@ -920,3 +935,4 @@ exports.deleteAllPayments = async () => {
   const result = await Payment.deleteMany({});
   return { deletedCount: result.deletedCount };
 };
+
