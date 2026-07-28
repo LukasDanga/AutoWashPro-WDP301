@@ -285,7 +285,7 @@ exports.createUser = async ({ name, email, password, phone, role }) => {
 };
 
 exports.getAllUsers = async (filters = {}) => {
-  const query = {};
+  const query = { isDeleted: { $ne: true } };
   if (filters.role) query.role = filters.role;
   if (filters.status) query.status = filters.status;
 
@@ -316,7 +316,7 @@ exports.getAllUsers = async (filters = {}) => {
 };
 
 exports.getUserById = async (id) => {
-  const user = await User.findById(id);
+  const user = await User.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
   return user;
 };
@@ -328,7 +328,34 @@ exports.updateUser = async (id, updates) => {
 };
 
 exports.deleteUser = async (id) => {
-  const user = await User.findByIdAndDelete(id);
+  const user = await User.findOne({ _id: id, role: { $ne: 'admin' } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
+
+  const Booking = require('../models/booking.schema');
+  const SlotPack = require('../models/slotPack.schema');
+
+  const [activeBookings, activeSlotPacks, recurringBookings, pointsBalance] = await Promise.all([
+    Booking.countDocuments({ userId: id, status: { $in: ['pending', 'confirmed', 'checked_in', 'in_progress'] } }),
+    SlotPack.countDocuments({ userId: id, status: 'active' }),
+    Booking.countDocuments({ userId: id, recurringGroupId: { $ne: null }, status: { $ne: 'cancelled' } }),
+    user.loyaltyPoints || 0,
+  ]);
+
+  if (activeBookings > 0 || activeSlotPacks > 0 || recurringBookings > 0 || pointsBalance > 0) {
+    const reasons = [];
+    if (activeBookings > 0) reasons.push(`${activeBookings} lịch đặt chưa hoàn thành`);
+    if (activeSlotPacks > 0) reasons.push(`${activeSlotPacks} gói lượt còn hiệu lực`);
+    if (recurringBookings > 0) reasons.push(`${recurringBookings} lịch định kỳ đang hoạt động`);
+    if (pointsBalance > 0) reasons.push(`${pointsBalance} điểm tích lũy chưa sử dụng`);
+
+    const err = new Error(
+      `Không thể xóa người dùng "${user.name}" vì đang có dữ liệu liên kết đang hoạt động (${reasons.join(', ')}). Bạn vui lòng vô hiệu hóa tài khoản (chuyển sang "Ngừng hoạt động") để ngưng sử dụng hệ thống mà vẫn bảo toàn dữ liệu.`
+    );
+    err.statusCode = 400;
+    err.code = 'USER_IN_USE';
+    throw err;
+  }
+
+  await User.findByIdAndUpdate(id, { isDeleted: true, status: 'inactive', deletedAt: new Date() });
   return user;
 };

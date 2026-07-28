@@ -26,6 +26,8 @@ const userSchema = new mongoose.Schema(
     spinCount: { type: Number, default: 0, min: 0 },
     // Số dư ví nội bộ (cho phép thanh toán hoặc nhận hoàn tiền)
     walletBalance: { type: Number, default: 0, min: 0 },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { showToast } from '@/lib/toast';
 import {
   ArrowClockwise,
@@ -509,6 +509,80 @@ function DetailView({ user }) {
   );
 }
 
+/* ─────────────────────────── Parse blocked message ──────────────── */
+function parseBlockedMessage(msg = '') {
+  const match = msg.match(/^(.*?)\((.*?)\)\.(.*)$/s);
+  if (match) {
+    const header = match[1].trim();
+    const itemsRaw = match[2].trim().split(/,\s*/);
+    const footer = match[3].trim();
+
+    const items = itemsRaw.map((item) => {
+      let icon = '📌';
+      if (item.includes('lịch đặt chưa hoàn thành')) icon = '📅';
+      else if (item.includes('gói lượt')) icon = '🎫';
+      else if (item.includes('lịch định kỳ')) icon = '🔄';
+      else if (item.includes('điểm tích lũy')) icon = '⭐';
+      return { icon, text: item };
+    });
+
+    return { header, items, footer };
+  }
+  return { header: msg, items: [], footer: '' };
+}
+
+/* ─────────────────────────── Block Delete Modal ─────────────────── */
+function BlockDeleteModal({ title, message, onClose }) {
+  const { header, items, footer } = useMemo(() => parseBlockedMessage(message), [message]);
+
+  return (
+    <Modal title={title || 'Không thể xóa'} onClose={onClose}>
+      <div className="space-y-4 py-1">
+        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200/70">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 mt-0.5 font-bold shadow-xs">
+            <Warning size={20} weight="fill" />
+          </div>
+          <div className="space-y-1 min-w-0 flex-1">
+            <h4 className="text-sm font-bold text-amber-900">Bảo vệ liên kết dữ liệu hệ thống</h4>
+            <p className="text-xs text-amber-800 leading-relaxed font-medium">{header}</p>
+          </div>
+        </div>
+
+        {items.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+              Các dữ liệu đang liên kết hoạt động:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {items.map((it, idx) => (
+                <div key={idx}
+                  className="flex items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 shadow-2xs hover:bg-amber-50 transition-colors">
+                  <span className="text-base shrink-0">{it.icon}</span>
+                  <span className="text-xs font-semibold text-slate-800 leading-tight">{it.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {footer && (
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+            <span className="text-amber-500 shrink-0 mt-0.5">💡</span>
+            <p className="leading-relaxed">{footer}</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─────────────────────────── Confirm delete ─────────────────────── */
 function ConfirmDelete({ user, onConfirm, onCancel, deleting }) {
   return (
@@ -521,11 +595,10 @@ function ConfirmDelete({ user, onConfirm, onCancel, deleting }) {
             className="mt-0.5 shrink-0 text-red-500"
           />
           <div className="text-sm text-red-700">
-            <p className="font-bold">Hành động này cực kỳ nguy hiểm!</p>
+            <p className="font-bold">Bạn chắc chắn muốn xóa tài khoản "{user.name}"?</p>
             <p className="mt-1">
-              Bạn chắc chắn muốn xóa vĩnh viễn tài khoản của{" "}
-              <strong>"{user.name}"</strong> ({user.email})? Mọi dữ liệu liên
-              quan sẽ bị xóa sạch và không thể khôi phục.
+              Nếu người dùng đang có lịch đặt chưa hoàn thành, gói lượt còn hiệu lực,
+              lịch định kỳ hoặc điểm tích lũy, hệ thống sẽ bảo vệ dữ liệu và không cho phép xóa.
             </p>
           </div>
         </div>
@@ -583,6 +656,7 @@ export default function UserManagement() {
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [blockedMsg, setBlockedMsg] = useState('');
   const [toast, setToast] = useState(null);
 
   const notify = (message, type = "success") => showToast(message, type);
@@ -676,7 +750,16 @@ export default function UserManagement() {
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await userService.deleteUser(selected._id);
+      const res = await apiFetch(`/auth/users/${selected._id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        if (errorData.code === 'USER_IN_USE') {
+          setBlockedMsg(errorData.message || 'Không thể xóa người dùng');
+          setModal('blocked');
+          return;
+        }
+        throw new Error(errorData.message || `Lỗi ${res.status}`);
+      }
       fetchUsers(page);
       setModal(null);
       notify("Đã xóa vĩnh viễn tài khoản người dùng.");
@@ -818,12 +901,18 @@ export default function UserManagement() {
                           className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
                           <PencilSimple size={15} />
                         </button>
-                        <button
-                          onClick={() => { setSelected(u); setModal("delete"); }}
-                          title="Xóa tài khoản"
-                          className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                          <Trash size={15} />
-                        </button>
+                        {u.role !== 'admin' ? (
+                          <button
+                            onClick={() => { setSelected(u); setModal("delete"); }}
+                            title="Xóa tài khoản"
+                            className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                            <Trash size={15} />
+                          </button>
+                        ) : (
+                          <span className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-200 cursor-not-allowed" title="Không thể xóa tài khoản admin">
+                            <Trash size={15} />
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -892,6 +981,14 @@ export default function UserManagement() {
         <Modal title="Thông tin chi tiết người dùng" onClose={() => setModal(null)}>
           <DetailView user={selected} />
         </Modal>
+      )}
+
+      {modal === "blocked" && (
+        <BlockDeleteModal
+          title="Không thể xóa tài khoản"
+          message={blockedMsg}
+          onClose={() => { setModal(null); setBlockedMsg(''); }}
+        />
       )}
 
       {modal === "delete" && selected && (
