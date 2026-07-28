@@ -88,7 +88,7 @@ router.get('/usage-history', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER)
  *     security:
  *       - bearerAuth: []
  */
-router.get('/:id/usage-history', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+router.get('/:id/usage-history', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   param('id').isMongoId().withMessage('Invalid slot pack ID'),
 ], validate, slotPackController.getSlotPackUsageHistory);
 
