@@ -82,6 +82,7 @@ export const createVnpayPayment = async (data: {
   paymentType: PaymentType;
   amount?: number;
   returnUrl?: string;
+  client?: string;
 }): Promise<{ paymentUrl: string; transactionId: string; payment: Payment }> => {
   const response = await apiClient.post('/payments/vnpay-create', data);
   return response.data;
@@ -102,9 +103,11 @@ export const createBankProvisional = async (
 // Create provisional VNPay payment (no booking required)
 export const createVnpayProvisional = async (
   amount: number,
+  client?: string,
 ): Promise<{ paymentUrl: string; transactionId: string; payment: Payment }> => {
   const response = await apiClient.post('/bookings/vnpay-provisional', {
     amount,
+    ...(client ? { client } : {}),
   });
   return response.data;
 };

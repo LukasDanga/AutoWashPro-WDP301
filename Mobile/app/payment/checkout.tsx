@@ -369,7 +369,7 @@ export default function PaymentCheckoutScreen() {
           ? `${apiBase}/payments/vnpay-return?client=mobile`
           : `${apiBase}/payments/vnpay-return?client=mobile&bookingId=${encodeURIComponent(bookingId)}`;
         if (isProvisional) {
-          const result = await paymentApi.createVnpayProvisional(amount);
+          const result = await paymentApi.createVnpayProvisional(amount, 'mobile');
           setPayment(result.payment ?? result);
           setVnpayUrl(result.paymentUrl);
           await WebBrowser.openBrowserAsync(result.paymentUrl);
@@ -379,6 +379,7 @@ export default function PaymentCheckoutScreen() {
             paymentType: payType,
             amount,
             returnUrl,
+            client: 'mobile',
           });
           setPayment(result.payment ?? result);
           setVnpayUrl(result.paymentUrl);
