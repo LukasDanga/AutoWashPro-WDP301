@@ -31,7 +31,7 @@ async function generateUniquePackCode() {
     const exists = await SlotPack.findOne({ packCode: code });
     if (!exists) return code;
   }
-  throw new Error('Cannot generate unique pack code, please try again');
+  throw new Error('Không thể tạo mã gói, vui lòng thử lại');
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -56,28 +56,28 @@ exports.createSlotPack = async (data) => {
     let branch = null;
     if (branchId) {
       branch = await Branch.findById(branchId).session(session);
-      if (!branch) throw Object.assign(new Error('Branch not found'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-      if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
+      if (!branch) throw Object.assign(new Error('Chi nhánh không tồn tại'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+      if (branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh hiện không khả dụng'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
     }
 
     let vehicle = null;
     if (vehicleId) {
       vehicle = await Vehicle.findById(vehicleId).session(session);
-      if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+      if (!vehicle) throw Object.assign(new Error('Xe không tồn tại'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
       if (String(vehicle.userId) !== String(userId)) {
-        throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+        throw Object.assign(new Error('Xe không thuộc về bạn'), { statusCode: 403, code: 'FORBIDDEN' });
       }
     }
 
-    if (!pkg)    throw Object.assign(new Error('Package not found'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-    if (!user)   throw Object.assign(new Error('User not found'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
-    if (pkg.status === 'inactive')    throw Object.assign(new Error('Package unavailable'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+    if (!pkg)    throw Object.assign(new Error('Gói dịch vụ không tồn tại'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+    if (!user)   throw Object.assign(new Error('Người dùng không tồn tại'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
+    if (pkg.status === 'inactive')    throw Object.assign(new Error('Gói dịch vụ hiện không khả dụng'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
     if (pkg.branchId && branchId && String(pkg.branchId) !== String(branchId)) {
-      throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+      throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
     }
 
     if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
-      throw Object.assign(new Error('Total slots must be between 1 and 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
+      throw Object.assign(new Error('Số lượng gói phải từ 1 đến 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
     }
 
     // --- Chiết khấu theo số lượng và hạng VIP ---
@@ -226,16 +226,16 @@ exports.getSlotPackById = async (id, userId, userRole) => {
     .populate('packageId', 'name price duration')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 
-  if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
   if (userRole === 'customer' && String(pack.userId._id || pack.userId) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   return pack;
 };
 
 exports.getSlotPackByCode = async (packCode, userRole, userBranchId) => {
   if (userRole !== 'admin' && userRole !== 'manager') {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   const pack = await SlotPack.findOne({ packCode: packCode.toUpperCase() })
     .populate('userId',    'name email phone tier')
@@ -243,11 +243,11 @@ exports.getSlotPackByCode = async (packCode, userRole, userBranchId) => {
     .populate('packageId', 'name price duration')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 
-  if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
   if (userRole === 'manager') {
     const packBranch = String(pack.branchId?._id || pack.branchId);
     if (!userBranchId || String(userBranchId) !== packBranch) {
-      throw Object.assign(new Error('Slot pack does not belong to your branch'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Gói lượt không thuộc chi nhánh của bạn'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
   return pack;
@@ -273,16 +273,16 @@ exports.useSlot = async (packId, staffId, data = {}) => {
 
     if (!pack) {
       const existing = await SlotPack.findById(packId).session(session);
-      if (!existing) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
-      if (existing.status !== 'active') throw Object.assign(new Error(`Slot pack is ${existing.status}`), { statusCode: 400, code: 'SLOT_PACK_INACTIVE' });
-      throw Object.assign(new Error('No slots remaining'), { statusCode: 400, code: 'NO_SLOTS_REMAINING' });
+      if (!existing) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+      if (existing.status !== 'active') throw Object.assign(new Error(`Gói lượt đang ở trạng thái ${existing.status}`), { statusCode: 400, code: 'SLOT_PACK_INACTIVE' });
+      throw Object.assign(new Error('Gói lượt đã hết lượt'), { statusCode: 400, code: 'NO_SLOTS_REMAINING' });
     }
 
     // Kiểm tra hạn
     if (pack.expiresAt && new Date() > pack.expiresAt) {
       // Rollback
       await SlotPack.findByIdAndUpdate(packId, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-      throw Object.assign(new Error('Slot pack has expired'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
+      throw Object.assign(new Error('Gói lượt đã hết hạn'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
     }
 
     // Nếu hết slot → đánh dấu exhausted
@@ -344,15 +344,15 @@ exports.useSlot = async (packId, staffId, data = {}) => {
 
 exports.cancelSlotPack = async (packId, userId, userRole) => {
   const pack = await SlotPack.findById(packId);
-  if (!pack) throw Object.assign(new Error('Slot pack not found'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
   if (userRole === 'customer' && String(pack.userId) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   if (pack.status !== 'active') {
-    throw Object.assign(new Error(`Cannot cancel a ${pack.status} slot pack`), { statusCode: 400, code: 'INVALID_STATUS' });
+    throw Object.assign(new Error(`Không thể hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
   }
   if (pack.usedSlots > 0 && userRole === 'customer') {
-    throw Object.assign(new Error('Cannot cancel a partially used slot pack. Please contact support.'), { statusCode: 400, code: 'PARTIALLY_USED' });
+    throw Object.assign(new Error('Không thể hủy gói lượt đã sử dụng một phần. Vui lòng liên hệ hỗ trợ.'), { statusCode: 400, code: 'PARTIALLY_USED' });
   }
   pack.status = 'cancelled';
   await pack.save();

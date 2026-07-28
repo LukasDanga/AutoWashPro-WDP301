@@ -126,16 +126,16 @@ exports.createBooking = async (data) => {
       User.findById(userId).session(session),
     ]);
 
-    if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-    if (pkg.status === 'inactive') throw Object.assign(new Error('Package unavailable'), { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+    if (!pkg) throw Object.assign(new Error('Gói dịch vụ không tồn tại'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+    if (pkg.status === 'inactive') throw Object.assign(new Error('Gói dịch vụ hiện không khả dụng'), { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
     if (pkg.branchId && String(pkg.branchId) !== String(branchId)) {
-      throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+      throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
     }
-    if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-    if (branch.status === 'inactive') throw Object.assign(new Error('Branch unavailable'), { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
-    if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+    if (!branch) throw Object.assign(new Error('Chi nhánh không tồn tại'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+    if (branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh hiện không khả dụng'), { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
+    if (!vehicle) throw Object.assign(new Error('Xe không tồn tại'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
     if (String(vehicle.userId) !== String(userId)) {
-      throw Object.assign(new Error('Vehicle does not belong to this user'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Xe không thuộc về bạn'), { statusCode: 403, code: 'FORBIDDEN' });
     }
 
     // Verify subServices and calculate total extra duration & price
@@ -159,7 +159,7 @@ exports.createBooking = async (data) => {
     const closeMinutes = parseTime(branch.closingTime || '20:00');
 
     if (endMinutes > closeMinutes) {
-      throw Object.assign(new Error('Booking end time exceeds branch closing time'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
+      throw Object.assign(new Error('Giờ kết thúc vượt quá giờ đóng cửa của chi nhánh'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
     }
 
     const bd = bookingDate instanceof Date ? bookingDate : new Date(bookingDate);
@@ -167,13 +167,13 @@ exports.createBooking = async (data) => {
     const todayStr = now.toISOString().split('T')[0];
     const bookingStr = bd.toISOString().split('T')[0];
     if (bookingStr < todayStr) {
-      throw Object.assign(new Error('Booking date cannot be in the past'), { statusCode: 400, code: 'INVALID_DATE' });
+      throw Object.assign(new Error('Ngày đặt không thể là ngày trong quá khứ'), { statusCode: 400, code: 'INVALID_DATE' });
     }
     if (bookingStr === todayStr) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const startMinutes = parseTime(startTime);
       if (startMinutes !== null && startMinutes <= currentMinutes + 30) {
-        throw Object.assign(new Error('Booking must be at least 30 minutes in the future'), { statusCode: 400, code: 'INVALID_TIME' });
+        throw Object.assign(new Error('Đặt lịch phải trước ít nhất 30 phút'), { statusCode: 400, code: 'INVALID_TIME' });
       }
     }
 
@@ -201,10 +201,10 @@ exports.createBooking = async (data) => {
 
     const capacity = branch.capacity || 2;
     if (overlappingCount >= capacity) {
-      throw Object.assign(new Error('Time slot full'), { statusCode: 409, code: 'SLOT_FULL' });
+      throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
     }
     if (capacity > 1 && overlappingCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') {
-      throw Object.assign(new Error('This slot is reserved for VIP members only'), { statusCode: 403, code: 'SLOT_VIP_ONLY' });
+      throw Object.assign(new Error('Khung giờ này chỉ dành cho thành viên VIP'), { statusCode: 403, code: 'SLOT_VIP_ONLY' });
     }
 
     let computedDiscountAmount = 0;
@@ -226,21 +226,21 @@ exports.createBooking = async (data) => {
         { $inc: { remainingSlots: -1, usedSlots: 1 } },
         { new: true, session }
       );
-      if (!pack) throw Object.assign(new Error('Slot pack not found or exhausted'), { statusCode: 400, code: 'SLOT_PACK_INVALID' });
+      if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại hoặc đã hết lượt'), { statusCode: 400, code: 'SLOT_PACK_INVALID' });
       
       if (pack.expiresAt && new Date() > pack.expiresAt) {
         await SlotPack.findByIdAndUpdate(pack._id, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-        throw Object.assign(new Error('Slot pack has expired'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
+        throw Object.assign(new Error('Gói lượt đã hết hạn'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
       }
       
       if (pack.branchId && String(pack.branchId) !== String(branchId)) {
         await SlotPack.findByIdAndUpdate(pack._id, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-        throw Object.assign(new Error('Slot pack is not valid for this branch'), { statusCode: 400, code: 'SLOT_PACK_BRANCH_MISMATCH' });
+        throw Object.assign(new Error('Gói lượt không áp dụng cho chi nhánh này'), { statusCode: 400, code: 'SLOT_PACK_BRANCH_MISMATCH' });
       }
 
       if (pack.vehicleId && String(pack.vehicleId) !== String(vehicleId)) {
         await SlotPack.findByIdAndUpdate(pack._id, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-        throw Object.assign(new Error('Slot pack is not valid for this vehicle'), { statusCode: 400, code: 'SLOT_PACK_VEHICLE_MISMATCH' });
+        throw Object.assign(new Error('Gói lượt không áp dụng cho xe này'), { statusCode: 400, code: 'SLOT_PACK_VEHICLE_MISMATCH' });
       }
       
       if (pack.remainingSlots === 0) {
@@ -486,14 +486,14 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
     .populate('branchId', 'name address phone')
     .populate('packageId', 'name price duration')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
-  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   if (userRole === 'customer' && String(booking.userId._id || booking.userId) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   if (userRole === 'manager') {
     const bookingBranch = String(booking.branchId?._id || booking.branchId);
     if (!userBranchId || String(userBranchId) !== bookingBranch) {
-      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
   return booking;
@@ -505,12 +505,12 @@ exports.updateBooking = async (id, updates, userRole, userId) => {
 
   try {
     const booking = await Booking.findById(id).session(session);
-    if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
     if (userRole === 'customer' && String(booking.userId) !== String(userId)) {
-      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
     }
     if (booking.status === 'completed' || booking.status === 'cancelled') {
-      throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+      throw Object.assign(new Error('Không thể cập nhật lịch hẹn đã hoàn thành hoặc đã hủy'), { statusCode: 400, code: 'INVALID_STATUS' });
     }
     // Khách hàng chỉ được tự đổi giờ/ngày (vd: theo gợi ý khi sắp bị auto-cancel), không đổi chi nhánh/gói
     if (userRole === 'customer' && (updates.branchId !== undefined || updates.packageId !== undefined)) {
@@ -526,10 +526,10 @@ exports.updateBooking = async (id, updates, userRole, userId) => {
     if (filtered.startTime || filtered.packageId || updates.branchId) {
       const pkgId = filtered.packageId || booking.packageId;
       const pkg = await Package.findById(pkgId).session(session);
-      if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+      if (!pkg) throw Object.assign(new Error('Gói dịch vụ không tồn tại'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
       const bid = String(filtered.branchId || booking.branchId);
       if (pkg.branchId && String(pkg.branchId) !== bid) {
-        throw Object.assign(new Error('Package does not belong to this branch'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+        throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
       }
 
       const startT = filtered.startTime || booking.startTime;
@@ -555,7 +555,7 @@ exports.updateBooking = async (id, updates, userRole, userId) => {
         return bs !== null && be !== null && isSlotOverlap(newStart, newEnd, bs, be);
       });
       if (hasConflict) {
-        throw Object.assign(new Error('Time slot not available'), { statusCode: 409, code: 'SLOT_UNAVAILABLE' });
+        throw Object.assign(new Error('Khung giờ không khả dụng'), { statusCode: 409, code: 'SLOT_UNAVAILABLE' });
       }
     }
 
@@ -583,21 +583,21 @@ exports.updateBooking = async (id, updates, userRole, userId) => {
 
 exports.updateBookingStatus = async (id, status, updateData = {}, userRole, userBranchId) => {
   if (!VALID_STATUSES.includes(status)) {
-    throw Object.assign(new Error('Invalid status'), { statusCode: 400, code: 'INVALID_STATUS' });
+    throw Object.assign(new Error('Trạng thái không hợp lệ'), { statusCode: 400, code: 'INVALID_STATUS' });
   }
 
   const currentBooking = await Booking.findById(id);
-  if (!currentBooking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (!currentBooking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
 
   if (userRole === 'manager') {
     if (!userBranchId || String(userBranchId) !== String(currentBooking.branchId)) {
-      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
 
   const allowed = VALID_TRANSITIONS[currentBooking.status] || [];
   if (!allowed.includes(status)) {
-    throw Object.assign(new Error(`Cannot transition from '${currentBooking.status}' to '${status}'`), { statusCode: 400, code: 'INVALID_TRANSITION' });
+    throw Object.assign(new Error(`Không thể chuyển từ '${currentBooking.status}' sang '${status}'`), { statusCode: 400, code: 'INVALID_TRANSITION' });
   }
 
   // Chốt chặn cọc: nếu chuyển sang 'confirmed' mà booking yêu cầu cọc
@@ -705,20 +705,20 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
   
   try {
     const booking = await Booking.findById(id).session(session);
-    if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
     
     if (userRole === 'manager') {
       if (!userBranchId || String(userBranchId) !== String(booking.branchId)) {
-        throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+        throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
       }
     } else if (userRole === 'customer') {
       if (!userId || String(userId) !== String(booking.userId)) {
-        throw Object.assign(new Error('Not authorized to update this booking'), { statusCode: 403, code: 'FORBIDDEN' });
+        throw Object.assign(new Error('Không có quyền cập nhật lịch hẹn này'), { statusCode: 403, code: 'FORBIDDEN' });
       }
     }
     
     if (booking.status === 'completed' || booking.status === 'cancelled') {
-      throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+      throw Object.assign(new Error('Không thể cập nhật lịch hẹn đã hoàn thành hoặc đã hủy'), { statusCode: 400, code: 'INVALID_STATUS' });
     }
 
     const packages = await Package.find({ isDeleted: false }).session(session);
@@ -761,12 +761,12 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
       }
 
       if (!found) {
-        throw Object.assign(new Error(`Sub-service not found: ${name}`), { statusCode: 404 });
+        throw Object.assign(new Error(`Dịch vụ phụ không tồn tại: ${name}`), { statusCode: 404 });
       }
     }
 
     const pkg = await Package.findById(booking.packageId).session(session);
-    if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404 });
+    if (!pkg) throw Object.assign(new Error('Gói dịch vụ không tồn tại'), { statusCode: 404 });
 
     const totalDuration = pkg.duration + addedDuration;
     const endTime = computeEndTime(booking.startTime, totalDuration);
@@ -774,7 +774,7 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
     const branch = await Branch.findById(booking.branchId).session(session);
     const closeMinutes = parseTime(branch?.closingTime || '20:00');
     if (parseTime(endTime) > closeMinutes) {
-      throw Object.assign(new Error('Adding these services exceeds branch closing time'), { statusCode: 400 });
+      throw Object.assign(new Error('Thêm dịch vụ vượt quá giờ đóng cửa của chi nhánh'), { statusCode: 400 });
     }
 
     booking.selectedSubServices = validSubServices;
@@ -816,7 +816,7 @@ exports.confirmBookings = async (ids, userRole, userId) => {
 
   if (userRole === 'manager') {
     const branch = await Branch.findOne({ managerId: userId });
-    if (!branch) throw Object.assign(new Error('Branch not found'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+  if (!branch) throw Object.assign(new Error('Chi nhánh không tồn tại'), { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
     query.branchId = branch._id;
   }
 
@@ -908,18 +908,18 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
   try {
     const booking = await Booking.findById(id).session(session);
-    if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
     if (userRole !== 'admin' && userRole !== 'manager' && String(booking.userId) !== String(userId)) {
-      throw Object.assign(new Error('Not authorized to cancel this booking'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Không có quyền hủy lịch hẹn này'), { statusCode: 403, code: 'FORBIDDEN' });
     }
     if (booking.status === 'completed') {
-      throw Object.assign(new Error('Cannot cancel a completed booking'), { statusCode: 400, code: 'INVALID_STATUS' });
+      throw Object.assign(new Error('Không thể hủy lịch hẹn đã hoàn thành'), { statusCode: 400, code: 'INVALID_STATUS' });
     }
     if (booking.status === 'cancelled') {
-      throw Object.assign(new Error('Booking already cancelled'), { statusCode: 400, code: 'ALREADY_CANCELLED' });
+      throw Object.assign(new Error('Lịch hẹn đã được hủy trước đó'), { statusCode: 400, code: 'ALREADY_CANCELLED' });
     }
     if (booking.paymentStatus === 'paid') {
-      throw Object.assign(new Error('Cannot cancel a booking that has been paid. Please request a refund first.'), { statusCode: 400, code: 'PAYMENT_PAID' });
+      throw Object.assign(new Error('Không thể hủy lịch hẹn đã thanh toán. Vui lòng yêu cầu hoàn tiền trước.'), { statusCode: 400, code: 'PAYMENT_PAID' });
     }
 
     const now = new Date();
@@ -927,7 +927,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     const [h, m] = booking.startTime.split(':').map(Number);
     bookingDateTime.setHours(h, m, 0, 0);
     if (booking.status !== 'in_progress' && bookingDateTime - now < 30 * 60 * 1000) {
-      throw Object.assign(new Error('Cannot cancel within 30 minutes of booking start time'), { statusCode: 400, code: 'CANCEL_WINDOW_PASSED' });
+      throw Object.assign(new Error('Không thể hủy trong vòng 30 phút trước giờ hẹn'), { statusCode: 400, code: 'CANCEL_WINDOW_PASSED' });
     }
 
     const cancelledBy = userRole === 'customer' ? 'customer' : userRole === 'admin' ? 'admin' : 'manager';
@@ -943,7 +943,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       { new: true, session }
     );
     if (!updated) {
-      throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
+    throw Object.assign(new Error('Lịch hẹn đã được thay đổi bởi yêu cầu khác'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
     }
 
     if (booking.voucherCode) {
@@ -1122,11 +1122,11 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
  */
 exports.extendGracePeriod = async (id, userRole, userBranchId) => {
   const booking = await Booking.findById(id);
-  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
 
   if (userRole === 'manager') {
     if (!userBranchId || String(userBranchId) !== String(booking.branchId)) {
-      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
   if (!['pending', 'confirmed'].includes(booking.status)) {
@@ -1158,10 +1158,10 @@ exports.extendGracePeriod = async (id, userRole, userBranchId) => {
 
 exports.deleteBooking = async (id, userRole) => {
   if (userRole !== 'admin') {
-    throw Object.assign(new Error('Only admin can delete bookings'), { statusCode: 403, code: 'FORBIDDEN' });
+    throw Object.assign(new Error('Chỉ admin mới có thể xóa lịch hẹn'), { statusCode: 403, code: 'FORBIDDEN' });
   }
   const booking = await Booking.findByIdAndDelete(id);
-  if (!booking) throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   return booking;
 };
 
@@ -1302,7 +1302,7 @@ exports.createRecurringBooking = async (data) => {
   const endMinutes = parseTime(endTime);
   const closeMinutes = parseTime(branch.closingTime || '20:00');
   if (endMinutes > closeMinutes) {
-    throw Object.assign(new Error('Booking end time exceeds branch closing time'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
+    throw Object.assign(new Error('Giờ kết thúc vượt quá giờ đóng cửa của chi nhánh'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
   }
 
   // --- Priority ---
@@ -1542,7 +1542,7 @@ exports.checkRecurringConflicts = async (data) => {
   const endMinutes = parseTime(endTime);
   const closeMinutes = parseTime(branch.closingTime || '20:00');
   if (endMinutes > closeMinutes) {
-    throw Object.assign(new Error('Booking end time exceeds branch closing time'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
+    throw Object.assign(new Error('Giờ kết thúc vượt quá giờ đóng cửa của chi nhánh'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
   }
 
   const today = new Date();
