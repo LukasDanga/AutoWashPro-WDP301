@@ -301,6 +301,34 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
     }
   }
 
+  const [walletLoading, setWalletLoading] = useState(false);
+  async function payWithWallet() {
+    if (!pendingDeposit) return;
+    if ((currentUser?.walletBalance || 0) < pendingDeposit.depositAmount) {
+      setMessage('Số dư ví không đủ để thanh toán. Vui lòng chọn phương thức khác.');
+      return;
+    }
+    setWalletLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: pendingDeposit._id, method: 'wallet', paymentType: 'deposit' }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.message || 'Thanh toán bằng ví thất bại');
+      
+      setMessage(`Đã thanh toán cọc ${formatCurrency(pendingDeposit.depositAmount || pendingDeposit.finalPrice)} bằng Ví AutoWash thành công.`);
+      setBookingCode(pendingDeposit.bookingCode || '');
+      setPendingDeposit(null);
+      refreshUser(); // Cập nhật lại số dư
+    } catch (e) {
+      setMessage(e.message || 'Thanh toán bằng ví thất bại');
+    } finally {
+      setWalletLoading(false);
+    }
+  }
+
   return (
     <div className="aw-shell">
       <header className="aw-topbar" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
@@ -694,10 +722,11 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                   {/* Payment method selection */}
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>CHỌN PHƯƠNG THỨC</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                       {[
                         { id: 'bank', label: 'Ngân hàng', icon: '🏦' },
                         { id: 'vnpay', label: 'VNPay', icon: '💳' },
+                        { id: 'wallet', label: 'Ví AutoWash', icon: '👛' },
                         { id: 'cash', label: 'Tiền mặt', icon: '💵' },
                       ].map(m => (
                         <button
@@ -706,13 +735,13 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                           onClick={() => setSelectedPayMethod(m.id)}
                           style={{
                             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                            padding: '10px 6px', borderRadius: 10, border: '2px solid',
+                            padding: '10px 4px', borderRadius: 10, border: '2px solid',
                             borderColor: selectedPayMethod === m.id ? '#10b981' : '#e2e8f0',
                             background: selectedPayMethod === m.id ? 'rgba(16,185,129,0.06)' : '#fff',
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}>
                           <span style={{ fontSize: 20 }}>{m.icon}</span>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: selectedPayMethod === m.id ? '#10b981' : '#64748b' }}>{m.label}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: selectedPayMethod === m.id ? '#10b981' : '#64748b', textAlign: 'center' }}>{m.label}</span>
                         </button>
                       ))}
                     </div>
@@ -730,6 +759,12 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                       <button type="button" onClick={payWithVnpay} disabled={vnpayLoading}
                         style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: vnpayLoading ? 0.7 : 1 }}>
                         {vnpayLoading ? 'ĐANG CHUYỂN HƯỚNG...' : `THANH TOÁN VNPay ${formatCurrency(pendingDeposit.depositAmount || 0)}`}
+                      </button>
+                    )}
+                    {selectedPayMethod === 'wallet' && (
+                      <button type="button" onClick={payWithWallet} disabled={walletLoading}
+                        style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#10b981', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: walletLoading ? 0.7 : 1 }}>
+                        {walletLoading ? 'ĐANG THANH TOÁN...' : `THANH TOÁN VÍ (${formatCurrency(currentUser?.walletBalance || 0)})`}
                       </button>
                     )}
                     {selectedPayMethod === 'cash' && (
