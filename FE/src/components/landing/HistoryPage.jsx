@@ -163,6 +163,15 @@ function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
           </button>
         </div>
         <div className="flex items-center gap-2">
+          {canQuickBook && onQuickBook && (
+            <button
+              type="button"
+              onClick={() => onQuickBook(pack)}
+              className="px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition-colors flex items-center gap-1.5"
+            >
+              ⚡ Đặt lịch nhanh
+            </button>
+          )}
           {canCancel && onCancelPack && (
             <button
               type="button"
