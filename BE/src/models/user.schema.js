@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema(
     noShowCount: { type: Number, default: 0, min: 0 },
     // Lượt quay vòng quay may mắn
     spinCount: { type: Number, default: 0, min: 0 },
+    // Số dư ví nội bộ (cho phép thanh toán hoặc nhận hoàn tiền)
+    walletBalance: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

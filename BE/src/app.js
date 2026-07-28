@@ -9,7 +9,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const config = require('./config/env');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
-const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, refundRequestRoutes, voucherRoutes, notificationRoutes, slotPackRoutes, reportRoutes, chatbotRoutes, sseRoutes, slotProductRoutes, giftRoutes, testimonialRoutes, statsRoutes, loyaltyRoutes } = require('./routes');
+const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, refundRequestRoutes, voucherRoutes, notificationRoutes, slotPackRoutes, reportRoutes, chatbotRoutes, sseRoutes, slotProductRoutes, giftRoutes, testimonialRoutes, statsRoutes, loyaltyRoutes, walletTransactionRoutes } = require('./routes');
 
 const allowedOrigins = [config.APP_URL, config.API_URL, config.FE_URL].filter(Boolean);
 
@@ -61,6 +61,7 @@ app.use('/api/gifts', giftRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
+app.use('/api/wallet-transactions', walletTransactionRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
