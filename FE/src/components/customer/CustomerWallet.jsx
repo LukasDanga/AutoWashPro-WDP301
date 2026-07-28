@@ -6,6 +6,32 @@ function formatCurrency(value) {
   return `${new Intl.NumberFormat('vi-VN').format(value || 0)}đ`;
 }
 
+const ERROR_TRANSLATIONS = {
+  'Validation failed': 'Xác thực dữ liệu thất bại',
+  'Invalid amount': 'Số tiền không hợp lệ',
+  'Amount is required': 'Vui lòng cung cấp số tiền',
+  'Invalid payment method': 'Phương thức thanh toán không hợp lệ',
+  'Invalid payment type': 'Loại thanh toán không hợp lệ',
+  'User not found': 'Không tìm thấy người dùng',
+  'Payment not found': 'Không tìm thấy thông tin giao dịch',
+  'Access denied. No token.': 'Từ chối truy cập. Vui lòng đăng nhập lại.',
+  'Invalid token': 'Phiên đăng nhập không hợp lệ',
+  'Token expired': 'Phiên đăng nhập đã hết hạn',
+  'Failed to fetch': 'Không thể kết nối đến máy chủ',
+};
+
+function translateError(msg) {
+  if (!msg) return '';
+  let result = msg;
+  if (ERROR_TRANSLATIONS[msg]) {
+    return ERROR_TRANSLATIONS[msg];
+  }
+  for (const [key, value] of Object.entries(ERROR_TRANSLATIONS)) {
+    result = result.replace(new RegExp(key, 'gi'), value);
+  }
+  return result;
+}
+
 export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +43,8 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
   const [vnpayLoading, setVnpayLoading] = useState(false);
   const [depositLoading, setDepositLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [showVnpaySuccessModal, setShowVnpaySuccessModal] = useState(false);
+  const [successAmount, setSuccessAmount] = useState(0);
 
   // Lắng nghe sự kiện nạp tiền thành công
   useSSE(token, 'wallet_topup_success', (data) => {
@@ -27,6 +55,36 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
     fetchTransactions();
     setTimeout(() => setMessage(''), 5000);
   });
+
+  // Lắng nghe kết quả VNPay từ URL sau khi redirect về
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vnpayResult = params.get('vnpay_result');
+    if (vnpayResult) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(vnpayResult));
+        const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
+        if (success) {
+          const rawAmt = parsed?.data?.amount;
+          const amt = rawAmt ? parseInt(rawAmt, 10) / 100 : 0;
+          setSuccessAmount(amt);
+          setShowVnpaySuccessModal(true);
+          refreshUser();
+          fetchTransactions();
+        } else {
+          setMessage(parsed?.message || 'Thanh toán VNPay thất bại');
+        }
+      } catch (e) {
+        console.error('Lỗi phân tích kết quả VNPay:', e);
+        setMessage('Lỗi xử lý kết quả thanh toán VNPay');
+      }
+      
+      // Dọn sạch URL query params để tránh F5 bị kích hoạt lại modal
+      const url = new URL(window.location);
+      url.searchParams.delete('vnpay_result');
+      window.history.replaceState({}, '', url);
+    }
+  }, [token]);
 
   const fetchTransactions = async () => {
     try {
@@ -76,14 +134,14 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
           amount: amount,
         });
       } catch (e) {
-        setMessage(e.message || 'Tạo giao dịch thất bại');
+        setMessage(translateError(e.message) || 'Tạo giao dịch thất bại');
       } finally {
         setDepositLoading(false);
       }
     } else if (payMethod === 'vnpay') {
       setVnpayLoading(true);
       try {
-        const res = await fetch(`${apiBase}/payments/vnpay-create`, {
+        const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ amount, paymentType: 'topup' }),
@@ -97,7 +155,7 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
         // Mở URL VNPay trong tab mới hoặc chuyển hướng
         window.location.href = paymentUrl;
       } catch (e) {
-        setMessage(e.message || 'Thanh toán VNPay thất bại');
+        setMessage(translateError(e.message) || 'Thanh toán VNPay thất bại');
         setVnpayLoading(false);
       }
     }
@@ -302,6 +360,26 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* VNPay Success Modal */}
+      {showVnpaySuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center animate-scale-in">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-4">
+              <ShieldCheck className="w-8 h-8 text-emerald-600" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 mb-2">Nạp tiền thành công!</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Bạn đã nạp thành công <span className="font-bold text-emerald-600 text-base">{formatCurrency(successAmount)}</span> vào ví AutoWash.
+            </p>
+            <button 
+              onClick={() => setShowVnpaySuccessModal(false)}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-600/30 transition-all"
+            >
+              Đồng ý
+            </button>
           </div>
         </div>
       )}

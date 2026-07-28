@@ -364,13 +364,29 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   const isMobile = req.query.client === 'mobile';
   const mobileBookingId = req.query.bookingId || '';
 
+  let isTopup = false;
+  const txnRef = result.data?.txnRef || req.query.vnp_TxnRef;
+  if (txnRef) {
+    try {
+      const Payment = require('../models/payment.schema');
+      const payment = await Payment.findOne({ transactionId: txnRef });
+      if (payment && payment.paymentType === 'topup') {
+        isTopup = true;
+      }
+    } catch (e) {
+      console.error('Error checking topup payment:', e);
+    }
+  }
+
   if (result.success) {
-    const txnRef = result.data.txnRef;
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
       if (isMobile) {
         const deepLinkId = mobileBookingId;
         return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+      }
+      if (isTopup) {
+        return res.redirect(302, `${feUrl}/profile?vnpay_result=${encoded}`);
       }
       // Provisional & slot pack đều redirect về / (App routing handles dispatch)
       if (payment && (!payment.bookingId || payment.slotPackId)) {
@@ -384,6 +400,9 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   if (isMobile) {
     const deepLinkId = mobileBookingId;
     return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+  }
+  if (isTopup) {
+    return res.redirect(302, `${feUrl}/profile?vnpay_result=${encoded}`);
   }
   return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
 });

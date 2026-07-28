@@ -137,6 +137,7 @@ export default function App() {
     const params = new URLSearchParams(location.search);
     const vnpayResult = params.get('vnpay_result');
     if (!vnpayResult) return;
+    if (location.pathname.startsWith('/profile')) return;
     const rebookDraft = sessionStorage.getItem('aw_rebookVnpayDraft');
     if (rebookDraft) {
       // Already on /history — no redirect needed (Handled by HistoryPage)
