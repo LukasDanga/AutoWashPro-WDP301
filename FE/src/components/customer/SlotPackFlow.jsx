@@ -1031,7 +1031,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   </div>
                   <div className="p-2.5 flex items-center justify-between">
                     <span className="text-slate-400 font-semibold">Số tài khoản</span>
-                    <span className="font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                    <span className="font-bold text-slate-700 font-mono tracking-wider">{slotPackPayment.bankInfo?.accountNumber || '6200320046868'}</span>
                   </div>
                   <div className="p-2.5 flex items-center justify-between">
                     <span className="text-slate-400 font-semibold">Chủ tài khoản</span>

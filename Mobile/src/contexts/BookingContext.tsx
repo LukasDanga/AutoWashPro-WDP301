@@ -49,6 +49,7 @@ type PersistedDraft = {
   selectedDate?: string | null;
   selectedTime?: string | null;
   voucher?: VoucherState | null;
+  step?: BookingStep;
 };
 
 interface BookingContextValue {
@@ -143,6 +144,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
           if (draft.selectedDate) setSelectedDateState(draft.selectedDate);
           if (draft.selectedTime) setSelectedTimeState(draft.selectedTime);
           if (draft.voucher) setVoucherState(draft.voucher);
+          if (draft.step) setStepState(draft.step);
         }
       } catch (err) {
         console.warn('[BookingContext] hydrate failed:', err);
@@ -165,6 +167,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       selectedDate,
       selectedTime,
       voucher,
+      step,
     };
     const serialized = JSON.stringify(draft);
     if (serialized === lastDraftRef.current) return;
@@ -180,6 +183,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
     selectedDate,
     selectedTime,
     voucher,
+    step,
   ]);
 
   const setStep = useCallback((next: BookingStep) => setStepState(next), []);

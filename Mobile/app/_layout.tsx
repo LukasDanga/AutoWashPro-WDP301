@@ -82,7 +82,7 @@ function RootLayoutContent() {
 
 function AlertBridgeRegistrar({ children }: { children: React.ReactNode }) {
   const alert = useAlertDialog();
-  registerAlertBridge(alert.show);
+  registerAlertBridge(alert.show, alert.hide);
   return <>{children}</>;
 }
 

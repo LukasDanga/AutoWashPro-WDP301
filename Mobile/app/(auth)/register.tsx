@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { AlertDialog, GoogleLogo, Input, Button, Text } from '../../src/components/common';
 import { colors } from '../../src/theme/colors';
@@ -108,12 +108,27 @@ export default function RegisterScreen() {
       const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
       if (idToken) {
         await loginWithGoogle(idToken);
+      } else {
+        AlertDialog.error('Đăng nhập thất bại', 'Không lấy được xác thực từ Google. Vui lòng thử lại.');
       }
     } catch (error: any) {
-      console.log('Google login error:', error);
-      if (error.code !== 'ASYNC_OP_IN_PROGRESS' && error.code !== 'SIGN_IN_CANCELLED') {
-        AlertDialog.error('Đăng nhập thất bại', 'Không thể kết nối với Google. Vui lòng thử lại.');
+      console.log('Google login error detail:', error);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED || error.code === 'ASYNC_OP_IN_PROGRESS') {
+        return;
       }
+      
+      let errorMsg = 'Không thể kết nối với Google. Vui lòng thử lại.';
+      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        errorMsg = 'Google Play Services không khả dụng hoặc chưa được cập nhật trên thiết bị.';
+      } else if (String(error.code) === '10' || error.code === (statusCodes as any).DEVELOPER_ERROR) {
+        errorMsg = 'Lỗi cấu hình Google (Web Client ID hoặc SHA-1 fingerprint chưa đúng trên Google Developer Console).';
+      } else if (error.response?.data?.message) {
+        errorMsg = error.response.data.message;
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+
+      AlertDialog.error('Đăng nhập thất bại', errorMsg);
     }
   };
 

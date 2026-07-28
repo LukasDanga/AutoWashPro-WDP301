@@ -268,7 +268,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const payObj = payload?.data || payload;
       if (payObj?.qrCodeUrl || payObj?.transactionId) {
         setSepayData({
-          qrCodeUrl: payObj.qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=97966888888&amount=${pendingDeposit.depositAmount || pendingDeposit.finalPrice}&des=DAT COC ${payObj.transactionId}`,
+          qrCodeUrl: payObj.qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=6200320046868&amount=${pendingDeposit.depositAmount || pendingDeposit.finalPrice}&des=DAT COC ${payObj.transactionId}`,
           transactionId: payObj.transactionId,
           amount: payObj.amount || pendingDeposit.depositAmount || pendingDeposit.finalPrice,
         });

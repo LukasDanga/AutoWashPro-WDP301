@@ -142,6 +142,7 @@ export interface Booking {
   paymentStatus: PaymentStatus;
   note?: string;
   subServices?: SubService[];
+  selectedSubServices?: (SubService | string)[];
   voucherCode?: string;
   discountAmount?: number;
   // Số tiền cọc cần thu (30% × finalPrice). BE tự tính; FE hiển thị.

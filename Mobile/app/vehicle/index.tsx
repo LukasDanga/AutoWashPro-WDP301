@@ -73,7 +73,70 @@ export default function VehicleScreen() {
           setVehicles(vehicles.filter((v) => v._id !== vehicle._id));
           toast.success('Đã xóa phương tiện', 'Phương tiện đã được xóa khỏi danh sách');
         } catch (error: any) {
-          AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể xóa phương tiện');
+          const errMsg = error.response?.data?.message || error.message || 'Không thể xóa phương tiện';
+          if (errMsg.includes('lịch hẹn đang hoạt động')) {
+            const countMatch = errMsg.match(/(\d+)\s*lịch hẹn/);
+            const count = countMatch ? parseInt(countMatch[1], 10) : 0;
+            const codesMatch = errMsg.match(/Mã:\s*(.+)/);
+            const codesRaw = codesMatch ? codesMatch[1].trim() : '';
+            const bookingItems = codesRaw.split(/,\s*/).filter(Boolean);
+            const bookings = bookingItems.map((item: string) => {
+              const m = item.match(/(\S+)\s*\((.+?)\s+(\S+)\)/);
+              return m ? { code: m[1], date: m[2], time: m[3] } : { code: item, date: '', time: '' };
+            });
+
+            AlertDialog.show({
+              title: 'Không thể xóa phương tiện',
+              variant: 'warning',
+              actions: [{ text: 'Đã hiểu', style: 'default' }],
+              customContent: (
+                <View style={{ gap: spacing.md, marginTop: spacing.xs }}>
+                  <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+                    <AppText variant="bodySmall" style={{ color: '#92400E' }}>
+                      Xe <AppText variant="bodySmall" weight="700" style={{ color: '#92400E' }}>{vehicle.licensePlate}</AppText> đang có <AppText variant="bodySmall" weight="700" style={{ color: '#92400E' }}>{count} lịch hẹn đang hoạt động</AppText>. Vui lòng hoàn thành hoặc hủy các lịch hẹn này trước khi xóa xe.
+                    </AppText>
+                  </View>
+                  {bookings.length > 0 && (
+                    <View style={{ gap: spacing.xs }}>
+                      <AppText variant="caption" weight="700" color="textTertiary">
+                        CÁC LỊCH HẸN ĐANG HOẠT ĐỘNG:
+                      </AppText>
+                      <View style={{ borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+                        {bookings.slice(0, 2).map((b: any, i: number) => (
+                          <View key={i} style={{ flexDirection: 'row', padding: spacing.sm, borderBottomWidth: i === 0 && bookings.length > 1 ? 1 : 0, borderBottomColor: colors.border, alignItems: 'center', gap: spacing.sm }}>
+                            <AppText variant="body" style={{ opacity: 0.8 }}>📅</AppText>
+                            <View>
+                              <AppText variant="bodySmall" weight="600">{b.code}</AppText>
+                              <AppText variant="caption" color="textTertiary">{b.date} • {b.time}</AppText>
+                            </View>
+                          </View>
+                        ))}
+                        {bookings.length > 2 && (
+                          <TouchableOpacity 
+                            style={{ padding: spacing.sm, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border }}
+                            onPress={() => {
+                              AlertDialog.hide?.();
+                              router.push(`/(tabs)/history?view=list&keyword=${encodeURIComponent(vehicle.licensePlate)}`);
+                            }}
+                          >
+                            <AppText variant="caption" color="primary" weight="600">Xem thêm {bookings.length - 2} lịch hẹn ➔</AppText>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', backgroundColor: colors.surface, padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', gap: spacing.sm }}>
+                    <AppText variant="body" style={{ opacity: 0.8 }}>💡</AppText>
+                    <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                      Bạn có thể hủy lịch hẹn hoặc đợi đến khi hoàn thành trước khi thực hiện xóa xe.
+                    </AppText>
+                  </View>
+                </View>
+              )
+            });
+          } else {
+            AlertDialog.error('Lỗi', errMsg);
+          }
         } finally {
           setIsDeleting(null);
         }

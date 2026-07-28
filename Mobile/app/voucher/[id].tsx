@@ -15,9 +15,9 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { voucherApi } from '../../src/api';
-import { 
-  Text as AppText, 
-  Card, 
+import {
+  Text as AppText,
+  Card,
   Loading,
   Button,
   Badge,
@@ -25,6 +25,7 @@ import {
   Icons,
   Header,
   ScreenContainer,
+  BottomNavBar,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
@@ -40,7 +41,7 @@ export default function VoucherDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
-  
+
   const [voucher, setVoucher] = useState<Voucher | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
@@ -125,11 +126,11 @@ export default function VoucherDetailScreen() {
     );
   }
 
-  const discountDisplay = voucher.type === 'percentage' 
-    ? `${voucher.value}%` 
+  const discountDisplay = voucher.type === 'percentage'
+    ? `${voucher.value}%`
     : formatCurrency(voucher.value);
-  
-  const maxDiscountDisplay = voucher.maxDiscount 
+
+  const maxDiscountDisplay = voucher.maxDiscount
     ? ` (tối đa ${formatCurrency(voucher.maxDiscount)})`
     : '';
 
@@ -141,7 +142,7 @@ export default function VoucherDetailScreen() {
         </TouchableOpacity>
       } />
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -155,7 +156,7 @@ export default function VoucherDetailScreen() {
             <View style={styles.voucherStatus}>
               {isExpired() ? (
                 <Badge label="Hết hạn" variant="error" size="small" />
-              ) : voucher.used ? (
+              ) : isUsed ? (
                 <Badge label="Đã sử dụng" variant="default" size="small" />
               ) : (
                 <Badge label="Còn hiệu lực" variant="success" size="small" />
@@ -182,7 +183,7 @@ export default function VoucherDetailScreen() {
         {/* Voucher Details */}
         <Card style={styles.detailsCard}>
           <Text style={styles.sectionTitle}>Chi tiết voucher</Text>
-          
+
           {/* Title */}
           <View style={styles.detailRow}>
             <Icon name="document-text-outline" size={20} color={colors.textSecondary} style={styles.detailIcon} />
@@ -240,18 +241,8 @@ export default function VoucherDetailScreen() {
         </Card>
       </ScrollView>
 
-      {/* Bottom Action */}
-      {!isExpired() && !voucher.used && (
-        <View style={styles.bottomAction}>
-          <Button
-            title="Áp dụng voucher"
-            onPress={handleApply}
-            fullWidth
-            size="large"
-            loading={isApplying}
-          />
-        </View>
-      )}
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar />
     </ScreenContainer>
   );
 }
@@ -265,7 +256,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 110,
   },
   voucherCard: {
     backgroundColor: '#0286c8',

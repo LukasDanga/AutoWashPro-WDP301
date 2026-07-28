@@ -119,10 +119,10 @@ exports.paySlotPack = catchAsync(async (req, res) => {
 
   const result = payment.toObject ? payment.toObject() : { ...payment };
   result.bankInfo = {
-    bankName: 'Ngân hàng TMCP Quân đội (MB)',
+    bankName: process.env.SEPAY_BANK_NAME || 'Ngân hàng TMCP Quân đội (MB)',
     bankId: process.env.SEPAY_BANK_ID || 'MB',
     accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
-    accountHolder: 'CONG TY CO PHAN AUTO WASH PRO',
+    accountHolder: process.env.SEPAY_ACCOUNT_NAME || 'CONG TY CO PHAN AUTO WASH PRO',
     transferContent: `THANH TOAN ${payment.transactionId}`,
   };
   success(res, result, 'Payment created');

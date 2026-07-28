@@ -24,7 +24,7 @@ import { formatCurrency } from '../../src/utils';
 import { getTierTheme } from '../../src/utils/tierHelper';
 import { shadows, layout } from '../../src/theme/spacing';
 import { useColors } from '../../src/theme/ThemeContext';
-import { Text as AppText } from '../../src/components/common';
+import { Text as AppText, useAlertDialog } from '../../src/components/common';
 import type { Branch, Package } from '../../src/types';
 
 
@@ -98,11 +98,19 @@ export default function HomeScreen() {
   const { user, isAuthenticated } = useAuth();
   const { unreadCount } = useNotifications();
   const colors = useColors();
+  const alertDialog = useAlertDialog();
 
   const [packages, setPackages] = useState<Package[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<{
+    url: string;
+    title: string;
+    message: string;
+    tag: string;
+    clearKeys: string[];
+    isCheckout: boolean;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -127,24 +135,24 @@ export default function HomeScreen() {
       let cancelled = false;
       const checkPending = async () => {
         try {
-          const [extrasStr, recurringStr] = await Promise.all([
+          const [extrasStr, recurringCheckoutStr, recurringProgressStr, slotpackStr] = await Promise.all([
             AsyncStorage.getItem('aw_checkout_extras'),
-            AsyncStorage.getItem('aw_recurring_draft')
+            AsyncStorage.getItem('aw_recurring_draft'),
+            AsyncStorage.getItem('aw_recurring_draft_progress'),
+            AsyncStorage.getItem('aw_slotpack_draft')
           ]);
           if (cancelled) return;
 
           const now = Date.now();
           const EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
-          let hasRecurring = false;
-          let hasExtras = false;
-
-          if (recurringStr) {
-            const parsed = JSON.parse(recurringStr);
+          if (recurringCheckoutStr) {
+            const parsed = JSON.parse(recurringCheckoutStr);
             if (!parsed.timestamp || (now - parsed.timestamp > EXPIRY_MS)) {
               await AsyncStorage.removeItem('aw_recurring_draft');
             } else {
-              hasRecurring = true;
+              setPendingDraft({ url: '/payment/checkout?type=recurring', title: 'Tiếp tục thanh toán 💳', message: 'Bạn có một giao dịch thanh toán định kỳ đang dở dang.', tag: 'Chưa hoàn tất', clearKeys: ['aw_recurring_draft'], isCheckout: true });
+              return;
             }
           }
 
@@ -153,17 +161,22 @@ export default function HomeScreen() {
             if (!parsed.timestamp || (now - parsed.timestamp > EXPIRY_MS)) {
               await AsyncStorage.removeItem('aw_checkout_extras');
             } else {
-              hasExtras = true;
+              setPendingDraft({ url: '/payment/checkout', title: 'Tiếp tục thanh toán 💳', message: 'Bạn có một giao dịch thanh toán đang dở dang.', tag: 'Chưa hoàn tất', clearKeys: ['aw_checkout_extras'], isCheckout: true });
+              return;
             }
           }
 
-          if (hasRecurring) {
-            setPendingCheckoutUrl('/payment/checkout?type=recurring');
-          } else if (hasExtras) {
-            setPendingCheckoutUrl('/payment/checkout');
-          } else {
-            setPendingCheckoutUrl(null);
+          if (slotpackStr) {
+            setPendingDraft({ url: '/slot-packs?resumeWizard=true', title: 'Tiếp tục mua gói lượt', message: 'Bạn có tiến trình mua gói lượt chưa hoàn thành.', tag: 'Tiến trình mua', clearKeys: ['aw_slotpack_draft'], isCheckout: false });
+            return;
           }
+
+          if (recurringProgressStr) {
+            setPendingDraft({ url: '/booking/recurring', title: 'Tiếp tục đặt lịch định kỳ', message: 'Bạn có tiến trình đặt lịch định kỳ chưa hoàn thành.', tag: 'Tiến trình đặt', clearKeys: ['aw_recurring_draft_progress'], isCheckout: false });
+            return;
+          }
+
+          setPendingDraft(null);
         } catch (e) {}
       };
       checkPending();
@@ -243,18 +256,45 @@ export default function HomeScreen() {
         </View>
 
         {/* Pending Checkout Banner */}
-        {pendingCheckoutUrl && (
+        {pendingDraft && (
           <TouchableOpacity 
             style={[styles.promoCard, { backgroundColor: colors.warningLight, borderColor: colors.warning, marginTop: SPACING.sm, marginBottom: 0 }]}
-            onPress={() => router.push(pendingCheckoutUrl as any)}
+            onPress={() => {
+              alertDialog.show({
+                title: pendingDraft.isCheckout ? 'Thanh toán chưa hoàn tất' : 'Tiến trình chưa hoàn tất',
+                message: pendingDraft.isCheckout 
+                  ? 'Bạn muốn tiếp tục thanh toán hay hủy bỏ giao dịch này?'
+                  : 'Bạn muốn tiếp tục hay xóa bỏ tiến trình này?',
+                variant: 'info',
+                actions: [
+                  {
+                    text: pendingDraft.isCheckout ? 'Hủy giao dịch' : 'Xóa tiến trình',
+                    style: 'destructive',
+                    onPress: async () => {
+                      for (const key of pendingDraft.clearKeys) {
+                        await AsyncStorage.removeItem(key);
+                      }
+                      setPendingDraft(null);
+                    },
+                  },
+                  {
+                    text: 'Tiếp tục',
+                    variant: 'primary',
+                    onPress: () => {
+                      router.push(pendingDraft.url as any);
+                    },
+                  },
+                ],
+              });
+            }}
             activeOpacity={0.8}
           >
             <View style={styles.promoContent}>
               <View style={[styles.promoTag, { backgroundColor: colors.warning }]}>
-                <AppText style={[styles.promoTagText, { color: '#000' }]}>Chưa hoàn tất</AppText>
+                <AppText style={[styles.promoTagText, { color: '#000' }]}>{pendingDraft.tag}</AppText>
               </View>
-              <AppText variant="h4" style={{ color: colors.textPrimary, marginTop: 8 }}>Tiếp tục thanh toán 💳</AppText>
-              <AppText variant="bodySmall" style={{ color: colors.textSecondary, marginTop: 2 }}>Bạn có một giao dịch thanh toán đang dở dang.</AppText>
+              <AppText variant="h4" style={{ color: colors.textPrimary, marginTop: 8 }}>{pendingDraft.title}</AppText>
+              <AppText variant="bodySmall" style={{ color: colors.textSecondary, marginTop: 2 }}>{pendingDraft.message}</AppText>
             </View>
             <Icon name={Icons.chevronRight} size={24} color={colors.textPrimary} />
           </TouchableOpacity>

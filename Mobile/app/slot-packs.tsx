@@ -75,6 +75,52 @@ export default function SlotPacksScreen() {
   // with no packages in the step-1 picker.
   const [branchPackageCounts, setBranchPackageCounts] = useState<Record<string, number>>({});
   
+  const startBuying = async () => {
+    setIsBuying(true);
+    setResumingPackId(null);
+    setBuyError('');
+    try {
+      const draftStr = await AsyncStorage.getItem('aw_slotpack_draft');
+      if (draftStr) {
+        const draft = JSON.parse(draftStr);
+        if (draft.step) setStep(draft.step);
+        if (draft.selectedBranch) setSelectedBranch(draft.selectedBranch);
+        if (draft.selectedPackage) setSelectedPackage(draft.selectedPackage);
+        if (draft.selectedVehicle) setSelectedVehicle(draft.selectedVehicle);
+        if (draft.slotCount) setSlotCount(draft.slotCount);
+      } else {
+        setSelectedBranch('');
+        setSelectedVehicle('');
+        setSelectedPackage('');
+        setSlotCount(5);
+        setStep(1);
+        setAppliedVoucher(null);
+      }
+    } catch {
+      setSelectedBranch('');
+      setSelectedVehicle('');
+      setSelectedPackage('');
+      setSlotCount(5);
+      setStep(1);
+      setAppliedVoucher(null);
+    }
+  };
+
+  const saveProgressAndHome = async () => {
+    try {
+      await AsyncStorage.setItem('aw_slotpack_draft', JSON.stringify({
+        step,
+        selectedBranch,
+        selectedPackage,
+        selectedVehicle,
+        slotCount,
+      }));
+      setIsBuying(false);
+      toast.info('Tiến trình đã được lưu', 'Bạn có thể tiếp tục mua gói sau');
+      router.replace('/');
+    } catch {}
+  };
+  
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
   const [selectedPackage, setSelectedPackage] = useState<string>('');
@@ -162,7 +208,14 @@ export default function SlotPacksScreen() {
   }, [params.resumePackId, slotPacks]);
 
   useEffect(() => {
-    if (isBuying && step === 1 && branches.length === 0) {
+    if (params.resumeWizard) {
+      startBuying();
+      router.setParams({ resumeWizard: undefined });
+    }
+  }, [params.resumeWizard]);
+
+  useEffect(() => {
+    if (isBuying && (step === 1 || (step > 1 && branches.length === 0))) {
       Promise.all([
         branchApi.getBranches(),
         // Pre-fetch package counts for all branches so we can badge disabled
@@ -182,7 +235,7 @@ export default function SlotPacksScreen() {
   }, [isBuying, step]);
 
   useEffect(() => {
-    if (isBuying && step === 2) {
+    if (isBuying && (step === 2 || (step > 2 && packages.length === 0))) {
       if (selectedBranch && selectedBranch !== 'ALL') {
         packageApi.getPackages({ branchId: selectedBranch, status: 'active' }).then(data => {
           setPackages(data);
@@ -319,17 +372,6 @@ export default function SlotPacksScreen() {
     return labels[status] || status;
   };
 
-  const startBuying = () => {
-    setResumingPackId(null);
-    setSelectedBranch('');
-    setSelectedVehicle('');
-    setSelectedPackage('');
-    setSlotCount(5);
-    setStep(1);
-    setAppliedVoucher(null);
-    setBuyError('');
-    setIsBuying(true);
-  };
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -373,6 +415,7 @@ export default function SlotPacksScreen() {
         packId = pack._id;
         // Save pending slot pack draft for home screen
         await AsyncStorage.setItem('aw_slot_pending', packId);
+        await AsyncStorage.removeItem('aw_slotpack_draft');
       }
 
       const payResult = await slotPackApi.paySlotPack(packId, paymentMethod);
@@ -612,11 +655,23 @@ export default function SlotPacksScreen() {
           <Header
             title="Mua gói slot"
             showBack
-            onBackPress={() => setIsBuying(false)}
+            onBackPress={() => {
+              if (step > 1 && !resumingPackId) {
+                setStep(step - 1);
+              } else {
+                setIsBuying(false);
+                setResumingPackId(null);
+              }
+            }}
             rightAction={
-              <TouchableOpacity onPress={() => setIsBuying(false)} style={{ padding: 4 }}>
-                <Icon name={Icons.close} size={24} color={colors.textPrimary} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <TouchableOpacity onPress={saveProgressAndHome} style={{ padding: 4 }} accessibilityLabel="Về trang chủ">
+                  <Icon name={Icons.homeOutline} size={24} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsBuying(false)} style={{ padding: 4 }}>
+                  <Icon name={Icons.close} size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
             }
           />
           <ScrollView contentContainerStyle={{ padding: 20 }}>

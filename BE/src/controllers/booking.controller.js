@@ -120,10 +120,10 @@ exports.createPayment = catchAsync(async (req, res) => {
   
   if (method === 'bank') {
     result.bankInfo = {
-      bankName: 'Ngân hàng TMCP Quân đội (MB)',
+      bankName: process.env.SEPAY_BANK_NAME || 'Ngân hàng TMCP Quân đội (MB)',
       bankId: process.env.SEPAY_BANK_ID || 'MB',
       accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
-      accountHolder: 'CONG TY CO PHAN AUTO WASH PRO',
+      accountHolder: process.env.SEPAY_ACCOUNT_NAME || 'CONG TY CO PHAN AUTO WASH PRO',
       transferContent: `${paymentType === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId}`,
     };
   }
@@ -155,7 +155,19 @@ exports.getPaymentByBooking = catchAsync(async (req, res) => {
 exports.getPaymentById = catchAsync(async (req, res) => {
   const payment = await paymentService.getPaymentById(req.params.id, req.userId, req.user.role);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
-  success(res, payment, 'Payment retrieved');
+  
+  const result = payment.toObject ? payment.toObject() : { ...payment };
+  if (result.method === 'bank') {
+    result.bankInfo = {
+      bankName: process.env.SEPAY_BANK_NAME || 'Ngân hàng TMCP Quân đội (MB)',
+      bankId: process.env.SEPAY_BANK_ID || 'MB',
+      accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
+      accountHolder: process.env.SEPAY_ACCOUNT_NAME || 'CONG TY CO PHAN AUTO WASH PRO',
+      transferContent: `${result.paymentType === 'full' ? 'THANH TOAN' : 'DAT COC'} ${result.transactionId}`,
+    };
+  }
+  
+  success(res, result, 'Payment retrieved');
 });
 
 exports.getAllPayments = catchAsync(async (req, res) => {
@@ -316,7 +328,17 @@ exports.createBankProvisional = catchAsync(async (req, res) => {
   }
   const paymentService = require('../services/payment.service');
   const payment = await paymentService.createProvisionalBankPayment(req.userId, amount, paymentType || 'deposit');
-  success(res, payment, 'Bank provisional payment created');
+  
+  const result = payment.toObject ? payment.toObject() : { ...payment };
+  result.bankInfo = {
+    bankName: process.env.SEPAY_BANK_NAME || 'Ngân hàng TMCP Quân đội (MB)',
+    bankId: process.env.SEPAY_BANK_ID || 'MB',
+    accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
+    accountHolder: process.env.SEPAY_ACCOUNT_NAME || 'CONG TY CO PHAN AUTO WASH PRO',
+    transferContent: `${paymentType === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId}`,
+  };
+  
+  success(res, result, 'Bank provisional payment created');
 });
 
 exports.vnpayCallback = catchAsync(async (req, res) => {

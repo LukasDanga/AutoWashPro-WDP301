@@ -2867,7 +2867,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       </div>
                       <div className="px-3 py-1.5 flex items-center justify-between">
                         <span className="text-[11px] text-slate-400 font-semibold">Số tài khoản</span>
-                        <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{depositPayment.bankInfo?.accountNumber || '97966888888'}</span>
+                        <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{depositPayment.bankInfo?.accountNumber || '6200320046868'}</span>
                       </div>
                       <div className="px-3 py-1.5 flex items-center justify-between">
                         <span className="text-[11px] text-slate-400 font-semibold">Chủ tài khoản</span>
