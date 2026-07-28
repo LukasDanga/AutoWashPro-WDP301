@@ -24,6 +24,7 @@ import {
   AlertDialog,
   useToast,
   BottomSheet,
+  BottomNavBar,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing } from '../../src/theme/spacing';
@@ -348,6 +349,9 @@ export default function SpinWheelScreen() {
         </AppText>
       </ScrollView>
 
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar />
+
       {/* Prize modal */}
       <BottomSheet
         visible={!!prize}
@@ -399,7 +403,7 @@ export default function SpinWheelScreen() {
 const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingBottom: 110,
   },
   heroCard: {
     marginBottom: spacing.lg,

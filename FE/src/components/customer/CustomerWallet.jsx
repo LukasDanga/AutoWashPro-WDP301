@@ -129,7 +129,7 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
         
         const payObj = payload?.data || payload;
         setSepayData({
-          qrCodeUrl: payObj.qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=97966888888&amount=${amount}&des=DAT COC ${payObj.transactionId}`,
+          qrCodeUrl: payObj.qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=6200320046868&amount=${amount}&des=DAT COC ${payObj.transactionId}`,
           transactionId: payObj.transactionId,
           amount: amount,
         });

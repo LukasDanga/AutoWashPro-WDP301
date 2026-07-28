@@ -145,6 +145,26 @@ export default function RecurringBookingScreen() {
 
   const [note, setNote] = useState('');
 
+  const saveProgressAndHome = async () => {
+    try {
+      await AsyncStorage.setItem('aw_recurring_draft_progress', JSON.stringify({
+        step,
+        selectedBranch,
+        selectedPackage,
+        selectedVehicle,
+        selectedSubServices,
+        selectedWeekdays,
+        selectedTime,
+        weeks,
+        voucherCode,
+        voucherDiscount,
+        note,
+      }));
+      toast.info('Tiến trình đã được lưu', 'Bạn có thể tiếp tục đặt lịch sau');
+      router.replace('/');
+    } catch {}
+  };
+
   // Slots for selected day-of-week (first slot preview)
   const [daySlots, setDaySlots] = useState<AvailableSlot[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
@@ -298,6 +318,22 @@ export default function RecurringBookingScreen() {
       if (isAuthenticated) {
         const vehiclesRes = await vehicleApi.getVehicles();
         setVehicles(vehiclesRes);
+      }
+
+      const draftStr = await AsyncStorage.getItem('aw_recurring_draft_progress');
+      if (draftStr) {
+        const draft = JSON.parse(draftStr);
+        if (draft.selectedBranch) setSelectedBranch(draft.selectedBranch);
+        if (draft.selectedPackage) setSelectedPackage(draft.selectedPackage);
+        if (draft.selectedVehicle) setSelectedVehicle(draft.selectedVehicle);
+        if (draft.selectedSubServices) setSelectedSubServices(draft.selectedSubServices);
+        if (draft.selectedWeekdays) setSelectedWeekdays(draft.selectedWeekdays);
+        if (draft.selectedTime) setSelectedTime(draft.selectedTime);
+        if (draft.weeks) setWeeks(draft.weeks);
+        if (draft.voucherCode) setVoucherCode(draft.voucherCode);
+        if (draft.voucherDiscount) setVoucherDiscount(draft.voucherDiscount);
+        if (draft.note) setNote(draft.note);
+        if (draft.step) setStep(draft.step);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -576,6 +612,7 @@ export default function RecurringBookingScreen() {
         ...recurringDraft,
         timestamp: Date.now(),
       }));
+      await AsyncStorage.removeItem('aw_recurring_draft_progress');
       router.push('/payment/checkout?type=recurring' as any);
     } catch (error: any) {
       const apiMessage =
@@ -1340,7 +1377,16 @@ export default function RecurringBookingScreen() {
 
   return (
     <ScreenContainer>
-      <Header title="Đặt lịch định kỳ" showBack onBackPress={handleBack} />
+      <Header 
+        title="Đặt lịch định kỳ" 
+        showBack 
+        onBackPress={handleBack}
+        rightAction={
+          <TouchableOpacity onPress={saveProgressAndHome} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Về trang chủ">
+            <Icon name={Icons.homeOutline} size={24} color={colors.primary} />
+          </TouchableOpacity>
+        }
+      />
       <StepIndicator
         steps={STEPS}
         currentIndex={getStepIndex()}

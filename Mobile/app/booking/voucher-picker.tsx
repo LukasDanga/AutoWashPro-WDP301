@@ -56,6 +56,7 @@ export default function VoucherPickerScreen() {
   const [publicVouchers, setPublicVouchers] = useState<VoucherItem[]>([]);
   const [tierVouchers, setTierVouchers] = useState<VoucherItem[]>([]);
   const [redeemableVouchers, setRedeemableVouchers] = useState<VoucherItem[]>([]);
+  const [userPoints, setUserPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
@@ -77,10 +78,12 @@ export default function VoucherPickerScreen() {
       setPublicVouchers(res.public || []);
       setTierVouchers(res.tierExclusive || []);
       setRedeemableVouchers(res.redeemable || []);
+      setUserPoints(res.user?.loyaltyPoints || 0);
     } catch {
       setPublicVouchers([]);
       setTierVouchers([]);
       setRedeemableVouchers([]);
+      setUserPoints(0);
     } finally {
       setIsLoading(false);
     }
@@ -173,9 +176,7 @@ export default function VoucherPickerScreen() {
     if (tierVouchers.length > 0) {
       result.push({ title: 'Đặc quyền hạng thành viên', data: tierVouchers });
     }
-    if (redeemableVouchers.length > 0) {
-      result.push({ title: 'Đổi điểm', data: redeemableVouchers });
-    }
+    result.push({ title: 'Đổi điểm', data: redeemableVouchers });
     return result;
   }, [publicVouchers, tierVouchers, redeemableVouchers]);
 
@@ -295,65 +296,81 @@ export default function VoucherPickerScreen() {
     <ScreenContainer>
       <Header showBack title="Chọn ưu đãi" />
 
-      {!hasVouchers ? (
-        <EmptyState
-          icon={<Icon name={Icons.gift} size={48} color={colors.textTertiary} />}
-          title="Không có ưu đãi"
-          message="Chi nhánh này hiện chưa có voucher khả dụng cho bạn"
+      {/* Manual coupon code input — always visible */}
+      <View style={styles.manualCodeRow}>
+        <TextInput
+          value={manualCode}
+          onChangeText={(t) => { setManualCode(t.toUpperCase()); setManualMsg(''); }}
+          placeholder="Nhập mã ưu đãi / coupon..."
+          placeholderTextColor={colors.textTertiary}
+          autoCapitalize="characters"
+          returnKeyType="go"
+          onSubmitEditing={applyManualCode}
+          style={[
+            styles.manualCodeInput,
+            { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary },
+          ]}
         />
-      ) : (
-        <>
-        {/* Manual coupon code input — web parity (VoucherPicker.jsx:316-351) */}
-        <View style={styles.manualCodeRow}>
-          <TextInput
-            value={manualCode}
-            onChangeText={(t) => { setManualCode(t.toUpperCase()); setManualMsg(''); }}
-            placeholder="Nhập mã ưu đãi / coupon..."
-            placeholderTextColor={colors.textTertiary}
-            autoCapitalize="characters"
-            returnKeyType="go"
-            onSubmitEditing={applyManualCode}
-            style={[
-              styles.manualCodeInput,
-              { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary },
-            ]}
-          />
-          <TouchableOpacity
-            onPress={applyManualCode}
-            disabled={manualLoading}
-            style={[styles.manualCodeBtn, { backgroundColor: colors.primary }]}
-          >
-            <AppText variant="button" style={{ color: '#fff' }}>
-              {manualLoading ? '...' : 'Áp dụng'}
-            </AppText>
-          </TouchableOpacity>
+        <TouchableOpacity
+          onPress={applyManualCode}
+          disabled={manualLoading}
+          style={[styles.manualCodeBtn, { backgroundColor: colors.primary }]}
+        >
+          <AppText variant="button" style={{ color: '#fff' }}>
+            {manualLoading ? '...' : 'Áp dụng'}
+          </AppText>
+        </TouchableOpacity>
+      </View>
+      {manualMsg ? (
+        <View style={[
+          styles.manualMsgBox,
+          {
+            backgroundColor: manualMsg.startsWith('✓') ? '#dcfce7' : '#fef2f2',
+            borderColor: manualMsg.startsWith('✓') ? '#bbf7d0' : '#fecaca',
+          },
+        ]}>
+          <AppText variant="bodySmall" style={{ color: manualMsg.startsWith('✓') ? '#16a34a' : '#dc2626' }}>
+            {manualMsg}
+          </AppText>
         </View>
-        {manualMsg ? (
-          <View style={[
-            styles.manualMsgBox,
-            {
-              backgroundColor: manualMsg.startsWith('✓') ? '#dcfce7' : '#fef2f2',
-              borderColor: manualMsg.startsWith('✓') ? '#bbf7d0' : '#fecaca',
-            },
-          ]}>
-            <AppText variant="bodySmall" style={{ color: manualMsg.startsWith('✓') ? '#16a34a' : '#dc2626' }}>
-              {manualMsg}
-            </AppText>
-          </View>
-        ) : null}
+      ) : null}
+      
+      {!hasVouchers ? (
+        <View style={{ flex: 1, marginTop: spacing.xl }}>
+          <EmptyState
+            icon={<Icon name={Icons.gift} size={48} color={colors.textTertiary} />}
+            title="Không có ưu đãi"
+            message="Chi nhánh này hiện chưa có voucher khả dụng cho bạn"
+          />
+        </View>
+      ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item._id}
           renderItem={renderVoucher}
           renderSectionHeader={({ section: { title } }) => (
-            <View style={styles.sectionHeader}>
+            <View style={[styles.sectionHeader, title === 'Đổi điểm' ? { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' } : {}]}>
               <AppText variant="label" color="textSecondary" style={styles.sectionTitle}>{title}</AppText>
+              {title === 'Đổi điểm' && (
+                <View style={{ backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                  <AppText variant="caption" weight="600" color="primary">Điểm của bạn: {userPoints} ⭐</AppText>
+                </View>
+              )}
             </View>
           )}
+          renderSectionFooter={({ section: { title, data } }) => {
+            if (title === 'Đổi điểm' && data.length === 0) {
+              return (
+                <View style={{ padding: spacing.md, alignItems: 'center' }}>
+                  <AppText variant="bodySmall" color="textTertiary">Chưa có mã đổi thưởng nào</AppText>
+                </View>
+              );
+            }
+            return null;
+          }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
-        </>
       )}
     </ScreenContainer>
   );

@@ -61,6 +61,7 @@ export interface AlertOptions {
   actions?: AlertAction[];
   cancelable?: boolean;
   iconName?: string;
+  customContent?: React.ReactNode;
 }
 
 interface ActiveAlert extends Required<Pick<AlertOptions, 'title' | 'variant' | 'cancelable'>> {
@@ -68,6 +69,7 @@ interface ActiveAlert extends Required<Pick<AlertOptions, 'title' | 'variant' | 
   message?: string;
   actions: AlertAction[];
   iconName?: string;
+  customContent?: React.ReactNode;
 }
 
 interface AlertContextValue {
@@ -110,7 +112,7 @@ const getVariantConfig = (variant: AlertVariant, colors: any, isDark: boolean) =
         iconColor: colors.error || '#ef4444',
         icon: Icons.warning || 'alert-circle-outline',
         gradientColors: isLight ? ['#FEF2F2', 'rgba(239, 68, 68, 0.1)'] : ['rgba(239, 68, 68, 0.15)', 'rgba(239, 68, 68, 0.05)'],
-        defaultSubtitle: 'Hành động này không thể hoàn tác',
+        defaultSubtitle: 'Đã xảy ra lỗi',
         subtitleColor: isLight ? '#991B1B' : 'rgba(239, 68, 68, 0.9)',
       };
     case 'confirm':
@@ -342,6 +344,12 @@ const AlertDialogModal: React.FC<AlertDialogModalProps> = ({ alert, onDismiss })
                 </Text>
               ) : null}
 
+              {alert.customContent && (
+                <View style={{ marginTop: spacing.sm }}>
+                  {alert.customContent}
+                </View>
+              )}
+
               <View style={styles.actions}>
                 {alert.actions.map((action, index) => {
                   const isCancel = action.style === 'cancel' || index === cancelIndex;
@@ -411,6 +419,7 @@ export const AlertDialogProvider: React.FC<{ children: React.ReactNode }> = ({ c
       cancelable: options.cancelable !== false,
       actions: defaultActions,
       iconName: options.iconName,
+      customContent: options.customContent,
     });
   }, []);
 
@@ -440,12 +449,15 @@ export function useAlertDialog(): AlertContextValue {
 
 // Static imperative API — drop-in replacement for Alert.alert
 let externalShow: ((options: AlertOptions) => void) | null = null;
+let externalHide: (() => void) | null = null;
 
-export function registerAlertBridge(showFn: (options: AlertOptions) => void) {
+export function registerAlertBridge(showFn: (options: AlertOptions) => void, hideFn?: () => void) {
   externalShow = showFn;
+  if (hideFn) externalHide = hideFn;
 }
 
 export const AlertDialog = {
+  hide: () => externalHide?.(),
   show: (options: AlertOptions) => externalShow?.(options),
   info: (title: string, message?: string, onOk?: () => void) =>
     externalShow?.({
@@ -468,9 +480,10 @@ export const AlertDialog = {
       variant: 'warning',
       actions: [{ text: 'OK', onPress: onOk }],
     }),
-  error: (title: string, message?: string, onOk?: () => void) =>
+  error: (title: string, message?: string, onOk?: () => void, subtitle?: string) =>
     externalShow?.({
       title,
+      subtitle,
       message,
       variant: 'danger',
       actions: [{ text: 'OK', onPress: onOk }],

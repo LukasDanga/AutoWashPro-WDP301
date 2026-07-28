@@ -64,6 +64,7 @@ export const Icons = {
   // Status
   success: 'checkmark-circle',
   successOutline: 'checkmark-circle-outline',
+  checkmarkCircle: 'checkmark-circle',
   warning: 'warning',
   warningOutline: 'warning-outline',
   error: 'alert-circle',

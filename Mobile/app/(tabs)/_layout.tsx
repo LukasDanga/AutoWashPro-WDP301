@@ -101,18 +101,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="rewards"
+        name="history"
         options={{
-          title: 'Ưu đãi',
+          title: 'Lịch sử',
           tabBarIcon: ({ color, focused }) => (
             <Icon
-              name={focused ? Icons.gift : Icons.giftOutline}
+              name={focused ? Icons.list : Icons.listOutline}
               size={24}
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'Ưu đãi và voucher',
-          tabBarLabel: 'Ưu đãi',
+          tabBarAccessibilityLabel: 'Lịch sử đặt lịch',
+          tabBarLabel: 'Lịch sử',
         }}
       />
       <Tabs.Screen
@@ -130,12 +130,12 @@ export default function TabLayout() {
           tabBarLabel: 'Tài khoản',
         }}
       />
-      {/* History screen kept accessible via deep-link but hidden from tab bar */}
+      {/* Rewards screen kept accessible via deep-link but hidden from tab bar */}
       <Tabs.Screen
-        name="history"
+        name="rewards"
         options={{
           href: null,
-          title: 'Lịch sử',
+          title: 'Ưu đãi',
         }}
       />
     </Tabs>

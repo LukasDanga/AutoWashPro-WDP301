@@ -59,6 +59,7 @@ import {
   StepIndicator,
   Chip,
   useToast,
+  useAlertDialog,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, layout, shadows } from '../../src/theme/spacing';
@@ -111,6 +112,7 @@ export default function BookingScreen() {
   const { isAuthenticated, user } = useAuth();
   const colors = useColors();
   const toast = useToast();
+  const alertDialog = useAlertDialog();
 
   const {
     step,
@@ -139,6 +141,11 @@ export default function BookingScreen() {
   const [packages, setPackages] = useState<Package[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [branchPackageCounts, setBranchPackageCounts] = useState<{ counts: Record<string, number>; globalCount: number }>({ counts: {}, globalCount: 0 });
+  const selectedBranchIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    selectedBranchIdRef.current = selectedBranch?._id || null;
+  }, [selectedBranch?._id]);
 
   const [dateSlots, setDateSlots] = useState<Record<string, AvailableSlot[]>>({});
   const [dateSlotsErrors, setDateSlotsErrors] = useState<Record<string, string>>({});
@@ -239,7 +246,13 @@ export default function BookingScreen() {
         // branch), which made the picker show duplicates. We don't know
         // the branch yet at this point, so we just collapse them by
         // composite key and keep the first occurrence.
-        setPackages(dedupePackages(packagesRes));
+        setPackages((prev) => {
+          // Merge with prev to ensure we don't overwrite getBranchPackages results
+          // Merge with prev to ensure we don't overwrite getBranchPackages results
+          // that might have finished before fetchInitial.
+          const merged = [...packagesRes, ...prev];
+          return dedupePackages(merged, selectedBranchIdRef.current);
+        });
 
         if (isAuthenticated) {
           const vehiclesRes = await vehicleApi.getVehicles();
@@ -303,31 +316,15 @@ export default function BookingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, isLoading]);
 
-  // Fresh-start reset on entry.
-  //
-  // BookingProvider lives at the root layout, so the booking draft (and the
-  // AsyncStorage-hydrated selections) survive across navigations. Without
-  // this, tapping "đặt lịch thường" again would show the previous session's
-  // branch/package/vehicle already ticked. We clear the draft every time the
-  // screen gains focus for a *fresh* entry — unless:
-  //   • the caller passed prefill params (rebook / quick-book), or
-  //   • we're returning from an internal detour (voucher-picker, vehicle/add,
-  //     login) where the in-progress booking must be preserved.
+  // Removed aggressive fresh-start reset on entry.
+  // The booking draft is now allowed to persist so the user can resume
+  // where they left off after pressing the Home button.
   useFocusEffect(
     useCallback(() => {
-      if (!isHydrated) return;
       if (returningFromSubScreen.current) {
-        // Came back from a sub-screen — keep the in-progress booking, just
-        // clear the one-shot guard for the next entry.
         returningFromSubScreen.current = false;
-        return;
       }
-      const hasPrefillParams =
-        params.branchId || params.packageId || params.vehicleId;
-      if (hasPrefillParams) return;
-      resetAll();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isHydrated, params.branchId, params.packageId, params.vehicleId]),
+    }, [])
   );
 
   // Packages shown in the package step — narrowed by branch availability.
@@ -410,7 +407,7 @@ export default function BookingScreen() {
   //      branch) or re-pick the branch. We do NOT silently clear the package
   //      — that's a frustrating dead end that leaves the user confused.
   useEffect(() => {
-    if (!selectedBranch?._id || !selectedPackage) return;
+    if (isLoading || !selectedBranch?._id || !selectedPackage) return;
     const current = selectedPackage;
     const isCompatible = filteredPackages.some((p) => p._id === current._id);
     if (isCompatible) {
@@ -486,7 +483,7 @@ export default function BookingScreen() {
       ],
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranch?._id, packages, filteredPackages, branchPackagesAttempted]);
+  }, [selectedBranch?._id, packages, filteredPackages, branchPackagesAttempted, isLoading]);
 
   // Fetch slots for all visible dates whenever the user enters the datetime
   // step with a branch + package selected.
@@ -757,7 +754,24 @@ export default function BookingScreen() {
 
   return (
     <ScreenContainer edges={['top']} background="subtle">
-      <Header title="Đặt lịch rửa xe" showBack onBackPress={handleBack} />
+      <Header 
+        title="Đặt lịch rửa xe" 
+        showBack 
+        onBackPress={handleBack} 
+        rightAction={
+          <TouchableOpacity
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => {
+              toast.info('Tiến trình đã được lưu', 'Bạn có thể tiếp tục đặt lịch sau');
+              router.replace('/');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Về trang chủ"
+          >
+            <Icon name={Icons.homeOutline} size={24} color={colors.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       <View style={[styles.progressContainer, { backgroundColor: colors.background }]}>
         <StepIndicator
@@ -843,6 +857,29 @@ export default function BookingScreen() {
                   key={pkg._id}
                   selected={selectedPackage?._id === pkg._id}
                   onPress={() => setSelectedPackage(pkg)}
+                  onInfoPress={() => {
+                    // @ts-ignore - subServices exists on package
+                    const includedServices = (pkg as any).subServices?.filter((s: any) => !s.isOptional) || [];
+                    if (includedServices.length > 0) {
+                      alertDialog.show({
+                        title: 'Các dịch vụ đi kèm',
+                        message: includedServices.map((s: any) => `• ${s.name}`).join('\n'),
+                        variant: 'info',
+                      });
+                    } else if (pkg.description) {
+                      alertDialog.show({
+                        title: 'Chi tiết gói',
+                        message: pkg.description,
+                        variant: 'info',
+                      });
+                    } else {
+                      alertDialog.show({
+                        title: 'Chi tiết gói',
+                        message: 'Không có thông tin chi tiết cho gói này.',
+                        variant: 'info',
+                      });
+                    }
+                  }}
                   icon={Icons.sparkle}
                   title={pkg.name}
                   subtitle={
@@ -1485,17 +1522,51 @@ export default function BookingScreen() {
             ) : null}
 
             <Card style={styles.priceCard}>
-              <View style={styles.priceRow}>
-                <AppText variant="body" color="textSecondary">
-                  Giá gốc
-                </AppText>
-                <AppText variant="body" color="textPrimary">
-                  {formatCurrency(totalBase)}
-                </AppText>
-              </View>
+              {selectedSubServices && selectedSubServices.length > 0 ? (
+                <>
+                  <View style={styles.priceRow}>
+                    <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
+                      Gói {selectedPackage?.name}
+                    </AppText>
+                    <AppText variant="body" color="textPrimary">
+                      {formatCurrency(basePrice)}
+                    </AppText>
+                  </View>
+                  {selectedSubServices.map((subName) => {
+                    const sub = (selectedPackage as any)?.subServices?.find((s: any) => s.name === subName);
+                    return (
+                      <View key={subName} style={styles.priceRow}>
+                        <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingLeft: spacing.xs, paddingRight: spacing.sm }}>
+                          + DV thêm: {subName}
+                        </AppText>
+                        <AppText variant="body" color="textSecondary">
+                          +{formatCurrency(sub?.price || 0)}
+                        </AppText>
+                      </View>
+                    );
+                  })}
+                  <View style={styles.priceRow}>
+                    <AppText variant="body" weight="600" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
+                      Giá gốc (Tổng)
+                    </AppText>
+                    <AppText variant="body" weight="600" color="textPrimary">
+                      {formatCurrency(totalBase)}
+                    </AppText>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.priceRow}>
+                  <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
+                    Giá gốc
+                  </AppText>
+                  <AppText variant="body" color="textPrimary">
+                    {formatCurrency(totalBase)}
+                  </AppText>
+                </View>
+              )}
               {isPayingWithPack ? (
                 <View style={styles.priceRow}>
-                  <AppText variant="body" color="textSecondary">
+                  <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
                     Thanh toán bằng gói lượt
                   </AppText>
                   <AppText variant="body" color="success">
@@ -1505,7 +1576,7 @@ export default function BookingScreen() {
               ) : null}
               {voucherSavings > 0 && !isPayingWithPack ? (
                 <View style={styles.priceRow}>
-                  <AppText variant="body" color="textSecondary">
+                  <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
                     Khuyến mãi từ voucher
                   </AppText>
                   <AppText variant="body" color="success">
@@ -1515,7 +1586,7 @@ export default function BookingScreen() {
               ) : null}
               <View style={[styles.priceDivider, { backgroundColor: colors.divider }]} />
               <View style={styles.priceRow}>
-                <AppText variant="body" color="textSecondary">
+                <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
                   Thực thu tại tiệm
                 </AppText>
                 <AppText variant="h3" color="primary">
@@ -1533,7 +1604,7 @@ export default function BookingScreen() {
                   },
                 ]}
               >
-                <AppText variant="body" color="textSecondary">
+                <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
                   Tích điểm
                 </AppText>
                 <AppText variant="body" style={{ color: colors.primary, fontWeight: '600' }}>
@@ -1621,6 +1692,7 @@ const StepLayout: React.FC<StepLayoutProps> = ({ title, subtitle, icon, children
 interface SelectableCardProps {
   selected: boolean;
   onPress: () => void;
+  onInfoPress?: () => void;
   icon: string;
   title: string;
   subtitle: React.ReactNode;
@@ -1631,6 +1703,7 @@ interface SelectableCardProps {
 const SelectableCard: React.FC<SelectableCardProps> = ({
   selected,
   onPress,
+  onInfoPress,
   icon,
   title,
   subtitle,
@@ -1673,9 +1746,20 @@ const SelectableCard: React.FC<SelectableCardProps> = ({
             />
           </View>
           <View style={styles.optionInfo}>
-            <AppText variant="body" style={styles.optionTitle} numberOfLines={1}>
-              {title}
-            </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <AppText variant="body" style={{ fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+                {title}
+              </AppText>
+              {onInfoPress && (
+                <TouchableOpacity
+                  onPress={onInfoPress}
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
+                  style={{ marginLeft: 6 }}
+                >
+                  <Icon name={Icons.informationCircleOutline} size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
             {subtitle}
             {disabled && disabledLabel ? (
               <AppText

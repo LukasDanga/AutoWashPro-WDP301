@@ -87,6 +87,7 @@ export default function BookingDetailScreen() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRebooking, setIsRebooking] = useState(false);
   const [qrFullscreen, setQrFullscreen] = useState(false);
+  const [isServiceExpanded, setIsServiceExpanded] = useState(false);
 
   // Refund UI state
   const [refundRequest, setRefundRequest] = useState<RefundRequest | null>(null);
@@ -452,49 +453,80 @@ export default function BookingDetailScreen() {
         </InfoCard>
 
         {/* Service */}
-        <InfoCard
-          icon={Icons.sparkle}
-          iconBg={colors.warningLight}
-          iconColor={colors.warning}
-          title="Dịch vụ & Gói chăm sóc"
-        >
-          <AppText variant="body" style={{ fontWeight: '700' }} numberOfLines={2}>
-            {packageName}
-          </AppText>
-          {packageDuration ? (
-            <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
-              ⏱️ Thời gian thực hiện: {packageDuration} phút
-            </AppText>
-          ) : null}
-          {typeof booking.packageId === 'object' && (booking.packageId as any)?.description ? (
-            <AppText variant="caption" color="textSecondary" style={{ marginTop: 4, lineHeight: 18 }}>
-              {(booking.packageId as any).description}
-            </AppText>
-          ) : null}
-          {booking.selectedSubServices && booking.selectedSubServices.length > 0 ? (
-            <View style={{ marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-              <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
-                Dịch vụ đính kèm ({booking.selectedSubServices.length}):
-              </AppText>
-              {booking.selectedSubServices.map((sub: any, idx: number) => {
-                const subName = typeof sub === 'object' ? sub.name : sub;
-                const subPrice = typeof sub === 'object' ? sub.price : undefined;
-                return (
-                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-                    <AppText variant="caption" color="textSecondary">
-                      • {subName}
+        {(() => {
+          const subServicesList = booking.selectedSubServices || booking.subServices;
+          const hasSubServices = subServicesList && subServicesList.length > 0;
+          const packageDesc = typeof booking.packageId === 'object' ? (booking.packageId as any)?.description : undefined;
+          const hasExpandableContent = hasSubServices || !!packageDesc;
+
+          return (
+            <InfoCard
+              icon={Icons.sparkle}
+              iconBg={colors.warningLight}
+              iconColor={colors.warning}
+              title="Dịch vụ & Gói chăm sóc"
+              onPress={hasExpandableContent ? () => setIsServiceExpanded(prev => !prev) : undefined}
+              rightAction={
+                hasExpandableContent ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <AppText variant="caption" color="textSecondary" style={{ marginRight: 2, fontSize: 11 }}>
+                      {isServiceExpanded ? 'Thu gọn' : 'Xem chi tiết'}
                     </AppText>
-                    {subPrice ? (
-                      <AppText variant="caption" color="textPrimary" style={{ fontWeight: '600' }}>
-                        +{formatCurrency(subPrice)}
-                      </AppText>
-                    ) : null}
+                    <Icon
+                      name={isServiceExpanded ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color={colors.textSecondary}
+                    />
                   </View>
-                );
-              })}
-            </View>
-          ) : null}
-        </InfoCard>
+                ) : null
+              }
+            >
+              <AppText variant="body" style={{ fontWeight: '700' }} numberOfLines={2}>
+                {packageName}
+              </AppText>
+              {packageDuration ? (
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+                  ⏱️ Thời gian thực hiện: {packageDuration} phút
+                </AppText>
+              ) : null}
+
+              {/* Expandable sub-services & package details */}
+              {isServiceExpanded && hasExpandableContent ? (
+                <View style={{ marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                  {packageDesc ? (
+                    <AppText variant="caption" color="textSecondary" style={{ marginBottom: 6, lineHeight: 18 }}>
+                      {packageDesc}
+                    </AppText>
+                  ) : null}
+
+                  {hasSubServices ? (
+                    <View>
+                      <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
+                        Dịch vụ đính kèm ({subServicesList.length}):
+                      </AppText>
+                      {subServicesList.map((sub: any, idx: number) => {
+                        const subName = typeof sub === 'object' ? sub.name : sub;
+                        const subPrice = typeof sub === 'object' ? sub.price : undefined;
+                        return (
+                          <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                            <AppText variant="caption" color="textSecondary">
+                              • {subName}
+                            </AppText>
+                            {subPrice ? (
+                              <AppText variant="caption" color="textPrimary" style={{ fontWeight: '600' }}>
+                                +{formatCurrency(subPrice)}
+                              </AppText>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </InfoCard>
+          );
+        })()}
 
         {/* Vehicle */}
         {vehicleInfo ? (
@@ -1058,25 +1090,47 @@ interface InfoCardProps {
   iconColor: string;
   title: string;
   children: React.ReactNode;
+  rightAction?: React.ReactNode;
+  onPress?: () => void;
 }
 
-const InfoCard: React.FC<InfoCardProps> = ({ icon, iconBg, iconColor, title, children }) => {
+const InfoCard: React.FC<InfoCardProps> = ({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  children,
+  rightAction,
+  onPress,
+}) => {
   const colors = useColors();
-  return (
+  const cardContent = (
     <Card style={styles.infoCard}>
       <View style={styles.infoCardRow}>
         <View style={[styles.infoIconWrap, { backgroundColor: iconBg }]}>
           <Icon name={icon} size={20} color={iconColor} />
         </View>
         <View style={{ flex: 1 }}>
-          <AppText variant="caption" color="textSecondary" style={{ marginBottom: 2 }}>
-            {title}
-          </AppText>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+            <AppText variant="caption" color="textSecondary">
+              {title}
+            </AppText>
+            {rightAction}
+          </View>
           {children}
         </View>
       </View>
     </Card>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+        {cardContent}
+      </TouchableOpacity>
+    );
+  }
+  return cardContent;
 };
 
 const RowBetween: React.FC<{

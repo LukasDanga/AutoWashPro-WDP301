@@ -24,7 +24,7 @@ const TABS: TabItem[] = [
   { label: 'Trang chủ', icon: Icons.homeOutline, iconFocused: Icons.home, route: '/(tabs)' },
   { label: 'Đặt lịch', icon: Icons.calendarOutline, iconFocused: Icons.calendar, route: '/(tabs)/booking' },
   { label: 'Check-in', icon: Icons.qrCodeOutline, iconFocused: Icons.qrCode, route: '/(tabs)/checkin' },
-  { label: 'Ưu đãi', icon: Icons.giftOutline, iconFocused: Icons.gift, route: '/(tabs)/rewards' },
+  { label: 'Lịch sử', icon: Icons.listOutline, iconFocused: Icons.list, route: '/(tabs)/history' },
   { label: 'Tài khoản', icon: Icons.personOutline, iconFocused: Icons.person, route: '/(tabs)/profile' },
 ];
 

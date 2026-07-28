@@ -28,6 +28,7 @@ export interface AvailableVouchersResponse {
 }
 
 export interface AvailableVouchersNormalized {
+  user?: AvailableVouchersResponse['user'];
   tierExclusive: Voucher[];
   public: Voucher[];
   redeemable: Voucher[];
@@ -67,6 +68,7 @@ export const getAvailableVouchers = async (params?: {
   const response = await apiClient.get('/vouchers/available', { params });
   const data = (response.data || {}) as AvailableVouchersResponse;
   return {
+    user:          data.user,
     tierExclusive: data.tier_exclusive || [],
     public:        data.public        || [],
     redeemable:    data.redeemable    || [],
