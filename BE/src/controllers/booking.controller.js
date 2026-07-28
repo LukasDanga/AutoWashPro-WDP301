@@ -386,7 +386,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
       }
       if (isTopup) {
-        return res.redirect(302, `${feUrl}/profile?vnpay_result=${encoded}`);
+        return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
       }
       // Provisional & slot pack đều redirect về / (App routing handles dispatch)
       if (payment && (!payment.bookingId || payment.slotPackId)) {
@@ -402,7 +402,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
     return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
   }
   if (isTopup) {
-    return res.redirect(302, `${feUrl}/profile?vnpay_result=${encoded}`);
+    return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
   }
   return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
 });
