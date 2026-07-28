@@ -275,6 +275,18 @@ export default function App() {
     );
   }
 
+  const handleGoToHistory = (param) => {
+    if (typeof param === 'string' && param.startsWith('/')) {
+      navigate(param);
+    } else if (param === 'slot_packs') {
+      navigate('/history?view=slot_packs');
+    } else if (param) {
+      navigate(`/history?bookingId=${param}`);
+    } else {
+      navigate('/history');
+    }
+  };
+
   if (path === '/payments' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
@@ -292,32 +304,32 @@ export default function App() {
   }
 
   if (path === '/booking') {
-    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={(id) => navigate(id ? `/history?bookingId=${id}` : '/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
   }
 
   if (path === '/packages') {
-    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/gifts') {
-    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/map') {
-    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path.startsWith('/branch/')) {
-    return <BranchDetailPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <BranchDetailPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/about') {
-    return <AboutPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <AboutPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/policies') {
-    return <PolicyPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <PolicyPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
-  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
 }
