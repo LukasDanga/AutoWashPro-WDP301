@@ -374,6 +374,7 @@ exports.getUsageHistory = async (filters = {}, userRole, userBranchId) => {
   const query = { bookingType: 'slot_pack_usage' };
 
   if (filters.slotPackId) query.slotPackId = filters.slotPackId;
+  if (filters.userId) query.userId = filters.userId;
 
   // Manager chỉ thấy chi nhánh mình
   if (userRole === 'manager' && userBranchId) {

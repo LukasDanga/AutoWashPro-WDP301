@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { RefreshCw } from 'lucide-react';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -53,6 +54,24 @@ export default function ManagerSlotPacks({ user }) {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [detail, setDetail] = useState(null);
   const [branchId, setBranchId] = useState(user?.branchId || null);
+
+  const [usageHistory, setUsageHistory] = useState([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  useEffect(() => {
+    if (!detail) {
+      setUsageHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setUsageLoading(true);
+    api(`/slot-packs/${detail._id}/usage-history?limit=50`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setUsageHistory(Array.isArray(d?.data) ? d.data : []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setUsageLoading(false); });
+    return () => { cancelled = true; };
+  }, [detail]);
 
   const loadPacks = useCallback(async (bId) => {
     if (!bId) { setLoading(false); return; }
@@ -261,12 +280,12 @@ export default function ManagerSlotPacks({ user }) {
       {detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => setDetail(null)}>
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h2 className="font-semibold text-slate-800 font-mono">{detail.packCode}</h2>
               <button onClick={() => setDetail(null)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
             </div>
-            <div className="p-6 space-y-3 text-sm">
+            <div className="p-6 space-y-3 text-sm overflow-y-auto flex-1">
               {[
                 ['Khách hàng', detail.userId?.name || '—'],
                 ['Số điện thoại', detail.userId?.phone || '—'],
@@ -286,8 +305,56 @@ export default function ManagerSlotPacks({ user }) {
                   <span className="font-medium text-slate-700 text-right">{v}</span>
                 </div>
               ))}
+
+              {/* Lịch sử sử dụng của Gói Lượt */}
+              <div className="border-t border-slate-100 pt-4 mt-2">
+                <span className="block text-xs text-slate-400 font-medium mb-2">Lịch sử sử dụng</span>
+                {usageLoading ? (
+                  <div className="flex justify-center py-4">
+                    <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                  </div>
+                ) : usageHistory.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-slate-400">Chưa có lượt sử dụng nào</div>
+                ) : (
+                  <div className="border border-slate-100 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100">
+                          <th className="px-3 py-2 font-semibold text-slate-500">Ngày</th>
+                          <th className="px-3 py-2 font-semibold text-slate-500">Giờ</th>
+                          <th className="px-3 py-2 font-semibold text-slate-500">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usageHistory.map(b => {
+                          const dateStr = b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : '—';
+                          const statusLabel = 
+                            b.status === 'completed' ? 'Hoàn thành' :
+                            b.status === 'cancelled' ? 'Đã hủy' :
+                            b.status === 'pending' ? 'Chờ xử lý' :
+                            'Đã xác nhận';
+                          const statusCls = 
+                            b.status === 'completed' ? 'text-emerald-600 font-semibold' :
+                            b.status === 'cancelled' ? 'text-red-500 font-semibold' :
+                            'text-slate-600';
+                          
+                          return (
+                            <tr key={b._id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                              <td className="px-3 py-2 font-medium text-slate-700">{dateStr}</td>
+                              <td className="px-3 py-2 text-slate-600">{b.startTime || '—'}</td>
+                              <td className="px-3 py-2">
+                                <span className={statusCls}>{statusLabel}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="px-6 pb-6">
+            <div className="px-6 py-4 border-t border-slate-100 shrink-0">
               <button onClick={() => setDetail(null)}
                 className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                 Đóng

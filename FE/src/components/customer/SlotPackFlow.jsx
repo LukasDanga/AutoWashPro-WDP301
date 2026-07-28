@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, X, MapPin, Clock, CheckCircle2, ShieldCheck, Check, Sparkles, Info } from 'lucide-react';
+import { RefreshCw, X, MapPin, Clock, CheckCircle2, ShieldCheck, Check, Sparkles, Info, AlertCircle } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
 import QuickBookModal from './QuickBookModal.jsx';
 import { showToast } from '@/lib/toast';
@@ -40,12 +40,34 @@ function SlotMeter({ total, remaining }) {
   );
 }
 
-function PackCard({ pack, onQuickBook, onCancelPack }) {
+function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
   const st = STATUS_MAP[pack.status] || { label: pack.status, color: '#6b7280', bg: '#f9fafb' };
   const pkg = pack.packageId;
   const branch = pack.branchId;
   const canQuickBook = pack.status === 'active' && pack.remainingSlots > 0 && pack.paymentStatus === 'paid';
   const canCancel = pack.status === 'active';
+
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!showHistory || !pack._id || !token) return;
+    setHistoryLoading(true);
+    fetch(`${apiBase}/slot-packs/${pack._id}/usage-history`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(payload => {
+        const data = payload?.data || payload;
+        setHistory(Array.isArray(data) ? data : []);
+      })
+      .catch(err => {
+        console.error('Lỗi khi fetch lịch sử gói lượt:', err);
+        setHistory([]);
+      })
+      .finally(() => setHistoryLoading(false));
+  }, [showHistory, pack._id, apiBase, token]);
 
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md ${pack.status !== 'active' ? 'opacity-60' : ''}`}>
@@ -85,8 +107,18 @@ function PackCard({ pack, onQuickBook, onCancelPack }) {
           🏷 {pack.voucherCode} — tiết kiệm thêm {formatCurrency(pack.voucherDiscount)}
         </div>
       )}
-      {(canQuickBook || canCancel) && (
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors flex items-center gap-1.5"
+          >
+            <Clock size={12} />
+            Lịch sử
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
           {canCancel && onCancelPack && (
             <button
               type="button"
@@ -105,6 +137,90 @@ function PackCard({ pack, onQuickBook, onCancelPack }) {
               ⚡ Đặt lịch nhanh
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Usage History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 z-[10006] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div
+            className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl relative border border-slate-100 text-slate-900 text-left"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowHistory(false)}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center transition-colors"
+            >
+              <X size={16} />
+            </button>
+            
+            <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Clock size={16} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Lịch sử sử dụng gói lượt</h3>
+                <p className="text-[11px] text-slate-400 font-mono">Mã: {pack.packCode}</p>
+              </div>
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1">
+              {historyLoading ? (
+                <div className="text-center py-10 text-xs text-slate-400 flex flex-col items-center gap-2">
+                  <RefreshCw size={20} className="animate-spin text-emerald-600" />
+                  Đang tải lịch sử...
+                </div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-10 text-xs text-slate-400">
+                  Gói lượt này chưa được sử dụng lần nào.
+                </div>
+              ) : (
+                history.map((h, idx) => {
+                  const bDate = new Date(h.bookingDate).toLocaleDateString('vi-VN');
+                  const statusCls = 
+                    h.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                    h.status === 'cancelled' ? 'bg-red-50 text-red-500 border-red-200' :
+                    h.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                    'bg-blue-50 text-blue-600 border-blue-200';
+                  const statusLabel = 
+                    h.status === 'completed' ? 'Hoàn thành' :
+                    h.status === 'cancelled' ? 'Đã hủy' :
+                    h.status === 'pending' ? 'Chờ xử lý' :
+                    'Đã xác nhận';
+                  
+                  return (
+                    <div key={h._id || idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex flex-col gap-1.5 text-xs text-slate-700">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-slate-800">{bDate} - {h.startTime}</span>
+                        <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${statusCls}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="text-slate-500 flex justify-between">
+                        <span>Chi nhánh:</span>
+                        <span className="font-semibold text-slate-700">{h.branchId?.name}</span>
+                      </div>
+                      <div className="text-slate-500 flex justify-between">
+                        <span>Xe:</span>
+                        <span className="font-semibold text-slate-700">
+                          {h.vehicleId?.brand} {h.vehicleId?.model} ({h.vehicleId?.licensePlate})
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setShowHistory(false)}
+              className="w-full mt-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition-colors"
+            >
+              Đóng
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -138,6 +254,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const [packsLoading, setPacksLoading] = useState(false);
   const [showMyPacks, setShowMyPacks] = useState(false);
   const [quickBookPack, setQuickBookPack] = useState(null);
+  const [packToCancel, setPackToCancel] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -179,16 +296,17 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
     finally { setPacksLoading(false); }
   }, [apiBase, token]);
 
-  const handleCancelPack = async (pack) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn hủy gói lượt ${pack.packCode}?`)) return;
+  const handleCancelPackConfirm = async () => {
+    if (!packToCancel) return;
     try {
-      const res = await fetch(`${apiBase}/slot-packs/${pack._id}/cancel`, {
+      const res = await fetch(`${apiBase}/slot-packs/${packToCancel._id}/cancel`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Không thể hủy gói lượt');
       showToast('Đã hủy gói lượt thành công', 'success');
+      setPackToCancel(null);
       loadMyPacks();
     } catch (err) {
       showToast(err.message, 'error');
@@ -742,14 +860,16 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
               <div className="mt-4 space-y-3">
                 {packsLoading ? (
                   <div className="text-center py-8 text-slate-400">Đang tải...</div>
-                ) : myPacks.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">Chưa có gói slot nào</div>
-                ) : myPacks.map(p => (
+                ) : myPacks.filter(p => p.status !== 'cancelled' && p.status !== 'exhausted' && p.remainingSlots > 0).length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">Chưa có gói slot nào khả dụng</div>
+                ) : myPacks.filter(p => p.status !== 'cancelled' && p.status !== 'exhausted' && p.remainingSlots > 0).map(p => (
                   <PackCard
                     key={p._id}
                     pack={p}
                     onQuickBook={setQuickBookPack}
-                    onCancelPack={handleCancelPack}
+                    onCancelPack={setPackToCancel}
+                    apiBase={apiBase}
+                    token={token}
                   />
                 ))}
               </div>
@@ -834,7 +954,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                   Đóng
                 </button>
-                <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); onGoToHistory?.(); }}
+                <button onClick={() => { setShowSuccessModal(false); setBuyResult(null); onGoToHistory?.('slot_packs'); }}
                   className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">
                   Lịch sử gói lượt
                 </button>
@@ -1011,6 +1131,69 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
             if (onGoToHistory) onGoToHistory();
           }}
         />
+      )}
+      {/* Cancel Confirmation Modal */}
+      {packToCancel && (
+        <div className="fixed inset-0 z-[10005] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative border border-slate-100"
+          >
+            <button
+              type="button"
+              onClick={() => setPackToCancel(null)}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center transition-colors"
+            >
+              <X size={16} />
+            </button>
+            
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+                <AlertCircle size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Xác nhận hủy gói lượt</h3>
+              <p className="text-xs text-slate-500 mb-4">Hành động này không thể hoàn tác. Gói lượt sẽ bị hủy bỏ hoàn toàn và ẩn khỏi giao diện của bạn.</p>
+              
+              <div className="w-full bg-slate-50 rounded-xl p-4 text-left space-y-2 mb-6 border border-slate-100 text-slate-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-semibold">Mã gói lượt:</span>
+                  <span className="font-mono font-bold text-slate-800">{packToCancel.packCode}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-semibold">Gói dịch vụ:</span>
+                  <span className="font-bold text-slate-800">{packToCancel.packageId?.name || 'Gói dịch vụ'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-semibold">Chi nhánh:</span>
+                  <span className="font-bold text-slate-800">{packToCancel.branchId?.name || 'Áp dụng toàn hệ thống'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-semibold">Số lượt còn lại:</span>
+                  <span className="font-bold text-red-600">{packToCancel.remainingSlots}/{packToCancel.totalSlots} lượt</span>
+                </div>
+              </div>
+              
+              <div className="flex w-full gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPackToCancel(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-100 transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelPackConfirm}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-500 transition-colors"
+                >
+                  Xác nhận hủy
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       )}
     </div>
   );

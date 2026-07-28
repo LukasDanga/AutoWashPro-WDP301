@@ -62,8 +62,12 @@ exports.getUsageHistory = catchAsync(async (req, res) => {
 
 /** GET /api/slot-packs/:id/usage-history — Lịch sử sử dụng của 1 gói cụ thể */
 exports.getSlotPackUsageHistory = catchAsync(async (req, res) => {
+  const filters = { ...req.query, slotPackId: req.params.id };
+  if (req.user.role === 'customer') {
+    filters.userId = req.userId;
+  }
   const result = await slotPackService.getUsageHistory(
-    { ...req.query, slotPackId: req.params.id },
+    filters,
     req.user.role,
     req.user.branchId,
   );

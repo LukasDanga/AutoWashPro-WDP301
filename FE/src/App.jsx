@@ -131,6 +131,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // VNPay return routing: provisional payments redirect to /? →
+  // detect rebook vs regular booking and route accordingly
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const vnpayResult = params.get('vnpay_result');
+    if (!vnpayResult) return;
+    const rebookDraft = sessionStorage.getItem('aw_rebookVnpayDraft');
+    if (rebookDraft) {
+      // Already on /history — no redirect needed (Handled by HistoryPage)
+      if (location.pathname.startsWith('/history')) return;
+      // Rebook flow → save result for HistoryPage, navigate to /history
+      sessionStorage.setItem('aw_rebookVnpayResult', vnpayResult);
+      navigate('/history?rebook_vnpay=true', { replace: true });
+    } else {
+      // Already on /booking — no redirect needed (Handled by BookingWidget)
+      if (location.pathname.startsWith('/booking')) return;
+      // Regular booking flow → forward to /booking where BookingWidget handles it
+      navigate('/booking?vnpay_result=' + encodeURIComponent(vnpayResult), { replace: true });
+    }
+  }, [location]);
+
   async function loginWithCredentials(identifier, password, expectedRole) {
     const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
@@ -254,6 +275,18 @@ export default function App() {
     );
   }
 
+  const handleGoToHistory = (param) => {
+    if (typeof param === 'string' && param.startsWith('/')) {
+      navigate(param);
+    } else if (param === 'slot_packs') {
+      navigate('/history?view=slot_packs');
+    } else if (param) {
+      navigate(`/history?bookingId=${param}`);
+    } else {
+      navigate('/history');
+    }
+  };
+
   if (path === '/payments' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
@@ -271,32 +304,32 @@ export default function App() {
   }
 
   if (path === '/booking') {
-    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={(id) => navigate(id ? `/history?bookingId=${id}` : '/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+    return <BookingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
   }
 
   if (path === '/packages') {
-    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <PackagesPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/gifts') {
-    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <GiftStorePage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/map') {
-    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <MapPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path.startsWith('/branch/')) {
-    return <BranchDetailPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <BranchDetailPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/about') {
-    return <AboutPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <AboutPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
   if (path === '/policies') {
-    return <PolicyPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
+    return <PolicyPage onOpenAuth={() => navigate('/auth')} user={user} onLogout={handleLogout} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} />;
   }
 
-  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={() => navigate('/history')} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
+  return <LandingPage onOpenAuth={() => navigate('/auth')} user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onGoToProfile={() => navigate('/profile')} onGoToHistory={handleGoToHistory} onGoToPayments={() => navigate('/payments')} onGoToNotifications={() => navigate('/notifications')} pendingBooking={pendingBooking} onSetPendingBooking={setPendingBooking} onVehicleCreated={handleVehicleCreated} />;
 }

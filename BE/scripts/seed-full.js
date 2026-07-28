@@ -122,7 +122,7 @@ async function main() {
       dateOfBirth: new Date('1988-11-08'),
     },
     {
-      _id: custIds[3], name: 'Phạm Thị Dung', email: 'dung.pham@gmail.com',
+      _id: custIds[3], name: 'Phạm Thị Dung', email: 'binhtntse182370@fpt.edu.vn',
       password: hash('123456'), phone: '0912111004', role: 'customer',
       status: 'active', tier: 'diamond', loyaltyPoints: 5000, lifetimePoints: 12000,
       dateOfBirth: new Date('1998-01-15'),
@@ -482,7 +482,7 @@ async function main() {
   console.log('  [CUSTOMER] an.nguyen@gmail.com');
   console.log('  [CUSTOMER] bich.tran@gmail.com');
   console.log('  [CUSTOMER] cuong.le@gmail.com');
-  console.log('  [CUSTOMER] dung.pham@gmail.com');
+  console.log('  [CUSTOMER] binhtntse182370@fpt.edu.vn');
   console.log('  [CUSTOMER] em.hoang@gmail.com');
   console.log('');
   console.log('  VOUCHERS: WELCOME10 | SUMMER50K | SILVER15 | DIAMOND20');

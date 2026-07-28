@@ -295,8 +295,9 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
   });
   await payment.save();
 
+  const client = req.body.client || 'web';
   const baseReturnUrl = process.env.VNP_RETURN_URL;
-  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=mobile` : undefined;
+  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=${client}` : undefined;
 
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount,
@@ -334,9 +335,10 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
 
   // Tạo payment record trước
   const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, 'vnpay', paymentType || 'deposit', amount);
+  const client = req.body.client || 'web';
   const baseReturnUrl = process.env.VNP_RETURN_URL;
   const targetReturnUrl = baseReturnUrl 
-    ? `${baseReturnUrl}?client=mobile&bookingId=${encodeURIComponent(bookingId)}`
+    ? `${baseReturnUrl}?client=${client}&bookingId=${encodeURIComponent(bookingId)}`
     : (returnUrl || undefined);
 
   const vnpayUrl = vnpayService.createPaymentUrl({
@@ -370,9 +372,9 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         const deepLinkId = mobileBookingId;
         return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
       }
-      // Provisional & slot pack đều redirect về /booking (nơi BookingWidget render)
+      // Provisional & slot pack đều redirect về / (App routing handles dispatch)
       if (payment && (!payment.bookingId || payment.slotPackId)) {
-        return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
+        return res.redirect(302, `${feUrl}/?vnpay_result=${encoded}`);
       }
     } catch (err) {
       console.error('Confirm payment error:', err.message);
