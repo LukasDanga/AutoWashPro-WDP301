@@ -264,6 +264,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [qbTime, setQbTime] = useState('');
   const [qbSubmitting, setQbSubmitting] = useState(false);
   const [qbError, setQbError] = useState('');
+  const [branches, setBranches] = useState([]);
   const [cancelPackLoading, setCancelPackLoading] = useState(null);
   const [qbBranchId, setQbBranchId] = useState('');
   const [qbVoucherCode, setQbVoucherCode] = useState('');
