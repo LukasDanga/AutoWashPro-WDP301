@@ -95,11 +95,17 @@ exports.paySlotPack = catchAsync(async (req, res) => {
   const { method } = req.body;
   const slotPackId = req.params.id;
 
-  if (!['bank', 'vnpay'].includes(method)) {
+  if (!['bank', 'vnpay', 'wallet'].includes(method)) {
     return res.status(400).json({ success: false, message: 'Phương thức thanh toán không hợp lệ' });
   }
 
   const payment = await paymentService.createSlotPackPayment(slotPackId, req.userId, method);
+
+  if (method === 'wallet') {
+    // Auto-confirm wallet payment immediately
+    const confirmed = await paymentService.confirmPaymentCallback(payment.transactionId, 'WALLET', true);
+    return success(res, confirmed, 'Thanh toán ví thành công', 201);
+  }
 
   if (method === 'vnpay') {
     const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';

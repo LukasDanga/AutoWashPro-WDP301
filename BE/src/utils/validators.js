@@ -125,70 +125,70 @@ const packageValidators = {
 
 const bookingValidators = {
   create: [
-    body('branchId').isMongoId().withMessage('Invalid branch ID'),
-    body('packageId').isMongoId().withMessage('Invalid package ID'),
-    body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
-    body('bookingDate').isISO8601().withMessage('Invalid date format'),
-    body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
+    body('branchId').isMongoId().withMessage('ID chi nhánh không hợp lệ'),
+    body('packageId').isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
+    body('vehicleId').isMongoId().withMessage('ID xe không hợp lệ'),
+    body('bookingDate').isISO8601().withMessage('Định dạng ngày không hợp lệ'),
+    body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Định dạng giờ không hợp lệ (HH:mm)'),
     body('note').optional().trim().isLength({ max: 500 }),
     body('voucherCode').optional().trim().isLength({ max: 50 }),
     body('discountAmount').optional().isFloat({ min: 0 }),
     body('finalPrice').optional().isFloat({ min: 0 }),
   ],
   update: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
+    param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
     body('bookingDate').optional().isISO8601(),
     body('startTime').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/),
     body('note').optional().trim().isLength({ max: 500 }),
-    body('packageId').optional().isMongoId().withMessage('Invalid package ID'),
+    body('packageId').optional().isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
   ],
   updateStatus: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled']),
+    param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
+    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled']),
   ],
   updateSubServices: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
-    body('subServices').isArray().withMessage('subServices must be an array'),
+    param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
+    body('subServices').isArray().withMessage('Dịch vụ phụ phải là một mảng'),
     body('subServices.*').isString(),
   ],
   slots: [
-    query('branchId').isString().notEmpty().withMessage('Invalid branch ID'),
-    query('date').isISO8601().withMessage('Invalid date format'),
-    query('packageId').optional().isString().withMessage('Invalid package ID'),
+    query('branchId').isString().notEmpty().withMessage('ID chi nhánh không hợp lệ'),
+    query('date').isISO8601().withMessage('Định dạng ngày không hợp lệ'),
+    query('packageId').optional().isString().withMessage('ID gói dịch vụ không hợp lệ'),
   ],
   cancel: [
-    param('id').isMongoId().withMessage('Invalid booking ID'),
+    param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
     body('cancellationReason').optional().trim().isLength({ max: 500 }),
   ],
   getByBookingId: [
-    param('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    param('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
   ],
 };
 
 const paymentValidators = {
   create: [
-    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
-    body('method').notEmpty().withMessage('Payment method is required').isIn(['cash', 'bank', 'vnpay', 'momo']),
+    body('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
+    body('method').notEmpty().withMessage('Phương thức thanh toán là bắt buộc').isIn(['cash', 'bank', 'vnpay', 'momo', 'wallet']),
   ],
   confirm: [
-    body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
-    body('method').trim().notEmpty().withMessage('Payment method is required').isIn(['cash', 'bank', 'vnpay', 'momo']),
+    body('transactionId').trim().notEmpty().withMessage('Mã giao dịch là bắt buộc'),
+    body('method').trim().notEmpty().withMessage('Phương thức thanh toán là bắt buộc').isIn(['cash', 'bank', 'vnpay', 'momo', 'wallet']),
     body('gatewayTransactionId').optional().trim(),
   ],
   refund: [
-    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    body('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
   ],
   callback: [
-    body('transactionId').trim().notEmpty().withMessage('Transaction ID is required'),
+    body('transactionId').trim().notEmpty().withMessage('Mã giao dịch là bắt buộc'),
     body('gatewayTransactionId').optional().trim(),
-    body('success').isBoolean().withMessage('Success flag is required'),
+    body('success').isBoolean().withMessage('Trạng thái thành công là bắt buộc'),
   ],
 };
 
 const refundRequestValidators = {
   create: [
-    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
-    body('reason').trim().notEmpty().withMessage('Reason is required').isLength({ max: 500 }),
+    body('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
+    body('reason').trim().notEmpty().withMessage('Lý do là bắt buộc').isLength({ max: 500 }),
   ],
   review: [
     param('id').isMongoId().withMessage('Invalid refund request ID'),
@@ -238,7 +238,7 @@ const voucherValidators = {
   ],
   redeem: [
     body('code').trim().notEmpty().withMessage('Voucher code is required'),
-    body('bookingId').optional().isMongoId().withMessage('Invalid booking ID'),
+    body('bookingId').optional().isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
     body('discountAmount').optional().isFloat({ min: 0 }),
   ],
   reserve: [
@@ -254,10 +254,10 @@ const voucherValidators = {
 
 const checkinValidators = {
   checkIn: [
-    body('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    body('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
   ],
   updateStatus: [
-    param('bookingId').isMongoId().withMessage('Invalid booking ID'),
+    param('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
     body('status').notEmpty().withMessage('Status is required').isIn(['in_progress', 'completed']),
     body('note').optional().trim().isLength({ max: 500 }),
     body('rating').optional().isInt({ min: 1, max: 5 }),

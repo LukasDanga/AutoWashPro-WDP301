@@ -382,6 +382,10 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           paymentMethod: 'vnpay',
         }));
         window.location.href = payResult.paymentUrl;
+      } else if (paymentMethod === 'wallet') {
+        // Wallet: thanh toán thành công ngay
+        setBuyResult(prev => prev ? { ...prev, paymentStatus: 'paid' } : { paymentStatus: 'paid' });
+        setShowSuccessModal(true);
       } else {
         setSlotPackPayment(payResult);
         setShowQrModal(true);
@@ -807,24 +811,36 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
 
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Chọn phương thức</span>
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
-                { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
-              ].map(m => (
+              {(() => {
+                const walletDisabled = !user || (user.walletBalance || 0) < finalTotal;
+                const methods = [
+                  { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
+                  { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
+                  { value: 'wallet', label: 'Ví của tôi', color: '#f59e0b', disabled: walletDisabled },
+                ];
+                return methods.map(m => {
+                  const isWalletDisabled = m.value === 'wallet' && m.disabled;
+                  return (
                 <button
                   key={m.value}
                   type="button"
-                  onClick={() => setPaymentMethod(m.value)}
+                  onClick={() => { if (!isWalletDisabled) setPaymentMethod(m.value); }}
                   className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${
                     paymentMethod === m.value
                       ? 'border-emerald-500 bg-emerald-50/30 shadow-sm'
-                      : 'border-slate-100 bg-white hover:border-slate-200'
+                      : isWalletDisabled
+                        ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                        : 'border-slate-100 bg-white hover:border-slate-200'
                   }`}
                 >
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{ backgroundColor: m.color }}>
                     {m.value === 'bank' ? (
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                      </svg>
+                    ) : m.value === 'wallet' ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z" />
                       </svg>
                     ) : (
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -833,10 +849,12 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                     )}
                   </div>
                   <span className={`text-xs font-bold ${paymentMethod === m.value ? 'text-emerald-700' : 'text-slate-500'}`}>
-                    {m.label}
+                    {m.value === 'wallet' ? 'Ví (' + formatCurrency(user?.walletBalance || 0) + ')' : m.label}
                   </span>
                 </button>
-              ))}
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -845,10 +863,10 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
               className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98] disabled:opacity-50">
               Quay lại
             </button>
-            <button onClick={handleBuy} disabled={buyLoading || !pkg}
-              className={`flex-[2] px-4 py-2.5 rounded-xl font-bold text-sm text-white shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${buyLoading || !pkg ? 'bg-slate-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+            <button onClick={handleBuy} disabled={buyLoading || !pkg || (paymentMethod === 'wallet' && (!user || (user.walletBalance || 0) < finalTotal))}
+              className={`flex-[2] px-4 py-2.5 rounded-xl font-bold text-sm text-white shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${buyLoading || !pkg || (paymentMethod === 'wallet' && (!user || (user.walletBalance || 0) < finalTotal)) ? 'bg-slate-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
               {buyLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-              {buyLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN ${paymentMethod === 'vnpay' ? 'VNPAY ' : ''}${formatCurrency(finalTotal)}`}
+              {buyLoading ? 'ĐANG XỬ LÝ...' : `THANH TOÁN ${formatCurrency(finalTotal)}`}
             </button>
           </div>
 

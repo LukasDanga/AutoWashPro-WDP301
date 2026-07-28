@@ -60,7 +60,7 @@ function authHeader(token) {
   return t ? `Bearer ${t}` : '';
 }
 
-export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab, rebookData }) {
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate, initialBranchId, initialTab, rebookData }) {
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -75,48 +75,28 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [step, setStep] = useState(Number(getUrlParam('step', 1)));
   const [spCanAdvance, setSpCanAdvance] = useState(false);
 
-  // Selections
-  const [selectedBranch, setSelectedBranch] = useState(null);
-  const [selectedVehicle, setSelectedVehicle] = useState('');
-  const [selectedPackage, setSelectedPackage] = useState(null);
-  const [selectedSubServices, setSelectedSubServices] = useState({});
-  const [selectedDate, setSelectedDate] = useState(bookingDates[1]?.id || bookingDates[0]?.id);
-  const [selectedTime, setSelectedTime] = useState('');
-  const [selectedDays, setSelectedDays] = useState([]);
-  const [weeks, setWeeks] = useState(4);
-  const [appliedVoucher, setAppliedVoucher] = useState(null);
-  const [selectedSlotPack, setSelectedSlotPack] = useState(null);
+  const defaultGuestVehicle = { licensePlate: '', brand: '', model: '', type: 'sedan' };
+  // Selections (initialized from sessionStorage to avoid timing race with auto-select effects)
+  const [selectedBranch, setSelectedBranch] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedBranch) return p.selectedBranch; } } catch {} return null; });
+  const [selectedVehicle, setSelectedVehicle] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedVehicle) return p.selectedVehicle; } } catch {} return ''; });
+  const [selectedPackage, setSelectedPackage] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedPackage) return p.selectedPackage; } } catch {} return null; });
+  const [selectedSubServices, setSelectedSubServices] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedSubServices && Object.keys(p.selectedSubServices).length) return p.selectedSubServices; } } catch {} return {}; });
+  const [selectedDate, setSelectedDate] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedDate) return p.selectedDate; } } catch {} return bookingDates[1]?.id || bookingDates[0]?.id; });
+  const [selectedTime, setSelectedTime] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedTime) return p.selectedTime; } } catch {} return ''; });
+  const [selectedDays, setSelectedDays] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedDays && p.selectedDays.length) return p.selectedDays; } } catch {} return []; });
+  const [weeks, setWeeks] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.weeks) return p.weeks; } } catch {} return 4; });
+  const [appliedVoucher, setAppliedVoucher] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.appliedVoucher) return p.appliedVoucher; } } catch {} return null; });
+  const [selectedSlotPack, setSelectedSlotPack] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedSlotPack) return p.selectedSlotPack; } } catch {} return null; });
+  const [guestVehicle, setGuestVehicle] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.guestVehicle?.licensePlate) return p.guestVehicle; } } catch {} return defaultGuestVehicle; });
 
   // Guest vehicle form
-  const [guestVehicle, setGuestVehicle] = useState({ licensePlate: '', brand: '', model: '', type: 'sedan' });
   const [vehicleError, setVehicleError] = useState('');
 
   useEffect(() => { syncUrlParam('step', step > 1 ? String(step) : ''); }, [step]);
   useEffect(() => { syncUrlParam('tab', tab !== 'regular' ? tab : ''); }, [tab]);
 
+  // Persist to sessionStorage on every meaningful change (step >= 2)
   useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem('aw_booking_state');
-      if (saved) {
-        const s = JSON.parse(saved);
-        if (s.selectedBranch) setSelectedBranch(s.selectedBranch);
-        if (s.selectedVehicle) setSelectedVehicle(s.selectedVehicle);
-        if (s.selectedPackage) setSelectedPackage(s.selectedPackage);
-        if (s.selectedSubServices && Object.keys(s.selectedSubServices).length) setSelectedSubServices(s.selectedSubServices);
-        if (s.selectedDate) setSelectedDate(s.selectedDate);
-        if (s.selectedTime) setSelectedTime(s.selectedTime);
-        if (s.selectedDays && s.selectedDays.length) setSelectedDays(s.selectedDays);
-        if (s.weeks) setWeeks(s.weeks);
-        if (s.appliedVoucher) setAppliedVoucher(s.appliedVoucher);
-        if (s.selectedSlotPack) setSelectedSlotPack(s.selectedSlotPack);
-        if (s.guestVehicle?.licensePlate) setGuestVehicle(s.guestVehicle);
-      }
-    } catch {}
-  }, []);
-
-  const isMountedRef = useRef(false);
-  useEffect(() => {
-    if (!isMountedRef.current) { isMountedRef.current = true; return; }
     if (step < 2) return;
     const toSave = { selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle };
     try { sessionStorage.setItem('aw_booking_state', JSON.stringify(toSave)); } catch {}
@@ -298,7 +278,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     loadPacks();
   }, [isLoggedIn, apiBase, token]);
 
-  // Auto-select first vehicle
+  // Auto-select first vehicle (only fires when selectedVehicle is truly unset)
   useEffect(() => {
     if (!selectedVehicle && userVehicles[0]) {
       setSelectedVehicle(userVehicles[0]._id || userVehicles[0].id || '');
@@ -395,7 +375,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
     if (isRecurring) {
       body.selectedDays = selectedDays;
-      body.durationWeeks = durationWeeks;
+      body.weeks = weeks;
     }
 
     const res = await fetch(endpoint, {
@@ -762,6 +742,67 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }
 
+  async function payWithWallet() {
+    if (!pendingDeposit) return;
+    setDepositLoading(true);
+    setError('');
+    try {
+      const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+      if (!user || (user.walletBalance || 0) < actualAmount) {
+        throw new Error('Số dư ví không đủ để thanh toán');
+      }
+
+      if (pendingDeposit.isDraft) {
+        const bk = await executeCreateBooking({ tab: pendingDeposit.tab || 'regular' });
+        const bkId = bk._id || bk.id;
+
+        const payRes = await fetch(`${apiBase}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingId: bkId, method: 'wallet', paymentType: paymentMode, amount: actualAmount }),
+        });
+        const payData = await payRes.json();
+        if (!payRes.ok) throw new Error(payData.message || 'Thanh toán ví thất bại');
+
+        setLastBooking({
+          _id: bkId,
+          branch: selectedBranch, vehicle, pkg, currentDate, selectedTime,
+          total: pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0,
+          discount: 0, points: 0, isPayingWithPack: false,
+          bookingCode: bk?.bookingCode || bk?.code || '',
+          subServices: (currentSubServices || []).map(n => {
+            const s = pkg?.subServices?.find(x => x.name === n);
+            return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
+          }),
+          depositAmount: pendingDeposit.depositAmount || 0,
+          depositPaid: true,
+          paymentMode,
+        });
+      } else {
+        const payRes = await fetch(`${apiBase}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingId: pendingDeposit._id, method: 'wallet', paymentType: paymentMode, amount: actualAmount }),
+        });
+        const payData = await payRes.json();
+        if (!payRes.ok) throw new Error(payData.message || 'Thanh toán ví thất bại');
+
+        setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
+      }
+
+      setPendingDeposit(null);
+      setDepositPayment(null);
+      setDepositDraft(null);
+      setDepositQrStep('select');
+      setShowSuccessModal(true);
+      if (onUserUpdate) onUserUpdate({ walletBalance: (user?.walletBalance || 0) - actualAmount });
+    } catch (err) {
+      setError(err.message || 'Thanh toán ví thất bại');
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
   // Xử lý VNPay return callback (BE đã tự confirm, FE chỉ đọc kết quả)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -782,16 +823,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
         if (success) {
           if (!authHeader(token)) {
-            setError('Bạn cần đăng nhập lại để hoàn tất đặt lịch');
+            showToast('Bạn cần đăng nhập lại để hoàn tất đặt lịch', 'error');
             return;
           }
           // Tạo booking từ draft data đã lưu (provisional VNPay)
           createBookingAfterPayment();
         } else {
-          setError(parsed?.message || 'Thanh toán VNPay thất bại');
+          const failReason = parsed?.message || (parsed?.data?.responseCode === '24' ? 'Giao dịch bị hủy' : parsed?.data?.responseCode === '09' ? 'Thẻ/Tài khoản không đủ số dư' : 'Thanh toán VNPay thất bại');
+          showToast('❌ ' + failReason, 'error');
         }
       } catch (e) {
-        setError('Lỗi xử lý kết quả thanh toán VNPay');
+        showToast('❌ Lỗi xử lý kết quả thanh toán VNPay', 'error');
       }
       setPendingDeposit(null);
       setDepositPayment(null);
@@ -820,7 +862,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const ah = authHeader(token);
       const br = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: ah }, body: JSON.stringify(bBody) });
       const bd = await br.json();
-      if (!br.ok) throw new Error(bd.message || bd.error || 'Không thể tạo lịch hẹn');
+      if (!br.ok) {
+        const fieldErrors = bd?.errors?.map(e => `${e.field}: ${e.message}`).join(', ');
+        throw new Error(fieldErrors || bd.message || bd.error || 'Không thể tạo lịch hẹn');
+      }
       const newBk = bd?.data || bd;
       const bkId = isRec ? (newBk.created?.[0]?._id || newBk.created?.[0]?.id) : (newBk._id || newBk.id);
       const newCode = isRec ? newBk.recurringGroupId : (newBk?.bookingCode || newBk?.code || '');
@@ -884,7 +929,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         setShowSuccessModal(true);
       }
     } catch (err) {
-      setError(err.message || 'Không thể tạo lịch hẹn sau thanh toán');
+      showToast('❌ ' + (err.message || 'Không thể tạo lịch hẹn sau thanh toán'), 'error');
       setCreatingBooking(false);
     } finally {
       setBookingLoading(false);
@@ -2297,9 +2342,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                       <div className="text-xs opacity-70">Còn {p.remainingSlots} lần sử dụng · Miễn đặt cọc</div>
                                     </div>
                                     <span className="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">{p.remainingSlots} lần</span>
-                                  </button>
-                                ))}
-                              </div>
+                          </button>
+                        ))}
+                      </div>
                             </div>
                           )}
                           {!isPayingWithPack && (
@@ -2964,24 +3009,37 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <div>
                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Chọn phương thức</span>
                       <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
-                          { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
-                        ].map(m => (
+                        {(() => {
+                          const walletAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
+                          const walletDisabled = !user || (user.walletBalance || 0) < walletAmount;
+                          const methods = [
+                            { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
+                            { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
+                            { value: 'wallet', label: 'Ví của tôi', color: '#f59e0b', disabled: walletDisabled },
+                          ];
+                          return methods.map(m => {
+                            const isWalletDisabled = m.value === 'wallet' && m.disabled;
+                            return (
                           <button
                             key={m.value}
                             type="button"
-                            onClick={() => setDepositMethod(m.value)}
+                            onClick={() => { if (!isWalletDisabled) setDepositMethod(m.value); }}
                             className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${
                               depositMethod === m.value
                                 ? 'border-emerald-500 bg-emerald-50/30 shadow-sm'
-                                : 'border-slate-100 bg-white hover:border-slate-200'
+                                : isWalletDisabled
+                                  ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                                  : 'border-slate-100 bg-white hover:border-slate-200'
                             }`}
                           >
                             <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{ backgroundColor: m.color }}>
                               {m.value === 'bank' ? (
                                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
+                                </svg>
+                              ) : m.value === 'wallet' ? (
+                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z" />
                                 </svg>
                               ) : (
                                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2990,10 +3048,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               )}
                             </div>
                             <span className={`text-xs font-bold ${depositMethod === m.value ? 'text-emerald-700' : 'text-slate-500'}`}>
-                              {m.label}
+                              {m.value === 'wallet' ? 'Ví (' + formatCurrency(user?.walletBalance || 0) + ')' : m.label}
                             </span>
                           </button>
-                        ))}
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
 
@@ -3008,12 +3068,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <ArrowLeft className="w-4 h-4" />
                       Quay lại
                     </button>
-                    <button type="button" onClick={depositMethod === 'vnpay' ? payWithVnpay : payDeposit} disabled={depositLoading || vnpayLoading}
+                    <button type="button" onClick={depositMethod === 'vnpay' ? payWithVnpay : depositMethod === 'wallet' ? payWithWallet : payDeposit} disabled={depositLoading || vnpayLoading || (depositMethod === 'wallet' && (!user || (user.walletBalance || 0) < (paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0))))}
                       className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
                       {depositLoading || vnpayLoading ? (
                         <><RefreshCw className="w-4 h-4 animate-spin" />{'ĐANG XỬ LÝ...'}</>
-                      ) : depositMethod === 'vnpay' ? (
-                        'THANH TOÁN VNPAY ' + formatCurrency(paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0))
                       ) : paymentMode === 'full' ? (
                         'THANH TOÁN ' + formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)
                       ) : (
