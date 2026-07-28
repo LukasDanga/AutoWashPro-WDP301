@@ -690,7 +690,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
     setAvailableSubServices([]);
     setSelectedNewSubs([]);
     try {
-      const res = await fetch(`http://localhost:5000/api/packages`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/packages`);
       if (res.ok) {
         const data = await res.json();
         const allPackages = data.data || [];
