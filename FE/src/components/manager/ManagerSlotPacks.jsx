@@ -147,6 +147,22 @@ export default function ManagerSlotPacks({ user }) {
     }
   }
 
+  async function handleCompleteRefund(packId) {
+    if (!confirm('Xác nhận đã hoàn tiền cho khách hàng?')) return;
+    try {
+      const res = await api(`/slot-packs/${packId}/refund-complete`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Lỗi hoàn tiền');
+      }
+      const data = await res.json();
+      setDetail(data.data || data);
+      loadPacks(branchId);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   const filtered = packs;
 
   return (
@@ -305,6 +321,28 @@ export default function ManagerSlotPacks({ user }) {
                   <span className="font-medium text-slate-700 text-right">{v}</span>
                 </div>
               ))}
+
+              {/* Refund Info */}
+              {detail.status === 'cancelled' && detail.refundStatus && detail.refundStatus !== 'none' && (
+                <div className="border-t border-red-100 pt-4 mt-2 bg-red-50 -mx-6 px-6 pb-4">
+                  <span className="block text-xs text-red-500 font-bold mb-2 uppercase tracking-wider">Thông tin hoàn tiền</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-800">
+                      {detail.refundAmount?.toLocaleString('vi-VN')}₫
+                    </span>
+                    {detail.refundStatus === 'pending' ? (
+                      <button onClick={() => handleCompleteRefund(detail._id)}
+                        className="rounded-lg bg-orange-100 text-orange-700 px-3 py-1.5 text-xs font-bold hover:bg-orange-200 transition-colors">
+                        Xác nhận đã hoàn
+                      </button>
+                    ) : (
+                      <span className="rounded-lg bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-bold">
+                        Đã hoàn tiền
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Lịch sử sử dụng của Gói Lượt */}
               <div className="border-t border-slate-100 pt-4 mt-2">

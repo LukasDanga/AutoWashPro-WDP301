@@ -9,6 +9,14 @@ exports.createBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.createBooking({ ...req.body, userId: req.userId });
   sseService.broadcastToAll('slots_updated');
   sseService.sendToUser(booking.userId?._id || booking.userId || req.userId, 'my_bookings_updated', {});
+  
+  const emailService = require('../services/email.service');
+  const User = require('../models/user.schema');
+  const user = await User.findById(req.userId);
+  if (user && user.email) {
+    emailService.sendBookingConfirmationEmail(user.email, booking).catch(e => console.error('Lỗi gửi email xác nhận đặt lịch:', e));
+  }
+
   success(res, booking, 'Booking created', 201);
 });
 
@@ -21,6 +29,16 @@ exports.createRecurringBooking = catchAsync(async (req, res) => {
   const result = await bookingService.createRecurringBooking({ ...req.body, userId: req.userId });
   sseService.broadcastToAll('slots_updated');
   sseService.sendToUser(req.userId, 'my_bookings_updated', {});
+  
+  if (result.created && result.created.length > 0) {
+    const emailService = require('../services/email.service');
+    const User = require('../models/user.schema');
+    const user = await User.findById(req.userId);
+    if (user && user.email) {
+      emailService.sendBookingConfirmationEmail(user.email, result.created[0]).catch(e => console.error('Lỗi gửi email xác nhận đặt lịch định kỳ:', e));
+    }
+  }
+
   success(res, result, `Recurring booking created: ${result.totalCreated} bookings`, 201);
 });
 
@@ -76,17 +94,92 @@ exports.extendGracePeriod = catchAsync(async (req, res) => {
   success(res, booking, 'Đã gia hạn thời gian check-in cho đơn');
 });
 
+exports.requestCancelOtp = catchAsync(async (req, res) => {
+  const emailService = require('../services/email.service');
+  const Booking = require('../models/booking.schema');
+  
+  const booking = await Booking.findById(req.params.id);
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404 });
+  if (String(booking.userId) !== String(req.userId)) {
+    throw Object.assign(new Error('Không có quyền hủy lịch hẹn này'), { statusCode: 403 });
+  }
+  if (['in_progress', 'completed', 'cancelled'].includes(booking.status)) {
+    throw Object.assign(new Error('Không thể yêu cầu OTP hủy lúc này'), { statusCode: 400 });
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const bcrypt = require('bcryptjs');
+  
+  booking.cancelOtpToken = bcrypt.hashSync(otp, 12);
+  booking.cancelOtpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
+  await booking.save();
+
+  // Need user email
+  const User = require('../models/user.schema');
+  const user = await User.findById(req.userId);
+  if (user && user.email) {
+    emailService.sendCancellationOtpEmail(user.email, otp).catch(e => console.error('Lỗi gửi OTP hủy đơn:', e));
+  }
+
+  success(res, null, 'OTP đã được gửi đến email của bạn');
+});
+
 exports.cancelBooking = catchAsync(async (req, res) => {
+  const bcrypt = require('bcryptjs');
+  const Booking = require('../models/booking.schema');
+
+  if (req.user.role === 'customer') {
+    if (!req.body.otp) {
+      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy đơn'), { statusCode: 400 });
+    }
+    const booking = await Booking.findById(req.params.id);
+    if (!booking || !booking.cancelOtpToken || !booking.cancelOtpExpires) {
+      throw Object.assign(new Error('Yêu cầu OTP không hợp lệ hoặc đã hết hạn'), { statusCode: 400 });
+    }
+    if (Date.now() > booking.cancelOtpExpires) {
+      throw Object.assign(new Error('Mã OTP đã hết hạn, vui lòng lấy mã mới'), { statusCode: 400 });
+    }
+    const isMatch = bcrypt.compareSync(req.body.otp, booking.cancelOtpToken);
+    if (!isMatch) {
+      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
+    }
+  }
+
   const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, req.body.cancellationReason);
+  
+  if (req.user.role === 'customer') {
+    // Xóa OTP
+    await Booking.findByIdAndUpdate(req.params.id, {
+      $unset: { cancelOtpToken: "", cancelOtpExpires: "" }
+    });
+  }
+
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
   success(res, booking, 'Booking cancelled');
 });
-
 exports.deleteBooking = catchAsync(async (req, res) => {
   await bookingService.deleteBooking(req.params.id, req.user.role);
   sseService.broadcastToAll('slots_updated');
   success(res, null, 'Booking deleted');
+});
+
+exports.refundComplete = catchAsync(async (req, res) => {
+  const Booking = require('../models/booking.schema');
+  const booking = await Booking.findById(req.params.id);
+  
+  if (!booking) {
+    throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404 });
+  }
+  if (booking.refundStatus !== 'pending') {
+    throw Object.assign(new Error('Lịch hẹn này không chờ hoàn tiền'), { statusCode: 400 });
+  }
+  
+  booking.refundStatus = 'completed';
+  await booking.save();
+  
+  success(res, booking, 'Đã xác nhận hoàn tiền thành công');
 });
 
 exports.deleteBookingsByDateRange = catchAsync(async (req, res) => {

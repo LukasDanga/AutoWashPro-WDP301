@@ -202,6 +202,17 @@ router.patch('/:id/extend-grace', authenticate, authorize(ROLES.ADMIN, ROLES.MAN
 
 /**
  * @swagger
+ * /api/bookings/{id}/cancel-otp:
+ *   post:
+ *     summary: Request OTP for cancelling booking (customer)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/:id/cancel-otp', authenticate, authorize(ROLES.CUSTOMER), bookingValidators.cancel, validate, bookingController.requestCancelOtp);
+
+/**
+ * @swagger
  * /api/bookings/{id}/cancel:
  *   post:
  *     summary: Cancel booking
@@ -210,6 +221,17 @@ router.patch('/:id/extend-grace', authenticate, authorize(ROLES.ADMIN, ROLES.MAN
  *       - bearerAuth: []
  */
 router.post('/:id/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.cancel, validate, bookingController.cancelBooking);
+
+/**
+ * @swagger
+ * /api/bookings/{id}/refund-complete:
+ *   post:
+ *     summary: Xác nhận đã hoàn tiền thủ công cho lịch hẹn
+ *     tags: [Bookings]
+ */
+router.post('/:id/refund-complete', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  param('id').isMongoId(),
+], validate, bookingController.refundComplete);
 
 /**
  * @swagger

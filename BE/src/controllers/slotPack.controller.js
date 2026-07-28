@@ -50,6 +50,24 @@ exports.cancelSlotPack = catchAsync(async (req, res) => {
   success(res, pack, 'Slot pack cancelled');
 });
 
+/** POST /api/slot-packs/:id/refund-complete — Xác nhận hoàn tiền gói */
+exports.refundComplete = catchAsync(async (req, res) => {
+  const SlotPack = require('../models/slotPack.schema');
+  const pack = await SlotPack.findById(req.params.id);
+  
+  if (!pack) {
+    throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404 });
+  }
+  if (pack.refundStatus !== 'pending') {
+    throw Object.assign(new Error('Gói lượt này không chờ hoàn tiền'), { statusCode: 400 });
+  }
+  
+  pack.refundStatus = 'completed';
+  await pack.save();
+  
+  success(res, pack, 'Đã xác nhận hoàn tiền thành công');
+});
+
 /** GET /api/slot-packs/usage-history — Lịch sử sử dụng gói lượt (admin/manager) */
 exports.getUsageHistory = catchAsync(async (req, res) => {
   const result = await slotPackService.getUsageHistory(req.query, req.user.role, req.user.branchId);

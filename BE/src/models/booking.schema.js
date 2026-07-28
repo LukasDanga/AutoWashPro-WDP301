@@ -22,6 +22,8 @@ const bookingSchema = new mongoose.Schema(
     cancelledAt: { type: Date },
     cancelledBy: { type: String, enum: ['customer', 'admin', 'manager', 'system'] },
     cancellationReason: { type: String, trim: true, maxlength: 500 },
+    cancelOtpToken: { type: String },
+    cancelOtpExpires: { type: Date },
     rescheduleCount: { type: Number, default: 0 },
     // Cảnh báo sắp bị auto-cancel đã gửi lúc nào (tránh gửi lặp lại mỗi lần cron chạy)
     lateWarningSentAt: { type: Date },
@@ -63,6 +65,12 @@ const bookingSchema = new mongoose.Schema(
       enum: ['unpaid', 'pending', 'deposit_paid', 'paid', 'refunded'],
       default: 'unpaid',
     },
+    refundStatus: {
+      type: String,
+      enum: ['none', 'pending', 'completed'],
+      default: 'none',
+    },
+    refundAmount: { type: Number, default: 0 },
     paymentMethod: {
       type: String,
       enum: ['cash', 'momo', 'vnpay', 'bank', 'sepay'],
