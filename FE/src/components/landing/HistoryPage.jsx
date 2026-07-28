@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { RefreshCw, Copy, Check, Sun, Sunset } from 'lucide-react';
+import { RefreshCw, Copy, Check, Sun, Sunset, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
 import QuickBookModal from '../customer/QuickBookModal.jsx';
 import VoucherPicker from '../VoucherPicker.jsx';
-
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATUS_MAP = {
@@ -156,11 +156,13 @@ function PackCard({ pack, onQuickBook, onCancelPack }) {
 }
 
 export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [] }) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
-  const limit = 50;
+  const limit = 10;
 
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -168,9 +170,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [sort, setSort] = useState('-createdAt'); // Mới nhất default
-  const [viewMode, setViewMode] = useState('list');
+  const viewModeFromUrl = searchParams.get('view');
+  const [viewMode, setViewMode] = useState(viewModeFromUrl || 'list');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [slotPacks, setSlotPacks] = useState([]);
   const [slotPacksLoading, setSlotPacksLoading] = useState(false);
+
+  // Sync viewMode with URL ?view= param
+  useEffect(() => {
+    const viewFromUrl = searchParams.get('view');
+    if (viewFromUrl && ['calendar', 'week', 'list', 'slot_packs'].includes(viewFromUrl)) {
+      setViewMode(viewFromUrl);
+    }
+  }, [searchParams]);
 
   const now = new Date();
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -236,8 +248,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const rebookPollRef = useRef(null);
   const [rebookSubServices, setRebookSubServices] = useState([]);
   const [rebookAvailableSubServices, setRebookAvailableSubServices] = useState([]);
-  const [rebookAppliedVoucher, setRebookAppliedVoucher] = useState(null); // null | voucher object
-
+  const [rebookAppliedVoucher, setRebookAppliedVoucher] = useState(null);
+  const [rebookVoucherCode, setRebookVoucherCode] = useState('');
+  const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
+  const [showRebookVoucherModal, setShowRebookVoucherModal] = useState(false);
 
   // Quick book modal
   const [showQuickBookModal, setShowQuickBookModal] = useState(false);
@@ -413,20 +427,41 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }, [showRecurringGroupModal, recurringGroupTarget, loadRecurringGroup]);
 
-  /* ── SSE: auto-refresh on notification ── */
-  useSSE(token, 'notification', useCallback(() => {
-    const gbr = viewMode === 'list';
-    doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
-  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]));
+  const [refreshSignal, setRefreshSignal] = useState(0);
 
-  useSSE(token, 'my_bookings_updated', useCallback(() => {
+  const handleSSEUpdate = useCallback(() => {
     const gbr = viewMode === 'list';
     doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
-  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]));
+    setRefreshSignal(s => s + 1);
+  }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]);
+
+  useSSE(token, 'notification', handleSSEUpdate);
+  useSSE(token, 'my_bookings_updated', handleSSEUpdate);
+
+  useEffect(() => {
+    if (refreshSignal > 0 && showRecurringGroupModal && recurringGroupTarget) {
+      loadRecurringGroup();
+    }
+  }, [refreshSignal]);
 
   function resetFilters() { setKeyword(''); setStatusFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setSort('-createdAt'); setPage(1); }
   function onFilterChange(setter, value) { setter(value); setPage(1); }
   function openReview(b) { setReviewTarget(b); setRating(b.rating || 0); setFeedbackText(b.feedback || ''); setShowReviewModal(true); }
+
+  useEffect(() => {
+    if (detailBooking) {
+      const bInList = bookings.find(b => b._id === detailBooking._id || b.id === detailBooking._id);
+      if (bInList) {
+        setDetailBooking(bInList);
+        return;
+      }
+      const bInGroup = recurringGroupBookings.find(b => b._id === detailBooking._id || b.id === detailBooking._id);
+      if (bInGroup) {
+        setDetailBooking(bInGroup);
+        return;
+      }
+    }
+  }, [bookings, recurringGroupBookings]);
 
   async function handleSubmitReview(e) {
     e.preventDefault();
@@ -493,46 +528,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     finally { setQrLoading(false); }
   }
 
-  async function handleRebook(b) {
-    setRebookTarget(b);
-    setRebookDate('');
-    setRebookTime(b.startTime || '');
-    setRebookFormError('');
-    setRebookSlots([]);
-    setRebookDepositMethod('bank');
-    setRebookPaymentMode('deposit');
-    setRebookDraft(null);
-    setRebookDepositPayment(null);
-    setRebookQrStep('form');
-    setRebookQrLoading(false);
-    setRebookVnpayLoading(false);
-    setRebookAppliedVoucher(null);
-    if (rebookPollRef.current) clearInterval(rebookPollRef.current);
-    // Fetch package sub-services from the original booking's package
-    const pkgId = b.packageId?._id || b.packageId?.id || b.packageId;
-    if (pkgId) {
-      try {
-        const pkgRes = await fetch(`${apiBase || API_BASE}/packages/${pkgId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (pkgRes.ok) {
-          const pkgData = await pkgRes.json();
-          const pkg = pkgData?.data || pkgData;
-          const allSubs = pkg?.subServices || [];
-          setRebookAvailableSubServices(allSubs);
-          // Pre-select: all mandatory (isOptional: false) + previously selected
-          const prevSelected = (b.selectedSubServices || []).map(s => s.name || s);
-          const initialSelection = allSubs
-            .filter(s => !s.isOptional || prevSelected.includes(s.name))
-            .map(s => ({ name: s.name, price: s.price, duration: s.duration }));
-          setRebookSubServices(initialSelection);
-        }
-      } catch (_) {}
-    } else {
-      setRebookAvailableSubServices([]);
-      setRebookSubServices([]);
-    }
-    setShowRebookModal(true);
+  function handleRebook(b) {
+    navigate('/booking', { state: { rebookData: b } });
   }
 
   async function submitRebook() {
@@ -560,13 +557,16 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
     setRebookLoading(true);
     try {
-      const basePrice = rebookTarget.packageId?.price || rebookTarget.finalPrice || 0;
-      const subServiceTotal = rebookSubServices.filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
-      const voucherDiscount = computeVoucherDiscount(rebookAppliedVoucher, basePrice + subServiceTotal);
-      const totalPrice = Math.max(0, basePrice + subServiceTotal - voucherDiscount);
-      const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
-      const amount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
-      const vCode = rebookAppliedVoucher?.code || undefined;
+      const bId = rebookTarget._id || rebookTarget.id;
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/rebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, voucherCode: rebookVoucherCode || undefined }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
+      const payload = await res.json();
+      const newBooking = payload?.data || payload;
+      const depositAmt = newBooking.depositAmount || 0;
 
       // Lưu draft để sau payment mới tạo booking
       setRebookDraft({
@@ -1146,17 +1146,15 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       if (res.ok) {
         const data = await res.json();
         const allPackages = data.data || [];
+        const currentPackage = allPackages.find(p => p._id === (b.packageId?._id || b.packageId));
         const allSubs = [];
-        const alreadySelected = b.selectedSubServices?.map(s => s.name) || [];
-        allPackages.forEach(p => {
-          if (p.subServices) {
-            p.subServices.forEach(s => {
-              if (!alreadySelected.includes(s.name) && !allSubs.some(x => x.name === s.name)) {
-                allSubs.push(s);
-              }
-            });
-          }
-        });
+        if (currentPackage && currentPackage.subServices) {
+          currentPackage.subServices.forEach(s => {
+            if (s.isOptional !== false && s.price > 0 && !allSubs.some(x => x.name === s.name)) {
+              allSubs.push(s);
+            }
+          });
+        }
         setAvailableSubServices(allSubs);
       }
     } catch (err) {
@@ -1190,6 +1188,29 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       showToast(err.message, 'error');
     } finally {
       setAddingService(false);
+    }
+  };
+
+  const handleRemoveSubService = async (b, subName) => {
+    try {
+      const bId = b._id || b.id;
+      const updatedSubs = (b.selectedSubServices || []).filter(s => s.name !== subName).map(s => s.name || s);
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/sub-services`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ subServices: updatedSubs })
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Lỗi khi xóa dịch vụ');
+      }
+      showToast('Đã xóa dịch vụ thành công!', 'success');
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list'); // refresh
+      if (detailBooking && (detailBooking._id === bId || detailBooking.id === bId)) {
+         setDetailBooking(null);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
     }
   };
 
@@ -1263,82 +1284,35 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     return s;
   }, [bookings]);
 
-  const hasActiveFilters = keyword || statusFilter || dateFrom || dateTo;
+  const hasActiveFilters = Boolean(keyword || statusFilter || typeFilter || dateFrom || dateTo || (sort && sort !== '-createdAt'));
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* header */}
-      <header className="awp-hist-header sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-            Quay lại
-          </button>
-          <h1 className="text-sm font-bold text-slate-800">Lịch sử đặt</h1>
-          <div className="w-20" />
-        </div>
-      </header>
-
+    <div className="space-y-6">
       {toast.show && (
         <div className="awp-toast-container">
           <div className={`awp-toast-message ${toast.type === 'error' ? 'awp-toast-error' : 'awp-toast-success'}`}>{toast.message}</div>
         </div>
       )}
 
-      <main className="max-w-4xl mx-auto px-6 py-10 space-y-5">
-        {/* stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <main className="w-full space-y-5">
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Chờ xử lý', value: stats.pending, color: '#f59e0b', bg: '#fffbeb' },
-            { label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff' },
-            { label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5' },
-            { label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb' },
+            { label: 'Chờ xử lý', value: stats.pending, color: '#f59e0b', bg: '#fffbeb', icon: '⏳' },
+            { label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff', icon: '✅' },
+            { label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5', icon: '🎉' },
+            { label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb', icon: '❌' },
           ].map(s => (
-            <div key={s.label} className="rounded-2xl p-4" style={{ background: s.bg, border: `1px solid ${s.color}20` }}>
-              <div className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</div>
-              <div className="text-2xl font-extrabold mt-1" style={{ color: s.color }}>{s.value}</div>
+            <div key={s.label} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg" style={{ background: s.bg }}>
+                {s.icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xl font-bold text-slate-800">{s.value}</p>
+                <p className="truncate text-xs text-slate-500">{s.label}</p>
+              </div>
             </div>
           ))}
-        </div>
-
-        {/* view toggle */}
-        <div className="flex gap-2 p-1 rounded-2xl flex-wrap sm:flex-nowrap" style={{ background: '#f1f5f9' }}>
-          <button onClick={() => setViewMode('calendar')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'calendar' ? '#fff' : 'transparent',
-              color: viewMode === 'calendar' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'calendar' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            📅 Lịch tháng
-          </button>
-          <button onClick={() => setViewMode('week')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'week' ? '#fff' : 'transparent',
-              color: viewMode === 'week' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'week' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            📆 Lịch tuần
-          </button>
-          <button onClick={() => setViewMode('list')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'list' ? '#fff' : 'transparent',
-              color: viewMode === 'list' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'list' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            📋 Lịch sử
-          </button>
-          <button onClick={() => setViewMode('slot_packs')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-none cursor-pointer"
-            style={{
-              background: viewMode === 'slot_packs' ? '#fff' : 'transparent',
-              color: viewMode === 'slot_packs' ? '#0284c7' : '#64748b',
-              boxShadow: viewMode === 'slot_packs' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            🎫 Gói lượt
-          </button>
         </div>
 
         {/* ── CALENDAR VIEW ── */}
@@ -1450,7 +1424,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               {b.vehicleId && <span>🚗 {b.vehicleId.licensePlate || ''}</span>}
                               {b.recurringGroupId && <span className="text-indigo-500">Định kỳ</span>}
                               {b.selectedSubServices && b.selectedSubServices.length > 0 && b.selectedSubServices.map((sub, idx) => (
-                                <span key={idx} className="text-indigo-500">+{sub.name}</span>
+                                <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(b, sub.name); }} className="group inline-flex items-center gap-1 cursor-pointer transition-colors hover:text-red-600">
+                                  <span className="text-indigo-500 font-bold group-hover:hidden">+</span>
+                                  <span className="text-red-500 font-bold hidden group-hover:inline">-</span>
+                                  <span className="text-indigo-500 group-hover:text-red-600">{sub.name}</span>
+                                </div>
                               ))}
                               {hasReview && <span className="text-amber-500">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
                             </div>
@@ -1606,40 +1584,105 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         {/* ── LIST VIEW ── */}
         {viewMode === 'list' && (
           <>
-            {/* filters */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                <div className="relative md:col-span-2">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
-                  <input type="text" value={keyword} onChange={e => onFilterChange(setKeyword, e.target.value)}
-                    placeholder="Tìm gói dịch vụ hoặc chi nhánh..."
-                    className="w-full h-10 rounded-xl border border-slate-200 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+            {/* Filter Bar Panel */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              {/* Row 1: Search + Status + Date range */}
+              <div className="flex flex-col gap-3">
+                {/* Search Input */}
+                <div className="relative w-full">
+                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={keyword}
+                    onChange={e => onFilterChange(setKeyword, e.target.value)}
+                    placeholder="Tìm theo gói dịch vụ, tên chi nhánh..."
+                    className="w-full h-9 rounded-xl border border-slate-200 pl-10 pr-9 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-slate-50/50"
+                  />
+                  {keyword && (
+                    <button
+                      onClick={() => onFilterChange(setKeyword, '')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
-                <select value={statusFilter} onChange={e => onFilterChange(setStatusFilter, e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
-                  {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <select value={typeFilter} onChange={e => onFilterChange(setTypeFilter, e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
-                  <option value="">Tất cả loại lịch</option>
-                  <option value="single">Lịch thường</option>
-                  <option value="recurring">Lịch định kỳ</option>
-                </select>
-                <select value={sort} onChange={e => onFilterChange(setSort, e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 bg-white">
-                  <option value="-createdAt">Mới nhất</option>
-                  <option value="createdAt">Cũ nhất</option>
-                  <option value="-bookingDate">Gần đây nhất (Ngày hẹn)</option>
-                </select>
-                <div className="flex gap-2">
-                  <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom, e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
-                  <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo, e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
+
+                {/* Status + Date range on same row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trạng thái</label>
+                    <select
+                      value={statusFilter}
+                      onChange={e => onFilterChange(setStatusFilter, e.target.value)}
+                      className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+                    >
+                      {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Khoảng ngày hẹn</label>
+                    <div className="flex items-center gap-1.5">
+                      <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom, e.target.value)}
+                        className="flex-1 min-w-0 h-9 rounded-xl border border-slate-200 px-2 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer" />
+                      <span className="text-slate-300 text-[10px] font-bold shrink-0">đến</span>
+                      <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo, e.target.value)}
+                        className="flex-1 min-w-0 h-9 rounded-xl border border-slate-200 px-2 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer" />
+                    </div>
+                  </div>
                 </div>
               </div>
-              {hasActiveFilters && (
-                <button onClick={resetFilters} className="px-5 h-9 rounded-xl border border-slate-200 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Xóa bộ lọc</button>
+
+              {/* Advanced filter toggle + clear */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors"
+                >
+                  <svg className={`w-3.5 h-3.5 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                  {showAdvancedFilters ? 'Ẩn bộ lọc nâng cao' : 'Lọc nâng cao'}
+                </button>
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 text-[11px] font-bold transition-colors flex items-center gap-1"
+                  >
+                    ✕ Xóa bộ lọc
+                  </button>
+                )}
+              </div>
+
+              {/* Advanced filters: Type + Sort */}
+              {showAdvancedFilters && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Loại lịch</label>
+                    <select
+                      value={typeFilter}
+                      onChange={e => onFilterChange(setTypeFilter, e.target.value)}
+                      className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="">Tất cả loại lịch</option>
+                      <option value="single">Lịch thường</option>
+                      <option value="recurring">Lịch định kỳ</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sắp xếp</label>
+                    <select
+                      value={sort}
+                      onChange={e => onFilterChange(setSort, e.target.value)}
+                      className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="-createdAt">Mới nhất (Ngày tạo)</option>
+                      <option value="createdAt">Cũ nhất</option>
+                      <option value="-bookingDate">Gần đây nhất (Ngày hẹn)</option>
+                    </select>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1683,7 +1726,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     
                     if (b.isGroup) {
                       return (
-                        <div key={bId} onClick={() => { setRecurringGroupTarget(b); setDetailBooking(b); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
+                        <div key={bId} onClick={() => { setRecurringGroupTarget(b); setShowRecurringGroupModal(true); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
                           <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
                           <div className="flex items-start justify-between gap-4 pl-3">
                             <div className="min-w-0 flex-1">
@@ -1710,6 +1753,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           <div className="mt-4 pl-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
                             {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="font-semibold text-slate-800">{b.vehicleId.licensePlate || ''}</span></span>}
                             <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">Cập nhật lần cuối: {formatDate(b.createdAt)}</span></span>
+                            {b.recurringGroupId && <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">#{(b.recurringGroupId || '').slice(-6).toUpperCase()}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 pl-3">
+                            <button className="px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1.5">
+                              <span>Xem chi tiết {b.groupCount} đơn lẻ</span>
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            </button>
                           </div>
                         </div>
                       );
@@ -1756,9 +1806,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           {b.bookingCode && <span className="font-mono text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">#{b.bookingCode}</span>}
                           {b.recurringGroupId && <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
                           {b.selectedSubServices && b.selectedSubServices.length > 0 && b.selectedSubServices.map((sub, idx) => (
-                            <span key={idx} className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">
-                              + {sub.name}
-                            </span>
+                            <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(b, sub.name); }} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 cursor-pointer">
+                              <span className="font-bold text-[11px] group-hover:hidden">+</span>
+                              <span className="font-bold text-[11px] hidden group-hover:inline">-</span>
+                              <span className="text-[11px] font-bold">{sub.name}</span>
+                            </div>
                           ))}
                           {hasReview && <span className="text-amber-500 font-medium">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
                         </div>
@@ -1849,22 +1901,51 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               </div>
             )}
 
-            {/* pagination */}
+            {/* Pagination Controls */}
             {pagination && pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <button disabled={!pagination.hasPrevPage} onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">‹ Trước</button>
-                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => setPage(p)}
-                    className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${page === p ? 'bg-emerald-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{p}</button>
-                ))}
-                <button disabled={!pagination.hasNextPage} onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Sau ›</button>
-              </div>
-            )}
-            {pagination && (
-              <div className="text-center mt-4">
-                <p className="text-xs text-slate-400">Hiển thị {(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)} trên {pagination.total} lịch hẹn</p>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-4 border-t border-slate-200">
+                <p className="text-xs font-medium text-slate-500">
+                  Hiển thị <span className="font-bold text-slate-800">{(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)}</span> trên tổng số <span className="font-bold text-emerald-600">{pagination.total}</span> lịch hẹn
+                </p>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    disabled={!pagination.hasPrevPage}
+                    onClick={() => setPage(p => p - 1)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    ‹ Trang trước
+                  </button>
+
+                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === pagination.totalPages || Math.abs(p - page) <= 1)
+                    .map((p, idx, arr) => {
+                      const showEllipsis = idx > 0 && p - arr[idx - 1] > 1;
+                      return (
+                        <React.Fragment key={p}>
+                          {showEllipsis && <span className="px-1 text-xs text-slate-400 font-bold">...</span>}
+                          <button
+                            onClick={() => setPage(p)}
+                            className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${
+                              page === p
+                                ? 'bg-emerald-600 text-white shadow-sm scale-105'
+                                : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <button
+                    disabled={!pagination.hasNextPage}
+                    onClick={() => setPage(p => p + 1)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Trang sau ›
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -1922,13 +2003,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {/* Header */}
               <div className="flex justify-between items-start mb-12">
                 <div>
-                  <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Receipt</h2>
+                  <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Biên lai</h2>
                   <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
-                    <div className="font-semibold text-black">Invoice number</div>
+                    <div className="font-semibold text-black">Mã hóa đơn</div>
                     <div className="text-black">AWP-{displayInvoiceNumber}</div>
-                    <div className="font-semibold text-black">Receipt number</div>
+                    <div className="font-semibold text-black">Mã biên lai</div>
                     <div className="text-black">{displayId}</div>
-                    <div className="font-semibold text-black">Date paid</div>
+                    <div className="font-semibold text-black">Ngày thanh toán</div>
                     <div className="text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
                   </div>
                 </div>
@@ -1952,7 +2033,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold text-black mb-1">Bill to</div>
+                  <div className="font-semibold text-black mb-1">Khách hàng</div>
                   <div className="text-black">
                     {detailBooking.userId?.name || 'Khách hàng'} ({detailBooking.userId?.phone || ''})<br/>
                     Biển số: {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
@@ -1964,18 +2045,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {/* Big Payment Status */}
               <div className="mb-10">
                 <h3 className="text-2xl font-bold text-black mb-3">
-                  {formatCurrency(displayTotal)} {detailBooking.paymentStatus === 'paid' ? `paid on ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `due on ${formatDate(detailBooking.bookingDate)}`}
+                  {formatCurrency(displayTotal)} {detailBooking.paymentStatus === 'paid' ? `đã thanh toán vào ${formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}` : `cần thanh toán vào ${formatDate(detailBooking.bookingDate)}`}
                 </h3>
                 <p className="text-[13px] text-black max-w-xl leading-relaxed">
-                  While we prefer electronic payment methods,<br/>
-                  any checks must be sent to the address below, NOT to our branch office.<br/>
+                  Cảm ơn quý khách đã sử dụng dịch vụ của AutoWash Pro.<br/>
+                  Quý khách có thể thanh toán bằng tiền mặt, chuyển khoản hoặc sử dụng thẻ thành viên.<br/>
                   --------------------------------<br/>
-                  PAYMENT ADDRESS:<br/>
+                  ĐỊA CHỈ THANH TOÁN:<br/>
                   AutoWash Pro<br/>
-                  Hồ Chí Minh, Vietnam
+                  Hồ Chí Minh, Việt Nam
                 </p>
                 <p className="text-[13px] text-black mt-4">
-                  VAT is calculated on the gross invoice amount using the formula: VAT = (sales price / (1 - 10%)) × 10%
+                  Giá đã bao gồm 10% VAT.
                 </p>
               </div>
 
@@ -1984,11 +2065,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="py-2 text-left font-normal text-black w-1/2">Description</th>
-                      <th className="py-2 text-right font-normal text-black">Qty</th>
-                      <th className="py-2 text-right font-normal text-black">Unit price</th>
-                      <th className="py-2 text-right font-normal text-black">Tax</th>
-                      <th className="py-2 text-right font-normal text-black">Amount</th>
+                      <th className="py-2 text-left font-normal text-black w-1/2">Mô tả</th>
+                      <th className="py-2 text-right font-normal text-black">SL</th>
+                      <th className="py-2 text-right font-normal text-black">Đơn giá</th>
+                      <th className="py-2 text-right font-normal text-black">Thuế</th>
+                      <th className="py-2 text-right font-normal text-black">Thành tiền</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2039,29 +2120,35 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 <div className="flex justify-end mt-6">
                   <div className="w-[300px] text-[13px]">
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Subtotal</span>
-                      <span className="text-black">{formatCurrency(displayTotal)}</span>
+                      <span className="text-black">Tạm tính</span>
+                      <span className="text-black">{formatCurrency(displayTotal + (detailBooking.discountAmount || 0))}</span>
                     </div>
+                    {detailBooking.voucherCode && (
+                      <div className="flex justify-between py-1 border-b border-slate-200">
+                        <span className="text-emerald-600 font-medium">Voucher ({detailBooking.voucherCode})</span>
+                        <span className="text-emerald-600 font-medium">-{formatCurrency(detailBooking.discountAmount || 0)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Total excluding tax</span>
+                      <span className="text-black">Tổng tiền (chưa VAT)</span>
                       <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">VAT - Vietnam (10% on {formatCurrency(Math.round((displayTotal) * 0.9))})</span>
+                      <span className="text-black">Thuế VAT (10%)</span>
                       <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="font-normal text-black">Total</span>
+                      <span className="font-normal text-black">Tổng cộng</span>
                       <span className="font-normal text-black">{formatCurrency(displayTotal)}</span>
                     </div>
                     {detailBooking.paymentStatus === 'deposit_paid' && (
                       <div className="flex justify-between py-1 border-b border-slate-200">
-                        <span className="font-normal text-black">Deposit Paid</span>
+                        <span className="font-normal text-black">Đã đặt cọc</span>
                         <span className="font-normal text-black">-{formatCurrency(displayDeposit || 0)}</span>
                       </div>
                     )}
                     <div className="flex justify-between py-1.5 border-b border-black">
-                      <span className="font-bold text-black">Amount {detailBooking.paymentStatus === 'paid' ? 'paid' : 'due'}</span>
+                      <span className="font-bold text-black">Số tiền {detailBooking.paymentStatus === 'paid' ? 'đã thanh toán' : 'cần thanh toán'}</span>
                       <span className="font-bold text-black">
                         {detailBooking.paymentStatus === 'paid' 
                           ? formatCurrency(displayTotal)
@@ -2077,20 +2164,20 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
               {/* Payment History */}
               <div>
-                <h3 className="text-xl font-bold text-black mb-4">Payment history</h3>
+                <h3 className="text-xl font-bold text-black mb-4">Lịch sử thanh toán</h3>
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="py-2 text-left font-normal text-black">Payment method</th>
-                      <th className="py-2 text-left font-normal text-black">Date</th>
-                      <th className="py-2 text-right font-normal text-black">Amount paid</th>
-                      <th className="py-2 text-right font-normal text-black">Receipt number</th>
+                      <th className="py-2 text-left font-normal text-black">Phương thức</th>
+                      <th className="py-2 text-left font-normal text-black">Ngày</th>
+                      <th className="py-2 text-right font-normal text-black">Số tiền</th>
+                      <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b border-slate-200">
                       <td className="py-3 text-left text-black">
-                        {detailBooking.paymentStatus === 'paid' ? 'Bank Transfer' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Deposit' : 'Pending')}
+                        {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
                       </td>
                       <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
                       <td className="py-3 text-right text-black">
@@ -2107,7 +2194,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {/* Status Badge & Feedback for Service Info */}
               <div className="mt-12 flex items-center justify-between border-t border-slate-200 pt-8">
                 <div className="flex items-center gap-4">
-                  <span className="text-[13px] font-semibold text-black">Service Status:</span>
+                  <span className="text-[13px] font-semibold text-black">Trạng thái:</span>
                   <StatusBadge status={detailBooking.status} />
                 </div>
                 {detailBooking.feedback && (
@@ -2182,27 +2269,29 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       {showAddService && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !addingService && setShowAddService(null)}>
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ con</h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ</h3>
             <p className="text-xs text-slate-500 mb-4">Bạn có thể chọn thêm các dịch vụ phát sinh. Hệ thống sẽ tự động tính lại tổng tiền.</p>
             
             <div className="max-h-60 overflow-y-auto space-y-2 mb-4 pr-2">
               {availableSubServices.length === 0 ? (
                 <p className="text-sm text-slate-500">Đang tải hoặc không có dịch vụ nào thêm...</p>
               ) : availableSubServices.map((sub, i) => {
-                const checked = selectedNewSubs.some(s => s.name === sub.name);
+                const alreadyHas = showAddService?.selectedSubServices?.some(s => s.name === sub.name);
+                const checked = alreadyHas || selectedNewSubs.some(s => s.name === sub.name);
                 return (
-                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${alreadyHas ? 'opacity-60 cursor-not-allowed bg-slate-50 border-slate-200' : checked ? 'border-emerald-400 bg-emerald-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'}`}>
                     <div className="flex items-center gap-3">
-                      <input type="checkbox" className="hidden" checked={checked} onChange={() => {
+                      <input type="checkbox" className="hidden" checked={checked} disabled={alreadyHas} onChange={() => {
+                        if (alreadyHas) return;
                         if (checked) setSelectedNewSubs(prev => prev.filter(s => s.name !== sub.name));
                         else setSelectedNewSubs(prev => [...prev, sub]);
                       }} />
-                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300'}`}>
+                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? (alreadyHas ? 'bg-slate-400 border-slate-400' : 'bg-emerald-600 border-emerald-600') + ' text-white' : 'border-slate-300'}`}>
                         {checked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                       </div>
-                      <span className={`text-sm font-medium ${checked ? 'text-emerald-800' : 'text-slate-700'}`}>{sub.name}</span>
+                      <span className={`text-sm font-medium ${checked ? (alreadyHas ? 'text-slate-500' : 'text-emerald-800') : 'text-slate-700'}`}>{sub.name}</span>
                     </div>
-                    <span className={`text-sm font-bold ${checked ? 'text-emerald-600' : 'text-slate-900'}`}>+{formatCurrency(sub.price || 0)}</span>
+                    <span className={`text-sm font-bold ${checked ? (alreadyHas ? 'text-slate-400' : 'text-emerald-600') : 'text-slate-900'}`}>{alreadyHas ? 'Đã có' : `+${formatCurrency(sub.price || 0)}`}</span>
                   </label>
                 )
               })}
@@ -2357,7 +2446,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       <div key={bId} onClick={() => setDetailBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <div className="font-semibold text-slate-800 text-sm">{formatDate(b.bookingDate)} · {b.startTime}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800 text-sm">{formatDate(b.bookingDate)} · {b.startTime}</span>
+                              {b.bookingCode && <span className="font-mono text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">#{b.bookingCode}</span>}
+                            </div>
                             <div className="text-xs text-slate-500 mt-1">{b.branchId?.name || b.branchName || ''}</div>
                           </div>
                           <StatusBadge status={b.status} />
@@ -2383,8 +2475,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           )}
                           {(b.status === 'completed' || b.status === 'cancelled') && (
                             <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
-                              disabled={rebookLoading}
-                              className="px-2.5 py-1 rounded text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
+                              className="px-2.5 py-1 rounded text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors">
                               Đặt lại
                             </button>
                           )}
@@ -2404,424 +2495,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           </div>
         </div>
       )}
-
-      {/* ── REBOOK MODAL ── */}
-      {showRebookModal && (() => {
-        const basePrice = rebookTarget?.packageId?.price || rebookTarget?.finalPrice || 0;
-        const subServiceTotal = (rebookSubServices || []).filter(s => s.price > 0).reduce((sum, s) => sum + s.price, 0);
-        const voucherDiscount = computeVoucherDiscount(rebookAppliedVoucher, basePrice + subServiceTotal);
-        const totalPrice = Math.max(0, basePrice + subServiceTotal - voucherDiscount);
-        const deposit30 = totalPrice > 0 ? Math.round(totalPrice * 0.3 / 1000) * 1000 : 0;
-        const currentAmount = rebookPaymentMode === 'full' ? totalPrice : deposit30;
-        const branchName = rebookTarget?.branchId?.name || rebookTarget?.branchName || '';
-        const pkgName = rebookTarget?.packageId?.name || rebookTarget?.packageName || 'Gói dịch vụ';
-        const vehicleLabel = rebookTarget?.vehicleId?.licensePlate || rebookTarget?.vehicleLicensePlate || '';
-        return (
-        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => { if (!rebookLoading && !rebookQrLoading) { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDraft(null); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); } }}>
-          <div className="bg-white rounded-[1.5rem] w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-
-            {/* ── Form bước ── */}
-            {rebookQrStep === 'form' && (
-              <div className="p-8">
-                <h3 className="text-lg font-bold text-slate-900 mb-1">Đặt lại lịch</h3>
-
-                {/* Thông tin đặt lại */}
-                <div className="mb-5 rounded-xl bg-slate-50 p-4 space-y-1.5 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Chi nhánh</span>
-                    <span className="font-medium text-slate-800 text-right max-w-[60%]">{branchName || '—'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Gói dịch vụ</span>
-                    <span className="font-medium text-slate-800 text-right max-w-[60%]">{pkgName || '—'}</span>
-                  </div>
-                  {vehicleLabel && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Xe</span>
-                      <span className="font-medium text-slate-800">{vehicleLabel}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Giờ cũ</span>
-                    <span className="font-medium text-slate-800">{rebookTarget?.startTime || '—'}</span>
-                  </div>
-                  {subServiceTotal > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Dịch vụ thêm</span>
-                      <span className="font-medium text-emerald-600">+{subServiceTotal.toLocaleString('vi-VN')}₫</span>
-                    </div>
-                  )}
-                  {voucherDiscount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Giảm giá</span>
-                      <span className="font-medium text-red-500">-{voucherDiscount.toLocaleString('vi-VN')}₫</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5">
-                    <span className="text-slate-500">Tổng tiền</span>
-                    <span className="font-bold text-emerald-600">{totalPrice.toLocaleString('vi-VN')}₫</span>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1.5">Ngày mới <span className="text-red-500">*</span></label>
-                    <input type="date"
-                      value={rebookDate}
-                      min={new Date().toISOString().split('T')[0]}
-                      onChange={e => setRebookDate(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1.5">
-                      Giờ mới <span className="text-red-500">*</span>
-                      {rebookTarget?.startTime && <span className="text-emerald-500 font-normal ml-1">(Giờ cũ: {rebookTarget.startTime})</span>}
-                    </label>
-                    {rebookSlotsLoading ? (
-                      <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
-                        <RefreshCw className="w-5 h-5 animate-spin text-slate-300" />
-                        <span className="text-sm">Đang tìm lịch trống...</span>
-                      </div>
-                    ) : !rebookSlotsLoading && rebookSlots.length > 0 && rebookDate ? (
-                      <div className="grid grid-cols-1 gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-amber-600">
-                            <Sun className="w-4 h-4" />
-                            <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi sáng</h4>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {(() => {
-                              const morning = rebookSlots.filter(s => {
-                                const h = parseInt((s.startTime || s.time || s).split(':')[0], 10);
-                                return h < 12;
-                              });
-                              return morning.length === 0
-                                ? <span className="text-xs text-slate-400 py-1">Không có lịch trống buổi sáng</span>
-                                : morning.map((slot, i) => {
-                                    const timeVal = slot.startTime || slot.time || slot;
-                                    const isDisabled = !slot.available;
-                                    const isSelected = rebookTime === timeVal;
-                                    return (
-                                      <button key={i} type="button"
-                                        disabled={isDisabled}
-                                        onClick={() => setRebookTime(timeVal)}
-                                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all duration-200 ${
-                                          isSelected
-                                            ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
-                                            : isDisabled
-                                              ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
-                                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                      >{timeVal}</button>
-                                    );
-                                  });
-                            })()}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-blue-600">
-                            <Sunset className="w-4 h-4" />
-                            <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi chiều</h4>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {(() => {
-                              const afternoon = rebookSlots.filter(s => {
-                                const h = parseInt((s.startTime || s.time || s).split(':')[0], 10);
-                                return h >= 12;
-                              });
-                              return afternoon.length === 0
-                                ? <span className="text-xs text-slate-400 py-1">Không có lịch trống buổi chiều</span>
-                                : afternoon.map((slot, i) => {
-                                    const timeVal = slot.startTime || slot.time || slot;
-                                    const isDisabled = !slot.available;
-                                    const isSelected = rebookTime === timeVal;
-                                    return (
-                                      <button key={i} type="button"
-                                        disabled={isDisabled}
-                                        onClick={() => setRebookTime(timeVal)}
-                                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all duration-200 ${
-                                          isSelected
-                                            ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
-                                            : isDisabled
-                                              ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
-                                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                      >{timeVal}</button>
-                                    );
-                                  });
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    ) : !rebookSlotsLoading && rebookSlots.length === 0 && rebookDate ? (
-                      <p className="text-xs text-amber-500 mt-1">Không có khung giờ trống cho ngày này</p>
-                    ) : null}
-                  </div>
-
-                  {/* Sub-services toggle */}
-                  {rebookAvailableSubServices.length > 0 && (
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-2 flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                        </svg>
-                        Dịch vụ thêm (Tùy chọn)
-                      </label>
-                      <div className="space-y-2">
-                        {rebookAvailableSubServices.map(sub => {
-                          const isMandatory = !sub.isOptional;
-                          const checked = rebookSubServices.some(s => s.name === sub.name);
-                          return (
-                            <button type="button" key={sub.name}
-                              onClick={() => {
-                                if (isMandatory) return;
-                                setRebookSubServices(prev =>
-                                  checked ? prev.filter(s => s.name !== sub.name) : [...prev, { name: sub.name, price: sub.price, duration: sub.duration }]
-                                );
-                              }}
-                              className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs font-semibold transition-all cursor-pointer ${
-                                isMandatory
-                                  ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
-                                  : checked
-                                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                {!isMandatory && (
-                                  <span className={`w-4 h-4 rounded border flex items-center justify-center text-white text-[10px] font-bold ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
-                                    {checked ? '✓' : ''}
-                                  </span>
-                                )}
-                                {sub.name}
-                              </span>
-                              <span className={isMandatory ? 'text-slate-400' : 'text-emerald-600'}>
-                                {sub.price > 0 ? `+${sub.price.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {subServiceTotal > 0 && (
-                        <p className="text-xs text-slate-500 mt-1.5 text-right">
-                          Phí dịch vụ thêm: <span className="font-bold text-emerald-600">+{subServiceTotal.toLocaleString('vi-VN')}₫</span>
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Voucher picker — same as BookingWidget */}
-                  <VoucherPicker
-                    apiBase={apiBase || API_BASE}
-                    token={token}
-                    selected={rebookAppliedVoucher}
-                    onSelect={setRebookAppliedVoucher}
-                    orderAmount={basePrice + subServiceTotal}
-                    compact
-                    branchId={rebookTarget?.branchId?._id || rebookTarget?.branchId?.id || rebookTarget?.branchId}
-                  />
-
-                  {/* Payment mode: 30% deposit or 100% full */}
-                  {totalPrice > 0 && deposit30 > 0 && (
-                    <div>
-                      <label className="text-xs font-medium text-slate-500 block mb-1.5">Hình thức thanh toán</label>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setRebookPaymentMode('deposit')}
-                          className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
-                            rebookPaymentMode === 'deposit' ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-white text-slate-600 border-slate-200'
-                          }`}>
-                          <span className="block font-semibold">Đặt cọc 30%</span>
-                          <span className="text-xs opacity-70">{deposit30.toLocaleString('vi-VN')}₫</span>
-                        </button>
-                        <button type="button" onClick={() => setRebookPaymentMode('full')}
-                          className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
-                            rebookPaymentMode === 'full' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-600 border-slate-200'
-                          }`}>
-                          <span className="block font-semibold">Thanh toán 100%</span>
-                          <span className="text-xs opacity-70">{totalPrice.toLocaleString('vi-VN')}₫</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Payment method selector */}
-                  <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1.5">Phương thức thanh toán</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setRebookDepositMethod('bank')}
-                        className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
-                          rebookDepositMethod === 'bank' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-white text-slate-600 border-slate-200'
-                        }`}>
-                        <span className="block text-xs opacity-70">Chuyển khoản</span>
-                      </button>
-                      <button type="button" onClick={() => setRebookDepositMethod('vnpay')}
-                        className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
-                          rebookDepositMethod === 'vnpay' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-600 border-slate-200'
-                        }`}>
-                        <span className="block text-xs opacity-70">VNPay</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {rebookFormError && (
-                    <div className="px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{rebookFormError}</div>
-                  )}
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDraft(null); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); }}
-                    disabled={rebookLoading || rebookVnpayLoading}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer">
-                    Hủy
-                  </button>
-                  <button onClick={submitRebook} disabled={rebookLoading || rebookVnpayLoading}
-                    className="flex-[2] px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
-                    {(rebookLoading || rebookVnpayLoading) && (
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    )}
-                    {rebookLoading ? 'Đang xử lý...' : rebookVnpayLoading ? 'Đang tạo VNPay...' : `Thanh toán ${currentAmount.toLocaleString('vi-VN')}₫`}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── QR / VNPay step ── */}
-            {rebookQrStep === 'qr' && rebookDepositPayment && (
-              <div className="p-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">
-                      {rebookDepositPayment.method === 'vnpay' ? 'Thanh toán VNPay' : 'Chuyển khoản đặt cọc'}
-                    </h3>
-                    <p className="text-sm text-slate-400">Đặt lại lịch — thanh toán để xác nhận</p>
-                  </div>
-                </div>
-
-                {rebookDepositPayment.method === 'vnpay' ? (
-                  /* VNPay waiting: không có QR, chỉ chờ xác nhận */
-                  <div className="flex flex-col items-center py-8 gap-4">
-                    <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
-                      <svg className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-slate-600 text-center">
-                      Vui lòng hoàn tất thanh toán trong cửa sổ VNPay đã mở.
-                    </p>
-                    <p className="text-2xl font-bold text-emerald-600">
-                      {(rebookDepositPayment.amount || 0).toLocaleString('vi-VN')}₫
-                    </p>
-                  </div>
-                ) : (
-                  /* Bank QR */
-                  <div className="flex flex-col items-center py-4">
-                    <div className="w-32 h-32 rounded-xl border-2 border-slate-100 bg-white flex items-center justify-center mb-3 overflow-hidden">
-                      {rebookDepositPayment.qrCode ? (
-                        <img src={rebookDepositPayment.qrCode} alt="QR code" className="w-32 h-32" />
-                      ) : (
-                        <span className="text-[10px] text-slate-300 text-center px-2">QR code</span>
-                      )}
-                    </div>
-                    <p className="text-2xl font-bold text-emerald-600">
-                      {(rebookDepositPayment.amount || 0).toLocaleString('vi-VN')}₫
-                    </p>
-                    <p className="text-xs text-slate-400">Số tiền cần chuyển</p>
-                  </div>
-                )}
-
-                      {rebookAppliedVoucher && voucherDiscount > 0 && (
-                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 mb-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-amber-700 font-medium">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        Mã giảm giá: <span className="font-bold uppercase tracking-wide">{rebookAppliedVoucher.code}</span>
-                      </span>
-                      <span className="text-amber-600 font-bold">
-                        -{voucherDiscount.toLocaleString('vi-VN')}₫
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {rebookDepositPayment.method !== 'vnpay' && (
-                  <div className="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Ngân hàng</span>
-                      <span className="text-xs font-bold text-slate-700">{rebookDepositPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Số tài khoản</span>
-                      <span className="text-xs font-bold text-slate-700 font-mono tracking-wider flex items-center gap-1">
-                        {rebookDepositPayment.bankInfo?.accountNumber || '97966888888'}
-                        <button onClick={() => { navigator.clipboard.writeText(rebookDepositPayment.bankInfo?.accountNumber || '97966888888'); showToastMsg('Đã sao chép số tài khoản'); }} className="text-emerald-500 hover:text-emerald-600 cursor-pointer" title="Copy">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                        </button>
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Chủ tài khoản</span>
-                      <span className="text-xs font-bold text-slate-700">{rebookDepositPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Nội dung CK</span>
-                      <span className="text-xs font-bold text-slate-800 font-mono max-w-[180px] text-right break-all">{rebookDepositPayment.bankInfo?.transferContent || `DAT COC ${rebookDepositPayment.transactionId || ''}`}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Mã GD</span>
-                      <span className="text-xs font-bold text-slate-700 font-mono">{rebookDepositPayment.transactionId || ''}</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-4 flex items-center gap-2 justify-center text-xs text-slate-400">
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                  Đang chờ xác nhận thanh toán...
-                </div>
-
-                {rebookFormError && (
-                  <div className="mt-3 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{rebookFormError}</div>
-                )}
-
-                <div className="flex gap-3 mt-6">
-                  <button onClick={() => { setRebookQrStep('form'); if (rebookPollRef.current) clearInterval(rebookPollRef.current); }}
-                    disabled={rebookQrLoading}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer">
-                    Quay lại
-                  </button>
-                  <button onClick={simulateRebookPayment} disabled={rebookQrLoading}
-                    className="flex-[2] px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
-                    {rebookQrLoading ? (
-                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Đang xử lý</>
-                    ) : 'Tôi đã chuyển khoản'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Rebook success step ── */}
-            {rebookQrStep === 'success' && (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-                  <Check className="w-8 h-8 text-emerald-600" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-1">Đặt lại thành công!</h3>
-                <p className="text-sm text-slate-500 mb-6">Lịch hẹn mới đã được tạo.</p>
-                <button onClick={() => { setShowRebookModal(false); setRebookTarget(null); setRebookFormError(''); setRebookQrStep('form'); setRebookDraft(null); setRebookDepositPayment(null); if (rebookPollRef.current) clearInterval(rebookPollRef.current); }}
-                  className="w-full px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors cursor-pointer">
-                  Đóng
-                </button>
-              </div>
-            )}
-
-          </div>
-        </div>);
-      })()}
 
       {/* ── MONTH PICKER MODAL ── */}
       {showMonthPicker && (

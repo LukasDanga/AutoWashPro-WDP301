@@ -13,6 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../src/contexts/AuthContext';
 import { slotPackApi, branchApi, packageApi, vehicleApi } from '../src/api';
 import {
@@ -132,6 +133,7 @@ export default function SlotPacksScreen() {
   // promotion tab, etc.) appears without a manual pull-to-refresh.
   useFocusEffect(
     useCallback(() => {
+      WebBrowser.dismissBrowser();
       if (isAuthenticated) fetchSlotPacks();
     }, [isAuthenticated, fetchSlotPacks])
   );
@@ -376,7 +378,7 @@ export default function SlotPacksScreen() {
       const payResult = await slotPackApi.paySlotPack(packId, paymentMethod);
       if (paymentMethod === 'vnpay') {
         if (payResult.paymentUrl) {
-          await Linking.openURL(payResult.paymentUrl);
+          await WebBrowser.openBrowserAsync(payResult.paymentUrl);
         }
         setIsBuying(false);
         setResumingPackId(null);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Clock, ShieldCheck, Car, Truck, Bike, Calendar, Tag, Check, 
@@ -9,6 +9,8 @@ import VoucherPicker from '../VoucherPicker.jsx';
 import SlotPackFlow from '../customer/SlotPackFlow.jsx';
 import useSSE from '../../hooks/useSSE.js';
 import { storageKeys } from '../../lib/authStorage.js';
+
+import { showToast } from '@/lib/toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -58,7 +60,7 @@ function authHeader(token) {
   return t ? `Bearer ${t}` : '';
 }
 
-export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab }) {
+export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, initialBranchId, initialTab, rebookData }) {
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -132,8 +134,18 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const res = await fetch(`${API_BASE}/branches/public`);
         const payload = await res.json();
         const data = payload?.data || payload || [];
-        setBranches(Array.isArray(data) ? data : []);
-        if (Array.isArray(data) && data.length > 0) setSelectedBranch(data[0]);
+        const branchList = Array.isArray(data) ? data : [];
+        setBranches(branchList);
+
+        if (branchList.length > 0) {
+          const targetBranchId = rebookData?.branchId?._id || rebookData?.branchId?.id || rebookData?.branchId;
+          const targetBranchName = rebookData?.branchId?.name || rebookData?.branchName || rebookData?.branch;
+          const found = branchList.find(b => 
+            (targetBranchId && String(b._id || b.id) === String(targetBranchId)) ||
+            (targetBranchName && String(b.name || '').trim().toLowerCase() === String(targetBranchName).trim().toLowerCase())
+          );
+          setSelectedBranch(found || branchList[0]);
+        }
       } catch (e) { console.error('Failed to load branches', e); }
     }
     loadBranches();
@@ -157,6 +169,64 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
     loadPackages();
   }, [selectedBranch]);
+
+  const handledRebookIdRef = useRef(null);
+
+  // Process rebookData: auto pre-fill branch, vehicle, time, jump to step 2
+  useEffect(() => {
+    if (!rebookData || branches.length === 0) return;
+
+    const rebookId = rebookData._id || rebookData.id || JSON.stringify(rebookData);
+    if (handledRebookIdRef.current === rebookId) return;
+    handledRebookIdRef.current = rebookId;
+
+    const targetBranchId = rebookData.branchId?._id || rebookData.branchId?.id || rebookData.branchId;
+    const targetBranchName = rebookData.branchId?.name || rebookData.branchName || rebookData.branch;
+    const foundBranch = branches.find(b => 
+      (targetBranchId && String(b._id || b.id) === String(targetBranchId)) ||
+      (targetBranchName && String(b.name || '').trim().toLowerCase() === String(targetBranchName).trim().toLowerCase())
+    );
+    if (foundBranch) {
+      setSelectedBranch(foundBranch);
+    }
+
+    const targetVehicleId = rebookData.vehicleId?._id || rebookData.vehicleId?.id || rebookData.vehicleId;
+    if (targetVehicleId) {
+      setSelectedVehicle(targetVehicleId);
+    } else if (rebookData.vehicleLicensePlate) {
+      setGuestVehicle({
+        licensePlate: rebookData.vehicleLicensePlate || '',
+        brand: rebookData.vehicleBrand || '',
+        model: rebookData.vehicleModel || '',
+        type: rebookData.vehicleType || 'sedan',
+      });
+    }
+
+    if (rebookData.startTime) {
+      setSelectedTime(rebookData.startTime);
+    }
+
+    setStep(2);
+    showToast('Thông tin từ lần đặt trước đã được điền sẵn. Bạn có thể chỉnh sửa hoặc thêm dịch vụ nếu cần.');
+  }, [rebookData, branches]);
+
+  // Pre-fill package & sub-services when packages load for rebookData
+  useEffect(() => {
+    if (!rebookData || packages.length === 0) return;
+    const targetPkgId = rebookData.packageId?._id || rebookData.packageId?.id || rebookData.packageId;
+    const foundPkg = packages.find(p => (p._id || p.id) === targetPkgId);
+    if (foundPkg) {
+      setSelectedPackage(foundPkg);
+      const pId = foundPkg._id || foundPkg.id;
+      const prevSubServices = (rebookData.selectedSubServices || []).map(s => typeof s === 'string' ? s : (s.name || s.title || s._id));
+      if (prevSubServices.length > 0) {
+        setSelectedSubServices(prev => ({
+          ...prev,
+          [pId]: prevSubServices,
+        }));
+      }
+    }
+  }, [rebookData, packages]);
 
   // Fetch today slots preview when branch + first package are available
   useEffect(() => {
@@ -195,8 +265,31 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }, [userVehicles, selectedVehicle]);
 
+  // Helper to build date object for any ISO date (whether in 7-day quick list or custom selected)
+  const getDateObj = useCallback((dateIso) => {
+    if (!dateIso) return bookingDates[0];
+    const found = bookingDates.find(d => d.id === dateIso);
+    if (found) return found;
+    try {
+      const parts = String(dateIso).split('-');
+      if (parts.length === 3) {
+        const [y, m, d] = parts;
+        const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+        const weekdayFormatter = new Intl.DateTimeFormat('vi-VN', { weekday: 'short' });
+        return {
+          id: dateIso,
+          label: weekdayFormatter.format(dateObj).toUpperCase(),
+          day: d,
+          month: m,
+          iso: dateIso,
+        };
+      }
+    } catch (_) {}
+    return { id: dateIso, label: dateIso, day: dateIso, month: '', iso: dateIso };
+  }, [bookingDates]);
+
   // Fetch available slots
-  const currentDate = bookingDates.find(d => d.id === selectedDate) || bookingDates[0];
+  const currentDate = useMemo(() => getDateObj(selectedDate), [selectedDate, getDateObj]);
   useEffect(() => {
     if (!selectedBranch || !selectedPackage || !currentDate?.iso) return;
     async function fetchSlots() {
@@ -392,7 +485,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           branch: selectedBranch || { name: '' },
           vehicle: { licensePlate: gv?.licensePlate || '', name: gv?.brand || '' },
           pkg: pkg || { name: '' },
-          currentDate: pb.selectedDate ? bookingDates.find(d => d.id === pb.selectedDate) : null,
+          currentDate: pb.selectedDate ? getDateObj(pb.selectedDate) : null,
           selectedTime: pb.selectedTime, total: estimatedTotal, discount: 0, points: 0, isPayingWithPack: false, bookingCode: code,
           subServices: (pb.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
           recurringCount: isRec ? bk?.totalCreated || 0 : undefined, depositAmount: 0, depositPaid: false,
@@ -542,6 +635,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           weekdays: pb?.selectedDays || selectedDays,
           weeks: pb?.weeks || weeks,
           voucherCode: pb?.appliedVoucher?.code || appliedVoucher?.code,
+          discountAmount: discount,
           selectedSubServices: pb?.selectedSubServices || currentSubServices,
           isRecurring: isRec,
           finalPrice: fullPrice,
@@ -717,6 +811,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       // Build lastBooking
       const subPrices = draft.subServicesPrices || {};
       setLastBooking({
+        _id: newBk._id || newBk.id || newBk.bookingId,
         branch: { name: draft.branchName || selectedBranch?.name || '' },
         vehicle: draft.vehicleInfo || vehicle || { licensePlate: '' },
         pkg: { name: draft.pkgName || pkg?.name || '', price: draft.pkgPrice || 0 },
@@ -735,7 +830,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         },
         selectedTime: draft.startTime,
         total: draft.finalPrice || 0,
-        discount: 0, points: 0, isPayingWithPack: false,
+        discount: draft.discountAmount || discount || 0,
+        voucherCode: draft.voucherCode || appliedVoucher?.code,
+        points: 0, isPayingWithPack: false,
         bookingCode: newCode,
         subServices: (draft.selectedSubServices || []).map(n => ({ name: n, price: subPrices[n] || 0 })),
         recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
@@ -803,7 +900,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   // Sub-services
   const pkg = selectedPackage;
-  const currentSubServices = selectedSubServices[pkg?._id || pkg?.id] || [];
+  const defaultIncluded = useMemo(() => {
+    return (pkg?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
+  }, [pkg]);
+
+  const currentSubServices = useMemo(() => {
+    const pId = pkg?._id || pkg?.id;
+    if (!pId) return defaultIncluded;
+    const selectedForPkg = selectedSubServices[pId];
+    if (selectedForPkg === undefined) return defaultIncluded;
+    return selectedForPkg;
+  }, [pkg, selectedSubServices, defaultIncluded]);
   let extraDuration = 0, extraPrice = 0;
   if (pkg && pkg.subServices) {
     for (const sub of pkg.subServices) {
@@ -931,8 +1038,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const booking = await executeCreateBooking({ tab: 'regular' });
       setBookingCode(booking?.bookingCode || booking?.code || '');
       setLastBooking({
+        _id: booking?._id || booking?.id,
         branch: selectedBranch, vehicle, pkg, currentDate, selectedTime, total, discount, points, isPayingWithPack,
         bookingCode: booking?.bookingCode || booking?.code || '',
+        voucherCode: appliedVoucher?.code,
         subServices: (currentSubServices || []).map(n => {
           const s = pkg?.subServices?.find(x => x.name === n);
           return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
@@ -1174,9 +1283,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const dayLabel = (value) => WEEKDAY_OPTIONS.find(o => o.value === value)?.label || String(value);
 
   return (
-    <section id="booking" className="relative bg-white min-h-[calc(100dvh-64px)] overflow-hidden pt-16">
+    <section id="booking" className="relative bg-white min-h-[calc(100dvh-64px)] pt-16">
 
-      <div className="max-w-[1000px] mx-auto px-6 md:px-12 py-6">
+      <div className="max-w-[1000px] mx-auto px-6 md:px-12 py-6 pb-40">
 
         <div className="bg-white/80 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] rounded-3xl p-6 md:p-8">
 
@@ -1376,33 +1485,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <h4 className="text-sm font-bold text-slate-700">Dịch vụ đã bao gồm</h4>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {selectedPackage.subServices.filter(sub => !sub.isOptional).map(sub => (
-                              <div key={sub.name} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-white opacity-80 cursor-default text-slate-600">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-100 border border-slate-300">
-                                    <Check className="w-3.5 h-3.5 stroke-[3] text-slate-400" />
-                                  </div>
-                                  <span className="text-sm font-medium">{sub.name}</span>
-                                </div>
-                                {sub.duration > 0 && (
-                                  <span className="text-xs font-medium text-slate-400">{sub.duration} phút</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Optional extra services */}
-                      {selectedPackage.subServices.filter(sub => sub.isOptional).length > 0 && (
-                        <div>
-                          <div className="flex items-center gap-2 mb-4">
-                            <Sparkles className="w-4 h-4 text-indigo-600" />
-                            <h4 className="text-sm font-bold text-slate-700">Dịch vụ chọn thêm (Tùy chọn)</h4>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {selectedPackage.subServices.filter(sub => sub.isOptional).map(sub => {
+                            {selectedPackage.subServices.filter(sub => !sub.isOptional).map(sub => {
                               const pId = selectedPackage._id || selectedPackage.id;
                               const checked = currentSubServices.includes(sub.name);
                               return (
@@ -1411,7 +1494,58 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                   key={sub.name}
                                   onClick={() => {
                                     setSelectedSubServices(prev => {
-                                      const current = prev[pId] || [];
+                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
+                                      return { 
+                                        ...prev, 
+                                        [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
+                                      };
+                                    });
+                                  }}
+                                  className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all duration-300 ${
+                                    checked
+                                      ? 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium'
+                                      : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                                  } cursor-pointer`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                                      checked 
+                                        ? 'bg-emerald-600 border-emerald-600 text-white' 
+                                        : 'border-slate-300 bg-white'
+                                    }`}>
+                                      {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                    </div>
+                                    <span className="text-sm font-medium">{sub.name}</span>
+                                  </div>
+                                  <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
+                                    {sub.duration > 0 ? `${sub.duration} phút` : 'Bao gồm'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Optional extra services */}
+                      {selectedPackage.subServices.filter(sub => sub.isOptional && sub.price > 0).length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <Sparkles className="w-4 h-4 text-indigo-600" />
+                            <h4 className="text-sm font-bold text-slate-700">Dịch vụ chọn thêm (Tùy chọn)</h4>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {selectedPackage.subServices.filter(sub => sub.isOptional && sub.price > 0).map(sub => {
+                              const pId = selectedPackage._id || selectedPackage.id;
+                              const checked = currentSubServices.includes(sub.name);
+                              return (
+                                <button
+                                  type="button"
+                                  key={sub.name}
+                                  onClick={() => {
+                                    setSelectedSubServices(prev => {
+                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
                                       return { 
                                         ...prev, 
                                         [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
@@ -1677,6 +1811,37 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             </button>
                           );
                         })}
+
+                        {/* Extended Custom Date Selector */}
+                        <div className="flex flex-col items-center justify-between min-w-[130px] p-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 transition-all shrink-0">
+                          <span className="text-[10px] uppercase font-bold text-emerald-800 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Chọn ngày khác
+                          </span>
+                          <input
+                            type="date"
+                            min={new Date().toLocaleDateString('en-CA')}
+                            value={bookingDates.some(d => d.id === selectedDate) ? '' : selectedDate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (!val) return;
+                              const todayStr = new Date().toLocaleDateString('en-CA');
+                              if (val < todayStr) {
+                                showToast('Chỉ được chọn ngày từ hiện tại trở đi vào tương lai!', 'error');
+                                return;
+                              }
+                              setSelectedDate(val);
+                            }}
+                            className="w-full text-xs font-bold text-emerald-900 bg-white border border-emerald-200 rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 text-center cursor-pointer shadow-sm mt-1"
+                          />
+                          {!bookingDates.some(d => d.id === selectedDate) && selectedDate && (
+                            <span className="text-[10px] font-extrabold text-emerald-600 mt-1">
+                              Đã chọn: {(() => {
+                                const parts = String(selectedDate).split('T')[0].split('-');
+                                return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : selectedDate;
+                              })()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1984,7 +2149,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Thời gian</span>
                             <span className="text-sm font-bold text-slate-700">
                               {tab === 'regular'
-                                ? `${currentDate?.label || ''}, ${selectedTime}`
+                                ? (() => {
+                                    const dateFormatted = currentDate?.iso 
+                                      ? new Date(currentDate.iso.includes('T') ? currentDate.iso : currentDate.iso + 'T00:00:00').toLocaleDateString('vi-VN')
+                                      : '';
+                                    return `${currentDate?.label || ''}${dateFormatted ? ` (${dateFormatted})` : ''} · ${selectedTime}`;
+                                  })()
                                 : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần (${previewDates.length} buổi)`
                               }
                             </span>
@@ -1992,19 +2162,51 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         </div>
                       </div>
 
-                      {/* Optional Sub-services summary */}
-                      {currentSubServices.length > 0 && (
-                        <div className="pb-6 border-b border-dashed border-slate-200">
-                          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2">Dịch vụ chọn thêm</span>
-                          <div className="flex flex-wrap gap-2">
-                            {currentSubServices.map(subName => (
-                              <span key={subName} className="text-xs font-semibold px-3 py-1 rounded-xl bg-slate-50 border border-slate-100 text-slate-600">
-                                {subName}
+                      {/* Sub-services summary: Included & Optional */}
+                      <div className="pb-6 border-b border-dashed border-slate-200 space-y-4">
+                        {/* Dịch vụ đã bao gồm trong gói */}
+                        {(() => {
+                          const keptIncluded = (pkg?.subServices || []).filter(s => !s.isOptional && currentSubServices.includes(s.name));
+                          if (keptIncluded.length === 0) return null;
+                          return (
+                            <div>
+                              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> Dịch vụ có sẵn (Đã bao gồm)
                               </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                              <div className="flex flex-wrap gap-2">
+                                {keptIncluded.map(sub => (
+                                  <span key={sub.name} className="text-xs font-semibold px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 flex items-center gap-1.5">
+                                    <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                                    {sub.name}
+                                    {sub.duration > 0 && <span className="text-[10px] text-emerald-600 font-normal">({sub.duration}p)</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Dịch vụ chọn thêm */}
+                        {(() => {
+                          const addedOptional = (pkg?.subServices || []).filter(s => s.isOptional && currentSubServices.includes(s.name));
+                          if (addedOptional.length === 0) return null;
+                          return (
+                            <div>
+                              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Dịch vụ chọn thêm (Tùy chọn)
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {addedOptional.map(sub => (
+                                  <span key={sub.name} className="text-xs font-semibold px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 flex items-center gap-1">
+                                    <span>+ {sub.name}</span>
+                                    <span className="text-[10px] text-indigo-600 font-bold">({sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
 
                       {/* Payment Options */}
                       {isLoggedIn && (
@@ -2068,37 +2270,81 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 </div>
                                 <span className="text-emerald-600 text-xs font-bold border border-emerald-200 px-3 py-1.5 rounded-full bg-white shadow-sm">Chọn</span>
                               </div>
-
-                              
                             </>
                           )}
                         </div>
                       )}
 
-                      {/* Financial Breakdown */}
+                      {/* Detailed Financial Breakdown */}
                       <div className="space-y-2.5 pt-2">
-                        <div className="flex justify-between text-sm text-slate-500">
-                          <span>Giá gốc dịch vụ</span>
-                          <span className="font-semibold">{formatCurrency(totalBase)}</span>
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIẾT GIÁ DỊCH VỤ</div>
+                        
+                        {/* Package price */}
+                        <div className="flex justify-between text-sm text-slate-800 font-bold">
+                          <span>{pkg?.name || 'Gói dịch vụ chính'}</span>
+                          <span className="font-bold">{formatCurrency(basePrice)}</span>
                         </div>
+
+                        {/* Included sub-services (Dịch vụ có sẵn trong gói - Miễn phí) */}
+                        {(() => {
+                          const keptIncluded = (pkg?.subServices || []).filter(s => !s.isOptional && currentSubServices.includes(s.name));
+                          if (keptIncluded.length === 0) return null;
+                          return (
+                            <div className="pl-3 space-y-1 my-1">
+                              {keptIncluded.map(sub => (
+                                <div key={sub.name} className="flex justify-between text-xs text-slate-500">
+                                  <span>+ {sub.name}</span>
+                                  <span className="text-slate-400 font-medium">Miễn phí</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Optional added sub-services (Dịch vụ chọn thêm - Trả phí) */}
+                        {(() => {
+                          const addedSubServices = (pkg?.subServices || []).filter(s => s.isOptional && currentSubServices.includes(s.name));
+                          if (addedSubServices.length === 0) return null;
+                          return (
+                            <div className="pt-2 border-t border-slate-100/80 space-y-1">
+                              <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-indigo-500" /> Dịch vụ chọn thêm (Trả phí)
+                              </div>
+                              <div className="pl-3 space-y-1">
+                                {addedSubServices.map(sub => (
+                                  <div key={sub.name} className="flex justify-between text-xs text-indigo-950 font-medium">
+                                    <span>+ {sub.name}</span>
+                                    <span className="font-bold text-indigo-600">+{formatCurrency(sub.price || 0)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Package slot usage discount */}
                         {isPayingWithPack && (
-                          <div className="flex justify-between text-sm text-emerald-600">
+                          <div className="flex justify-between text-sm text-emerald-600 font-medium">
                             <span>Sử dụng gói lượt</span>
                             <span>-{formatCurrency(basePrice)}</span>
                           </div>
                         )}
+
+                        {/* Voucher discount */}
                         {isLoggedIn && discount > 0 && (
-                          <div className="flex justify-between text-sm text-emerald-600">
-                            <span>Mã giảm giá</span>
-                            <span>-{formatCurrency(discount)}</span>
+                          <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                            <span>Mã giảm giá {appliedVoucher?.code ? `(${appliedVoucher.code})` : ''}</span>
+                            <span className="font-bold">-{formatCurrency(discount)}</span>
                           </div>
                         )}
+
                         {isLoggedIn && points > 0 && (
-                          <div className="flex justify-between text-xs text-slate-400">
-                            <span>Tích điểm thành viên</span>
+                          <div className="flex justify-between text-xs text-amber-600 font-semibold">
+                            <span>Thưởng tích điểm thành viên</span>
                             <span>+{points} điểm</span>
                           </div>
                         )}
+
                         {tab === 'recurring' && pkg && previewDates.length > 0 && (
                           <div className="flex justify-between text-xs text-slate-400 border-t border-slate-100 pt-2.5">
                             <span>Tổng số buổi định kỳ</span>
@@ -2108,7 +2354,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         
                         <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
                           <span className="text-base font-bold text-slate-800">
-                            {tab === 'recurring' ? 'Tổng dự kiến (tạm tính)' : 'Thành tiền'}
+                            {tab === 'recurring' ? 'Tổng dự kiến (tạm tính)' : 'Thành tiền tổng cộng'}
                           </span>
                           <span className="text-2xl font-extrabold text-emerald-600">
                             {tab === 'recurring' 
@@ -2117,7 +2363,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             }
                           </span>
                         </div>
-
                       </div>
                     </div>
                   </div>
@@ -2198,103 +2443,113 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
 
-                  {/* Actions */}
-                  <div className="text-center pt-4">
-                    {tab === 'regular' ? (
-                      <button 
-                        type="button"
-                        onClick={confirmBooking} 
-                        disabled={bookingLoading}
-                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
-                      >
-                        {bookingLoading ? (
-                          <>
-                            <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>Đang tạo lịch hẹn...</span>
-                          </>
-                        ) : isLoggedIn ? (
-                          'Xác nhận đặt chỗ ngay'
-                        ) : (
-                          'Đăng nhập để đặt lịch'
-                        )}
-                      </button>
-                    ) : (
-                      <button 
-                        type="button"
-                        onClick={confirmRecurringBooking} 
-                        disabled={bookingLoading || previewDates.length === 0}
-                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
-                      >
-                        {bookingLoading ? (
-                          <>
-                            <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>Đang tạo lịch hẹn...</span>
-                          </>
-                        ) : isLoggedIn ? (
-                          `Xác nhận ${previewDates.length} buổi đặt định kỳ`
-                        ) : (
-                          'Đăng nhập để đặt lịch định kỳ'
-                        )}
-                      </button>
-                    )}
-                    
-                    {!isLoggedIn && (
-                      <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3 text-left">
-                        <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Bạn cần đăng nhập để hoàn tất đặt chỗ. Thông tin xe bạn nhập ở bước trước sẽ được tự động lưu vào tài khoản sau khi đăng nhập thành công.
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  {/* Actions have been moved to sticky footer */}
                 </motion.div>
               )}
             </>
           )}
 
-          {/* ── Shared Navigation ── */}
-          {(tab !== 'slot_pack' || isLoggedIn) && (
-            <div className="flex items-center justify-between mt-10 pt-6 border-t border-slate-100">
-              {step > 1 ? (
+          {/* ── Shared Navigation is rendered outside to escape backdrop-filter containing block ── */}
+        </div>
+      </div>
+
+      {/* ── Shared Navigation ── */}
+      {(tab !== 'slot_pack' || isLoggedIn) && (
+        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-3 w-full max-w-[calc(100%-2rem)] sm:w-auto">
+          
+          {/* Info Banner floating independently above the pill */}
+          {!isLoggedIn && step === totalSteps && (
+            <div className="pointer-events-auto w-full max-w-[600px] p-3 sm:p-4 rounded-3xl bg-amber-50/90 backdrop-blur-xl border border-amber-200/50 flex items-start gap-3 text-left shadow-[0_10px_30px_-10px_rgba(0,0,0,0.1)]">
+              <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm text-amber-700 leading-relaxed font-medium">
+                Bạn cần đăng nhập để hoàn tất đặt chỗ. Thông tin xe bạn nhập ở bước trước sẽ được tự động lưu vào tài khoản sau khi đăng nhập thành công.
+              </p>
+            </div>
+          )}
+
+          {/* Navigation Pill */}
+          <div className="pointer-events-auto bg-white/10 sm:bg-white/5 backdrop-blur-[64px] border border-white/20 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] rounded-[2rem] sm:rounded-full p-2 flex flex-col sm:flex-row items-center gap-2 w-full sm:w-max">
+            
+            {step > 1 && (
+              <button 
+                type="button"
+                onClick={() => setStep(step - 1)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[1.5rem] sm:rounded-full border border-white/30 bg-white/20 text-slate-700 text-sm font-bold hover:bg-white/40 hover:text-slate-900 transition-colors active:scale-[0.98]"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Quay lại
+              </button>
+            )}
+            
+            {step === totalSteps && (
+              <button 
+                type="button"
+                onClick={reset}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[1.5rem] sm:rounded-full border border-white/30 bg-white/20 text-slate-600 text-sm font-bold hover:bg-white/40 hover:text-slate-800 transition-colors active:scale-[0.98]"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Đặt lại
+              </button>
+            )}
+            
+            {step < totalSteps ? (
+              <button 
+                type="button"
+                onClick={() => setStep(step + 1)} 
+                disabled={!canNextStep()}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-[1.5rem] sm:rounded-full text-sm font-bold transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30"
+                style={{
+                  backgroundColor: canNextStep() ? '#10b981' : 'rgba(255,255,255,0.2)',
+                  color: canNextStep() ? '#ffffff' : '#94a3b8',
+                  cursor: canNextStep() ? 'pointer' : 'not-allowed',
+                  border: canNextStep() ? 'none' : '1px solid rgba(255,255,255,0.4)'
+                }}
+              >
+                <span>Tiếp theo</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              tab === 'regular' ? (
                 <button 
                   type="button"
-                  onClick={() => setStep(step - 1)}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-800 transition-colors active:scale-[0.98]"
+                  onClick={confirmBooking} 
+                  disabled={bookingLoading}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-[1.5rem] sm:rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  Quay lại
-                </button>
-              ) : <div />}
-              
-              {step < totalSteps ? (
-                <button 
-                  type="button"
-                  onClick={() => setStep(step + 1)} 
-                  disabled={!canNextStep()}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] bg-emerald-600 text-white shadow-md shadow-emerald-500/10 hover:bg-emerald-505"
-                  style={{
-                    backgroundColor: canNextStep() ? '#10b981' : '#f1f5f9',
-                    color: canNextStep() ? '#ffffff' : '#94a3b8',
-                    cursor: canNextStep() ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  <span>Tiếp theo</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {bookingLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang xử lý...</span>
+                    </>
+                  ) : isLoggedIn ? (
+                    'Xác nhận đặt chỗ ngay'
+                  ) : (
+                    'Đăng nhập để đặt lịch'
+                  )}
                 </button>
               ) : (
                 <button 
                   type="button"
-                  onClick={reset}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-500 text-sm font-bold hover:bg-slate-50 hover:text-slate-700 transition-colors active:scale-[0.98]"
+                  onClick={confirmRecurringBooking} 
+                  disabled={bookingLoading || previewDates.length === 0}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-[1.5rem] sm:rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  Đặt lại từ đầu
+                  {bookingLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang xử lý...</span>
+                    </>
+                  ) : isLoggedIn ? (
+                    `Xác nhận ${previewDates.length} buổi`
+                  ) : (
+                    'Đăng nhập để đặt lịch'
+                  )}
                 </button>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <AnimatePresence>
         {showSuccessModal && lastBooking && (
@@ -2390,7 +2645,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                     {lastBooking.discount > 0 && (
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-emerald-600 font-semibold">Giảm giá</span>
+                        <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                          <span>Mã giảm giá</span>
+                          {lastBooking.voucherCode && <span className="font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-bold">({lastBooking.voucherCode})</span>}
+                        </span>
                         <span className="font-bold text-emerald-600">-{formatCurrency(lastBooking.discount)}</span>
                       </div>
                     )}
@@ -2448,10 +2706,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setShowSuccessModal(false); reset(); onGoToHistory?.(lastBooking._id); }}
+                  onClick={() => {
+                    const targetId = lastBooking._id || lastBooking.bookingId || lastBooking.id;
+                    setShowSuccessModal(false);
+                    reset();
+                    onGoToHistory?.(targetId);
+                  }}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]"
                 >
-                  Lịch sử đặt
+                  Xem hóa đơn đơn hàng
                 </button>
               </div>
             </motion.div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { CurrencyCircleDollar, TrendUp, TrendDown } from '@phosphor-icons/react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -92,29 +93,48 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-            Quay lại
-          </button>
-          <h1 className="text-sm font-bold text-slate-800">Lịch sử thanh toán</h1>
-          <div className="w-20" />
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-10">
+    <div className="space-y-6">
+      <main className="w-full">
         
         {/* Filters and Stats Section */}
         <div className="mb-8 space-y-6">
-          {/* Always show the chart container, even if empty, so user knows it exists */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-800 mb-4">Chi tiêu 6 tháng gần nhất</h3>
-            <div className="h-48 w-full">
-              {stats && stats.length > 0 ? (
+          {stats && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-500">
+                <CurrencyCircleDollar size={28} weight="duotone" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-500 mb-0.5">Chi tiêu tháng này</p>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-2xl font-bold text-slate-800">{formatCurrency(stats.currentMonthTotal)}</p>
+                  {(() => {
+                    const current = stats.currentMonthTotal || 0;
+                    const prev = stats.previousMonthTotal || 0;
+                    let percent = 0;
+                    if (prev === 0 && current > 0) percent = 100;
+                    else if (prev > 0) percent = ((current - prev) / prev) * 100;
+                    
+                    if (percent === 0) return <span className="text-[11px] text-slate-400">Không đổi so với tháng trước</span>;
+                    const isUp = percent > 0;
+                    return (
+                      <div className={`flex items-center gap-1 text-[12px] font-medium ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {isUp ? <TrendUp weight="bold" /> : <TrendDown weight="bold" />}
+                        <span>{Math.abs(percent).toFixed(1)}% so với tháng trước</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-800 mb-4">Chi tiêu 6 tháng gần nhất</h3>
+              <div className="h-48 w-full">
+                {stats && stats.months && stats.months.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <BarChart data={stats.months} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} />
                     <YAxis tickFormatter={(val) => `${val / 1000}k`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dx={-10} />
                     <Tooltip 
@@ -123,8 +143,8 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                       cursor={{ fill: '#f1f5f9' }}
                     />
                     <Bar dataKey="totalAmount" radius={[4, 4, 0, 0]}>
-                      {stats.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index === stats.length - 1 ? '#10b981' : '#94a3b8'} />
+                      {stats.months.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index === stats.months.length - 1 ? '#10b981' : '#94a3b8'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -137,6 +157,33 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
               )}
             </div>
           </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Chi tiêu theo xe</h3>
+            <div className="flex-1 overflow-y-auto max-h-48 pr-2">
+              {stats && stats.vehicles && stats.vehicles.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {stats.vehicles.map((v, i) => (
+                    <div key={v.vehicleId || i} className="py-2.5 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800 uppercase">{v.licensePlate}</p>
+                        <p className="text-xs text-slate-500 capitalize">{v.vehicleType === 'unknown' ? 'Khác' : v.vehicleType} {v.brand ? `· ${v.brand}` : ''}</p>
+                      </div>
+                      <div className="text-right font-bold text-emerald-600 text-sm">
+                        {formatCurrency(v.totalAmount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <svg className="w-8 h-8 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                  <span className="text-sm">Chưa có dữ liệu chi tiêu</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">

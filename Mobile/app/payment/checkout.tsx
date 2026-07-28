@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
   Linking,
   AppState,
+  Modal,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -119,6 +121,8 @@ export default function PaymentCheckoutScreen() {
   const [vnpayUrl, setVnpayUrl] = useState<string | null>(null);
   const [createdBookingId, setCreatedBookingId] = useState<string>('');
   const [checkoutExtras, setCheckoutExtras] = useState<any>(null);
+  const [showWebView, setShowWebView] = useState(false);
+  const [webViewError, setWebViewError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +162,7 @@ export default function PaymentCheckoutScreen() {
   // Deep-link return from VNPay (autowashpro://payment/checkout?...&vnpay_result=...)
   useEffect(() => {
     if (!vnpayResultParam) return;
+    WebBrowser.dismissBrowser();
     let cancelled = false;
     const handleReturn = async () => {
       try {
@@ -204,12 +209,11 @@ export default function PaymentCheckoutScreen() {
   }, [vnpayResultParam, bookingId]);
 
   // Compute amounts from booking (existing) or draft (provisional)
-  const totalAmount = useMemo(() => {
+  const baseServiceAmount = useMemo(() => {
     if (isProvisional) {
       if (isRecurringType && recurringDraft) {
         return recurringDraft.totalAmount ?? 0;
       }
-      // Single booking provisional: compute from BookingContext draft
       const pkg = bookingCtx?.selectedPackage;
       const basePrice = pkg?.price ?? 0;
       const extras = checkoutExtras || {};
@@ -217,17 +221,35 @@ export default function PaymentCheckoutScreen() {
         const subService = (pkg as any)?.subServices?.find((s: any) => s.name === sub);
         return sum + (subService?.price ?? 0);
       }, 0);
-      const voucherDiscount = bookingCtx?.voucher?.discountAmount ?? 0;
-      return Math.max(0, basePrice + subTotal - voucherDiscount);
+      return basePrice + subTotal;
     }
-    // Existing booking mode
+    if (!booking) return 0;
+    return booking.totalPrice ?? booking.finalPrice ?? 0;
+  }, [booking, isProvisional, isRecurringType, recurringDraft, bookingCtx?.selectedPackage, checkoutExtras]);
+
+  const activeVoucherDiscount = useMemo(() => {
+    if (isProvisional) {
+      const extras = checkoutExtras || {};
+      return extras.voucherDiscount ?? bookingCtx?.voucher?.discountAmount ?? 0;
+    }
+    if (!booking) return 0;
+    return booking.discountAmount ?? 0;
+  }, [booking, isProvisional, checkoutExtras, bookingCtx?.voucher]);
+
+  const totalAmount = useMemo(() => {
+    if (isProvisional) {
+      if (isRecurringType && recurringDraft) {
+        return recurringDraft.totalAmount ?? 0;
+      }
+      return Math.max(0, baseServiceAmount - activeVoucherDiscount);
+    }
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
     if (beDeposit > 0) {
       return Math.round(beDeposit / 0.3 / 1000) * 1000;
     }
     return booking.finalPrice ?? booking.totalPrice ?? 0;
-  }, [booking, isProvisional, isRecurringType, recurringDraft, bookingCtx?.selectedPackage, bookingCtx?.voucher, checkoutExtras]);
+  }, [booking, isProvisional, isRecurringType, recurringDraft, baseServiceAmount, activeVoucherDiscount]);
 
   const depositAmount = useMemo(() => {
     if (isProvisional) {
@@ -350,7 +372,7 @@ export default function PaymentCheckoutScreen() {
           const result = await paymentApi.createVnpayProvisional(amount);
           setPayment(result.payment ?? result);
           setVnpayUrl(result.paymentUrl);
-          await Linking.openURL(result.paymentUrl);
+          await WebBrowser.openBrowserAsync(result.paymentUrl);
         } else {
           const result = await paymentApi.createVnpayPayment({
             bookingId,
@@ -360,7 +382,7 @@ export default function PaymentCheckoutScreen() {
           });
           setPayment(result.payment ?? result);
           setVnpayUrl(result.paymentUrl);
-          await Linking.openURL(result.paymentUrl);
+          await WebBrowser.openBrowserAsync(result.paymentUrl);
         }
         setStep('vnpay_pending');
         setPollCount(0);
@@ -436,7 +458,7 @@ export default function PaymentCheckoutScreen() {
 
   const handleReopenVnpay = async () => {
     if (vnpayUrl) {
-      await Linking.openURL(vnpayUrl);
+      await WebBrowser.openBrowserAsync(vnpayUrl);
       return;
     }
     // Recreate if URL was lost
@@ -458,6 +480,112 @@ export default function PaymentCheckoutScreen() {
     setStep('amount');
     setError('');
     setPollCount(0);
+  };
+
+  const handleWebViewNavigationStateChange = async (navState: any) => {
+    const { url } = navState;
+    console.log('[WebView NavState] URL:', url);
+
+    // 1. Nếu Backend thực hiện redirect về deep link
+    if (url.startsWith('autowashpro://')) {
+      setShowWebView(false);
+      const paramsPart = url.split('?')[1] || '';
+      const paramsObj: any = {};
+      paramsPart.split('&').forEach((p: string) => {
+        const [k, v] = p.split('=');
+        paramsObj[k] = decodeURIComponent(v || '');
+      });
+
+      const vnpayResult = paramsObj.vnpay_result;
+      if (vnpayResult) {
+        try {
+          let parsed: any;
+          try {
+            parsed = JSON.parse(vnpayResult);
+          } catch {
+            parsed = JSON.parse(decodeURIComponent(vnpayResult));
+          }
+
+          if (parsed?.success) {
+            if (isProvisional) {
+              const payType = paymentMode === 'full' ? 'full' : 'deposit';
+              const newBookingId = await createBookingFromDraft();
+              if (newBookingId) {
+                setCreatedBookingId(newBookingId);
+                await linkPaymentToBooking(newBookingId, payType);
+                if (isRecurringType) {
+                  await AsyncStorage.removeItem('aw_recurring_draft');
+                }
+                bookingCtx?.resetAll?.();
+                setStep('success');
+              }
+            } else {
+              await checkPaid();
+            }
+          } else {
+            setError(parsed?.message || 'Thanh toán VNPay thất bại hoặc bị huỷ');
+            setStep('amount');
+          }
+        } catch (err) {
+          console.error('Parse vnpay_result in webview error:', err);
+          if (!isProvisional) await checkPaid();
+        }
+      }
+      return;
+    }
+
+    // 2. Fallback: Nếu WebView load đến vnpay-return của Backend nhưng không thể redirect về app
+    if (url.includes('/payments/vnpay-return') && url.includes('vnp_ResponseCode')) {
+      const urlParts = url.split('?');
+      if (urlParts.length > 1) {
+        const queryString = urlParts[1];
+        const paramsObj: any = {};
+        queryString.split('&').forEach((param: string) => {
+          const [key, val] = param.split('=');
+          paramsObj[key] = decodeURIComponent(val || '');
+        });
+
+        const responseCode = paramsObj.vnp_ResponseCode;
+        const txnRef = paramsObj.vnp_TxnRef;
+
+        if (responseCode === '00') {
+          setTimeout(async () => {
+            setShowWebView(false);
+            if (isProvisional) {
+              const payType = paymentMode === 'full' ? 'full' : 'deposit';
+              try {
+                if (txnRef) {
+                  await paymentApi.vnpayCallback({
+                    transactionId: txnRef,
+                    gatewayTransactionId: paramsObj.vnp_TransactionNo || 'VNPAY',
+                    status: 'success'
+                  });
+                }
+                const newBookingId = await createBookingFromDraft();
+                if (newBookingId) {
+                  setCreatedBookingId(newBookingId);
+                  await linkPaymentToBooking(newBookingId, payType);
+                  if (isRecurringType) {
+                    await AsyncStorage.removeItem('aw_recurring_draft');
+                  }
+                  bookingCtx?.resetAll?.();
+                  setStep('success');
+                }
+              } catch (err) {
+                console.error('Provisional fallback flow error:', err);
+                setError('Thanh toán thành công nhưng không thể tạo lịch. Vui lòng liên hệ Admin.');
+              }
+            } else {
+              await checkPaid();
+            }
+          }, 1500);
+        } else {
+          setShowWebView(false);
+          setError('Thanh toán VNPay bị hủy hoặc không thành công');
+          setStep('amount');
+        }
+      }
+    }
   };
 
   const branchName = booking?.branchId 
@@ -768,6 +896,8 @@ export default function PaymentCheckoutScreen() {
             </AppText>
           </TouchableOpacity>
         </View>
+
+
       </ScreenContainer>
     );
   }
@@ -848,9 +978,40 @@ export default function PaymentCheckoutScreen() {
                 Tổng dịch vụ
               </AppText>
               <AppText variant="body" style={styles.summaryValue}>
-                {formatCurrency(totalAmount)}
+                {formatCurrency(baseServiceAmount > 0 ? baseServiceAmount : totalAmount)}
               </AppText>
             </View>
+
+            {activeVoucherDiscount > 0 ? (
+              <>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" style={{ color: '#059669', fontWeight: '600' }}>
+                    Voucher giảm giá {checkoutExtras?.voucherCode ? `(${checkoutExtras.voucherCode})` : ''}
+                  </AppText>
+                  <AppText variant="body" style={{ color: '#059669', fontWeight: '700' }}>
+                    -{formatCurrency(activeVoucherDiscount)}
+                  </AppText>
+                </View>
+              </>
+            ) : null}
+
+            {activeVoucherDiscount > 0 ? (
+              <>
+                <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+                <View style={styles.summaryRow}>
+                  <AppText variant="body" style={{ fontWeight: '700', color: colors.textPrimary }}>
+                    Thành tiền
+                  </AppText>
+                  <AppText variant="body" style={{ fontWeight: '700', color: colors.textPrimary }}>
+                    {formatCurrency(totalAmount)}
+                  </AppText>
+                </View>
+              </>
+            ) : null}
+
+            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
+
             {paymentMode === 'deposit' ? (
               <>
                 <View style={styles.summaryRow}>
@@ -1101,6 +1262,8 @@ export default function PaymentCheckoutScreen() {
           </View>
         </View>
       </View>
+
+
     </ScreenContainer>
   );
 }

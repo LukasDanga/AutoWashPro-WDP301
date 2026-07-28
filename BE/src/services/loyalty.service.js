@@ -57,6 +57,8 @@ const determineTier = (lifetimePoints) => {
   return 'bronze';
 };
 
+exports.getTierConfig = () => Object.values(TIER_CONFIG);
+
 
 /**
  * Xử lý khi thanh toán thành công: cộng điểm, ghi log, thăng hạng

@@ -721,7 +721,7 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
       throw Object.assign(new Error('Cannot update a completed or cancelled booking'), { statusCode: 400, code: 'INVALID_STATUS' });
     }
 
-    const packages = await Package.find({ branchId: booking.branchId }).session(session);
+    const packages = await Package.find({ isDeleted: false }).session(session);
     const validSubServices = [];
     let addedDuration = 0;
     let addedPrice = 0;
@@ -730,16 +730,36 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
 
     for (const name of uniqueNames) {
       let found = false;
-      for (const pkg of packages) {
-        const sub = pkg.subServices?.find(s => s.name === name);
-        if (sub) {
-          validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration, isOptional: sub.isOptional });
-          addedDuration += sub.duration || 0;
-          addedPrice += sub.price || 0;
+      
+      // 1. Check if it already exists in the current booking
+      const existingSub = booking.selectedSubServices?.find(s => s.name === name);
+      if (existingSub) {
+        validSubServices.push({ name: existingSub.name, price: existingSub.price, duration: existingSub.duration, isOptional: existingSub.isOptional });
+        addedDuration += existingSub.duration || 0;
+        addedPrice += existingSub.price || 0;
+        found = true;
+      }
+
+      // 2. If not found, it is a new subservice. Find the max price across all packages
+      if (!found) {
+        let maxPriceSub = null;
+        for (const pkg of packages) {
+          const sub = pkg.subServices?.find(s => s.name === name);
+          if (sub) {
+            if (!maxPriceSub || (sub.price || 0) > (maxPriceSub.price || 0)) {
+              maxPriceSub = sub;
+            }
+          }
+        }
+        
+        if (maxPriceSub) {
+          validSubServices.push({ name: maxPriceSub.name, price: maxPriceSub.price, duration: maxPriceSub.duration, isOptional: maxPriceSub.isOptional });
+          addedDuration += maxPriceSub.duration || 0;
+          addedPrice += maxPriceSub.price || 0;
           found = true;
-          break;
         }
       }
+
       if (!found) {
         throw Object.assign(new Error(`Sub-service not found: ${name}`), { statusCode: 404 });
       }
@@ -1647,33 +1667,92 @@ exports.getFeedbacks = async (user, filters = {}) => {
 
   if (user.role === 'manager') {
     const branch = await Branch.findOne({ managerId: user.id });
-    if (!branch) return { feedbacks: [], total: 0, page: 1, totalPages: 0 };
+    if (!branch) return { feedbacks: [], total: 0, page: 1, totalPages: 0, stats: null, previousStats: null };
     query.branchId = branch._id;
+  }
+
+  const now = new Date();
+  let startOfPeriod = null;
+  let endOfPeriod = null;
+  let startOfPrev = null;
+  let endOfPrev = null;
+
+  if (filters.period === 'today') {
+    startOfPeriod = new Date(now.setHours(0, 0, 0, 0));
+    endOfPeriod = new Date(now.setHours(23, 59, 59, 999));
+    startOfPrev = new Date(startOfPeriod); startOfPrev.setDate(startOfPrev.getDate() - 1);
+    endOfPrev = new Date(endOfPeriod); endOfPrev.setDate(endOfPrev.getDate() - 1);
+  } else if (filters.period === 'month') {
+    startOfPeriod = new Date(now.getFullYear(), now.getMonth(), 1);
+    endOfPeriod = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    startOfPrev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    endOfPrev = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  }
+
+  const listQuery = { ...query };
+  const prevQuery = { ...query };
+
+  if (startOfPeriod && endOfPeriod) {
+    listQuery.feedbackAt = { $gte: startOfPeriod, $lte: endOfPeriod };
+    prevQuery.feedbackAt = { $gte: startOfPrev, $lte: endOfPrev };
   }
 
   if (filters.rating) {
     const r = parseInt(filters.rating);
-    query.rating = r <= 2 ? { $lte: 2 } : r;
+    listQuery.rating = r <= 2 ? { $lte: 2 } : r;
   }
-  if (filters.replied === 'true')  query.managerReply = { $exists: true, $ne: '' };
-  if (filters.replied === 'false') query.$and = [...(query.$and || []), { $or: [{ managerReply: { $exists: false } }, { managerReply: '' }] }];
+  if (filters.replied === 'true')  listQuery.managerReply = { $exists: true, $ne: '' };
+  if (filters.replied === 'false') listQuery.$and = [...(listQuery.$and || []), { $or: [{ managerReply: { $exists: false } }, { managerReply: '' }] }];
 
   const page  = Math.max(1, parseInt(filters.page)  || 1);
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit) || 20));
   const skip  = (page - 1) * limit;
 
-  const [feedbacks, total] = await Promise.all([
-    Booking.find(query)
+  const buildStatsPipeline = (matchStage) => [
+    { $match: matchStage },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: 1 },
+        ratingSum: { $sum: { $ifNull: ['$rating', 0] } },
+        ratingCount: { $sum: { $cond: [{ $ifNull: ['$rating', false] }, 1, 0] } },
+        repliedCount: { $sum: { $cond: [{ $ifNull: ['$managerReply', false] }, 1, 0] } }
+      }
+    }
+  ];
+
+  const [feedbacks, total, statsResult, prevStatsResult] = await Promise.all([
+    Booking.find(listQuery)
       .populate('userId', 'name email phone avatar tier')
       .populate('packageId', 'name')
       .populate('branchId', 'name')
       .sort({ feedbackAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit),
-    Booking.countDocuments(query),
+    Booking.countDocuments(listQuery),
+    Booking.aggregate(buildStatsPipeline(listQuery)),
+    (startOfPrev && endOfPrev) ? Booking.aggregate(buildStatsPipeline(prevQuery)) : Promise.resolve([])
   ]);
 
-  return { feedbacks, total, page, totalPages: Math.ceil(total / limit) };
+  const stats = statsResult[0] || { total: 0, ratingSum: 0, ratingCount: 0, repliedCount: 0 };
+  const previousStats = prevStatsResult[0] || { total: 0, ratingSum: 0, ratingCount: 0, repliedCount: 0 };
+
+  return { 
+    feedbacks, 
+    total, 
+    page, 
+    totalPages: Math.ceil(total / limit),
+    stats: {
+      total: stats.total,
+      avgRating: stats.ratingCount > 0 ? (stats.ratingSum / stats.ratingCount).toFixed(1) : '—',
+      repliedCount: stats.repliedCount
+    },
+    previousStats: {
+      total: previousStats.total,
+      avgRating: previousStats.ratingCount > 0 ? (previousStats.ratingSum / previousStats.ratingCount).toFixed(1) : '—',
+      repliedCount: previousStats.repliedCount
+    }
+  };
 };
 
 // ─── Submit / update feedback (customer, on completed booking) ───────────────

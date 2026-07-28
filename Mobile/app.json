@@ -37,7 +37,8 @@
           "cameraPermission": "AutoWashPro cần quyền camera để quét mã QR check-in."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": false

@@ -68,8 +68,34 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
     finally { setSubmitting(false); }
   }
 
-  async function handleDeleteVehicle(vId) {
-    if (!(await confirmDialog({ title: 'Xóa xe', message: 'Bạn có chắc chắn muốn xóa xe này?', confirmLabel: 'Xóa', danger: true }))) return;
+  async function handleDeleteVehicle(vehicle) {
+    const vId = vehicle._id || vehicle.id;
+    const plate = vehicle.licensePlate || '';
+    const brandModel = [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || 'Xe';
+
+    // Step 1: Detailed confirmation dialog
+    if (!(await confirmDialog({
+      title: 'Xóa xe',
+      confirmLabel: 'Xóa',
+      danger: true,
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">Bạn có chắc chắn muốn xóa xe này? Hành động này không thể hoàn tác.</p>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-500">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 17h14M5 17a2 2 0 01-2-2V9a2 2 0 012-2h14a2 2 0 012 2v6a2 2 0 01-2 2M5 17v2a1 1 0 001 1h12a1 1 0 001-1v-2" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">{brandModel}</p>
+              <p className="text-xs text-slate-500">{plate} · {vehicle.vehicleType || ''} · {vehicle.color || ''}</p>
+            </div>
+          </div>
+        </div>
+      ),
+    }))) return;
+
     try {
       const res = await fetch(`${apiBase || API_BASE}/vehicles/${vId}`, {
         method: 'DELETE',
@@ -82,36 +108,75 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
       setVehicles(prev => prev.filter(v => (v._id || v.id) !== vId));
     } catch (e) {
       if (e.message.includes('lịch hẹn đang hoạt động')) {
-        const shortMsg = e.message.replace(/^Không thể xóa xe này vì đã có /i, '');
-        const [countLine, ...codeLines] = shortMsg.includes('Mã:') ? shortMsg.split('Mã:') : [shortMsg, ''];
-        const codesRaw = (codeLines.join('') || '').trim();
+        // Parse booking data from error message
+        const msg = e.message;
+        const countMatch = msg.match(/(\d+)\s*lịch hẹn/);
+        const count = countMatch ? parseInt(countMatch[1]) : 0;
+        const codesMatch = msg.match(/Mã:\s*(.+)/);
+        const codesRaw = codesMatch ? codesMatch[1].trim() : '';
         const bookingItems = codesRaw.split(/,\s*/).filter(Boolean);
         const bookings = bookingItems.map(item => {
           const m = item.match(/(\S+)\s*\((.+?)\s+(\S+)\)/);
           return m ? { code: m[1], date: m[2], time: m[3] } : { code: item, date: '', time: '' };
         });
-        const count = countLine.match(/(\d+)/)?.[1] || bookings.length;
+
         await confirmDialog({
           title: 'Không thể xóa phương tiện',
-          message: `Xe này hiện có ${count} lịch hẹn đang hoạt động. Vui lòng hoàn thành hoặc hủy các lịch hẹn này trước khi thực hiện xóa xe.`,
+          hideCancel: true,
+          confirmLabel: 'Đã hiểu',
           content: (
-            <div className="rounded-xl border border-slate-200 overflow-hidden text-sm mt-3">
-              <div className="grid grid-cols-[1fr_1fr] bg-slate-50 border-b border-slate-200 px-4 py-2">
-                <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wide">Mã lịch hẹn</span>
-                <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wide text-right">Thời gian</span>
+            <div className="space-y-4">
+              {/* Warning banner */}
+              <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200/70">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 mt-0.5 shadow-xs">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 9v4M12 17h.01M10.29 3.86l-8.1 14c-.6 1.04.15 2.36 1.21 2.36h16.2c1.06 0 1.81-1.32 1.19-2.36l-8.1-14c-.6-1.04-1.78-1.04-2.38 0z" />
+                  </svg>
+                </div>
+                <div className="space-y-1 min-w-0 flex-1">
+                  <h4 className="text-sm font-bold text-amber-900">Bảo vệ liên kết dữ liệu hệ thống</h4>
+                  <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                    Xe <strong>{plate}</strong> đang có <strong>{count} lịch hẹn đang hoạt động</strong>. Vui lòng hoàn thành hoặc hủy các lịch hẹn này trước khi xóa xe.
+                  </p>
+                </div>
               </div>
-              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                {bookings.map((b, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_1fr] px-4 py-2.5 hover:bg-slate-50">
-                    <span className="font-semibold text-slate-800">{b.code}</span>
-                    <span className="text-slate-600 text-right">{[b.date, b.time].filter(Boolean).join(' ')}</span>
+
+              {/* Booking list */}
+              {bookings.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+                    Các lịch hẹn đang hoạt động:
+                  </span>
+                  <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
+                    {bookings.slice(0, 4).map((b, i) => (
+                      <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors">
+                        <span className="text-base shrink-0">📅</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800">{b.code}</p>
+                          <p className="text-xs text-slate-500">{b.date} · {b.time}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {bookings.length > 4 && (
+                      <div className="px-4 py-2.5 text-center">
+                        <span className="text-xs font-semibold text-slate-400">
+                          ... và {bookings.length - 4} lịch hẹn khác
+                        </span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                </div>
+              )}
+
+              {/* Tip */}
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+                <span className="text-amber-500 shrink-0 mt-0.5">💡</span>
+                <p className="leading-relaxed">
+                  Bạn có thể hủy lịch hẹn hoặc đợi đến khi hoàn thành trước khi thực hiện xóa xe.
+                </p>
               </div>
             </div>
           ),
-          confirmLabel: 'Đã hiểu',
-          hideCancel: true,
         });
       } else {
         alert(e.message);
@@ -196,24 +261,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            Trang chủ
-          </button>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">{user?.name || user?.email}</span>
-            <button onClick={onLogout} className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors">
-              Thoát
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div className="space-y-6">
       {toast.show && (
         <div className="awp-toast-container">
           <div className={`awp-toast-message ${toast.message === 'Đã cập nhật thành công' ? 'awp-toast-success' : 'awp-toast-error'}`}>
@@ -222,7 +270,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
         </div>
       )}
 
-      <main className="max-w-4xl mx-auto px-6 py-10">
+      <main className="w-full">
         <div className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden">
           <div className="p-8 md:p-10">
             <div className="flex items-center gap-6 mb-8">
@@ -423,7 +471,7 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
                             </button>
-                            <button onClick={() => handleDeleteVehicle(vId)}
+                            <button onClick={() => handleDeleteVehicle(v)}
                               className="text-red-400 hover:text-red-600 transition-colors p-1.5">
                               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />

@@ -295,10 +295,14 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
   });
   await payment.save();
 
+  const baseReturnUrl = process.env.VNP_RETURN_URL;
+  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=mobile` : undefined;
+
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount,
     ipAddr,
     txnRef: transactionId,
+    returnUrl: targetReturnUrl,
   });
 
   success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'VNPay provisional URL created');
@@ -330,11 +334,16 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
 
   // Tạo payment record trước
   const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, 'vnpay', paymentType || 'deposit', amount);
+  const baseReturnUrl = process.env.VNP_RETURN_URL;
+  const targetReturnUrl = baseReturnUrl 
+    ? `${baseReturnUrl}?client=mobile&bookingId=${encodeURIComponent(bookingId)}`
+    : (returnUrl || undefined);
+
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount: payment.amount,
     ipAddr,
     txnRef: payment.transactionId,
-    returnUrl: returnUrl || undefined,
+    returnUrl: targetReturnUrl,
   });
 
   success(res, { paymentUrl: vnpayUrl, transactionId: payment.transactionId, payment }, 'VNPay URL created');
@@ -358,7 +367,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
       if (isMobile) {
-        const deepLinkId = mobileBookingId || result.data.txnRef || '';
+        const deepLinkId = mobileBookingId;
         return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
       }
       // Provisional & slot pack đều redirect về / (App routing handles dispatch)
@@ -371,7 +380,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   }
 
   if (isMobile) {
-    const deepLinkId = mobileBookingId || req.query.txnRef || '';
+    const deepLinkId = mobileBookingId;
     return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
   }
   return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);

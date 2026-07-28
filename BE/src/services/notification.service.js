@@ -39,7 +39,9 @@ exports.sendToMany = async (userIds, title, message, type, data) => {
 
 exports.getByUser = async (userId, filters = {}) => {
   const query = { userId };
-  if (filters.isRead !== undefined) query.isRead = filters.isRead;
+  if (filters.isRead !== undefined) {
+    query.isRead = filters.isRead === 'true' || filters.isRead === true;
+  }
   if (filters.type) query.type = filters.type;
 
   const page = parseInt(filters.page) || 1;
