@@ -11,18 +11,19 @@ const config = require('./config/env');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
 const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, refundRequestRoutes, voucherRoutes, notificationRoutes, slotPackRoutes, reportRoutes, chatbotRoutes, sseRoutes, slotProductRoutes, giftRoutes, testimonialRoutes, statsRoutes, loyaltyRoutes, walletTransactionRoutes } = require('./routes');
 
-const allowedOrigins = [config.APP_URL, config.API_URL, config.FE_URL].filter(Boolean);
+const extraOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = [config.APP_URL, config.API_URL, config.FE_URL, ...extraOrigins].filter(Boolean);
 
 const app = express();
 
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    if (origin.includes('localhost')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
