@@ -64,9 +64,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               const refreshed = await refreshTokens();
               if (!refreshed) {
                 await clearTokens();
+                setState((prev) => ({ ...prev, isInitialized: true }));
               }
             } else {
               await clearTokens();
+              setState((prev) => ({ ...prev, isInitialized: true }));
             }
           }
         } else {
