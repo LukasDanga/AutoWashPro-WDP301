@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Calendar, CreditCard, Bell, Gift, LogOut, ChevronDown, Award } from 'lucide-react';
+import { User, Calendar, CreditCard, Bell, Gift, LogOut, ChevronDown, Award, Wallet } from 'lucide-react';
 import Navbar from './Navbar';
 
 const TIER_BADGES = {
@@ -116,11 +116,17 @@ export default function CustomerLayout({
                     <Award size={11} />
                     {tierInfo.label}
                   </span>
-                  {user?.points !== undefined && (
+                  {user?.loyaltyPoints !== undefined && (
                     <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      {user.points}p
+                      {user.loyaltyPoints}p
                     </span>
                   )}
+                </div>
+                <div className="mt-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold bg-blue-50 text-blue-700 border-blue-200">
+                    <Wallet size={11} />
+                    Ví: {(user?.walletBalance || 0).toLocaleString('vi-VN')}đ
+                  </span>
                 </div>
               </div>
             </div>

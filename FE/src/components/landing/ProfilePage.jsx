@@ -4,6 +4,7 @@ import { showToast as fireToast } from '@/lib/toast';
 import { confirmDialog } from '@/lib/confirm';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import CustomerWallet from '../customer/CustomerWallet';
 
 // Default fallback in case API fails
 const FALLBACK_TIER_MAP = {
@@ -329,13 +330,13 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
               </div>
             )}
 
-            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit mb-8">
-              {['info', 'benefits', 'vehicles'].map(tab => (
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 flex-wrap mb-8">
+              {['info', 'benefits', 'vehicles', 'wallet'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}>
-                  {tab === 'info' ? 'Thông tin' : tab === 'benefits' ? 'Ưu đãi hạng' : 'Xe của tôi'}
+                  {tab === 'info' ? 'Thông tin' : tab === 'benefits' ? 'Ưu đãi hạng' : tab === 'vehicles' ? 'Xe của tôi' : 'Ví của tôi'}
                 </button>
               ))}
             </div>
@@ -489,6 +490,12 @@ export default function ProfilePage({ user, vehicles: initialVehicles, onLogout,
                       Thêm xe mới
                     </button>
                   </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'wallet' && (
+                <motion.div key="wallet" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+                  <CustomerWallet apiBase={apiBase || API_BASE} token={token} user={user} refreshUser={() => onUserUpdate && onUserUpdate({})} />
                 </motion.div>
               )}
 

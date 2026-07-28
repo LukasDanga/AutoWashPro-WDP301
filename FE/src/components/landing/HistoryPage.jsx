@@ -253,6 +253,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
   const [showRebookVoucherModal, setShowRebookVoucherModal] = useState(false);
 
+  // Refund modal
+  const [refunds, setRefunds] = useState([]);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundLoading, setRefundLoading] = useState(false);
+
   // Quick book modal
   const [showQuickBookModal, setShowQuickBookModal] = useState(false);
   const [quickBookPack, setQuickBookPack] = useState(null);
@@ -351,6 +358,43 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       })
       .finally(() => setSlotPacksLoading(false));
   }, [apiBase, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${apiBase || API_BASE}/refund-requests/my`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(payload => setRefunds(payload?.data || []))
+      .catch(() => setRefunds([]));
+  }, [apiBase, token]);
+
+  const findRefundRequest = (bId) => refunds.find(r => r.bookingId === bId || r.bookingId?._id === bId);
+  const isRefundExpired = (b) => {
+    if (b.status !== 'completed') return false;
+    const date = b.updatedAt || b.bookingDate;
+    if (!date) return false;
+    return (Date.now() - new Date(date).getTime()) > 48 * 60 * 60 * 1000;
+  };
+  const openRefundRequest = (b) => { setRefundTarget(b); setRefundReason(''); setShowRefundModal(true); };
+  const submitRefundRequest = async () => {
+    if (!refundReason.trim()) return showToastMsg('Vui lòng nhập lý do hoàn tiền', 'error');
+    setRefundLoading(true);
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/refund-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: refundTarget._id || refundTarget.id, reason: refundReason })
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || 'Lỗi hệ thống');
+      showToastMsg('Gửi yêu cầu hoàn tiền thành công');
+      setRefunds(prev => [...prev, payload.data]);
+      setShowRefundModal(false);
+    } catch (err) {
+      showToastMsg(err.message, 'error');
+    } finally {
+      setRefundLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -1487,6 +1531,18 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                                 className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 border-none bg-transparent cursor-pointer disabled:opacity-50">
                                 🔄 Đặt lại
                               </button>
+                              {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
+                                const existing = findRefundRequest(b._id || b.id);
+                                if (existing?.status === 'pending') return <span className="text-[11px] font-semibold text-amber-600">⏳ Chờ hoàn tiền</span>;
+                                return (
+                                  <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }}
+                                    disabled={isRefundExpired(b)}
+                                    title={isRefundExpired(b) ? 'Đã quá 48h kể từ khi hoàn thành đơn' : ''}
+                                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-500 border-none bg-transparent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                    💸 Hoàn tiền
+                                  </button>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
@@ -1850,11 +1906,31 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               </button>
                             )}
                             {(b.status === 'completed' || b.status === 'cancelled') && (
-                              <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
-                                disabled={rebookLoading}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
-                                🔄 Đặt lại
-                              </button>
+                              <>
+                                <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
+                                  disabled={rebookLoading}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
+                                  🔄 Đặt lại
+                                </button>
+                                {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
+                                  const existing = findRefundRequest(b._id || b.id);
+                                  if (existing?.status === 'pending') {
+                                    return (
+                                      <div className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 cursor-default" onClick={e => e.stopPropagation()}>
+                                        ⏳ Đang chờ hoàn tiền
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }}
+                                      disabled={isRefundExpired(b)}
+                                      title={isRefundExpired(b) ? 'Đã quá 48h kể từ khi hoàn thành đơn' : ''}
+                                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                      💸 Yêu cầu hoàn tiền
+                                    </button>
+                                  );
+                                })()}
+                              </>
                             )}
                             {canReview && !hasReview && (
                               <button onClick={(e) => { e.stopPropagation(); openReview(b); }}
@@ -2251,6 +2327,24 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-black text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 text-center">
                     Đặt lại
                   </button>
+                  {detailBooking.status === 'completed' && ['paid', 'deposit_paid'].includes(detailBooking.paymentStatus) && (() => {
+                    const existing = findRefundRequest(detailBooking._id || detailBooking.id);
+                    if (existing?.status === 'pending') {
+                      return (
+                        <div className="flex-1 px-4 py-2.5 rounded-lg bg-amber-50 text-amber-700 text-sm font-semibold border border-amber-200 text-center cursor-default">
+                          Đang chờ hoàn tiền
+                        </div>
+                      );
+                    }
+                    return (
+                      <button onClick={() => { setDetailBooking(null); openRefundRequest(detailBooking); }}
+                        disabled={isRefundExpired(detailBooking)}
+                        title={isRefundExpired(detailBooking) ? 'Đã quá 48h kể từ khi hoàn thành đơn' : ''}
+                        className="flex-1 px-4 py-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        Yêu cầu hoàn tiền
+                      </button>
+                    );
+                  })()}
                   {!detailBooking.isGroup && detailBooking.status === 'completed' && (
                     <button onClick={() => { setDetailBooking(null); openReview(detailBooking); }}
                       className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors text-center ${detailBooking.rating ? 'border border-slate-300 bg-white text-black hover:bg-slate-50' : 'bg-black text-white hover:bg-slate-800'}`}>
@@ -2566,6 +2660,29 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
             doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, true);
           }}
         />
+      )}
+      {/* Refund Request Modal */}
+      {showRefundModal && refundTarget && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl relative">
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Yêu cầu hoàn tiền</h3>
+            <p className="text-sm text-slate-500 mb-4">Mã đơn: <span className="font-bold text-slate-700">{refundTarget.bookingCode || refundTarget._id?.slice(-6).toUpperCase()}</span></p>
+            <textarea
+              className="w-full h-24 p-3 rounded-xl border border-slate-200 text-sm mb-6 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              placeholder="Nhập lý do hoàn tiền (VD: Hủy do bận đột xuất, không hài lòng dịch vụ...)"
+              value={refundReason}
+              onChange={e => setRefundReason(e.target.value)}
+            />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowRefundModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                Đóng
+              </button>
+              <button onClick={submitRefundRequest} disabled={refundLoading} className="px-5 py-2.5 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                {refundLoading ? 'Đang gửi...' : 'Gửi yêu cầu'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -6,9 +6,9 @@ const paymentSchema = new mongoose.Schema(
     slotPackId: { type: mongoose.Schema.Types.ObjectId, ref: 'SlotPack' },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     amount: { type: Number, required: true, min: 0 },
-    method: { type: String, enum: ['cash', 'momo', 'vnpay', 'bank'], required: true },
-    // 'deposit' = tiền cọc trước, 'remaining' = phần còn lại khi hoàn thành, 'full' = trả 1 lần
-    paymentType: { type: String, enum: ['deposit', 'remaining', 'full'], default: 'full' },
+    method: { type: String, enum: ['cash', 'momo', 'vnpay', 'bank', 'wallet'], required: true },
+    // 'deposit' = tiền cọc trước, 'remaining' = phần còn lại khi hoàn thành, 'full' = trả 1 lần, 'topup' = nạp tiền vào ví
+    paymentType: { type: String, enum: ['deposit', 'remaining', 'full', 'topup'], default: 'full' },
     status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
     transactionId: { type: String },
     paymentUrl: { type: String },
