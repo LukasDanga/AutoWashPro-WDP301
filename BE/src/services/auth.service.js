@@ -204,35 +204,8 @@ exports.forgotPassword = async (email) => {
   user.forgotPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
   await user.save();
 
-  const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
-    secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-
-  await transporter.sendMail({
-    from: `"AutoWashPro" <${process.env.SMTP_USER}>`,
-    to: email,
-    subject: 'Mã xác nhận khôi phục mật khẩu - AutoWashPro',
-    html: `
-      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2 style="color: #0f172a;">Khôi phục mật khẩu</h2>
-        <p>Xin chào,</p>
-        <p>Bạn đã yêu cầu khôi phục mật khẩu cho tài khoản AutoWashPro. Dưới đây là mã xác nhận (OTP) của bạn:</p>
-        <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #2563eb; margin: 20px 0; border-radius: 8px; border: 1px dashed #cbd5e1;">
-          ${otp}
-        </div>
-        <p style="color: #64748b; font-size: 14px;">Mã này sẽ hết hạn sau <strong>15 phút</strong>. Vui lòng không chia sẻ mã này với bất kỳ ai.</p>
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-        <p style="font-size: 12px; color: #94a3b8;">Nếu bạn không yêu cầu điều này, xin vui lòng bỏ qua email này.</p>
-      </div>
-    `
-  });
+  const emailService = require('./email.service');
+  await emailService.sendPasswordResetEmail(email, otp);
 };
 
 exports.verifyOtp = async (email, otp) => {

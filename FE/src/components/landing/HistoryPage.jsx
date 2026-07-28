@@ -335,6 +335,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelConfirmError, setCancelConfirmError] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelStep, setCancelStep] = useState(1);
+  const [cancelOtp, setCancelOtp] = useState('');
 
   // Cancel recurring confirm modal
   const [showCancelRecurringConfirm, setShowCancelRecurringConfirm] = useState(false);
@@ -651,10 +653,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setCancelTarget(b);
     setCancelConfirmError('');
     setCancelReason('');
+    setCancelStep(1);
+    setCancelOtp('');
     setShowCancelConfirm(true);
   }
 
-  async function confirmCancel() {
+  async function requestCancelOtp() {
     if (!cancelTarget) return;
     if (!cancelReason.trim()) {
       setCancelConfirmError('Vui lòng nhập lý do hủy đơn');
@@ -664,19 +668,43 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setCancelConfirmError('');
     try {
       const bId = cancelTarget._id || cancelTarget.id;
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể yêu cầu OTP'); }
+      setCancelStep(2);
+    } catch (e) {
+      setCancelConfirmError(e.message);
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    if (cancelStep === 2 && !cancelOtp.trim()) {
+      setCancelConfirmError('Vui lòng nhập mã OTP');
+      return;
+    }
+    setCancelLoading(true);
+    setCancelConfirmError('');
+    try {
+      const bId = cancelTarget._id || cancelTarget.id;
       const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cancellationReason: cancelReason.trim() }),
+        body: JSON.stringify({ cancellationReason: cancelReason.trim(), otp: cancelOtp.trim() }),
       });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể hủy đơn'); }
       const cancelPayload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(cancelPayload.message || 'Hủy thất bại');
+      
       const refundAmount = cancelPayload?.data?.refundAmount || 0;
       if (refundAmount > 0 && onUserUpdate) {
         onUserUpdate({ walletBalance: (user?.walletBalance || 0) + refundAmount });
       }
       showToastMsg(refundAmount > 0 ? `Đã hủy đơn thành công, hoàn ${refundAmount.toLocaleString('vi-VN')}đ vào ví` : 'Đã hủy đơn thành công');
-      setShowCancelConfirm(false); setCancelTarget(null); setCancelReason('');
+      setShowCancelConfirm(false); setCancelTarget(null); setCancelReason(''); setCancelOtp(''); setCancelStep(1);
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
       if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) { setCancelConfirmError(e.message); }
@@ -2552,29 +2580,44 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       {/* ── CANCEL CONFIRM MODAL ── */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
-          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); } }}>
+          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); } }}>
           <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
-            <div className="text-4xl mb-4">🗑</div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận hủy đơn</h3>
-            <p className="text-sm text-slate-500 mb-4">Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.</p>
-            <div className="text-left mb-6">
-              <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
-              <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn..."
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none" />
-            </div>
+            <div className="text-4xl mb-4">{cancelStep === 1 ? '🗑' : '📩'}</div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{cancelStep === 1 ? 'Xác nhận hủy đơn' : 'Nhập mã xác thực OTP'}</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              {cancelStep === 1 
+                ? 'Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.' 
+                : 'Chúng tôi đã gửi mã OTP gồm 6 chữ số đến email của bạn. Vui lòng kiểm tra hộp thư.'}
+            </p>
+            
+            {cancelStep === 1 ? (
+              <div className="text-left mb-6">
+                <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
+                <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                  rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn..."
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none" />
+              </div>
+            ) : (
+              <div className="text-left mb-6">
+                <label className="text-xs font-medium text-slate-500 block mb-1.5">Mã OTP <span className="text-red-500">*</span></label>
+                <input type="text" value={cancelOtp} onChange={e => setCancelOtp(e.target.value)}
+                  placeholder="Nhập mã 6 số"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-bold tracking-[5px] text-center focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400" />
+              </div>
+            )}
+            
             {cancelConfirmError && (
               <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{cancelConfirmError}</div>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); }}
+              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); }}
                 disabled={cancelLoading}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
                 Không, giữ lại
               </button>
-              <button onClick={confirmCancel} disabled={cancelLoading}
+              <button onClick={cancelStep === 1 ? requestCancelOtp : confirmCancel} disabled={cancelLoading}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-400 transition-colors disabled:opacity-50">
-                {cancelLoading ? 'Đang hủy...' : 'Xác nhận hủy'}
+                {cancelLoading ? 'Đang xử lý...' : (cancelStep === 1 ? 'Lấy mã OTP' : 'Xác nhận hủy')}
               </button>
             </div>
           </div>

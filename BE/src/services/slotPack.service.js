@@ -354,8 +354,38 @@ exports.cancelSlotPack = async (packId, userId, userRole) => {
   if (pack.usedSlots > 0 && userRole === 'customer') {
     throw Object.assign(new Error('Không thể hủy gói lượt đã sử dụng một phần. Vui lòng liên hệ hỗ trợ.'), { statusCode: 400, code: 'PARTIALLY_USED' });
   }
+
+  // Calculate refund
+  let refundStatus = 'none';
+  let refundAmount = 0;
+  
+  const now = new Date();
+  const createdDate = new Date(pack.createdAt);
+  const hoursSinceBought = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+
+  if (pack.paymentStatus === 'paid' && pack.usedSlots === 0 && hoursSinceBought <= 48) {
+    const Payment = mongoose.model('Payment');
+    const payment = await Payment.findOne({ slotPackId: pack._id, status: 'paid' });
+    if (payment) {
+       refundAmount = payment.amount;
+       refundStatus = 'pending';
+       payment.status = 'refunded';
+       payment.refundedAt = new Date();
+       await payment.save();
+    }
+  }
+
   pack.status = 'cancelled';
+  pack.refundStatus = refundStatus;
+  pack.refundAmount = refundAmount;
   await pack.save();
+
+  // Send email
+  const user = await User.findById(pack.userId);
+  if (user && user.email) {
+    const emailService = require('./email.service');
+    emailService.sendCancellationSuccessEmail(user.email, { type: 'slot_pack', code: pack.packCode }, refundAmount).catch(e => console.error('Lỗi gửi email hủy gói:', e));
+  }
 
   // Rollback voucher nếu có và chưa dùng
   if (pack.voucherCode && pack.usedSlots === 0) {

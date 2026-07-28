@@ -75,8 +75,8 @@ function generateBookingCode() {
 }
 
 const getDayBounds = (dateStr) => ({
-  gte: new Date(`${dateStr}T00:00:00.000Z`),
-  lte: new Date(`${dateStr}T23:59:59.999Z`),
+  gte: new Date(`${dateStr}T00:00:00.000+07:00`),
+  lte: new Date(`${dateStr}T23:59:59.999+07:00`),
 });
 
 /**
@@ -955,40 +955,55 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       ).catch(() => {});
     }
 
-    // Tự động hoàn tiền vào ví nếu khách tự hủy đơn đã thanh toán
+    // Chuyển sang logic hoàn tiền theo thời gian (>= 12h) thay vì auto-hoàn vào ví
     let refundAmount = 0;
+    let refundStatus = 'none';
+
     if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
       const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
+      
       if (paidPayment) {
-        refundAmount = paidPayment.amount;
+        const totalPaid = paidPayment.amount;
+        const deposit = booking.depositAmount || 0;
+        const hoursBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+        if (hoursBefore >= 12) {
+          // Hủy sớm: hoàn 100%
+          refundAmount = totalPaid;
+        } else {
+          // Hủy muộn: Phạt 30% cọc. Nếu thanh toán đủ, hoàn (tổng - cọc).
+          if (booking.paymentStatus === 'paid') {
+            refundAmount = Math.max(0, totalPaid - deposit);
+          } else {
+            refundAmount = 0; // chỉ thanh toán cọc thì mất cọc
+          }
+        }
+
+        if (refundAmount > 0) {
+          refundStatus = 'pending';
+        }
+
         paidPayment.status = 'refunded';
         paidPayment.refundedAt = new Date();
         await paidPayment.save({ session });
-
-        const refundUser = await User.findById(booking.userId).session(session);
-        if (refundUser) {
-          refundUser.walletBalance = (refundUser.walletBalance || 0) + refundAmount;
-          await refundUser.save({ session });
-
-          await mongoose.model('WalletTransaction').create([{
-            userId: refundUser._id,
-            amount: refundAmount,
-            type: 'credit',
-            reason: `Hoàn tiền đơn ${booking.bookingCode} - ${cancellationReason || 'Khách yêu cầu hủy'}`,
-            bookingId: booking._id,
-          }], { session });
-        }
-
-        await Booking.findByIdAndUpdate(id, { paymentStatus: 'refunded' }).session(session);
-
-        notificationService.send(
-          booking.userId,
-          'Hoàn tiền vào ví',
-          `Số tiền ${refundAmount.toLocaleString('vi-VN')}đ của đơn ${booking.bookingCode} đã được hoàn vào ví AutoWash.`,
-          'refund',
-          { bookingId: id }
-        ).catch(() => {});
       }
+    }
+
+    const updatedBooking = await Booking.findByIdAndUpdate(
+      id,
+      { 
+        paymentStatus: 'refunded',
+        refundStatus,
+        refundAmount
+      },
+      { new: true, session }
+    );
+
+    // Gửi email thông báo hủy thành công kèm số tiền hoàn
+    const user = await mongoose.model('User').findById(booking.userId).session(session);
+    if (user && user.email) {
+      const emailService = require('./email.service');
+      emailService.sendCancellationSuccessEmail(user.email, { type: booking.bookingType, code: booking.bookingCode || booking.recurringGroupId || '' }, refundAmount).catch(e => console.error('Lỗi gửi email hủy đơn:', e));
     }
 
     await session.commitTransaction();

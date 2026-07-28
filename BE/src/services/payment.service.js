@@ -1,9 +1,10 @@
-﻿const mongoose = require('mongoose');
+const mongoose = require('mongoose');
 const QRCode = require('qrcode');
 const { Payment, Booking } = require('../models');
 const notificationService = require('./notification.service');
 const sseService = require('./sse.service');
 const voucherService = require('./voucher.service');
+const emailService = require('./email.service');
 const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
@@ -468,6 +469,10 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
       if (success) {
         const sPack = await mongoose.model('SlotPack').findById(payment.slotPackId);
         sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
+        const user = await mongoose.model('User').findById(payment.userId);
+        if (user && user.email) {
+          emailService.sendSlotPackConfirmationEmail(user.email, sPack).catch(e => console.error('Lỗi gửi email gói lượt:', e));
+        }
       }
       return payment;
     }
