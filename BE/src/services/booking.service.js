@@ -918,10 +918,6 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     if (booking.status === 'cancelled') {
       throw Object.assign(new Error('Lịch hẹn đã được hủy trước đó'), { statusCode: 400, code: 'ALREADY_CANCELLED' });
     }
-    if (booking.paymentStatus === 'paid') {
-      throw Object.assign(new Error('Không thể hủy lịch hẹn đã thanh toán. Vui lòng yêu cầu hoàn tiền trước.'), { statusCode: 400, code: 'PAYMENT_PAID' });
-    }
-
     const now = new Date();
     const bookingDateTime = new Date(booking.bookingDate);
     const [h, m] = booking.startTime.split(':').map(Number);
@@ -959,6 +955,42 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       ).catch(() => {});
     }
 
+    // Tự động hoàn tiền vào ví nếu khách tự hủy đơn đã thanh toán
+    let refundAmount = 0;
+    if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
+      const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
+      if (paidPayment) {
+        refundAmount = paidPayment.amount;
+        paidPayment.status = 'refunded';
+        paidPayment.refundedAt = new Date();
+        await paidPayment.save({ session });
+
+        const refundUser = await User.findById(booking.userId).session(session);
+        if (refundUser) {
+          refundUser.walletBalance = (refundUser.walletBalance || 0) + refundAmount;
+          await refundUser.save({ session });
+
+          await mongoose.model('WalletTransaction').create([{
+            userId: refundUser._id,
+            amount: refundAmount,
+            type: 'credit',
+            reason: `Hoàn tiền đơn ${booking.bookingCode} - ${cancellationReason || 'Khách yêu cầu hủy'}`,
+            bookingId: booking._id,
+          }], { session });
+        }
+
+        await Booking.findByIdAndUpdate(id, { paymentStatus: 'refunded' }).session(session);
+
+        notificationService.send(
+          booking.userId,
+          'Hoàn tiền vào ví',
+          `Số tiền ${refundAmount.toLocaleString('vi-VN')}đ của đơn ${booking.bookingCode} đã được hoàn vào ví AutoWash.`,
+          'refund',
+          { bookingId: id }
+        ).catch(() => {});
+      }
+    }
+
     await session.commitTransaction();
 
     notificationService.send(
@@ -978,7 +1010,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       { bookingId: id, branchId: booking.branchId }
     ).catch(() => {});
 
-    return updated;
+    const result = typeof updated.toObject === 'function' ? updated.toObject() : { ...updated };
+    if (refundAmount > 0) result.refundAmount = refundAmount;
+    return result;
   } catch (err) {
     if (session.inTransaction()) {
       await session.abortTransaction();
