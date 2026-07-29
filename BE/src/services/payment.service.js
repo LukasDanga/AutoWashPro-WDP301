@@ -215,9 +215,14 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
         );
         await markRecurringSiblingsDepositPaid(booking, method, session);
       } else {
+        const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method, depositPaid: true, depositAmount: booking.finalPrice };
+        if (booking.status === 'awaiting_payment') {
+          updateData.status = 'completed';
+          updateData.checkOutTime = new Date();
+        }
         await Booking.findByIdAndUpdate(
           booking._id,
-          { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method, depositPaid: true, depositAmount: booking.finalPrice },
+          updateData,
           { session }
         );
         await markRecurringSiblingsPaid(booking, method, session);
@@ -529,7 +534,12 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
         await markRecurringSiblingsDepositPaid(booking, payment.method, session);
       } else {
-        await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice }).session(session);
+        const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice };
+        if (booking.status === 'awaiting_payment') {
+          updateData.status = 'completed';
+          updateData.checkOutTime = new Date();
+        }
+        await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
         await markRecurringSiblingsPaid(booking, payment.method, session);
         await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });

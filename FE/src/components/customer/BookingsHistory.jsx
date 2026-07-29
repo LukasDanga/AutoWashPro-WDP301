@@ -9,13 +9,14 @@ const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', '
   'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
 const STATUS_MAP = {
-  pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  confirmed:   { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  checked_in:  { label: 'Đã check-in',  cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-  in_progress: { label: 'Đang rửa',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  completed:   { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  cancelled:   { label: 'Đã hủy',       cls: 'bg-slate-100 text-slate-500 border-slate-200' },
-  paid:        { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-700 border-green-200' },
+  pending:          { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  confirmed:        { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  checked_in:       { label: 'Đã check-in',  cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  in_progress:      { label: 'Đang rửa',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  awaiting_payment: { label: 'Chờ thanh toán', cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+  completed:        { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cancelled:        { label: 'Đã hủy',       cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  paid:             { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-700 border-green-200' },
 };
 
 function StatusBadge({ status }) {

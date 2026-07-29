@@ -9,19 +9,21 @@ import VoucherPicker from '../VoucherPicker.jsx';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATUS_MAP = {
-  pending:     { label: 'Chờ xử lý',   cls: 'bg-amber-50 text-amber-600 border-amber-200' },
-  confirmed:   { label: 'Đã xác nhận', cls: 'bg-blue-50 text-blue-600 border-blue-200' },
-  checked_in:  { label: 'Đã check-in', cls: 'bg-sky-50 text-sky-600 border-sky-200' },
-  in_progress: { label: 'Đang rửa',    cls: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
-  completed:   { label: 'Hoàn thành',  cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-  cancelled:   { label: 'Đã hủy',      cls: 'bg-red-50 text-red-500 border-red-200' },
-  paid:        { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-600 border-green-200' },
+  pending:          { label: 'Chờ xử lý',   cls: 'bg-amber-50 text-amber-600 border-amber-200' },
+  confirmed:        { label: 'Đã xác nhận', cls: 'bg-blue-50 text-blue-600 border-blue-200' },
+  checked_in:       { label: 'Đã check-in', cls: 'bg-sky-50 text-sky-600 border-sky-200' },
+  in_progress:      { label: 'Đang rửa',    cls: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+  awaiting_payment: { label: 'Chờ thanh toán', cls: 'bg-orange-50 text-orange-600 border-orange-200' },
+  completed:        { label: 'Hoàn thành',  cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+  cancelled:        { label: 'Đã hủy',      cls: 'bg-red-50 text-red-500 border-red-200' },
+  paid:             { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-600 border-green-200' },
 };
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tất cả trạng thái' },
   { value: 'pending', label: 'Chờ xử lý' },
   { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'awaiting_payment', label: 'Chờ thanh toán' },
   { value: 'completed', label: 'Hoàn thành' },
   { value: 'cancelled', label: 'Đã hủy' },
 ];

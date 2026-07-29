@@ -6,14 +6,15 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 const sseService = require('./sse.service');
 
-const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'];
+const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled'];
 
-// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → completed
+// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → awaiting_payment/completed
 const VALID_TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['checked_in', 'cancelled'],
   checked_in: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  in_progress: ['awaiting_payment', 'completed', 'cancelled'],
+  awaiting_payment: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 };
@@ -31,7 +32,7 @@ const GRACE_EXTENSION_STEP_MINUTES = 5;
 const MAX_GRACE_EXTENSION_MINUTES = 15;
 
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
-const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
+const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment'];
 
 const getDepositRate = () => DEPOSIT_RATE;
 
@@ -650,8 +651,11 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     if (updateData.staffId) update.staffId = updateData.staffId;
   }
   if (status === 'cancelled') update.cancelledAt = new Date();
-  if (status === 'completed') {
+  if (status === 'awaiting_payment') {
     update.checkOutTime = new Date();
+  }
+  if (status === 'completed') {
+    if (currentBooking.status !== 'awaiting_payment') update.checkOutTime = new Date();
     if (currentBooking.paymentStatus === 'unpaid') {
       update.paymentStatus = 'pending';
     }
@@ -684,6 +688,21 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   }
 
   // Post-completion side effects (async, non-blocking)
+  if (status === 'awaiting_payment') {
+    setImmediate(async () => {
+      try {
+        const plate = booking.vehicleId?.licensePlate || '';
+        await notificationService.send(
+          booking.userId?._id || currentBooking.userId,
+          'Xe đã rửa xong',
+          `Xe ${plate} đã rửa xong. Vui lòng thanh toán phần còn lại để hoàn tất.`,
+          'booking_awaiting_payment',
+          { bookingId: id }
+        );
+      } catch { /* silent */ }
+    });
+  }
+
   if (status === 'completed') {
     setImmediate(async () => {
       try {
@@ -693,7 +712,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
         await notificationService.send(
           booking.userId?._id || currentBooking.userId,
           'Dịch vụ đã hoàn thành',
-          `Xe ${plate} đã rửa xong tại ${branch}. Cảm ơn bạn — hãy để lại đánh giá nhé!`,
+          `Xe ${plate} đã hoàn thành tại ${branch}. Bạn đã nhận được 1 vòng quay may mắn, hãy vào trang Quà Tặng (gifts) để quay nhé!`,
           'booking_completed',
           { bookingId: id }
         );
@@ -715,6 +734,15 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           }
         }
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)
+        // Đồng thời tặng 1 lượt quay vòng quay may mắn
+        await User.findOneAndUpdate(
+          { _id: currentBooking.userId },
+          { 
+            $inc: { spinCount: 1 },
+            // Chỉ giảm noShowCount nếu > 0 (MongoDB không cho phép điều kiện $gt trong findOneAndUpdate mà update $inc chung không điều kiện, nên ta dùng update pipeline hoặc hai query. Thay vào đó ta sẽ xử lý riêng)
+          }
+        ).catch(() => {});
+        
         await User.findOneAndUpdate(
           { _id: currentBooking.userId, noShowCount: { $gt: 0 } },
           { $inc: { noShowCount: -1 } }

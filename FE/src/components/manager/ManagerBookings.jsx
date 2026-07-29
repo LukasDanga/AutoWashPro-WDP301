@@ -73,19 +73,21 @@ function Spinner({ size = 18 }) {
 
 /* ── status config ── */
 const STATUS_MAP = {
-  pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700' },
-  confirmed:   { label: 'Đã xác nhận', cls: 'bg-indigo-50 text-indigo-700' },
-  checked_in:  { label: 'Đã check-in', cls: 'bg-cyan-50 text-cyan-700' },
-  in_progress: { label: 'Đang thực hiện', cls: 'bg-blue-50 text-blue-700' },
-  completed:   { label: 'Hoàn thành', cls: 'bg-emerald-50 text-emerald-700' },
-  cancelled:   { label: 'Đã hủy', cls: 'bg-slate-100 text-slate-500' },
+  pending:          { label: 'Chờ xác nhận',       cls: 'bg-amber-50 text-amber-700' },
+  confirmed:        { label: 'Đã xác nhận',         cls: 'bg-indigo-50 text-indigo-700' },
+  checked_in:       { label: 'Đã check-in',          cls: 'bg-cyan-50 text-cyan-700' },
+  in_progress:      { label: 'Đang thực hiện',       cls: 'bg-blue-50 text-blue-700' },
+  awaiting_payment: { label: 'Chờ thanh toán',       cls: 'bg-orange-50 text-orange-700' },
+  completed:        { label: 'Hoàn thành',           cls: 'bg-emerald-50 text-emerald-700' },
+  cancelled:        { label: 'Đã hủy',               cls: 'bg-slate-100 text-slate-500' },
 };
 
 const NEXT_STATUS = {
-  pending:     ['confirmed', 'cancelled'],
-  confirmed:   ['checked_in', 'cancelled'],
-  checked_in:  ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  pending:          ['confirmed', 'cancelled'],
+  confirmed:        ['checked_in', 'cancelled'],
+  checked_in:       ['in_progress', 'cancelled'],
+  in_progress:      ['awaiting_payment', 'completed', 'cancelled'],
+  awaiting_payment: ['completed', 'cancelled'],
 };
 
 const TYPE_MAP = {
@@ -803,11 +805,13 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [savingSubServices, setSavingSubServices] = useState(false);
   const [qrPaymentStatus, setQrPaymentStatus] = useState('loading');
   const [qrPollCount, setQrPollCount] = useState(0);
+  const needsPayment = booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'refunded' && (booking.finalPrice || 0) > 0;
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'confirmed', label: 'Đã xác nhận' },
     { id: 'checked_in', label: 'Đã check-in' },
     { id: 'in_progress', label: 'Đang thực hiện' },
+    ...(needsPayment || booking.status === 'awaiting_payment' ? [{ id: 'awaiting_payment', label: 'Chờ thanh toán' }] : []),
     { id: 'completed', label: 'Hoàn thành' },
   ];
 
@@ -816,6 +820,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
     confirmed: 'Xác nhận đơn',
     checked_in: 'Khách đã đến — Check-in',
     in_progress: 'Bắt đầu rửa',
+    awaiting_payment: 'Rửa xong (Chờ TT)',
     completed: 'Hoàn thành',
   };
 
@@ -1543,12 +1548,13 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
 /* ── Week view (lịch tuần) ── */
 const CAL_STATUS_COLOR = {
-  pending:     'bg-amber-400 text-white border-amber-500',
-  confirmed:   'bg-indigo-500 text-white border-indigo-600',
-  checked_in:  'bg-cyan-500 text-white border-cyan-600',
-  in_progress: 'bg-blue-500 text-white border-blue-600',
-  completed:   'bg-emerald-500 text-white border-emerald-600',
-  cancelled:   'bg-slate-300 text-slate-600 border-slate-400',
+  pending:          'bg-amber-400 text-white border-amber-500',
+  confirmed:        'bg-indigo-500 text-white border-indigo-600',
+  checked_in:       'bg-cyan-500 text-white border-cyan-600',
+  in_progress:      'bg-blue-500 text-white border-blue-600',
+  awaiting_payment: 'bg-orange-500 text-white border-orange-600',
+  completed:        'bg-emerald-500 text-white border-emerald-600',
+  cancelled:        'bg-slate-300 text-slate-600 border-slate-400',
 };
 
 function calDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }

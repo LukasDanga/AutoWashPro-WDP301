@@ -120,6 +120,7 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
                 booking.status === 'pending' ? 'Chờ xác nhận' :
                 booking.status === 'checked_in' ? 'Đã check-in' :
                 booking.status === 'in_progress' ? 'Đang thực hiện' :
+                booking.status === 'awaiting_payment' ? 'Chờ thanh toán' :
                 booking.status === 'completed' ? 'Hoàn thành' :
                 booking.status === 'cancelled' ? 'Đã hủy' : booking.status || '—'
               }
