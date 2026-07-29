@@ -839,7 +839,8 @@ export default function BookingsHistory({ apiBase, token }) {
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{value}</span>
                   </div>
                 </div>
-              ))}
+              ));
+            })()}
 
               {detailBooking.depositAmount > 0 && (
                 <>

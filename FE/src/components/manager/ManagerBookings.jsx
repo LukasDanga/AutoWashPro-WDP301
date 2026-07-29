@@ -852,7 +852,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       });
       if (!res.ok) throw new Error(await readErr(res));
       onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: method });
-      notify(`Xác nhận thanh toán ${method === 'cash' ? 'tiền mặt' : method === 'bank' ? 'chuyển khoản' : 'VNPay'} thành công!`, 'success');
+      notify(`Xác nhận thanh toán ${method === 'cash' ? 'tiền mặt' : method === 'bank' ? 'chuyển khoản' : method === 'wallet' ? 'ví' : 'VNPay'} thành công!`, 'success');
     } catch (err) {
       notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
     } finally { setBusy(false); }
@@ -860,7 +860,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
   const handlePaymentClick = async () => {
     if (!managerPayMethod) { notify('Vui lòng chọn phương thức thanh toán', 'warning'); return; }
-    if (managerPayMethod === 'cash') { setConfirmCash(true); return; }
+    if (managerPayMethod === 'cash' || managerPayMethod === 'wallet') { setConfirmCash(true); return; }
     setBusy(true);
     try {
       if (managerPayMethod === 'bank') {
@@ -1250,7 +1250,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       </div>
 
       {/* ── INVOICE (full width, outside grid) ── */}
-        {booking.status === 'completed' && (
+        {(booking.status === 'completed' || booking.status === 'awaiting_payment') && (
           <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 overflow-hidden">
             {/* Invoice header */}
             <div className="flex items-center justify-between bg-emerald-600 px-5 py-3">
@@ -1276,9 +1276,14 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
                     booking.paymentMethod === 'cash' ? 'bg-violet-100 text-violet-700' :
                     booking.paymentMethod === 'bank' ? 'bg-blue-100 text-blue-700' :
+                    booking.paymentMethod === 'wallet' ? 'bg-rose-100 text-rose-700' :
                     'bg-indigo-100 text-indigo-700'
                   }`}>
-                    {booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'bank' ? 'Chuyển khoản' : 'VNPay'}
+                    {booking.paymentMethod === 'cash' ? 'Tiền mặt' : 
+                     booking.paymentMethod === 'bank' ? 'Chuyển khoản' : 
+                     booking.paymentMethod === 'wallet' ? 'Ví AutoWash' :
+                     booking.paymentMethod === 'vnpay' ? 'VNPay' : 
+                     booking.paymentMethod === 'momo' ? 'MoMo' : booking.paymentMethod}
                   </span>
                 ) : '—' },
                 { icon: <CheckCircle size={14} weight="fill" className={(booking.paymentStatus === 'paid' || booking.paymentStatus === 'deposit_paid') ? 'text-emerald-600 shrink-0' : 'text-amber-500 shrink-0'} />, label: 'Thanh toán', value: (
@@ -1298,7 +1303,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 </div>
               ))}
 
-              {booking.depositAmount > 0 && (
+              {booking.depositAmount > 0 && booking.depositAmount < (booking.totalAmount || booking.finalPrice || 0) && (
                 <>
                   <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
                     <span className="flex items-center gap-2 text-[13px] font-semibold text-amber-600">
@@ -1318,14 +1323,31 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                       {booking.paymentStatus === 'paid' ? '0đ' : `${Number(Math.max(0, (booking.totalAmount || booking.finalPrice || 0) - (booking.depositAmount || 0))).toLocaleString('vi-VN')}đ`}
                     </span>
                   </div>
-                  {booking.depositPaid && (
+                  {booking.depositPaid && booking.paymentStatus !== 'paid' && (
                     <div className="mt-2 text-center pb-2 border-b border-slate-100">
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
                         <CheckCircle size={13} weight="fill" /> Đã đặt cọc {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
                       </span>
                     </div>
                   )}
+                  {booking.paymentStatus === 'paid' && (
+                    <div className="mt-2 flex flex-col gap-2 items-center pb-2 border-b border-slate-100">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                        <CheckCircle size={13} weight="fill" /> Đã đặt cọc {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                        <CheckCircle size={13} weight="fill" /> Đã thu phần còn lại {Number((booking.totalAmount || booking.finalPrice || 0) - booking.depositAmount).toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+                  )}
                 </>
+              )}
+              {booking.depositAmount > 0 && booking.depositAmount >= (booking.totalAmount || booking.finalPrice || 0) && (
+                <div className="mt-2 text-center pb-2 border-b border-slate-100">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                    <CheckCircle size={13} weight="fill" /> Đã thanh toán trước 100% ({Number(booking.depositAmount).toLocaleString('vi-VN')}đ)
+                  </span>
+                </div>
               )}
 
               <div className="pt-3 space-y-2">
@@ -1333,11 +1355,11 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'}].map(m => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
                         <button key={m.id} type="button"
                           onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
-                          className={`flex flex-col items-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
+                          className={`flex flex-col items-center justify-center text-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
                             managerPayMethod === m.id
                               ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
                               : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
@@ -1411,14 +1433,32 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <div className="w-12 h-12 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center mx-auto mb-3">
               <CurrencyCircleDollar size={24} weight="fill" className="text-emerald-600" />
             </div>
-            <h3 className="text-base font-bold text-slate-900 text-center">Xác nhận thu tiền mặt</h3>
+            <h3 className="text-base font-bold text-slate-900 text-center">
+              {managerPayMethod === 'wallet' ? 'Xác nhận thu từ ví' : 'Xác nhận thu tiền mặt'}
+            </h3>
             <div className="mt-4 bg-slate-50 rounded-xl p-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">Phương thức:</span>
-                <span className="font-bold text-slate-700">Tiền mặt</span>
+                <span className="text-slate-500">Khách hàng:</span>
+                <span className="font-bold text-slate-700">
+                  {booking.userId?.name || 'Không xác định'}
+                </span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Phương thức:</span>
+                <span className="font-bold text-slate-700">
+                  {managerPayMethod === 'wallet' ? 'Ví AutoWash' : 'Tiền mặt'}
+                </span>
+              </div>
+              {managerPayMethod === 'wallet' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Số dư ví hiện tại:</span>
+                  <span className="font-bold text-indigo-600">
+                    {booking.userId?.walletBalance !== undefined ? formatCurrency(booking.userId.walletBalance) : 'Chưa cập nhật'}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60">
-                <span className="text-slate-500">Số tiền:</span>
+                <span className="text-slate-500">Số tiền cần thu:</span>
                 <span className="font-black text-emerald-600 text-sm">{formatCurrency(booking.paymentStatus === 'paid' ? 0 : (booking.finalPrice || booking.totalAmount || 0) - (booking.depositPaid ? (booking.depositAmount || 0) : 0))}</span>
               </div>
             </div>

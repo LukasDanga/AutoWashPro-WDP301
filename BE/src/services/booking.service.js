@@ -464,7 +464,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     const total = countResult.length > 0 ? countResult[0].total : 0;
 
     await Booking.populate(aggResults, [
-      { path: 'userId', select: 'name email phone tier' },
+      { path: 'userId', select: 'name email phone tier walletBalance' },
       { path: 'branchId', select: 'name address' },
       { path: 'packageId', select: 'name price duration' },
       { path: 'vehicleId', select: 'licensePlate vehicleType brand color' }
@@ -485,7 +485,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
   const [bookings, total] = await Promise.all([
     Booking.find(query)
-      .populate('userId', 'name email phone tier')
+      .populate('userId', 'name email phone tier walletBalance')
       .populate('branchId', 'name address')
       .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color')
@@ -510,7 +510,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
 exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   const booking = await Booking.findById(id)
-    .populate('userId', 'name email phone tier')
+    .populate('userId', 'name email phone tier walletBalance')
     .populate('branchId', 'name address phone')
     .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
@@ -734,14 +734,17 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           }
         }
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)
-        // Đồng thời tặng 1 lượt quay vòng quay may mắn
-        await User.findOneAndUpdate(
-          { _id: currentBooking.userId },
-          { 
-            $inc: { spinCount: 1 },
-            // Chỉ giảm noShowCount nếu > 0 (MongoDB không cho phép điều kiện $gt trong findOneAndUpdate mà update $inc chung không điều kiện, nên ta dùng update pipeline hoặc hai query. Thay vào đó ta sẽ xử lý riêng)
-          }
-        ).catch(() => {});
+        // Đồng thời tặng 1 lượt quay vòng quay may mắn nếu đã thanh toán đủ
+        const isFullyPaid = currentBooking.paymentStatus === 'paid' || currentBooking.bookingType === 'slot_pack_usage';
+        if (isFullyPaid) {
+          await User.findOneAndUpdate(
+            { _id: currentBooking.userId },
+            { 
+              $inc: { spinCount: 1 },
+            }
+          ).catch(() => {});
+          sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
+        }
         
         await User.findOneAndUpdate(
           { _id: currentBooking.userId, noShowCount: { $gt: 0 } },

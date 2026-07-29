@@ -347,6 +347,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [qrLoading, setQrLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [rebookLoading, setRebookLoading] = useState(false);
+  
+  // Pay Remaining Modal
+  const [payRemainingTarget, setPayRemainingTarget] = useState(null);
+  const [payRemainingMethod, setPayRemainingMethod] = useState('vnpay');
+  const [payRemainingLoading, setPayRemainingLoading] = useState(false);
 
   // Cancel confirm modal
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -713,6 +718,51 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       showToastMsg('Đánh giá thành công!');
     } catch (e) { showToastMsg(e.message, 'error'); } finally { setSubmitting(false); }
   }
+  const handlePayRemaining = (b) => {
+    setPayRemainingTarget(b);
+    setPayRemainingMethod('vnpay');
+  };
+
+  const confirmPayRemaining = async () => {
+    if (!payRemainingTarget) return;
+    try {
+      setPayRemainingLoading(true);
+      const bId = payRemainingTarget._id || payRemainingTarget.id;
+      
+      if (payRemainingMethod === 'wallet') {
+        const res = await fetch(`${apiBase || API_BASE}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingId: bId, method: 'wallet', paymentType: 'remaining' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Thanh toán bằng ví thất bại');
+        showToastMsg('Thanh toán thành công');
+        setPayRemainingTarget(null);
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      } else {
+        const res = await fetch(`${apiBase || API_BASE}/payments/vnpay-create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ bookingId: bId, paymentType: 'remaining' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Khởi tạo thanh toán thất bại');
+        
+        if (data?.data?.paymentUrl || data?.data?.url) {
+          window.location.href = data?.data?.paymentUrl || data?.data?.url;
+        } else {
+          showToastMsg('Khởi tạo thanh toán thành công');
+          setPayRemainingTarget(null);
+          doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        }
+      }
+    } catch (err) {
+      showToastMsg(err.message, 'error');
+    } finally {
+      setPayRemainingLoading(false);
+    }
+  };
 
   async function handleCancel(b) {
     setCancelTarget(b);
@@ -2242,6 +2292,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-colors">
                               Xem hóa đơn
                             </button>
+                            {b.status !== 'cancelled' && b.paymentStatus !== 'paid' && (
+                              <button onClick={(e) => { e.stopPropagation(); handlePayRemaining(b); }}
+                                disabled={cancelLoading}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-600 transition-colors shadow-sm disabled:opacity-50">
+                                💳 Thanh toán ngay
+                              </button>
+                            )}
                             {(b.status === 'pending' || b.status === 'confirmed') && (
                               <button onClick={(e) => { e.stopPropagation(); handleShowQR(b); }}
                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors">
@@ -3068,6 +3125,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 className="flex-1 px-4 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors text-center">
                 Xem hóa đơn
               </button>
+              {b.status !== 'cancelled' && b.paymentStatus !== 'paid' && (
+                <button onClick={() => { handlePayRemaining(b); }} disabled={cancelLoading}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors text-center shadow-sm disabled:opacity-50">
+                  💳 Thanh toán ngay
+                </button>
+              )}
               <button onClick={() => setViewBooking(null)}
                 className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors text-center">
                 Đóng
@@ -3161,6 +3224,63 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       )}
 
       {/* ── CANCEL CONFIRM MODAL ── */}
+      {/* ── PAY REMAINING MODAL ── */}
+      {payRemainingTarget && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !payRemainingLoading && setPayRemainingTarget(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Thanh toán phần còn lại</h3>
+                <p className="text-xs text-slate-500 mt-1">Chọn phương thức thanh toán</p>
+              </div>
+              <button onClick={() => !payRemainingLoading && setPayRemainingTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300">
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-3">
+              <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-colors ${payRemainingMethod === 'vnpay' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm font-bold">VN</div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Thanh toán qua VNPAY</div>
+                    <div className="text-xs text-slate-500">Thẻ ATM / QR Code / VNPAY</div>
+                  </div>
+                </div>
+                <input type="radio" name="payRemainingMethod" value="vnpay" checked={payRemainingMethod === 'vnpay'} onChange={() => setPayRemainingMethod('vnpay')} className="hidden" />
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${payRemainingMethod === 'vnpay' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                  {payRemainingMethod === 'vnpay' && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+              </label>
+
+              <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-colors ${payRemainingMethod === 'wallet' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">💳</div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Thanh toán từ Ví</div>
+                    <div className="text-xs text-slate-500">Số dư ví của bạn: <span className="font-bold text-emerald-600">{user?.walletBalance ? formatCurrency(user.walletBalance) : '0đ'}</span></div>
+                  </div>
+                </div>
+                <input type="radio" name="payRemainingMethod" value="wallet" checked={payRemainingMethod === 'wallet'} onChange={() => setPayRemainingMethod('wallet')} className="hidden" />
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${payRemainingMethod === 'wallet' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
+                  {payRemainingMethod === 'wallet' && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+              </label>
+            </div>
+            
+            <div className="p-5 border-t border-slate-100 bg-slate-50">
+              <button 
+                onClick={confirmPayRemaining}
+                disabled={payRemainingLoading}
+                className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-500 disabled:opacity-50 transition-colors shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+              >
+                {payRemainingLoading ? 'Đang xử lý...' : 'Xác nhận thanh toán ngay'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCancelConfirm && (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
           onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null); } }}>
