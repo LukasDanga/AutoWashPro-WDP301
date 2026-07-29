@@ -44,36 +44,28 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
     systemEvents = false,
   } = options;
 
-  // Handle app state changes
+  // Keep latest userId to avoid reconnecting socket when object reference changes
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?._id || null;
+
+  // Handle app state changes — reconnect when app returns to foreground,
+  // but only if no other provider is already managing the connection.
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && isAuthenticated && user) {
-        sseService.connect(user._id);
-      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-        sseService.disconnect();
+      if (nextAppState === 'active') {
+        // sseService.connect guards against duplicate connections internally,
+        // so multiple callers cannot trigger reconnect storms here.
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [isAuthenticated, user]);
+  }, []);
 
-  // Auto-connect when authenticated
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      sseService.connect(user._id);
-      setIsConnected(true);
-    } else {
-      sseService.disconnect();
-      setIsConnected(false);
-    }
-
-    return () => {
-      sseService.disconnect();
-    };
-  }, [isAuthenticated, user]);
-
-  // Subscribe to specific event types
+  // Subscribe to specific event types — NO automatic connect/disconnect.
+  // Connection is managed centrally by NotificationContext so we don't
+  // get into a connect/disconnect loop with other providers that also
+  // depend on (isAuthenticated, user).
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
 
@@ -115,15 +107,12 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
   }, [notifications, bookingUpdates, paymentUpdates, systemEvents]);
 
   const connect = useCallback(() => {
-    if (isAuthenticated && user) {
-      sseService.connect(user._id);
-      setIsConnected(true);
-    }
-  }, [isAuthenticated, user]);
+    // No-op: connection is centrally managed by NotificationContext.
+    // Subscribers can still use this hook to listen for events.
+  }, []);
 
   const disconnect = useCallback(() => {
-    sseService.disconnect();
-    setIsConnected(false);
+    // No-op: connection is centrally managed by NotificationContext.
   }, []);
 
   const subscribe = useCallback((type: SSEEventType | 'all', callback: (event: SSEEvent) => void) => {

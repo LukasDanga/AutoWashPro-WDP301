@@ -606,7 +606,7 @@ export default function SlotPacksScreen() {
           <View style={styles.divider} />
           <View style={styles.infoRow}>
             <Icon name={Icons.walletOutline} size={16} color={colors.textSecondary} style={styles.infoIcon} />
-            <AppText variant="bodySmall" color="textSecondary">Giá: {formatCurrency(item.finalPrice ?? item.totalPrice ?? 0)}</AppText>
+            <AppText variant="bodySmall" color="textSecondary">Giá: {formatCurrency(item.finalPrice ?? 0)}</AppText>
           </View>
           <View style={styles.infoRow}>
             <Icon name={Icons.cubeOutline} size={16} color={colors.primary} style={styles.infoIcon} />
@@ -735,14 +735,9 @@ export default function SlotPacksScreen() {
               }
             }}
             rightAction={
-              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                <TouchableOpacity onPress={saveProgressAndHome} style={{ padding: 4 }} accessibilityLabel="Về trang chủ">
-                  <Icon name={Icons.homeOutline} size={24} color={colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setIsBuying(false)} style={{ padding: 4 }}>
-                  <Icon name={Icons.close} size={24} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={saveProgressAndHome} style={{ padding: 4 }} accessibilityLabel="Về trang chủ">
+                <Icon name={Icons.homeOutline} size={24} color={colors.primary} />
+              </TouchableOpacity>
             }
           />
           <View style={[styles.progressContainer, { backgroundColor: colors.background }]}>
@@ -994,23 +989,117 @@ export default function SlotPacksScreen() {
 
                 {buyError ? <AppText color="error" style={{ marginBottom: 12, marginTop: 12, textAlign: 'center' }}>{buyError}</AppText> : null}
 
-                <AppText variant="label" style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>Phương thức thanh toán</AppText>
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-                  <PressableScale onPress={() => setPaymentMethod('wallet')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'wallet' ? colors.primary : colors.borderLight, backgroundColor: paymentMethod === 'wallet' ? colors.primarySubtle : colors.surface, alignItems: 'center', ...shadows.sm }}>
-                    <AppText variant="bodySmall" style={{ fontWeight: '600', color: paymentMethod === 'wallet' ? colors.primary : colors.textPrimary }}>Ví AutoWash</AppText>
-                    {user?.walletBalance !== undefined && (
-                      <AppText variant="caption" style={{ color: paymentMethod === 'wallet' ? colors.primary : colors.textSecondary, marginTop: 4, fontWeight: '500' }}>
-                        {formatCurrency(user.walletBalance)}
+                <AppText variant="label" style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>
+                  Phương thức thanh toán
+                </AppText>
+
+                {/* Wallet Option */}
+                <TouchableOpacity
+                  onPress={() => setPaymentMethod('wallet')}
+                  activeOpacity={0.8}
+                  style={{ marginBottom: spacing.sm }}
+                >
+                  <View
+                    style={[
+                      styles.selectablePaymentCard,
+                      {
+                        backgroundColor: paymentMethod === 'wallet' ? colors.primarySubtle : colors.surface,
+                        borderColor: paymentMethod === 'wallet' ? colors.primary : colors.borderLight,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.methodIconWrap, { backgroundColor: colors.primarySubtle }]}>
+                      <Icon name={Icons.wallet} size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                      <AppText variant="body" style={{ fontWeight: '600' }}>
+                        Ví AutoWash
                       </AppText>
+                      <AppText variant="caption" color="textSecondary">
+                        Số dư: {formatCurrency(user?.walletBalance || 0)}
+                      </AppText>
+                    </View>
+                    {paymentMethod === 'wallet' ? (
+                      <View style={[styles.optionCheckBadge, { backgroundColor: colors.primary }]}>
+                        <Icon name={Icons.checkmark} size={14} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <View style={[styles.optionCheckEmptyBadge, { borderColor: colors.borderLight }]} />
                     )}
-                  </PressableScale>
-                  <PressableScale onPress={() => setPaymentMethod('bank')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'bank' ? colors.primary : colors.borderLight, backgroundColor: paymentMethod === 'bank' ? colors.primarySubtle : colors.surface, alignItems: 'center', ...shadows.sm }}>
-                    <AppText variant="bodySmall" style={{ fontWeight: '600', color: paymentMethod === 'bank' ? colors.primary : colors.textPrimary }}>Ngân hàng</AppText>
-                  </PressableScale>
-                  <PressableScale onPress={() => setPaymentMethod('vnpay')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'vnpay' ? colors.primary : colors.borderLight, backgroundColor: paymentMethod === 'vnpay' ? colors.primarySubtle : colors.surface, alignItems: 'center', ...shadows.sm }}>
-                    <AppText variant="bodySmall" style={{ fontWeight: '600', color: paymentMethod === 'vnpay' ? colors.primary : colors.textPrimary }}>VNPay</AppText>
-                  </PressableScale>
-                </View>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Bank Option */}
+                <TouchableOpacity
+                  onPress={() => setPaymentMethod('bank')}
+                  activeOpacity={0.8}
+                  style={{ marginBottom: spacing.sm }}
+                >
+                  <View
+                    style={[
+                      styles.selectablePaymentCard,
+                      {
+                        backgroundColor: paymentMethod === 'bank' ? colors.primarySubtle : colors.surface,
+                        borderColor: paymentMethod === 'bank' ? colors.primary : colors.borderLight,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.methodIconWrap, { backgroundColor: colors.primarySubtle }]}>
+                      <Icon name={Icons.card} size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                      <AppText variant="body" style={{ fontWeight: '600' }}>
+                        Ngân hàng
+                      </AppText>
+                      <AppText variant="caption" color="textSecondary">
+                        Chuyển khoản qua mã QR
+                      </AppText>
+                    </View>
+                    {paymentMethod === 'bank' ? (
+                      <View style={[styles.optionCheckBadge, { backgroundColor: colors.primary }]}>
+                        <Icon name={Icons.checkmark} size={14} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <View style={[styles.optionCheckEmptyBadge, { borderColor: colors.borderLight }]} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {/* VNPay Option */}
+                <TouchableOpacity
+                  onPress={() => setPaymentMethod('vnpay')}
+                  activeOpacity={0.8}
+                  style={{ marginBottom: spacing.md }}
+                >
+                  <View
+                    style={[
+                      styles.selectablePaymentCard,
+                      {
+                        backgroundColor: paymentMethod === 'vnpay' ? colors.primarySubtle : colors.surface,
+                        borderColor: paymentMethod === 'vnpay' ? colors.primary : colors.borderLight,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.methodIconWrap, { backgroundColor: colors.primarySubtle }]}>
+                      <Icon name={Icons.globeOutline} size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                      <AppText variant="body" style={{ fontWeight: '600' }}>
+                        VNPay
+                      </AppText>
+                      <AppText variant="caption" color="textSecondary">
+                        Cổng thanh toán VNPay
+                      </AppText>
+                    </View>
+                    {paymentMethod === 'vnpay' ? (
+                      <View style={[styles.optionCheckBadge, { backgroundColor: colors.primary }]}>
+                        <Icon name={Icons.checkmark} size={14} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <View style={[styles.optionCheckEmptyBadge, { borderColor: colors.borderLight }]} />
+                    )}
+                  </View>
+                </TouchableOpacity>
               </StepLayout>
             )}
           </ScrollView>
@@ -1614,4 +1703,32 @@ const styles = StyleSheet.create({
   bottomBackButton: { flex: 1 },
   bottomNextButton: { flex: 1 },
   bottomPrimaryButton: { flex: 1 },
+  selectablePaymentCard: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  methodIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionCheckBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionCheckEmptyBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
 });

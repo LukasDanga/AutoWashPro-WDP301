@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { vehicleApi } from '../../src/api';
 import {
@@ -43,6 +44,7 @@ export default function VehicleFormScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!params.id;
   const toast = useToast();
+  const insets = useSafeAreaInsets();
 
   const [formData, setFormData] = useState({
     licensePlate: '',
@@ -153,6 +155,7 @@ export default function VehicleFormScreen() {
       <Header title={isEditing ? 'Sửa phương tiện' : 'Thêm phương tiện'} showBack />
       <KeyboardAwareScrollView
         style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -266,7 +269,7 @@ export default function VehicleFormScreen() {
         </View>
       </KeyboardAwareScrollView>
 
-      <View style={[styles.bottomAction, { borderTopColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
+      <View style={[styles.bottomAction, { borderTopColor: colors.border, backgroundColor: colors.surfaceElevated, paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }]}>
         <Button
           title={isEditing ? 'Cập nhật' : 'Thêm mới'}
           onPress={handleSave}

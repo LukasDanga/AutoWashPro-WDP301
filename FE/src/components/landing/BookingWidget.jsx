@@ -76,18 +76,36 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [spCanAdvance, setSpCanAdvance] = useState(false);
 
   const defaultGuestVehicle = { licensePlate: '', brand: '', model: '', type: 'sedan' };
-  // Selections (initialized from sessionStorage to avoid timing race with auto-select effects)
-  const [selectedBranch, setSelectedBranch] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedBranch) return p.selectedBranch; } } catch {} return null; });
-  const [selectedVehicle, setSelectedVehicle] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedVehicle) return p.selectedVehicle; } } catch {} return ''; });
-  const [selectedPackage, setSelectedPackage] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedPackage) return p.selectedPackage; } } catch {} return null; });
-  const [selectedSubServices, setSelectedSubServices] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedSubServices && Object.keys(p.selectedSubServices).length) return p.selectedSubServices; } } catch {} return {}; });
-  const [selectedDate, setSelectedDate] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedDate) return p.selectedDate; } } catch {} return bookingDates[1]?.id || bookingDates[0]?.id; });
-  const [selectedTime, setSelectedTime] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedTime) return p.selectedTime; } } catch {} return ''; });
-  const [selectedDays, setSelectedDays] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedDays && p.selectedDays.length) return p.selectedDays; } } catch {} return []; });
-  const [weeks, setWeeks] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.weeks) return p.weeks; } } catch {} return 4; });
-  const [appliedVoucher, setAppliedVoucher] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.appliedVoucher) return p.appliedVoucher; } } catch {} return null; });
-  const [selectedSlotPack, setSelectedSlotPack] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedSlotPack) return p.selectedSlotPack; } } catch {} return null; });
-  const [guestVehicle, setGuestVehicle] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.guestVehicle?.licensePlate) return p.guestVehicle; } } catch {} return defaultGuestVehicle; });
+
+  const getSavedBookingState = () => {
+    try {
+      const s = sessionStorage.getItem('aw_booking_state');
+      if (!s) return null;
+      const p = JSON.parse(s);
+      if (!p.savedAt || (Date.now() - p.savedAt > 3 * 60 * 1000)) {
+        sessionStorage.removeItem('aw_booking_state');
+        sessionStorage.removeItem('aw_bookingDraft');
+        return null;
+      }
+      return p;
+    } catch {
+      return null;
+    }
+  };
+
+  const initialBookingState = getSavedBookingState();
+  // Selections (initialized from sessionStorage with 3 min expiration check)
+  const [selectedBranch, setSelectedBranch] = useState(() => initialBookingState?.selectedBranch || null);
+  const [selectedVehicle, setSelectedVehicle] = useState(() => initialBookingState?.selectedVehicle || '');
+  const [selectedPackage, setSelectedPackage] = useState(() => initialBookingState?.selectedPackage || null);
+  const [selectedSubServices, setSelectedSubServices] = useState(() => (initialBookingState?.selectedSubServices && Object.keys(initialBookingState.selectedSubServices).length) ? initialBookingState.selectedSubServices : {});
+  const [selectedDate, setSelectedDate] = useState(() => initialBookingState?.selectedDate || bookingDates[1]?.id || bookingDates[0]?.id);
+  const [selectedTime, setSelectedTime] = useState(() => initialBookingState?.selectedTime || '');
+  const [selectedDays, setSelectedDays] = useState(() => initialBookingState?.selectedDays || []);
+  const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 4);
+  const [appliedVoucher, setAppliedVoucher] = useState(() => initialBookingState?.appliedVoucher || null);
+  const [selectedSlotPack, setSelectedSlotPack] = useState(() => initialBookingState?.selectedSlotPack || null);
+  const [guestVehicle, setGuestVehicle] = useState(() => initialBookingState?.guestVehicle?.licensePlate ? initialBookingState.guestVehicle : defaultGuestVehicle);
 
   // Guest vehicle form
   const [vehicleError, setVehicleError] = useState('');
@@ -95,10 +113,28 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   useEffect(() => { syncUrlParam('step', step > 1 ? String(step) : ''); }, [step]);
   useEffect(() => { syncUrlParam('tab', tab !== 'regular' ? tab : ''); }, [tab]);
 
-  // Persist to sessionStorage on every meaningful change (step >= 2)
+  // Auto-expire saved booking state after 3 minutes of inactivity
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const s = sessionStorage.getItem('aw_booking_state');
+      if (s) {
+        try {
+          const p = JSON.parse(s);
+          if (!p.savedAt || (Date.now() - p.savedAt > 3 * 60 * 1000)) {
+            sessionStorage.removeItem('aw_booking_state');
+            sessionStorage.removeItem('aw_bookingDraft');
+            setStep(1);
+          }
+        } catch {}
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Persist to sessionStorage on every meaningful change (step >= 2) with timestamp
   useEffect(() => {
     if (step < 2) return;
-    const toSave = { selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle };
+    const toSave = { selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle, savedAt: Date.now() };
     try { sessionStorage.setItem('aw_booking_state', JSON.stringify(toSave)); } catch {}
   }, [step, selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle]);
 

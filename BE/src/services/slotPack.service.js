@@ -401,8 +401,8 @@ exports.cancelSlotPack = async (packId, userId, userRole, otp) => {
   const createdDate = new Date(pack.createdAt);
   const daysSinceBought = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
 
-  // Business Rule 1: <= 7 days and usedSlots == 0 -> Refund
-  if (pack.paymentStatus === 'paid' && pack.usedSlots === 0 && daysSinceBought <= 7) {
+  // Business Rule 1: <= 3 days and usedSlots == 0 -> Refund
+  if (pack.paymentStatus === 'paid' && pack.usedSlots === 0 && daysSinceBought <= 3) {
     const Payment = mongoose.model('Payment');
     const payment = await Payment.findOne({ slotPackId: pack._id, status: 'paid' });
     if (payment) {

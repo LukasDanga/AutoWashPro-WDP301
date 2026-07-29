@@ -42,6 +42,8 @@ export type VoucherState = {
   message?: string;
 };
 
+const DRAFT_TTL_MS = 3 * 60 * 1000; // 3 minutes TTL
+
 type PersistedDraft = {
   selectedPackage?: Package | null;
   selectedBranch?: Branch | null;
@@ -50,6 +52,7 @@ type PersistedDraft = {
   selectedTime?: string | null;
   voucher?: VoucherState | null;
   step?: BookingStep;
+  savedAt?: number;
 };
 
 interface BookingContextValue {
@@ -138,13 +141,18 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw && !cancelled) {
           const draft = JSON.parse(raw) as PersistedDraft;
-          if (draft.selectedBranch) setSelectedBranchState(draft.selectedBranch);
-          if (draft.selectedPackage) setSelectedPackageState(draft.selectedPackage);
-          if (draft.selectedVehicle) setSelectedVehicleState(draft.selectedVehicle);
-          if (draft.selectedDate) setSelectedDateState(draft.selectedDate);
-          if (draft.selectedTime) setSelectedTimeState(draft.selectedTime);
-          if (draft.voucher) setVoucherState(draft.voucher);
-          if (draft.step) setStepState(draft.step);
+          const isExpired = !draft.savedAt || (Date.now() - draft.savedAt > DRAFT_TTL_MS);
+          if (isExpired) {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+          } else {
+            if (draft.selectedBranch) setSelectedBranchState(draft.selectedBranch);
+            if (draft.selectedPackage) setSelectedPackageState(draft.selectedPackage);
+            if (draft.selectedVehicle) setSelectedVehicleState(draft.selectedVehicle);
+            if (draft.selectedDate) setSelectedDateState(draft.selectedDate);
+            if (draft.selectedTime) setSelectedTimeState(draft.selectedTime);
+            if (draft.voucher) setVoucherState(draft.voucher);
+            if (draft.step) setStepState(draft.step);
+          }
         }
       } catch (err) {
         console.warn('[BookingContext] hydrate failed:', err);
@@ -168,6 +176,7 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       selectedTime,
       voucher,
       step,
+      savedAt: Date.now(),
     };
     const serialized = JSON.stringify(draft);
     if (serialized === lastDraftRef.current) return;
@@ -186,6 +195,34 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
     step,
   ]);
 
+  const resetAll = useCallback(() => {
+    setSelectedBranchState(null);
+    setSelectedPackageState(null);
+    setSelectedVehicleState(null);
+    setSelectedDateState(null);
+    setSelectedTimeState(null);
+    setVoucherState(null);
+    setStepState('branch');
+    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+  }, []);
+
+  // Auto-expire draft after 3 minutes of inactivity
+  useEffect(() => {
+    if (!isHydrated) return;
+    const interval = setInterval(async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw) as PersistedDraft;
+          if (draft.savedAt && Date.now() - draft.savedAt > DRAFT_TTL_MS) {
+            resetAll();
+          }
+        }
+      } catch {}
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isHydrated, resetAll]);
+
   const setStep = useCallback((next: BookingStep) => setStepState(next), []);
 
   const goNext = useCallback(() => {
@@ -202,17 +239,6 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({
       if (i <= 0) return s;
       return STEP_ORDER[i - 1];
     });
-  }, []);
-
-  const resetAll = useCallback(() => {
-    setSelectedBranchState(null);
-    setSelectedPackageState(null);
-    setSelectedVehicleState(null);
-    setSelectedDateState(null);
-    setSelectedTimeState(null);
-    setVoucherState(null);
-    setStepState('branch');
-    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   }, []);
 
   const setSelectedBranch = useCallback((b: Branch | null) => {

@@ -13,8 +13,9 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bookingApi } from '../../../src/api';
+import { sseService } from '../../../src/services/sse';
 import {
   Text as AppText,
   Card,
@@ -31,12 +32,14 @@ import { useColors } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 import { spacing, borderRadius } from '../../../src/theme/spacing';
 import type { Booking } from '../../../src/types';
+import { formatDate } from '../../../src/utils';
 
 export default function FeedbackScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [rating, setRating] = useState(0);
@@ -61,7 +64,7 @@ export default function FeedbackScreen() {
         setFeedback(response.feedback);
       }
     } catch (error) {
-      console.error('Error fetching booking:', error);
+      console.log('Error fetching booking:', error);
       AlertDialog.error('Lỗi', 'Không thể tải thông tin đặt lịch');
     } finally {
       setIsLoading(false);
@@ -80,6 +83,7 @@ export default function FeedbackScreen() {
         rating,
         feedback: feedback.trim(),
       });
+      sseService.emitBookingUpdate({ id });
       AlertDialog.show({
         title: 'Cảm ơn bạn!',
         message: 'Cảm ơn bạn đã đánh giá dịch vụ của chúng tôi. Phản hồi của bạn giúp chúng tôi cải thiện chất lượng mỗi ngày.',
@@ -220,7 +224,7 @@ export default function FeedbackScreen() {
                     Ngày
                   </AppText>
                   <AppText variant="body">
-                    {booking.bookingDate} - {booking.startTime}
+                    {formatDate(booking.bookingDate)} - {booking.startTime}
                   </AppText>
                 </View>
               </View>
@@ -248,8 +252,8 @@ export default function FeedbackScreen() {
               >
                 <Icon
                   name={star <= rating ? Icons.star : Icons.starOutline}
-                  size={40}
-                  color={star <= rating ? colors.warning : colors.textTertiary}
+                  size={48}
+                  color={star <= rating ? colors.warning : colors.border}
                 />
               </TouchableOpacity>
             ))}
@@ -271,7 +275,7 @@ export default function FeedbackScreen() {
             Nói cho chúng tôi biết trải nghiệm của bạn
           </AppText>
 
-          <View style={[styles.textInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={[styles.textInputContainer, { backgroundColor: colors.background, borderWidth: 0 }]}>
             <TextInput
               style={[styles.textInput, { color: colors.textPrimary }]}
               placeholder="Ví dụ: Nhân viên thân thiện, dịch vụ tốt..."
@@ -343,7 +347,7 @@ export default function FeedbackScreen() {
       </ScrollView>
 
       {/* Submit Button */}
-      <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={[styles.bottomAction, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom + spacing.sm : spacing.md }]}>
         <Button
           title="Gửi đánh giá"
           onPress={handleSubmit}
@@ -440,6 +444,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.md,
     borderWidth: 1,
+    borderColor: 'transparent',
   },
   textInput: {
     ...typography.body,
@@ -456,6 +461,7 @@ const styles = StyleSheet.create({
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: spacing.sm,
   },
   tag: {

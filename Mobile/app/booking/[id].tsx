@@ -32,6 +32,7 @@ import { vi } from 'date-fns/locale';
 import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { sseService } from '../../src/services/sse';
 import { bookingApi, refundApi } from '../../src/api';
 import {
   Text as AppText,
@@ -52,6 +53,7 @@ import {
   EmptyState,
   RefundStatusCard,
 } from '../../src/components/common';
+import { EditSubServicesModal } from '../../src/components/booking/EditSubServicesModal';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency, formatDate } from '../../src/utils';
@@ -102,10 +104,31 @@ export default function BookingDetailScreen() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelStep, setCancelStep] = useState(1);
   const [cancelOtp, setCancelOtp] = useState('');
+
+  // Edit sub-services state
+  const [showEditServicesModal, setShowEditServicesModal] = useState(false);
+  const [isUpdatingServices, setIsUpdatingServices] = useState(false);
   const [cancelPreview, setCancelPreview] = useState<any>(null);
 
   useEffect(() => {
-    if (id) fetchBooking();
+    if (!id) return;
+    fetchBooking();
+
+    const unsub1 = sseService.subscribe('booking_update', () => fetchBooking());
+    const unsub2 = sseService.subscribe('my_bookings_updated', () => fetchBooking());
+    const unsub3 = sseService.subscribe('notification', () => fetchBooking());
+    const unsub4 = sseService.subscribe('refund_request_updated', () => fetchBooking());
+    const unsub5 = sseService.subscribe('refund_requests_updated', () => fetchBooking());
+    const unsub6 = sseService.subscribe('all', () => fetchBooking());
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+      unsub5();
+      unsub6();
+    };
   }, [id]);
 
   const fetchBooking = async () => {
@@ -278,6 +301,33 @@ export default function BookingDetailScreen() {
     }
   };
 
+  const handleUpdateServices = async (selectedNames: string[]) => {
+    if (!id) return;
+    setIsUpdatingServices(true);
+    try {
+      const updated = await bookingApi.updateSubServices(id, selectedNames);
+      
+      // Calculate diff for toast message
+      const refundAmount = updated.refundAmount || 0;
+      
+      let msg = 'Đã cập nhật dịch vụ thành công.';
+      if (refundAmount > 0) {
+        msg += ` Hoàn ${formatCurrency(refundAmount)} vào Ví AutoWash.`;
+      }
+      
+      toast.success('Thành công', msg);
+      setShowEditServicesModal(false);
+      setBooking(updated);
+    } catch (error: any) {
+      AlertDialog.error(
+        'Lỗi',
+        error.response?.data?.message || 'Không thể cập nhật dịch vụ'
+      );
+    } finally {
+      setIsUpdatingServices(false);
+    }
+  };
+
   if (isLoading) return <Loading fullScreen message="Đang tải..." />;
 
   if (!booking) {
@@ -309,6 +359,7 @@ export default function BookingDetailScreen() {
   const canRebook = booking.status === 'completed';
   const canFeedback = booking.status === 'completed' && !booking.rating;
   const canShowQR = ['confirmed', 'checked_in'].includes(booking.status);
+  const canEditServices = ['pending', 'confirmed', 'checked_in', 'in_progress'].includes(booking.status);
 
   // Logic payment actions — match BE booking.service.js.
   // Thanh toán phần còn lại: đã cọc, dịch vụ đã hoàn thành (completed) hoặc
@@ -318,9 +369,10 @@ export default function BookingDetailScreen() {
     booking.paymentStatus !== 'paid' &&
     ['checked_in', 'in_progress', 'completed'].includes(booking.status);
 
-  // Refund condition: booking cancelled, customer paid something, and no refund request exists yet
+  // Refund condition: booking cancelled OR (completed within 24h), customer paid something, and no refund request exists yet
+  const hoursSinceCompletion = booking.updatedAt ? (Date.now() - new Date(booking.updatedAt).getTime()) / (1000 * 60 * 60) : 0;
   const canRequestRefund =
-    booking.status === 'cancelled' &&
+    (booking.status === 'cancelled' || (booking.status === 'completed' && hoursSinceCompletion <= 24)) &&
     (booking.depositPaid || booking.paymentStatus === 'paid') &&
     !refundRequest;
 
@@ -494,7 +546,7 @@ export default function BookingDetailScreen() {
           const subServicesList = booking.selectedSubServices || booking.subServices;
           const hasSubServices = subServicesList && subServicesList.length > 0;
           const packageDesc = typeof booking.packageId === 'object' ? (booking.packageId as any)?.description : undefined;
-          const hasExpandableContent = hasSubServices || !!packageDesc;
+          const hasExpandableContent = hasSubServices || !!packageDesc || canEditServices;
 
           return (
             <InfoCard
@@ -536,11 +588,26 @@ export default function BookingDetailScreen() {
                     </AppText>
                   ) : null}
 
-                  {hasSubServices ? (
-                    <View>
-                      <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
-                        Dịch vụ đính kèm ({subServicesList.length}):
+                  {canEditServices && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, marginTop: packageDesc ? 4 : 0 }}>
+                      <AppText variant="caption" color="primary" style={{ fontWeight: '700' }}>
+                        Dịch vụ đính kèm {subServicesList?.length ? `(${subServicesList.length})` : ''}:
                       </AppText>
+                      <TouchableOpacity onPress={() => setShowEditServicesModal(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <AppText variant="caption" color="primary" style={{ textDecorationLine: 'underline' }}>
+                          Chỉnh sửa
+                        </AppText>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {!canEditServices && hasSubServices && (
+                    <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
+                      Dịch vụ đính kèm ({subServicesList.length}):
+                    </AppText>
+                  )}
+
+                  {hasSubServices && (
+                    <View>
                       {subServicesList.map((sub: any, idx: number) => {
                         const subName = typeof sub === 'object' ? sub.name : sub;
                         const subPrice = typeof sub === 'object' ? sub.price : undefined;
@@ -558,7 +625,7 @@ export default function BookingDetailScreen() {
                         );
                       })}
                     </View>
-                  ) : null}
+                  )}
                 </View>
               ) : null}
             </InfoCard>
@@ -672,24 +739,39 @@ export default function BookingDetailScreen() {
 
         {/* Feedback */}
         {canFeedback ? (
-          <Card style={[styles.feedbackCard, { backgroundColor: colors.warningLight }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-              <Icon name={Icons.starOutline} size={22} color={colors.warning} />
+          <Card style={[styles.feedbackCard, { backgroundColor: colors.warningLight, borderColor: 'rgba(245, 158, 11, 0.25)' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+              <View style={[styles.infoIconWrap, { backgroundColor: '#FDE68A', elevation: 0, shadowOpacity: 0, marginRight: spacing.md }]}>
+                <Icon name={Icons.starOutline} size={22} color={colors.warning} />
+              </View>
               <View style={{ flex: 1 }}>
-                <AppText variant="body" style={{ fontWeight: '600' }}>
+                <AppText variant="body" style={{ fontWeight: '700' }}>
                   Bạn đã sử dụng dịch vụ
                 </AppText>
-                <AppText variant="caption" color="textSecondary" style={{ marginBottom: spacing.sm }}>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
                   Hãy đánh giá để giúp chúng tôi cải thiện dịch vụ tốt hơn
                 </AppText>
-                <Button
-                  title="Đánh giá ngay"
-                  variant="outline"
-                  icon={<Icon name={Icons.star} size={18} color={colors.warning} />}
-                  onPress={() => router.push(`/booking/${id}/feedback` as any)}
-                />
               </View>
             </View>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.warning,
+                paddingVertical: spacing.sm + 2,
+                borderRadius: borderRadius.lg,
+                gap: spacing.xs + 2,
+              }}
+              onPress={() => router.push(`/booking/${id}/feedback` as any)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <Icon name={Icons.star} size={18} color="#FFFFFF" />
+              <AppText variant="body" style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                Đánh giá ngay
+              </AppText>
+            </TouchableOpacity>
           </Card>
         ) : null}
 
@@ -738,13 +820,16 @@ export default function BookingDetailScreen() {
 
       {/* Bottom actions — nằm phía trên thanh điều hướng dưới cùng */}
       {hasBottomActions ? (
-        <View style={{ backgroundColor: colors.background, marginBottom: 68 + insets.bottom }}>
-          <View
-            style={[
-              styles.bottomAction,
-              { borderTopColor: colors.border },
-            ]}
-          >
+        <View style={{ 
+          position: 'absolute', 
+          bottom: 68 + insets.bottom, 
+          left: 0, 
+          right: 0, 
+          backgroundColor: colors.background,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border
+        }}>
+          <View style={[styles.bottomAction, { borderTopWidth: 0 }]}>
           {(() => {
             // Nút thanh toán: chỉ còn "Thanh toán phần còn lại".
             // Nút "Đặt cọc" đã được gỡ bỏ theo yêu cầu (thanh toán cọc xử lý ở luồng đặt lịch).
@@ -820,11 +905,22 @@ export default function BookingDetailScreen() {
                     title="Đặt lại"
                     variant="outline"
                     size="medium"
-                    icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
+                    icon={<Icon name={Icons.refreshOutline} size={16} color={colors.primary} />}
                     onPress={handleRebook}
                     loading={isRebooking}
-                    style={styles.actionFlex}
+                    style={{ flex: 1, height: 48, paddingHorizontal: 4 }}
+                    textStyle={{ fontSize: 13.5 }}
                   />
+                  {canRequestRefund && !refundRequest && (
+                    <Button
+                      title="Yêu cầu hoàn tiền"
+                      size="medium"
+                      icon={<Icon name={Icons.cashOutline} size={16} color={colors.textInverse} />}
+                      onPress={() => setShowRefundModal(true)}
+                      style={{ flex: 1, height: 48, paddingHorizontal: 4 }}
+                      textStyle={{ fontSize: 13.5 }}
+                    />
+                  )}
                 </>
               );
             }
@@ -869,7 +965,7 @@ export default function BookingDetailScreen() {
           accessibilityLabel="Đóng hộp thoại"
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
             style={styles.modalKavWrapper}
             pointerEvents="box-none"
           >
@@ -914,7 +1010,11 @@ export default function BookingDetailScreen() {
                       <AppText variant="bodySmall" style={{ fontWeight: '600', color: '#9A3412', marginBottom: 4 }}>
                         Cảnh báo chính sách hủy
                       </AppText>
-                      {cancelPreview.refundAmount > 0 ? (
+                      {cancelPreview.policy ? (
+                        <AppText variant="caption" style={{ color: '#C2410C' }}>
+                          {cancelPreview.policy}
+                        </AppText>
+                      ) : cancelPreview.refundAmount > 0 ? (
                         <AppText variant="caption" style={{ color: '#C2410C' }}>
                           Phí phạt: -{formatCurrency(cancelPreview.penaltyAmount)} ({cancelPreview.penaltyPercent}%).{'\n'}
                           Hoàn lại: +{formatCurrency(cancelPreview.refundAmount)} vào ví.
@@ -1028,7 +1128,7 @@ export default function BookingDetailScreen() {
           accessibilityLabel="Đóng hộp thoại"
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
             style={styles.modalKavWrapper}
             pointerEvents="box-none"
           >
@@ -1164,6 +1264,14 @@ export default function BookingDetailScreen() {
           </SafeAreaView>
         </View>
       </Modal>
+      <EditSubServicesModal
+        visible={showEditServicesModal}
+        onClose={() => setShowEditServicesModal(false)}
+        onSave={handleUpdateServices}
+        availableSubServices={((booking.packageId as any)?.subServices || []).filter((s: any) => s.isOptional !== false)}
+        initialSelected={(booking.selectedSubServices || booking.subServices || []).map((s: any) => typeof s === 'object' ? s.name : s)}
+        loading={isUpdatingServices}
+      />
     </ScreenContainer>
   );
 }
@@ -1473,6 +1581,8 @@ const styles = StyleSheet.create({
     padding: 0, // body+hero handle their own padding
     width: '100%',
     maxWidth: 460,
+    maxHeight: '85%',
+    flexShrink: 1,
     alignSelf: 'center',
     backgroundColor: '#FFFFFF', // explicit opaque background — prevents modal from showing page content through
     shadowColor: '#0F172A',
@@ -1558,6 +1668,7 @@ const styles = StyleSheet.create({
   cancelBody: {
     // ScrollView outer — no flex grow so modal stays compact when no scroll needed
     flexGrow: 0,
+    flexShrink: 1,
   },
   cancelBodyContent: {
     padding: spacing.lg,
@@ -1698,6 +1809,7 @@ const styles = StyleSheet.create({
   },
   refundBody: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   refundBodyContent: {
     padding: spacing.lg,

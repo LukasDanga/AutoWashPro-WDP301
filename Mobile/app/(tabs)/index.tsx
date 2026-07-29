@@ -96,7 +96,7 @@ const LoyaltyCard: React.FC<LoyaltyCardProps> = ({
 export default function HomeScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, refreshNotifications } = useNotifications();
   const colors = useColors();
   const alertDialog = useAlertDialog();
 
@@ -132,6 +132,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      refreshNotifications();
       let cancelled = false;
       const checkPending = async () => {
         try {

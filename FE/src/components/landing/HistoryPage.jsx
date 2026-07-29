@@ -636,6 +636,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
   useSSE(token, 'notification', handleSSEUpdate);
   useSSE(token, 'my_bookings_updated', handleSSEUpdate);
+  useSSE(token, 'booking_new', handleSSEUpdate);
+  useSSE(token, 'booking_update', handleSSEUpdate);
+  useSSE(token, 'points_updated', handleSSEUpdate);
+  useSSE(token, 'refund_request_updated', handleSSEUpdate);
 
   useEffect(() => {
     if (refreshSignal > 0 && showRecurringGroupModal && recurringGroupTarget) {

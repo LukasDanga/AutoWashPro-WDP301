@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -46,6 +46,11 @@ export default function WalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState('');
+  const [isFetching, setIsFetching] = useState(false);
+
+  // Transaction Detail State
+  const [selectedTx, setSelectedTx] = useState<WalletTransaction | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Topup Modal State
   const [showTopupModal, setShowTopupModal] = useState(false);
@@ -55,16 +60,103 @@ export default function WalletScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // QR Modal State
-  const [sepayData, setSepayData] = useState<{ qrCodeUrl: string; transactionId: string; amount: number } | null>(null);
+  const [sepayData, setSepayData] = useState<{ qrCodeUrl: string; transactionId: string; paymentId: string; amount: number } | null>(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
 
   const fetchTransactions = useCallback(async () => {
+    if (isFetching) return;
+    setIsFetching(true);
     try {
       const res = await walletApi.getWalletTransactions({ limit: 50 });
       setTransactions(res.data);
     } catch (e) {
       console.error('Lỗi tải lịch sử ví:', e);
+    } finally {
+      setIsFetching(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto polling while QR modal is open — check payment status on backend
+  useEffect(() => {
+    if (!sepayData) return;
+    let lastCall = 0;
+    const interval = setInterval(async () => {
+      const now = Date.now();
+      // Throttle: chỉ gọi nếu đã qua ít nhất 5 giây kể từ lần gọi trước
+      if (now - lastCall < 5000) return;
+      lastCall = now;
+      try {
+        // Call getPayment which triggers backend SePay auto-poll
+        const payment = await paymentApi.getPayment(sepayData.paymentId);
+        if (payment && payment.status === 'paid') {
+          setMessage(`Cập nhật số dư ví: +${formatCurrency(sepayData.amount)}`);
+          setSepayData(null);
+          await refreshUser();
+          await fetchTransactions();
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+      } catch (e) {
+        // ignore — payment may not exist yet or network error
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [sepayData, refreshUser, fetchTransactions]);
+
+  const handleConfirmTransfer = async () => {
+    if (!sepayData) return;
+    setCheckingPayment(true);
+    try {
+      // Poll backend để kiểm tra payment đã thực sự được xác nhận chưa
+      let confirmed = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+      while (attempts < maxAttempts && !confirmed) {
+        attempts++;
+        try {
+          const payment: any = await paymentApi.getPayment(sepayData.paymentId);
+          if (payment && (payment.status === 'paid' || payment.status === 'success' || payment.status === 'completed')) {
+            confirmed = true;
+            break;
+          }
+        } catch (e) {
+          // ignore and retry
+        }
+        if (!confirmed && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      }
+
+      if (confirmed) {
+        setMessage(`Cập nhật số dư ví: +${formatCurrency(sepayData.amount)}`);
+        setSepayData(null);
+        await loadData();
+        setTimeout(() => setMessage(''), 5000);
+      } else {
+        // Backend chưa xác nhận - KHÔNG cộng tiền
+        setMessage('Chưa nhận được thanh toán. Vui lòng đợi thêm hoặc liên hệ hỗ trợ.');
+        setTimeout(() => setMessage(''), 4000);
+      }
+    } catch (e: any) {
+      setMessage('Có lỗi xảy ra khi kiểm tra thanh toán');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
+
+  const getTxBookingId = (tx: WalletTransaction): string | null => {
+    if (tx.bookingId) {
+      if (typeof tx.bookingId === 'string') return tx.bookingId;
+      if (typeof tx.bookingId === 'object' && tx.bookingId._id) return String(tx.bookingId._id);
+    }
+    const text = tx.reason || tx.description || '';
+    const match = text.match(/#([a-f0-9]{24})/i) || text.match(/#([a-f0-9]{6,})/i);
+    if (match) return match[1];
+    return null;
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -84,18 +176,37 @@ export default function WalletScreen() {
     }, [loadData])
   );
 
+  // Store latest callbacks in refs so SSE subscriptions remain stable across renders
+  const refreshUserRef = useRef(refreshUser);
+  refreshUserRef.current = refreshUser;
+  const fetchTransactionsRef = useRef(fetchTransactions);
+  fetchTransactionsRef.current = fetchTransactions;
+
+  // Single cooldown used across both subscriptions to prevent cascading refetches
+  const lastSseRefreshAtRef = useRef<number>(0);
+  const SSE_REFRESH_COOLDOWN_MS = 3000;
+
   useEffect(() => {
-    const unsub = sseService.subscribe('wallet_topup_success', (event) => {
-      const amount = event.data?.amount;
-      setMessage(`Nạp tiền thành công: +${formatCurrency(amount)}`);
-      setSepayData(null);
-      setShowTopupModal(false);
-      refreshUser();
-      fetchTransactions();
-      setTimeout(() => setMessage(''), 5000);
+    const refreshAll = () => {
+      const now = Date.now();
+      if (now - lastSseRefreshAtRef.current < SSE_REFRESH_COOLDOWN_MS) return;
+      lastSseRefreshAtRef.current = now;
+      refreshUserRef.current();
+      fetchTransactionsRef.current();
+    };
+
+    const unsub1 = sseService.subscribe('wallet_topup_success', (event) => {
+      // Skip sync events fired during socket reconnect
+      if (event.data?.isSync) return;
+      refreshAll();
     });
-    return unsub;
-  }, [refreshUser, fetchTransactions]);
+    const unsub2 = sseService.subscribe('refund_request_updated', refreshAll);
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
+  }, []);
 
   const handleTopup = async () => {
     const finalAmount = customAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : topupAmount;
@@ -112,8 +223,9 @@ export default function WalletScreen() {
       if (payMethod === 'bank') {
         const res = await paymentApi.createBankProvisional(finalAmount, 'topup');
         setSepayData({
-          qrCodeUrl: (res as any).qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=6200320046868&amount=${finalAmount}&des=DAT COC ${(res as any).transactionId}`,
+          qrCodeUrl: (res as any).qrCodeUrl || `https://qr.sepay.vn/img?bank=MB&acc=6200320046868&amount=${finalAmount}&des=NAP VI ${(res as any).transactionId}`,
           transactionId: (res as any).transactionId,
+          paymentId: (res as any)._id,
           amount: finalAmount,
         });
         setShowTopupModal(false);
@@ -163,6 +275,13 @@ export default function WalletScreen() {
 
   const getTransactionSign = (type: string) => {
     return ['deposit', 'bonus', 'refund', 'credit'].includes(type) ? '+' : '-';
+  };
+
+  const formatTxReason = (text?: string): string => {
+    if (!text) return 'Giao dịch ví';
+    return text.replace(/#([a-f0-9]{12,})/gi, (match, hexId) => {
+      return '#' + hexId.slice(-6).toUpperCase();
+    }).trim();
   };
 
   if (loading && !transactions.length) {
@@ -273,27 +392,164 @@ export default function WalletScreen() {
         ) : (
           <View style={styles.transactionList}>
             {transactions.map((tx, index) => (
-              <View key={tx._id} style={[
-                styles.txItem,
-                index === transactions.length - 1 && { borderBottomWidth: 0 }
-              ]}>
+              <TouchableOpacity
+                key={tx._id}
+                style={[
+                  styles.txItem,
+                  index === transactions.length - 1 && { borderBottomWidth: 0 }
+                ]}
+                onPress={() => setSelectedTx(tx)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.txLeft}>
                   <View style={[styles.txIconWrap, { backgroundColor: `${getTransactionColor(tx.type)}15` }]}>
                     <Icon name={getTransactionIcon(tx.type)} size={22} color={getTransactionColor(tx.type)} />
                   </View>
                   <View style={styles.txInfo}>
-                    <AppText style={styles.txDesc} numberOfLines={2}>{tx.reason || tx.description}</AppText>
+                    <AppText style={styles.txDesc} numberOfLines={2}>{formatTxReason(tx.reason || tx.description)}</AppText>
                     <AppText variant="caption" color="textTertiary">{formatDate(tx.createdAt)}</AppText>
                   </View>
                 </View>
-                <AppText style={[styles.txAmount, { color: getTransactionColor(tx.type) }]}>
-                  {getTransactionSign(tx.type)}{formatCurrency(tx.amount)}
-                </AppText>
-              </View>
+                <View style={styles.txRight}>
+                  <AppText style={[styles.txAmount, { color: getTransactionColor(tx.type) }]}>
+                    {getTransactionSign(tx.type)}{formatCurrency(tx.amount)}
+                  </AppText>
+                  <View style={styles.txArrowWrap}>
+                    <AppText variant="caption" style={{ color: colors.primary, fontSize: 11, fontWeight: '600' }}>Chi tiết</AppText>
+                    <Icon name={Icons.chevronRight} size={14} color={colors.primary} />
+                  </View>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
       </ScrollView>
+
+      {/* Transaction Detail Modal */}
+      <Modal
+        visible={!!selectedTx}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedTx(null)}
+      >
+        <TouchableOpacity
+          style={styles.detailOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedTx(null)}
+        >
+          <TouchableOpacity
+            style={styles.detailCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Header with close */}
+            <View style={styles.detailHeader}>
+              <AppText variant="h3" style={styles.detailHeaderTitle}>Chi tiết giao dịch</AppText>
+              <TouchableOpacity onPress={() => setSelectedTx(null)} style={styles.closeBtn}>
+                <Icon name={Icons.close} size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedTx && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+                {/* Hero Icon & Amount Banner */}
+                <View style={styles.detailHero}>
+                  <View style={[styles.detailHeroIconCircle, { backgroundColor: `${getTransactionColor(selectedTx.type)}15` }]}>
+                    <Icon name={getTransactionIcon(selectedTx.type)} size={32} color={getTransactionColor(selectedTx.type)} />
+                  </View>
+                  <AppText style={[styles.detailHeroAmount, { color: getTransactionColor(selectedTx.type) }]}>
+                    {getTransactionSign(selectedTx.type)}{formatCurrency(selectedTx.amount)}
+                  </AppText>
+
+                  {/* Status Badge */}
+                  <View style={styles.statusPill}>
+                    <Icon name={Icons.checkmarkCircle} size={14} color="#059669" />
+                    <AppText style={styles.statusPillText}>Thành công</AppText>
+                  </View>
+                </View>
+
+                {/* Details Breakdown Card */}
+                <View style={styles.detailBox}>
+                  {/* Row: Loại giao dịch */}
+                  <View style={styles.detailRow}>
+                    <AppText variant="bodySmall" color="textSecondary">Loại giao dịch</AppText>
+                    <AppText variant="bodySmall" style={{ fontWeight: '600', color: colors.textPrimary }}>
+                      {selectedTx.type === 'credit' || selectedTx.type === 'deposit' || selectedTx.type === 'refund'
+                        ? (selectedTx.reason?.includes('Hoàn tiền') ? 'Hoàn tiền vào ví' : 'Nạp tiền vào ví')
+                        : 'Thanh toán từ ví'}
+                    </AppText>
+                  </View>
+
+                  <View style={styles.detailDivider} />
+
+                  {/* Row: Nội dung / Lý do */}
+                  <View style={styles.detailRowVertical}>
+                    <AppText variant="bodySmall" color="textSecondary" style={{ marginBottom: 4 }}>Nội dung / Lý do</AppText>
+                    <AppText variant="body" style={{ color: colors.textPrimary, lineHeight: 20 }}>
+                      {formatTxReason(selectedTx.reason || selectedTx.description)}
+                    </AppText>
+                  </View>
+
+                  <View style={styles.detailDivider} />
+
+                  {/* Row: Thời gian */}
+                  <View style={styles.detailRow}>
+                    <AppText variant="bodySmall" color="textSecondary">Thời gian</AppText>
+                    <AppText variant="bodySmall" style={{ fontWeight: '600', color: colors.textPrimary }}>
+                      {formatDate(selectedTx.createdAt)}
+                    </AppText>
+                  </View>
+
+                  <View style={styles.detailDivider} />
+
+                  {/* Row: Mã giao dịch */}
+                  <View style={styles.detailRow}>
+                    <AppText variant="bodySmall" color="textSecondary">Mã giao dịch</AppText>
+                    <TouchableOpacity
+                      style={styles.copyIdBtn}
+                      onPress={() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      <AppText variant="caption" style={{ color: colors.primary, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                        {selectedTx._id.slice(-8).toUpperCase()}
+                      </AppText>
+                      <Icon name={copied ? Icons.checkmark : Icons.copy} size={14} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Optional Action Button: Go to Booking Detail */}
+                {getTxBookingId(selectedTx) ? (
+                  <TouchableOpacity
+                    style={styles.viewBookingBtn}
+                    onPress={() => {
+                      const bId = getTxBookingId(selectedTx);
+                      setSelectedTx(null);
+                      if (bId) {
+                        router.push(`/booking/${bId}`);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={['#059669', '#064E3B']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.viewBookingGradient}
+                    >
+                      <Icon name={Icons.calendarOutline} size={18} color="#FFFFFF" />
+                      <AppText style={styles.viewBookingBtnText}>Xem chi tiết đơn đặt lịch</AppText>
+                      <Icon name={Icons.chevronRight} size={18} color="#FFFFFF" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ) : null}
+              </ScrollView>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Topup Modal */}
       <Modal
@@ -303,7 +559,7 @@ export default function WalletScreen() {
         onRequestClose={() => setShowTopupModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           style={styles.modalOverlay}
         >
           <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
@@ -415,45 +671,84 @@ export default function WalletScreen() {
         onRequestClose={() => setSepayData(null)}
       >
         <View style={styles.qrModalOverlay}>
-          <View style={styles.qrModalContent}>
-            <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setSepayData(null)}>
-              <Icon name={Icons.close} size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-            
-            <View style={styles.qrHeaderIcon}>
-              <Icon name={Icons.qrCodeOutline} size={32} color={colors.primary} />
-            </View>
-            <AppText variant="h2" style={styles.qrTitle}>Quét mã thanh toán</AppText>
-            <AppText variant="body" color="textSecondary" style={styles.qrSubtitle}>
-              Mở ứng dụng ngân hàng và quét mã QR này. Hệ thống sẽ tự động cập nhật số dư.
-            </AppText>
-            
-            {sepayData && (
-              <View style={styles.qrBoxWrapper}>
-                <View style={styles.qrBox}>
-                  <Image
-                    source={{ uri: sepayData.qrCodeUrl }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.qrKeyboardWrap}
+          >
+            <ScrollView
+              contentContainerStyle={styles.qrScrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.qrModalContent}>
+                <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setSepayData(null)}>
+                  <Icon name={Icons.close} size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+
+                <View style={styles.qrHeaderIcon}>
+                  <Icon name={Icons.qrCodeOutline} size={32} color={colors.primary} />
+                </View>
+                <AppText variant="h2" style={styles.qrTitle}>Quét mã thanh toán</AppText>
+                <AppText variant="body" color="textSecondary" style={styles.qrSubtitle}>
+                  Mở ứng dụng ngân hàng và quét mã QR này. Hệ thống sẽ tự động cập nhật số dư.
+                </AppText>
+
+                {sepayData && (
+                  <View style={styles.qrBoxWrapper}>
+                    <View style={styles.qrBox}>
+                      <Image
+                        source={{ uri: sepayData.qrCodeUrl }}
+                        style={styles.qrImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.qrInfo}>
+                  <View style={styles.qrRow}>
+                    <AppText variant="body" color="textSecondary">Số tiền cần chuyển:</AppText>
+                    <AppText style={styles.qrAmount}>{sepayData ? formatCurrency(sepayData.amount) : ''}</AppText>
+                  </View>
+                </View>
+
+                {/* Confirm Transfer Button */}
+                <TouchableOpacity
+                  style={styles.confirmTransferBtn}
+                  onPress={handleConfirmTransfer}
+                  activeOpacity={0.8}
+                  disabled={checkingPayment}
+                >
+                  <LinearGradient
+                    colors={['#10B981', '#059669']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.confirmTransferGradient}
+                  >
+                    {checkingPayment ? (
+                      <>
+                        <Loading size="small" />
+                        <AppText style={styles.confirmTransferText}>Đang xác nhận...</AppText>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name={Icons.checkmarkCircle} size={20} color="#FFFFFF" />
+                        <AppText style={styles.confirmTransferText}>Đã chuyển khoản xong</AppText>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <View style={styles.qrLoadingBox}>
+                  <Loading size="small" />
+                  <AppText variant="caption" color="textTertiary" style={styles.qrWaitText}>
+                    Hệ thống đang tự động kiểm tra...
+                  </AppText>
                 </View>
               </View>
-            )}
-
-            <View style={styles.qrInfo}>
-              <View style={styles.qrRow}>
-                <AppText variant="body" color="textSecondary">Số tiền cần chuyển:</AppText>
-                <AppText style={styles.qrAmount}>{sepayData ? formatCurrency(sepayData.amount) : ''}</AppText>
-              </View>
-            </View>
-
-            <View style={styles.qrLoadingBox}>
-              <Loading size="small" />
-              <AppText variant="caption" color="primary" style={styles.qrWaitText}>
-                Đang chờ thanh toán thành công...
-              </AppText>
-            </View>
-          </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </ScreenContainer>
@@ -703,6 +998,127 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  txRight: {
+    alignItems: 'flex-end',
+  },
+  txArrowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 4,
+  },
+
+  // Transaction Detail Modal
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  detailCard: {
+    backgroundColor: colors.background,
+    width: '100%',
+    maxHeight: '85%',
+    borderRadius: 24,
+    padding: spacing.xl,
+    ...shadows.lg,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  detailHeaderTitle: {
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  detailHero: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  detailHeroIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  detailHeroAmount: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: spacing.xs,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xs,
+  },
+  statusPillText: {
+    color: '#065F46',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  detailBox: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    ...shadows.sm,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  detailRowVertical: {
+    paddingVertical: 8,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4,
+  },
+  copyIdBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${colors.primary}10`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  viewBookingBtn: {
+    width: '100%',
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.md,
+    shadowColor: '#059669',
+  },
+  viewBookingGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  viewBookingBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+    flex: 1,
+    textAlign: 'center',
+  },
 
   // Topup Modal
   modalOverlay: {
@@ -829,12 +1245,26 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  qrKeyboardWrap: {
+    flex: 1,
+    width: '100%',
+  },
+  qrScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    width: '100%',
+  },
   qrModalContent: {
     backgroundColor: colors.background,
-    width: width - spacing.xl * 2,
+    width: '100%',
+    maxWidth: 420,
     borderRadius: 28,
     padding: spacing.xl,
     alignItems: 'center',
+    alignSelf: 'center',
     position: 'relative',
     ...shadows.lg,
   },
@@ -873,6 +1303,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 24,
     marginBottom: spacing.xl,
+    alignSelf: 'center',
     ...shadows.sm,
   },
   qrBox: {
@@ -881,6 +1312,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: spacing.sm,
+    overflow: 'hidden',
   },
   qrImage: {
     width: '100%',
@@ -892,6 +1324,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     marginBottom: spacing.lg,
+    alignSelf: 'stretch',
   },
   qrRow: {
     flexDirection: 'row',
@@ -912,5 +1345,29 @@ const createStyles = (colors: any) => StyleSheet.create({
   qrWaitText: {
     fontWeight: '600',
     marginLeft: spacing.sm,
+  },
+
+  // Confirm Transfer Button
+  confirmTransferBtn: {
+    width: '100%',
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
+    alignSelf: 'stretch',
+    ...shadows.md,
+    shadowColor: '#059669',
+  },
+  confirmTransferGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: borderRadius.full,
+    gap: spacing.sm,
+  },
+  confirmTransferText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

@@ -335,6 +335,7 @@ exports.createBooking = async (data) => {
       packageName: pkg.name,
       startTime,
     });
+    sseService.sendToUser(String(userId), 'my_bookings_updated', { bookingId: booking._id });
 
     return booking;
   } catch (err) {
@@ -1048,7 +1049,7 @@ exports.getCancelPreview = async (id, userId) => {
   const [h, m] = booking.startTime.split(':').map(Number);
   bookingDateTime.setHours(h, m, 0, 0);
   const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
-  const isLateCancel = minutesBefore < 20;
+  const isLateCancel = minutesBefore <= 60; // Dưới hoặc bằng 1 tiếng
 
   let totalPaid = 0;
   let refundAmount = 0;
@@ -1068,12 +1069,12 @@ exports.getCancelPreview = async (id, userId) => {
           penaltyPercent = 30;
           penaltyAmount = Math.round(totalPaid * 0.3);
           refundAmount = totalPaid - penaltyAmount;
-          policy = `Hủy trong vòng 20 phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
+          policy = `Hủy trong vòng 1 tiếng trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
         } else {
           // Chỉ đặt cọc → mất hết tiền cọc
           penaltyAmount = totalPaid;
           refundAmount = 0;
-          policy = `Hủy trong vòng 20 phút trước giờ hẹn: mất toàn bộ tiền cọc ${totalPaid.toLocaleString('vi-VN')}₫.`;
+          policy = `Hủy trong vòng 1 tiếng trước giờ hẹn: mất toàn bộ tiền cọc ${totalPaid.toLocaleString('vi-VN')}₫.`;
         }
       } else {
         // Hủy sớm → hoàn 100%
@@ -1088,10 +1089,10 @@ exports.getCancelPreview = async (id, userId) => {
   let slotPackRefundInfo = null;
   if (booking.bookingType === 'slot_pack_usage') {
     const hoursBefore = minutesBefore / 60;
-    if (hoursBefore >= 24) {
-      slotPackRefundInfo = 'Hủy lịch hẹn trước 24h sẽ được hoàn lại 1 lượt vào gói.';
+    if (hoursBefore >= 1) {
+      slotPackRefundInfo = 'Hủy lịch hẹn sớm (trước 1h) sẽ được hoàn lại 1 lượt vào gói.';
     } else {
-      slotPackRefundInfo = 'Hủy lịch hẹn sát giờ (dưới 24h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.';
+      slotPackRefundInfo = 'Hủy lịch hẹn sát giờ (dưới 1h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.';
     }
     policy = slotPackRefundInfo;
   }
@@ -1169,21 +1170,21 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       let shouldRefundSlot = false;
       
       if (cancelledBy === 'customer') {
-        // Hủy đúng hạn >= 24h -> hoàn 1 lượt. Sát giờ -> mất lượt.
-        if (hoursBefore >= 24) {
+        // Hủy sớm >= 1h -> hoàn 1 lượt. Sát giờ < 1h -> mất lượt.
+        if (hoursBefore >= 1) {
           shouldRefundSlot = true;
         }
       } else {
-        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng 50 điểm đền bù
+        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng 500 điểm đền bù
         shouldRefundSlot = true;
         
-        // Tặng 50 điểm
+        // Tặng 500 điểm
         const User = mongoose.model('User');
         const PointHistory = mongoose.model('PointHistory');
-        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: 50, lifetimePoints: 50 } }, { session }).catch(() => {});
+        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: 500, lifetimePoints: 500 } }, { session }).catch(() => {});
         await PointHistory.create([{
           userId: booking.userId,
-          points: 50,
+          points: 500,
           type: 'earned',
           description: 'Hệ thống hủy lịch hẹn - Tặng điểm đền bù',
           bookingId: booking._id
@@ -1193,7 +1194,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
         notificationService.send(
           booking.userId,
           'Hệ thống hủy lịch hẹn',
-          'Lịch hẹn bằng gói lượt của bạn đã bị cửa hàng hủy. Bạn được hoàn lại 1 lượt vào gói và nhận 50 điểm đền bù.',
+          'Lịch hẹn bằng gói lượt của bạn đã bị cửa hàng hủy. Bạn được hoàn lại 1 lượt vào gói và nhận 500 điểm đền bù.',
           'booking_cancelled_system',
           { bookingId: booking._id }
         ).catch(() => {});
@@ -1209,14 +1210,69 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     }
 
     // ── Chính sách hoàn tiền ──
-    // > 20 phút trước giờ hẹn → hoàn 100%
-    // ≤ 20 phút (thanh toán full) → mất 30%, hoàn 70% vào ví
-    // ≤ 20 phút (chỉ cọc) → mất hết tiền cọc
     let refundAmount = 0;
     let refundStatus = 'none';
-    const isLateCancel = minutesBefore < 20;
+    const isLateCancel = minutesBefore <= 60;
 
-    if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
+    if (booking.bookingType === 'recurring') {
+      let groupDepositAmount = 0;
+      let recurringTotal = booking.recurringTotal || 1;
+      const firstBooking = booking.isRecurringFirst 
+          ? booking 
+          : await Booking.findOne({ recurringGroupId: booking.recurringGroupId, isRecurringFirst: true }).session(session);
+      
+      if (firstBooking) {
+        groupDepositAmount = firstBooking.depositAmount;
+        recurringTotal = firstBooking.recurringTotal || 1;
+      }
+      const depositShare = Math.round(groupDepositAmount / recurringTotal);
+
+      if (cancelledBy !== 'customer') {
+        refundAmount = depositShare;
+      } else {
+        if (isLateCancel) {
+          refundAmount = 0;
+        } else {
+          refundAmount = depositShare;
+        }
+      }
+
+      if (booking.isRecurringFirst) {
+        const nextBooking = await Booking.findOne({ 
+          recurringGroupId: booking.recurringGroupId, 
+          status: { $in: ['pending', 'confirmed'] },
+          _id: { $ne: id }
+        }).sort({ recurringPosition: 1 }).session(session);
+
+        if (nextBooking) {
+          nextBooking.isRecurringFirst = true;
+          nextBooking.depositAmount = Math.max(0, groupDepositAmount - depositShare);
+          nextBooking.paymentStatus = booking.paymentStatus;
+          await nextBooking.save({ session });
+
+          const payment = await Payment.findOne({ bookingId: id }).session(session);
+          if (payment) {
+            payment.bookingId = nextBooking._id;
+            await payment.save({ session });
+          }
+        } else {
+          if (refundAmount > 0) {
+            const payment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
+            if (payment) {
+              payment.status = 'refunded';
+              payment.refundedAt = new Date();
+              await payment.save({ session });
+            }
+          }
+        }
+      } else {
+        if (firstBooking && firstBooking._id.toString() !== id) {
+          firstBooking.depositAmount = Math.max(0, firstBooking.depositAmount - depositShare);
+          await firstBooking.save({ session });
+        }
+      }
+
+    } else if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
       const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
       
       if (paidPayment) {
@@ -1224,14 +1280,11 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
         if (isLateCancel) {
           if (booking.paymentStatus === 'paid') {
-            // Thanh toán full → mất 30%
             refundAmount = Math.round(totalPaid * 0.7);
           } else {
-            // Chỉ cọc → mất hết
             refundAmount = 0;
           }
         } else {
-          // Hủy sớm → hoàn 100%
           refundAmount = totalPaid;
         }
 
@@ -1962,31 +2015,105 @@ exports.checkRecurringConflicts = async (data) => {
  * Chỉ hủy những booking đang pending.
  */
 exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
-  const bookings = await Booking.find({
-    recurringGroupId,
-    status: 'pending',
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (bookings.length === 0) {
-    throw Object.assign(new Error('No pending bookings found for this recurring group'), { statusCode: 404, code: 'NOT_FOUND' });
+  try {
+    const bookings = await Booking.find({
+      recurringGroupId,
+      status: { $in: ['pending', 'confirmed'] },
+    }).session(session);
+
+    if (bookings.length === 0) {
+      throw Object.assign(new Error('No pending bookings found for this recurring group'), { statusCode: 404, code: 'NOT_FOUND' });
+    }
+
+    if (userRole === 'customer' && String(bookings[0].userId) !== String(userId)) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+
+    const firstBooking = await Booking.findOne({ recurringGroupId, isRecurringFirst: true }).session(session);
+    const recurringTotal = firstBooking ? (firstBooking.recurringTotal || 1) : 1;
+    const groupDepositAmount = firstBooking ? firstBooking.depositAmount : 0;
+    const depositShare = Math.round(groupDepositAmount / recurringTotal);
+
+    let totalRefundAmount = 0;
+    const now = new Date();
+    const cancelledBy = userRole === 'customer' ? 'customer' : userRole === 'admin' ? 'admin' : 'manager';
+
+    const results = [];
+    for (const b of bookings) {
+      const bookingDateTime = new Date(b.bookingDate);
+      const [h, m] = b.startTime.split(':').map(Number);
+      bookingDateTime.setHours(h, m, 0, 0);
+      const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
+      const isLateCancel = minutesBefore <= 60;
+
+      let refundAmountForThisBooking = 0;
+      if (cancelledBy !== 'customer') {
+        refundAmountForThisBooking = depositShare;
+      } else {
+        if (!isLateCancel) {
+          refundAmountForThisBooking = depositShare;
+        }
+      }
+
+      totalRefundAmount += refundAmountForThisBooking;
+
+      const updated = await Booking.findOneAndUpdate(
+        { _id: b._id, status: { $in: ['pending', 'confirmed'] } },
+        { 
+          status: 'cancelled', 
+          cancelledAt: new Date(), 
+          cancelledBy,
+          refundAmount: refundAmountForThisBooking,
+          paymentStatus: refundAmountForThisBooking > 0 ? 'refunded' : b.paymentStatus
+        },
+        { new: true, session }
+      );
+      if (updated) results.push(updated);
+    }
+
+    if (firstBooking) {
+       firstBooking.depositAmount = 0;
+       await firstBooking.save({ session });
+    }
+    
+    if (firstBooking) {
+      const payment = await mongoose.model('Payment').findOne({ bookingId: firstBooking._id, status: 'paid' }).session(session);
+      if (payment) {
+          payment.status = 'refunded';
+          payment.refundedAt = new Date();
+          await payment.save({ session });
+      }
+    }
+
+    if (totalRefundAmount > 0) {
+      const user = await mongoose.model('User').findById(bookings[0].userId).session(session);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + totalRefundAmount;
+        await user.save({ session });
+
+        await mongoose.model('WalletTransaction').create([{
+          userId: user._id,
+          amount: totalRefundAmount,
+          type: 'credit',
+          reason: `Hoàn tiền hủy nhóm lịch định kỳ #${recurringGroupId}`,
+          bookingId: bookings[0]._id,
+        }], { session });
+      }
+    }
+
+    await session.commitTransaction();
+    return { cancelled: results.length, total: bookings.length, totalRefundAmount };
+  } catch (err) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw err;
+  } finally {
+    session.endSession();
   }
-
-  // Validate ownership (nếu là customer)
-  if (userRole === 'customer' && String(bookings[0].userId) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
-  }
-
-  const results = await Promise.allSettled(
-    bookings.map((b) =>
-      Booking.findOneAndUpdate(
-        { _id: b._id, status: 'pending' },
-        { status: 'cancelled', cancelledAt: new Date(), cancelledBy: userRole }
-      )
-    )
-  );
-
-  const cancelled = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
-  return { cancelled: cancelled.length, total: bookings.length };
 };
 
 exports.getFeedbacks = async (user, filters = {}) => {
