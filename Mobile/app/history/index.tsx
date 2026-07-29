@@ -44,6 +44,8 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'cancelled', label: 'Đã hủy' },
 ];
 
+import { sseService } from '../../src/services/sse';
+
 export default function HistoryScreen() {
   const router = useRouter();
   const colors = useColors();
@@ -70,7 +72,16 @@ export default function HistoryScreen() {
 
   useEffect(() => {
     fetchBookings();
-  }, [fetchBookings]);
+    
+    if (isAuthenticated) {
+      const unsubMyBookings = sseService.subscribe('my_bookings_updated', fetchBookings);
+      const unsubBookingUpdate = sseService.subscribe('booking_update', fetchBookings);
+      return () => {
+        unsubMyBookings();
+        unsubBookingUpdate();
+      };
+    }
+  }, [fetchBookings, isAuthenticated]);
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);

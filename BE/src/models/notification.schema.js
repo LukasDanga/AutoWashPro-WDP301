@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema(
     message: { type: String, required: true, trim: true, maxlength: 1000 },
     type: {
       type: String,
-      enum: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_completed', 'booking_reminder', 'booking_at_risk', 'booking_grace_extended', 'payment_received', 'payment_confirmed', 'refund', 'voucher', 'system'],
+      enum: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_cancelled_system', 'booking_completed', 'booking_reminder', 'booking_at_risk', 'booking_grace_extended', 'payment_received', 'payment_confirmed', 'refund', 'voucher', 'system', 'profile_updated', 'vehicle_added', 'wallet_transaction'],
       required: true,
     },
     isRead: { type: Boolean, default: false },

@@ -104,9 +104,11 @@ export const createBankProvisional = async (
 export const createVnpayProvisional = async (
   amount: number,
   client?: string,
+  paymentType: string = 'deposit'
 ): Promise<{ paymentUrl: string; transactionId: string; payment: Payment }> => {
   const response = await apiClient.post('/bookings/vnpay-provisional', {
     amount,
+    paymentType,
     ...(client ? { client } : {}),
   });
   return response.data;

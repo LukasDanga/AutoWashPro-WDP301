@@ -43,6 +43,8 @@ import {
   type BookingStep,
   type VoucherState,
 } from '../../src/contexts/BookingContext';
+import sseService from '../../src/services/sse';
+import { SOCKET_EVENTS } from '../../src/utils/socketEvents';
 import { branchApi, packageApi, vehicleApi, bookingApi, slotPackApi } from '../../src/api';
 import {
   Text as AppText,
@@ -270,6 +272,17 @@ export default function BookingScreen() {
     };
   }, [isAuthenticated]);
 
+  // Real-time synchronization of vehicles
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsubscribe = sseService.subscribe(SOCKET_EVENTS.MY_VEHICLES_UPDATED, () => {
+      vehicleApi.getVehicles()
+        .then(res => setVehicles(res))
+        .catch(err => console.error('Error fetching vehicles from SSE sync:', err));
+    });
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
   // Deep-link prefill (rebook / quick-book from other screens).
   // Fresh-entry reset is handled separately by the focus effect below; this
   // effect only applies prefill when the caller passed explicit params.
@@ -323,8 +336,13 @@ export default function BookingScreen() {
     useCallback(() => {
       if (returningFromSubScreen.current) {
         returningFromSubScreen.current = false;
+        if (isAuthenticated) {
+          vehicleApi.getVehicles()
+            .then(res => setVehicles(res))
+            .catch(err => console.error('Error refreshing vehicles:', err));
+        }
       }
-    }, [])
+    }, [isAuthenticated])
   );
 
   // Packages shown in the package step — narrowed by branch availability.

@@ -202,6 +202,19 @@ router.patch('/:id/extend-grace', authenticate, authorize(ROLES.ADMIN, ROLES.MAN
 
 /**
  * @swagger
+ * /api/bookings/{id}/cancel-preview:
+ *   get:
+ *     summary: Preview refund/penalty before cancelling (customer)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/:id/cancel-preview', authenticate, authorize(ROLES.CUSTOMER), [
+  param('id').isMongoId(),
+], validate, bookingController.getCancelPreview);
+
+/**
+ * @swagger
  * /api/bookings/{id}/cancel-otp:
  *   post:
  *     summary: Request OTP for cancelling booking (customer)

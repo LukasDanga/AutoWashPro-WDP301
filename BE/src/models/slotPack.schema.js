@@ -67,6 +67,10 @@ const slotPackSchema = new mongoose.Schema(
     },
     refundAmount: { type: Number, default: 0 },
     paidAt: { type: Date },
+
+    // OTP xác nhận hủy gói
+    cancelOtpToken: { type: String },
+    cancelOtpExpires: { type: Date },
   },
   { timestamps: true }
 );

@@ -390,11 +390,11 @@ export default function HomeScreen() {
             onPress={() => router.push('/(tabs)/history')}
           />
           <QuickService
-            icon={Icons.qrCodeOutline}
-            label="Check-in QR"
+            icon={Icons.layersOutline}
+            label="Gói slot"
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
-            onPress={() => router.push('/checkin')}
+            onPress={() => router.push('/slot-packs')}
           />
           <QuickService
             icon={Icons.chatBot}

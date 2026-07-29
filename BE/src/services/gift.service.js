@@ -1,5 +1,6 @@
 const { Gift, User, Voucher } = require('../models');
 const mongoose = require('mongoose');
+const notificationService = require('./notification.service');
 
 exports.getPublicGifts = async () => {
   return Gift.find({ status: 'active' }).sort({ sortOrder: 1, createdAt: 1 });
@@ -92,6 +93,16 @@ exports.spinWheel = async (userId) => {
     }
 
     await session.commitTransaction();
+    
+    if (createdVoucher && selectedGift) {
+      notificationService.send(
+        userId, 
+        'Trúng thưởng vòng quay', 
+        `Chúc mừng! Bạn đã trúng ${selectedGift.name}. Voucher đã được thêm vào tài khoản của bạn.`, 
+        'spin_won', 
+        { giftId: selectedGift._id, voucherCode: createdVoucher.code }
+      ).catch(() => {});
+    }
     
     return {
       spinCount: user.spinCount,

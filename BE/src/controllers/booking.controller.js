@@ -94,6 +94,11 @@ exports.extendGracePeriod = catchAsync(async (req, res) => {
   success(res, booking, 'Đã gia hạn thời gian check-in cho đơn');
 });
 
+exports.getCancelPreview = catchAsync(async (req, res) => {
+  const preview = await bookingService.getCancelPreview(req.params.id, req.userId);
+  success(res, preview, 'Cancel preview');
+});
+
 exports.requestCancelOtp = catchAsync(async (req, res) => {
   const emailService = require('../services/email.service');
   const Booking = require('../models/booking.schema');

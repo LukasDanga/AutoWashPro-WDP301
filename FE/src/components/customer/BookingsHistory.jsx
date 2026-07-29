@@ -145,6 +145,7 @@ export default function BookingsHistory({ apiBase, token }) {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelStep, setCancelStep] = useState(1);
   const [cancelOtp, setCancelOtp] = useState('');
+  const [cancelPreview, setCancelPreview] = useState(null);
 
   // Refund request modal
   const [refundRequests, setRefundRequests] = useState([]);
@@ -323,7 +324,17 @@ export default function BookingsHistory({ apiBase, token }) {
     setCancelReason('');
     setCancelStep(1);
     setCancelOtp('');
+    setCancelPreview(null);
     setShowCancelConfirm(true);
+    try {
+      const res = await fetch(`${apiBase}/bookings/${id}/cancel-preview`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        setCancelPreview(payload?.data || null);
+      }
+    } catch (e) { /* ignore preview errors */ }
   }
 
   async function requestCancelOtp() {
@@ -373,7 +384,9 @@ export default function BookingsHistory({ apiBase, token }) {
       setCancelReason('');
       setCancelOtp('');
       setCancelStep(1);
-      showToast('Đã hủy lịch thành công');
+      setCancelPreview(null);
+      const refundAmount = updatedBooking?.refundAmount || 0;
+      showToast(refundAmount > 0 ? `Đã hủy lịch thành công. Hoàn ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.` : 'Đã hủy lịch thành công');
     } catch (e) {
       setCancelError(e.message);
     } finally {
@@ -1032,7 +1045,7 @@ export default function BookingsHistory({ apiBase, token }) {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); } }}>
+        }} onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null); } }}>
           <div style={{
             width: '100%', maxWidth: 380, background: '#fff', borderRadius: 20, overflow: 'hidden',
             boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
@@ -1050,6 +1063,30 @@ export default function BookingsHistory({ apiBase, token }) {
 
               {cancelStep === 1 ? (
                 <div style={{ textAlign: 'left', marginBottom: 16 }}>
+                  {cancelPreview && cancelPreview.totalPaid > 0 && (
+                    <div style={{
+                      marginBottom: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
+                      background: cancelPreview.isLateCancel ? '#fffbe6' : '#e6f4ea',
+                      border: cancelPreview.isLateCancel ? '1px solid #ffe58f' : '1px solid #b7eb8f',
+                      color: cancelPreview.isLateCancel ? '#873800' : '#135200'
+                    }}>
+                      {cancelPreview.isLateCancel ? (
+                        <>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Hủy sát giờ hẹn ({cancelPreview.minutesBefore} phút trước)</div>
+                          {cancelPreview.penaltyAmount > 0 && (
+                            <div style={{ color: '#cf1322', fontWeight: 600 }}>Phí phạt: -{cancelPreview.penaltyAmount.toLocaleString('vi-VN')}₫ ({cancelPreview.penaltyPercent}%)</div>
+                          )}
+                          {cancelPreview.refundAmount > 0 ? (
+                            <div style={{ color: '#389e0d', fontWeight: 600 }}>Hoàn lại vào ví: {cancelPreview.refundAmount.toLocaleString('vi-VN')}₫</div>
+                          ) : (
+                            <div style={{ color: '#cf1322', fontWeight: 600 }}>Mất toàn bộ tiền cọc — không hoàn lại.</div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ fontWeight: 700, color: '#389e0d' }}>✅ Hoàn lại 100% ({cancelPreview.totalPaid.toLocaleString('vi-VN')}₫) vào ví</div>
+                      )}
+                    </div>
+                  )}
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
                     Lý do hủy <span style={{ color: '#ef4444' }}>*</span>
                   </label>

@@ -129,6 +129,8 @@ export const Icons = {
   documentOutline: 'document-text-outline',
   statsChart: 'stats-chart',
   statsChartOutline: 'stats-chart-outline',
+  layers: 'layers',
+  layersOutline: 'layers-outline',
 
   // Security
   eye: 'eye',

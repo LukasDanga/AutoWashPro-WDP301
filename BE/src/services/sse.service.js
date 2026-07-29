@@ -19,24 +19,50 @@ function removeClient(userId, res) {
 }
 
 function sendToUser(userId, event, data) {
+  // 1. Send via SSE (for Web)
   const set = clients.get(String(userId));
-  if (!set || set.size === 0) return;
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of set) {
-    try { res.write(payload); } catch { /* client disconnected */ }
+  if (set && set.size > 0) {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of set) {
+      try { res.write(payload); } catch { /* client disconnected */ }
+    }
+  }
+  // 2. Send via Socket.io (for Mobile)
+  try {
+    const socket = require('./../socket');
+    socket.getIO().to(`user_${userId}`).emit(event, data);
+  } catch (err) {
+    // ignore if socket is not initialized
   }
 }
 
 function broadcastToManagers(branchId, event, data) {
+  // SSE
   emitter.emit('manager-event', { branchId: String(branchId), event, data });
+  // Socket.io
+  try {
+    const socket = require('./../socket');
+    socket.getIO().to(`branch_${branchId}`).emit(event, data);
+    socket.getIO().to('admin').emit(event, data);
+  } catch (err) {
+    // ignore
+  }
 }
 
 function broadcastToAll(event, data) {
+  // SSE
   const payload = `event: ${event}\ndata: ${JSON.stringify(data || {})}\n\n`;
   for (const set of clients.values()) {
     for (const res of set) {
       try { res.write(payload); } catch { /* client disconnected */ }
     }
+  }
+  // Socket.io
+  try {
+    const socket = require('./../socket');
+    socket.getIO().emit(event, data || {});
+  } catch (err) {
+    // ignore
   }
 }
 
