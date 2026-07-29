@@ -294,10 +294,11 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [packagesList, setPackagesList] = useState([]);
 
   useEffect(() => {
-    fetch(`${apiBase || API_BASE}/packages`)
+    fetch(`${apiBase || API_BASE}/packages?limit=all`)
       .then(res => res.json())
       .then(data => {
-        if (data.data) setPackagesList(data.data);
+        const pkgs = data.data?.data || data.data || (Array.isArray(data) ? data : []);
+        setPackagesList(Array.isArray(pkgs) ? pkgs : []);
       })
       .catch(err => console.error(err));
   }, [apiBase]);
@@ -336,6 +337,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [editingSubServices, setEditingSubServices] = useState(false);
   const [editedSubServiceNames, setEditedSubServiceNames] = useState([]);
   const [savingSubServices, setSavingSubServices] = useState(false);
+  const [refundConfirmData, setRefundConfirmData] = useState(null);
   const [addingService, setAddingService] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
   const [showQR, setShowQR] = useState(false);
@@ -427,6 +429,15 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       if (qbPollRef.current) clearInterval(qbPollRef.current);
     }
   }, [showQuickBookModal]);
+
+  // Reset editing subservices state whenever viewBooking modal closes or changes
+  useEffect(() => {
+    if (!viewBooking) {
+      setEditingSubServices(false);
+      setEditedSubServiceNames([]);
+      setSavingSubServices(false);
+    }
+  }, [viewBooking]);
 
   // Cleanup rebook poll khi modal đóng
   useEffect(() => {
@@ -627,6 +638,28 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
   function resetFilters() { setKeyword(''); setStatusFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setSort('-createdAt'); setPage(1); }
   function onFilterChange(setter, value) { setter(value); setPage(1); }
+
+  const handleDateFromChange = (val) => {
+    if (dateTo && val && val > dateTo) {
+      showToast('Ngày bắt đầu không được lớn hơn ngày kết thúc', 'error');
+      setDateFrom(val);
+      setDateTo(val);
+      setPage(1);
+      return;
+    }
+    onFilterChange(setDateFrom, val);
+  };
+
+  const handleDateToChange = (val) => {
+    if (dateFrom && val && val < dateFrom) {
+      showToast('Ngày kết thúc không được nhỏ hơn ngày bắt đầu', 'error');
+      setDateFrom(val);
+      setDateTo(val);
+      setPage(1);
+      return;
+    }
+    onFilterChange(setDateTo, val);
+  };
   function openReview(b) { setReviewTarget(b); setRating(b.rating || 0); setFeedbackText(b.feedback || ''); setShowReviewModal(true); }
 
   useEffect(() => {
@@ -1457,17 +1490,34 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const handleStartEditSubServices = (b) => {
     const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
     const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
-    const pkgObj = (pkgFromList && pkgFromList.subServices && pkgFromList.subServices.length > 0)
+    const pkgObj = (pkgFromList && Array.isArray(pkgFromList.subServices) && pkgFromList.subServices.length > 0)
       ? pkgFromList
-      : (typeof b.packageId === 'object' && b.packageId !== null ? b.packageId : pkgFromList);
+      : (typeof b.packageId === 'object' && b.packageId !== null && Array.isArray(b.packageId.subServices) && b.packageId.subServices.length > 0
+        ? b.packageId
+        : pkgFromList || (typeof b.packageId === 'object' ? b.packageId : null));
 
     const pkgSubs = pkgObj?.subServices || [];
+    const defaultIncludedSubs = pkgSubs.filter(s => {
+      const sOpt = typeof s === 'object' ? s?.isOptional : false;
+      const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
+      return sOpt === false || sOpt === undefined || sPrice === 0;
+    });
+    const defaultIncludedNames = defaultIncludedSubs.map(s => (typeof s === 'string' ? s : s?.name));
+    const selectedNames = Array.isArray(b.selectedSubServices)
+      ? b.selectedSubServices.map(x => (typeof x === 'string' ? x : x?.name))
+      : [];
+    const hasAnyIncludedInSelected = selectedNames.length > 0 && defaultIncludedNames.some(name => selectedNames.includes(name));
     const initialSelected = [];
 
     if (Array.isArray(pkgSubs)) {
       pkgSubs.forEach(s => {
-        if (s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price))) {
-          if (!initialSelected.includes(s.name)) initialSelected.push(s.name);
+        const sName = typeof s === 'string' ? s : s?.name;
+        const sOpt = typeof s === 'object' ? s?.isOptional : false;
+        const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
+        const isDefaultIncluded = sOpt === false || sOpt === undefined || sPrice === 0;
+        const isKept = !hasAnyIncludedInSelected || selectedNames.includes(sName);
+        if (sName && isDefaultIncluded && isKept && !initialSelected.includes(sName)) {
+          initialSelected.push(sName);
         }
       });
     }
@@ -1493,29 +1543,71 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     );
   };
 
-  const handleSaveSubServices = async (b) => {
+  const executeSaveSubServices = async (b, targetSubServices) => {
     const bId = b._id || b.id;
     setSavingSubServices(true);
     try {
       const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/sub-services`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ subServices: editedSubServiceNames })
+        body: JSON.stringify({ subServices: targetSubServices })
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || 'Lỗi khi cập nhật dịch vụ');
       }
-      showToast('Đã cập nhật dịch vụ thành công!', 'success');
+      
       const updated = data.data || data;
+      const refunded = data.refundAmount || (updated && updated.refundAmount) || 0;
+      
+      if (refunded > 0) {
+        showToast(`🎉 Đã cập nhật dịch vụ và hoàn ${formatCurrency(refunded)} vào Ví của bạn thành công!`, 'success');
+      } else {
+        showToast('Đã cập nhật dịch vụ thành công!', 'success');
+      }
+
       setViewBooking(updated);
       setEditingSubServices(false);
+      setRefundConfirmData(null);
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
       setSavingSubServices(false);
     }
+  };
+
+  const handleSaveSubServices = async (b) => {
+    const currentPaid = b.paymentStatus === 'paid'
+      ? (b.finalPrice || 0)
+      : (b.depositPaid || b.paymentStatus === 'deposit_paid' ? (b.depositAmount || 0) : 0);
+
+    const prevSubServices = Array.isArray(b.selectedSubServices) ? b.selectedSubServices : [];
+    const removedOptionalSubs = prevSubServices.filter(s => {
+      const name = typeof s === 'string' ? s : s?.name;
+      const isOpt = typeof s === 'object' ? s.isOptional !== false : true;
+      return isOpt && !editedSubServiceNames.includes(name);
+    });
+
+    const refundAmountPreview = removedOptionalSubs.reduce((sum, s) => {
+      const price = typeof s === 'object' ? (s.price || 0) : 0;
+      return sum + price;
+    }, 0);
+
+    const actualRefundAmount = Math.min(refundAmountPreview, currentPaid);
+
+    if (currentPaid > 0 && actualRefundAmount > 0) {
+      const canceledNames = removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name);
+      setRefundConfirmData({
+        booking: b,
+        refundAmount: actualRefundAmount,
+        canceledNames,
+        targetSubServices: editedSubServiceNames
+      });
+      return;
+    }
+
+    await executeSaveSubServices(b, editedSubServiceNames);
   };
 
 
@@ -1738,7 +1830,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-bold text-emerald-600">{formatCurrency(b.finalPrice)}</span>
-                              {b.paymentStatus === 'paid' ? (
+                              {(b.paymentStatus === 'paid' || (b.depositAmount > 0 && b.depositAmount >= (b.finalPrice || 0))) ? (
                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200">
                                   Đã thanh toán 100%
                                 </span>
@@ -1931,10 +2023,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Khoảng ngày hẹn</label>
                     <div className="flex items-center gap-1.5">
-                      <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom, e.target.value)}
+                      <input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => handleDateFromChange(e.target.value)}
                         className="flex-1 min-w-0 h-9 rounded-xl border border-slate-200 px-2 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer" />
                       <span className="text-slate-300 text-[10px] font-bold shrink-0">đến</span>
-                      <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo, e.target.value)}
+                      <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => handleDateToChange(e.target.value)}
                         className="flex-1 min-w-0 h-9 rounded-xl border border-slate-200 px-2 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer" />
                     </div>
                   </div>
@@ -2094,7 +2186,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-lg font-black text-slate-900">{formatCurrency(b.finalPrice)}</p>
-                            {b.paymentStatus === 'paid' ? (
+                            {(b.paymentStatus === 'paid' || (b.depositAmount > 0 && b.depositAmount >= (b.finalPrice || 0))) ? (
                               <span className="inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-600 border-emerald-200">
                                 Đã thanh toán 100%
                               </span>
@@ -2111,13 +2203,32 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           {b.startTime && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg><span className="font-semibold text-slate-800">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span></span>}
                           {b.bookingCode && <span className="font-mono text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">#{b.bookingCode}</span>}
                           {b.recurringGroupId && <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
-                          {b.selectedSubServices && b.selectedSubServices.length > 0 && b.selectedSubServices.map((sub, idx) => (
-                            <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(b, sub.name); }} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 cursor-pointer">
-                              <span className="font-bold text-[11px] group-hover:hidden">+</span>
-                              <span className="font-bold text-[11px] hidden group-hover:inline">-</span>
-                              <span className="text-[11px] font-bold">{sub.name}</span>
-                            </div>
-                          ))}
+                          {b.selectedSubServices && b.selectedSubServices.length > 0 && (() => {
+                            const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
+                            const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
+                            const pkgSubs = Array.isArray(pkgFromList?.subServices) ? pkgFromList.subServices : (Array.isArray(b.packageId?.subServices) ? b.packageId.subServices : []);
+
+                            return b.selectedSubServices.map((sub, idx) => {
+                              const sName = typeof sub === 'string' ? sub : sub?.name;
+                              if (!sName) return null;
+                              const matchingSub = pkgSubs.find(x => (x.name || x) === sName);
+                              
+                              const sOpt = typeof sub === 'object' && sub.isOptional !== undefined ? sub.isOptional : (matchingSub ? matchingSub.isOptional : false);
+                              const sPrice = typeof sub === 'object' && sub.price !== undefined ? sub.price : (matchingSub ? matchingSub.price : 0);
+                              const isExtra = sOpt === true || sPrice > 0;
+
+                              return (
+                                <span key={idx} className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold border ${
+                                  isExtra 
+                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}>
+                                  <span className="font-bold text-[11px]">{isExtra ? '+' : '✓'}</span>
+                                  <span>{sName}</span>
+                                </span>
+                              );
+                            });
+                          })()}
                           {hasReview && <span className="text-amber-500 font-medium">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
                         </div>
                           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 pl-3">
@@ -2621,7 +2732,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               </div>
               {(() => {
                 const totalVal = b.finalPrice || b.totalAmount || 0;
-                const isFullyPaid = b.paymentStatus === 'paid';
+                const isFullyPaid = b.paymentStatus === 'paid' || (b.depositAmount > 0 && b.depositAmount >= totalVal);
                 const isDepositPaid = b.paymentStatus === 'deposit_paid' || b.depositPaid;
                 const paidVal = isFullyPaid ? totalVal : (isDepositPaid ? (b.depositAmount || 0) : 0);
                 const remainingVal = Math.max(0, totalVal - paidVal);
@@ -2678,47 +2789,73 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {(() => {
                 const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
                 const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
-                const pkgObj = (pkgFromList && pkgFromList.subServices && pkgFromList.subServices.length > 0)
+                const pkgObj = (pkgFromList && Array.isArray(pkgFromList.subServices) && pkgFromList.subServices.length > 0)
                   ? pkgFromList
-                  : (typeof b.packageId === 'object' && b.packageId !== null ? b.packageId : pkgFromList);
+                  : (typeof b.packageId === 'object' && b.packageId !== null && Array.isArray(b.packageId.subServices) && b.packageId.subServices.length > 0
+                    ? b.packageId
+                    : pkgFromList || (typeof b.packageId === 'object' ? b.packageId : null));
 
-                const pkgSubs = pkgObj?.subServices || [];
+                const pkgSubs = Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
                 const canEdit = b.status === 'pending';
 
-                // Normal view lists
+                // Get default included subservices for this package
+                const defaultIncludedSubs = pkgSubs.filter(s => {
+                  const sOpt = typeof s === 'object' ? s?.isOptional : false;
+                  const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
+                  return sOpt === false || sOpt === undefined || sPrice === 0;
+                });
+
+                const defaultIncludedNames = defaultIncludedSubs.map(s => (typeof s === 'string' ? s : s?.name));
+
+                // Check selectedSubServices on booking
+                const hasSelectedArr = Array.isArray(b.selectedSubServices) && b.selectedSubServices.length > 0;
+                const selectedNames = hasSelectedArr
+                  ? b.selectedSubServices.map(x => (typeof x === 'string' ? x : x?.name))
+                  : [];
+
+                // Check if the booking's selectedSubServices explicitly contains any default included subservices
+                const hasAnyIncludedInSelected = hasSelectedArr && defaultIncludedNames.some(name => selectedNames.includes(name));
+
+                // Build includedList:
                 const includedList = [];
-                if (Array.isArray(pkgSubs)) {
-                  pkgSubs.forEach(s => {
-                    if (s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price))) {
-                      if (!includedList.some(item => item.name === s.name)) {
-                        includedList.push(s);
-                      }
+
+                if (defaultIncludedSubs.length > 0) {
+                  defaultIncludedSubs.forEach(s => {
+                    const sName = typeof s === 'string' ? s : s?.name;
+                    // If booking explicitly has included subservices in selectedSubServices, only include those that were kept.
+                    // Otherwise (initial booking with only extra services or no subservices specified), include all default package included subservices!
+                    const isKept = !hasAnyIncludedInSelected || selectedNames.includes(sName);
+                    if (sName && isKept && !includedList.some(item => (item.name || item) === sName)) {
+                      includedList.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
                     }
                   });
                 }
 
-                if (Array.isArray(b.selectedSubServices)) {
+                // Fallback: If pkgSubs had no default included subservices, check selectedSubServices
+                if (hasSelectedArr && includedList.length === 0) {
                   b.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s.name;
-                    const sPrice = typeof s === 'object' ? s.price : 0;
-                    const sOpt = typeof s === 'object' ? s.isOptional : undefined;
+                    const sName = typeof s === 'string' ? s : s?.name;
+                    const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
+                    const sOpt = typeof s === 'object' ? s?.isOptional : undefined;
                     
-                    if (sOpt === false || (sOpt === undefined && (sPrice === 0 || !sPrice))) {
-                      if (!includedList.some(item => item.name === sName)) {
-                        includedList.push({ name: sName, price: sPrice });
+                    if (sOpt === false || (sOpt === undefined && sPrice === 0)) {
+                      if (sName && !includedList.some(item => (item.name || item) === sName)) {
+                        includedList.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
                       }
                     }
                   });
                 }
 
+                // Build extraList (optional subservices selected for this booking)
                 const extraList = [];
-                if (Array.isArray(b.selectedSubServices)) {
+                if (hasSelectedArr) {
                   b.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s.name;
-                    const isInc = includedList.some(inc => inc.name === sName);
-                    if (!isInc) {
-                      if (!extraList.some(item => item.name === sName)) {
-                        extraList.push(typeof s === 'object' ? s : { name: s });
+                    const sName = typeof s === 'string' ? s : s?.name;
+                    const isInc = includedList.some(inc => (inc.name || inc) === sName);
+                    if (!isInc && sName) {
+                      if (!extraList.some(item => (item.name || item) === sName)) {
+                        const fullSub = pkgSubs.find(x => (x.name || x) === sName);
+                        extraList.push(fullSub || (typeof s === 'object' ? s : { name: sName }));
                       }
                     }
                   });
@@ -2726,19 +2863,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
                 // Edit mode items calculation: strictly gather subservices belonging to THIS booked package
                 const allAvailableSubs = [];
-
-                if (pkgObj && Array.isArray(pkgObj.subServices)) {
-                  pkgObj.subServices.forEach(s => {
-                    if (!allAvailableSubs.some(x => x.name === s.name)) {
-                      allAvailableSubs.push(s);
+                if (pkgSubs.length > 0) {
+                  pkgSubs.forEach(s => {
+                    const sName = typeof s === 'string' ? s : s?.name;
+                    if (sName && !allAvailableSubs.some(x => (x.name || x) === sName)) {
+                      allAvailableSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
                     }
                   });
                 }
 
                 if (Array.isArray(b.selectedSubServices)) {
                   b.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s.name;
-                    if (sName && !allAvailableSubs.some(x => x.name === sName)) {
+                    const sName = typeof s === 'string' ? s : s?.name;
+                    if (sName && !allAvailableSubs.some(x => (x.name || x) === sName)) {
                       allAvailableSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: true });
                     }
                   });
@@ -3336,6 +3473,61 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
           </div>
         </div>
       )}
+      {/* Refund Confirm Modal for Sub-services Cancellation */}
+      {refundConfirmData && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative border border-emerald-100 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center text-2xl mb-3 mx-auto">
+              💡
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 text-center mb-1">
+              Xác nhận hủy dịch vụ & hoàn tiền vào Ví
+            </h3>
+            <p className="text-xs text-slate-500 text-center mb-4">
+              Mã đơn: <span className="font-bold text-slate-700">#{refundConfirmData.booking.bookingCode || refundConfirmData.booking._id?.slice(-6).toUpperCase()}</span>
+            </p>
+            
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-4 mb-4 space-y-2 text-xs">
+              <div className="text-slate-600 font-medium">
+                Bạn đã bỏ chọn dịch vụ chọn thêm:
+              </div>
+              <div className="font-bold text-emerald-800 bg-white/90 p-2.5 rounded-lg border border-emerald-100/80 leading-relaxed">
+                {refundConfirmData.canceledNames.map(n => `• ${String(n).replace(/^\+\s*/, '')}`).join('\n')}
+              </div>
+              <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-sm">
+                <span className="font-medium text-slate-700">Số tiền hoàn về Ví:</span>
+                <span className="font-black text-emerald-600 text-base">
+                  +{formatCurrency(refundConfirmData.refundAmount)}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 text-center mb-6 leading-relaxed">
+              Số tiền trên sẽ được tự động hoàn trực tiếp vào <b>Ví AutoWash Pro</b> của bạn ngay khi bấm xác nhận. Trạng thái thanh toán và tiền cọc cũng sẽ được cập nhật chính xác.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setRefundConfirmData(null)}
+                disabled={savingSubServices}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors"
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                onClick={() => executeSaveSubServices(refundConfirmData.booking, refundConfirmData.targetSubServices)}
+                disabled={savingSubServices}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition-colors shadow-sm flex items-center justify-center gap-1.5"
+              >
+                {savingSubServices ? 'Đang xử lý...' : 'Xác nhận & Hoàn tiền'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Refund Request Modal */}
       {showRefundModal && refundTarget && (
         <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
