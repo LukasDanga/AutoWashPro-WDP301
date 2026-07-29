@@ -239,6 +239,7 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                         {booking?.bookingDate ? formatDate(booking.bookingDate) : ''}
                         {booking?.startTime ? ` ${booking.startTime}` : ''}
                         {p.method && ` · ${METHOD_MAP[p.method] || p.method}`}
+                        {booking?.bookingCode && <span className="font-mono font-bold text-emerald-600"> · #{booking.bookingCode}</span>}
                       </p>
                       {p.paymentType === 'deposit' && booking?.finalPrice && (
                         <p className="text-xs text-amber-600 font-semibold mt-1.5">
@@ -347,6 +348,10 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Dịch vụ</span>
                       <span className="text-sm text-slate-700 text-right">{detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5">
+                      <span className="text-xs text-slate-500">Mã đơn</span>
+                      <span className="text-sm font-mono font-bold text-emerald-700">#{detailPayment.bookingId.bookingCode || '—'}</span>
                     </div>
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Ngày</span>
