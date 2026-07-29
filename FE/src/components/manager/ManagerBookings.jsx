@@ -34,6 +34,10 @@ import {
   Lock,
   Wallet,
   Bank,
+  User,
+  MapPin,
+  NotePencil,
+  ArrowRight,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
 import TierBadge from '@/components/ui/TierBadge';
@@ -354,7 +358,6 @@ function RebookModal({ booking, onClose, onRebooked, notify }) {
 function getQrMode(b) {
   if (!b) return null;
   if (b.status === 'confirmed') return 'active';
-  if (['checked_in', 'in_progress', 'completed'].includes(b.status)) return 'checked_in';
   if (b.status === 'cancelled' && b.cancelledBy === 'system') return 'expired';
   return null;
 }
@@ -454,9 +457,11 @@ function QRDisplayModal({ booking, onClose }) {
   );
 }
 
+/* ── helpers ── */
+const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+
 /* ── print receipt modal ── */
 function PrintReceiptModal({ booking, onClose }) {
-  const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   const formatDate = (dateString) => { const d = new Date(dateString); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
 
   const detailBooking = booking;
@@ -713,80 +718,91 @@ function PrintReceiptModal({ booking, onClose }) {
 }
 function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
-  const [showAddService, setShowAddService] = useState(false);
-  const [availableSubServices, setAvailableSubServices] = useState([]);
-  const [selectedNewSubs, setSelectedNewSubs] = useState([]);
-  const [addingService, setAddingService] = useState(false);
 
-  const handleOpenAddService = async () => {
-    setShowAddService(true);
-    setAvailableSubServices([]);
-    setSelectedNewSubs([]);
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/packages`);
-      if (res.ok) {
-        const data = await res.json();
-        const allPackages = data.data || [];
-        const currentPackage = allPackages.find(p => p._id === (booking.packageId?._id || booking.packageId));
-        const allSubs = [];
-        if (currentPackage && currentPackage.subServices) {
-          currentPackage.subServices.forEach(s => {
-            if (s.isOptional !== false && s.price > 0 && !allSubs.some(x => x.name === s.name)) {
-              allSubs.push(s);
-            }
-          });
-        }
-        setAvailableSubServices(allSubs);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+  const handleStartEditSubServices = () => {
+    const current = (booking.selectedSubServices || []).map(s => s.name || s);
+    const included = Array.isArray(booking.packageId?.subServices)
+      ? booking.packageId.subServices.filter(s => s.isOptional === false).map(s => s.name)
+      : [];
+    setEditedSubServiceNames([...new Set([...included, ...current])]);
+    setEditingSubServices(true);
   };
 
-  const submitAddServices = async () => {
-    if (selectedNewSubs.length === 0 || !booking) return;
-    setAddingService(true);
+  const handleToggleSubService = (name) => {
+    setEditedSubServiceNames(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+  };
+
+  const executeSaveSubServices = async (targetNames) => {
+    setSavingSubServices(true);
     try {
-      const bId = booking._id || booking.id;
-      const updatedSubs = [...(booking.selectedSubServices || []), ...selectedNewSubs].map(s => s.name || s);
-      const res = await api(`/bookings/${bId}/sub-services`, {
+      const res = await api(`/bookings/${booking._id}/sub-services`, {
         method: 'PATCH',
-        body: JSON.stringify({ subServices: updatedSubs }),
+        body: JSON.stringify({ subServices: targetNames }),
       });
       if (!res.ok) throw new Error(await readErr(res));
-      const payload = await res.json();
-      notify('Đã thêm dịch vụ thành công!', 'success');
-      setShowAddService(false);
-      setSelectedNewSubs([]);
-      onUpdated(payload?.data || payload);
+      const data = await res.json();
+      const updated = data?.data || data;
+      const refunded = data.refundAmount || (updated && updated.refundAmount) || 0;
+      if (refunded > 0) {
+        notify(`Đã hoàn ${formatCurrency(refunded)} vào ví khách hàng!`, 'success');
+      } else {
+        notify('Đã cập nhật dịch vụ thành công!', 'success');
+      }
+      setEditingSubServices(false);
+      setRefundConfirmData(null);
+      onUpdated(updated);
     } catch (err) {
       notify(err.message, 'error');
     } finally {
-      setAddingService(false);
+      setSavingSubServices(false);
     }
   };
 
-  const handleRemoveSubService = async (b, subName) => {
-    try {
-      const bId = b._id || b.id;
-      const updatedSubs = (b.selectedSubServices || []).filter(s => s.name !== subName).map(s => s.name || s);
-      const res = await api(`/bookings/${bId}/sub-services`, {
-        method: 'PATCH',
-        body: JSON.stringify({ subServices: updatedSubs }),
+  const handleSaveSubServices = () => {
+    const currentPaid = booking.paymentStatus === 'paid'
+      ? (booking.finalPrice || 0)
+      : (booking.depositPaid || booking.paymentStatus === 'deposit_paid' ? (booking.depositAmount || 0) : 0);
+
+    const prevSubServices = Array.isArray(booking.selectedSubServices) ? booking.selectedSubServices : [];
+    const removedOptionalSubs = prevSubServices.filter(s => {
+      const name = typeof s === 'string' ? s : s?.name;
+      const isOpt = typeof s === 'object' ? s.isOptional !== false : true;
+      return isOpt && !editedSubServiceNames.includes(name);
+    });
+
+    const refundAmountPreview = removedOptionalSubs.reduce((sum, s) => {
+      const price = typeof s === 'object' ? (s.price || 0) : 0;
+      return sum + price;
+    }, 0);
+
+    const actualRefundAmount = Math.min(refundAmountPreview, currentPaid);
+
+    if (currentPaid > 0 && actualRefundAmount > 0) {
+      setRefundConfirmData({
+        refundAmount: actualRefundAmount,
+        canceledNames: removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name),
+        targetSubServices: editedSubServiceNames,
       });
-      if (!res.ok) throw new Error(await readErr(res));
-      const payload = await res.json();
-      notify('Đã xóa dịch vụ thành công!', 'success');
-      onUpdated(payload?.data || payload);
-    } catch (err) {
-      notify(err.message, 'error');
+      return;
     }
+
+    executeSaveSubServices(editedSubServiceNames);
   };
 
   const [showQR, setShowQR] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
   const [confirmCash, setConfirmCash] = useState(false);
   const [managerPayMethod, setManagerPayMethod] = useState(null);
+  const [showPaymentQR, setShowPaymentQR] = useState(false);
+  const [paymentQRData, setPaymentQRData] = useState(null);
+  const [editingSubServices, setEditingSubServices] = useState(false);
+  const [editedSubServiceNames, setEditedSubServiceNames] = useState([]);
+  const [refundConfirmData, setRefundConfirmData] = useState(null);
+  const [savingSubServices, setSavingSubServices] = useState(false);
+  const [qrPaymentStatus, setQrPaymentStatus] = useState('loading');
+  const [qrPollCount, setQrPollCount] = useState(0);
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
     { id: 'confirmed', label: 'Đã xác nhận' },
@@ -837,204 +853,398 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
     } finally { setBusy(false); }
   };
 
-  return (
-    <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-      <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
-        <ArrowLeft size={16} /> Quay lại danh sách
-      </button>
+  const handlePaymentClick = async () => {
+    if (!managerPayMethod) { notify('Vui lòng chọn phương thức thanh toán', 'warning'); return; }
+    if (managerPayMethod === 'cash') { setConfirmCash(true); return; }
+    setBusy(true);
+    try {
+      if (managerPayMethod === 'bank') {
+        const res = await api('/payments', {
+          method: 'POST',
+          body: JSON.stringify({ bookingId: booking._id, method: 'bank', paymentType: booking.depositPaid ? 'remaining' : 'full' }),
+        });
+        if (!res.ok) throw new Error(await readErr(res));
+        const data = await res.json();
+        const payment = data?.data || data;
+        setPaymentQRData(payment);
+        setQrPaymentStatus('pending');
+        setQrPollCount(0);
+        setShowPaymentQR(true);
+      }
+    } catch (err) {
+      notify(err.message || 'Lỗi tạo thanh toán', 'error');
+    } finally { setBusy(false); }
+  };
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-          <h2 className="text-lg font-bold text-slate-800">Chi tiết đơn đặt lịch <span className="text-blue-600 font-mono text-base">#{booking._id.substring(18).toUpperCase()}</span></h2>
+  const checkQrPaymentStatus = useCallback(async () => {
+    if (!showPaymentQR || !paymentQRData) return;
+    try {
+      const targetUrl = `/payments/${paymentQRData._id || paymentQRData.id}`;
+      const res = await api(targetUrl);
+      if (!res.ok) return;
+      const data = await res.json();
+      const p = data?.data || data;
+      if (p?.status === 'paid') {
+        setQrPaymentStatus('paid');
+        onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: 'bank' });
+        notify('Đã phát hiện thanh toán!', 'success');
+        setTimeout(() => { setShowPaymentQR(false); setPaymentQRData(null); }, 1200);
+      }
+      setQrPollCount(c => c + 1);
+    } catch (e) { /* ignore */ }
+  }, [showPaymentQR, paymentQRData, booking, onUpdated]);
+
+  useEffect(() => {
+    if (!showPaymentQR || qrPaymentStatus !== 'pending') return;
+    const interval = setInterval(checkQrPaymentStatus, 10000);
+    return () => clearInterval(interval);
+  }, [showPaymentQR, qrPaymentStatus, checkQrPaymentStatus]);
+
+  const renderQrButton = () => {
+    const m = getQrMode(booking);
+    if (!m) return null;
+    const label = m === 'active' ? 'Hiển thị QR cho khách'
+      : m === 'checked_in' ? 'Xem QR (đã check-in)' : 'Xem QR (hết hạn)';
+    const cls = m === 'active' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+      : m === 'checked_in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+      : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
+    return (
+      <div className="mt-4 flex items-center gap-2">
+        <button onClick={() => setShowQR(true)}
+          className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${cls}`}>
+          <QrCode size={15} />
+          {label}
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-12">
+      {/* Top Bar Navigation & Quick Actions */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 px-3.5 py-2 rounded-xl transition-all"
+        >
+          <ArrowLeft size={16} /> Quay lại danh sách
+        </button>
+
+        <div className="flex items-center gap-3">
+        </div>
+      </div>
+
+      {/* Main Order Header Banner */}
+      <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm relative overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-black tracking-tight text-slate-900">
+                Đơn đặt lịch <span className="font-mono text-emerald-600">#{booking.bookingCode || (booking._id ? booking._id.substring(18).toUpperCase() : '—')}</span>
+              </h2>
+              {booking.bookingType === 'recurring' && (
+                <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                  <ArrowClockwise size={12} weight="bold" /> Đặt định kỳ
+                </span>
+              )}
+              {booking.bookingType === 'slot_pack_usage' && (
+                <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                  <Package size={12} weight="bold" /> Dùng gói lượt
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+              <span>Khung giờ: <strong className="text-slate-800 font-semibold">{booking.startTime}{booking.endTime ? ` - ${booking.endTime}` : ''}</strong></span>
+              <span>•</span>
+              <span>Ngày: <strong className="text-slate-800 font-semibold">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')}</strong></span>
+            </p>
+          </div>
           <StatusBadge status={booking.status} />
         </div>
-        
-        {/* Stages Tracking */}
+
+        {/* Visual Workflow Stepper Bar */}
         {booking.status !== 'cancelled' ? (
-          <div className="mb-10 mt-6 relative px-8">
-            <div className="absolute top-1/2 left-10 right-10 h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
-            <div className="relative flex justify-between">
-              {stages.map((stage, idx) => {
-                const isPast = currentStageIndex > idx || booking.status === 'completed';
-                const isCurrent = currentStageIndex === idx;
-                const Icon = isPast ? CheckCircle : isCurrent ? PlayCircle : CircleDashed;
-                const color = isPast ? 'text-emerald-500 bg-emerald-50' : isCurrent ? 'text-blue-500 bg-blue-50 ring-4 ring-blue-100' : 'text-slate-300 bg-white';
-                
-                return (
-                  <div key={stage.id} className="flex flex-col items-center gap-2 bg-white px-4 z-10 min-w-[120px]">
-                    <div className={`rounded-full p-1.5 ${color} transition-all duration-300`}>
-                      <Icon size={24} weight={isPast ? 'fill' : isCurrent ? 'duotone' : 'regular'} />
+          <div className="mt-8 mb-4">
+            <div className="relative px-2 sm:px-6">
+              {/* Connector line */}
+              <div className="absolute top-6 left-8 right-8 h-1 bg-slate-100 -translate-y-1/2 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-600 transition-all duration-500"
+                  style={{
+                    width: `${(currentStageIndex / (stages.length - 1)) * 100}%`
+                  }}
+                />
+              </div>
+
+              <div className="relative flex justify-between">
+                {stages.map((stage, idx) => {
+                  const isPast = currentStageIndex > idx || booking.status === 'completed';
+                  const isCurrent = currentStageIndex === idx;
+                  const Icon = isPast ? CheckCircle : isCurrent ? PlayCircle : CircleDashed;
+
+                  return (
+                    <div key={stage.id} className="flex flex-col items-center group">
+                      <div
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 z-10 ${
+                          isPast
+                            ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 ring-4 ring-white'
+                            : isCurrent
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-300 ring-4 ring-blue-100 animate-pulse'
+                            : 'bg-white text-slate-300 border-2 border-slate-200'
+                        }`}
+                      >
+                        <Icon size={22} weight={isPast ? 'fill' : isCurrent ? 'duotone' : 'regular'} />
+                      </div>
+                      <span
+                        className={`text-xs font-bold mt-2.5 transition-colors text-center ${
+                          isCurrent ? 'text-blue-700 font-extrabold' : isPast ? 'text-emerald-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {stage.label}
+                      </span>
+
+                      {/* Next action button rendered directly under current stage */}
+                      {isCurrent && stage.id !== 'completed' && (
+                        <button
+                          disabled={busy}
+                          onClick={() => updateStatus(stages[idx + 1].id)}
+                          className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:shadow-lg hover:brightness-105 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                        >
+                          {busy ? 'Đang cập nhật...' : (STAGE_ACTION[stages[idx + 1].id] || `Chuyển sang ${stages[idx + 1].label}`)}
+                          <ArrowRight size={14} weight="bold" />
+                        </button>
+                      )}
                     </div>
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isCurrent ? 'text-blue-600' : isPast ? 'text-emerald-600' : 'text-slate-400'}`}>
-                      {stage.label}
-                    </span>
-                    {isCurrent && stage.id !== 'completed' && (
-                      <button disabled={busy} onClick={() => updateStatus(stages[idx + 1].id)}
-                        className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 hover:shadow disabled:opacity-50 transition-all">
-                        {busy ? 'Đang cập nhật...' : (STAGE_ACTION[stages[idx + 1].id] || `Chuyển sang ${stages[idx + 1].label}`)}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
-          <div className="mb-8 rounded-xl bg-rose-50 p-4 border border-rose-100 text-rose-700 flex items-center gap-2">
-            <XCircle size={20} weight="fill" />
-            <span className="text-sm font-medium">Đơn đặt lịch này đã bị hủy.</span>
+          <div className="mt-6 rounded-2xl bg-rose-50/80 p-4 border border-rose-200/80 text-rose-800 flex items-center gap-3">
+            <XCircle size={24} weight="fill" className="text-rose-500 shrink-0" />
+            <div>
+              <p className="text-sm font-bold">Đơn đặt lịch này đã bị hủy</p>
+              {booking.cancellationReason && (
+                <p className="text-xs text-rose-600 mt-0.5">Lý do: {booking.cancellationReason}</p>
+              )}
+            </div>
           </div>
         )}
+      </div>
 
-        {/* Details Grid */}
-        <div className="grid grid-cols-2 gap-6 rounded-xl bg-slate-50 p-5 border border-slate-100">
-          <div>
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Khách hàng</h3>
-            <div className="flex items-center gap-2 mb-0.5">
-              <p className="font-medium text-slate-800">{booking.userId?.name || '—'}</p>
-              {booking.userId?.tier && <TierBadge tier={booking.userId.tier} />}
+      {/* 4 Cards Modular Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* CARD 1: KHÁCH HÀNG & PHƯƠNG TIỆN */}
+        <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <User size={16} className="text-emerald-600" /> Thông tin khách hàng & Xe
+            </h3>
+            {booking.userId?.tier && <TierBadge tier={booking.userId.tier} />}
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-base font-bold text-slate-900">{booking.userId?.name || 'Khách vãng lai'}</p>
+                <p className="text-sm text-slate-600 font-medium">{booking.userId?.phone || 'Chưa có SĐT'}</p>
+                {booking.userId?.email && <p className="text-xs text-slate-400">{booking.userId.email}</p>}
+              </div>
             </div>
-            <p className="text-sm text-slate-600">{booking.userId?.phone || '—'}</p>
-            <p className="text-xs text-slate-500 mt-1">{booking.userId?.email || ''}</p>
+
+            {/* License Plate & Vehicle Specs */}
             {(booking.vehiclePlate || booking.vehicleId?.licensePlate) && (
-              <div className="mt-2 flex flex-col items-start gap-1.5">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
-                  <span>Biển số:</span>
-                  <span className="font-mono text-blue-700">{booking.vehiclePlate || booking.vehicleId?.licensePlate}</span>
+              <div className="mt-4 pt-3 border-t border-slate-100 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                    <Car size={15} className="text-slate-600" /> Biển số xe:
+                  </span>
+                  <div className="px-3.5 py-1 rounded-lg bg-white border-2 border-slate-900 shadow-2xs font-mono font-black text-sm tracking-wider text-slate-900 text-center">
+                    {booking.vehiclePlate || booking.vehicleId?.licensePlate}
+                  </div>
                 </div>
+
                 {booking.vehicleId?.vehicleType && (
-                  <div className="inline-flex text-[11px] text-slate-600 font-medium px-2 py-0.5 bg-slate-50 border border-slate-200 rounded">
-                    Loại xe: <span className="ml-1 text-slate-800 capitalize">{booking.vehicleId.vehicleType}</span>
-                    {booking.vehicleId.brand ? ` • ${booking.vehicleId.brand}` : ''}
-                    {booking.vehicleId.color ? ` • ${booking.vehicleId.color}` : ''}
+                  <div className="text-xs text-slate-600 flex items-center gap-2 mt-2 pt-2 border-t border-slate-200/60">
+                    <span className="font-bold text-slate-800 capitalize bg-white px-2 py-0.5 rounded border border-slate-200">
+                      {booking.vehicleId.vehicleType}
+                    </span>
+                    {booking.vehicleId.brand && <span className="text-slate-600 font-medium">• {booking.vehicleId.brand}</span>}
+                    {booking.vehicleId.color && <span className="text-slate-600 font-medium">• {booking.vehicleId.color}</span>}
                   </div>
                 )}
               </div>
             )}
-          </div>
-          <div>
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dịch vụ</h3>
-            <p className="font-medium text-slate-800">{booking.packageId?.name || '—'}</p>
-            {(() => {
-              const pkgSubs = booking.packageId?.subServices;
-              const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
-              const extra = (booking.selectedSubServices || []).filter(s => s.isOptional !== false);
-              return (
-                <>
-                  {included.length > 0 && (
-                    <div className="mt-1 mb-2 flex flex-wrap gap-1">
-                      {included.map((sub, idx) => (
-                        <div key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-200">
-                          <span className="text-[11px] font-bold">{sub.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {extra.length > 0 && (
-                    <div className="mt-1 mb-2 flex flex-wrap gap-1">
-                      {extra.map((sub, idx) => (
-                        <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(booking, sub.name); }} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 cursor-pointer">
-                          <span className="font-bold text-[11px] group-hover:hidden">+</span>
-                          <span className="font-bold text-[11px] hidden group-hover:inline">-</span>
-                          <span className="text-[11px] font-bold">{sub.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-            <p className="text-sm text-slate-600 mt-2">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')} lúc {booking.startTime}</p>
-            <p className="text-xs text-slate-500 mt-1">{booking.branchId?.name || '—'}</p>
-            {booking.checkInTime && (
-              <p className="text-xs text-blue-600 font-medium mt-2 bg-blue-50 px-2 py-1 inline-block rounded">
-                Vào lúc: {new Date(booking.checkInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            )}
 
-            {/* Add service button moved here */}
-            {booking.status !== 'completed' && booking.status !== 'cancelled' && (
-              <button onClick={handleOpenAddService} disabled={busy}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
-                <Package size={13} /> Thêm dịch vụ
+            {/* Financial summary */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Tổng giá trị dịch vụ:</span>
+                <span className="font-bold text-slate-900">{formatCurrency(booking.finalPrice || booking.totalAmount || 0)}</span>
+              </div>
+              {(booking.depositPaid || booking.paymentStatus === 'deposit_paid' || booking.paymentStatus === 'paid') && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Tiền đã trả:</span>
+                  <span className="font-bold text-emerald-600">
+                    {booking.paymentStatus === 'paid' ? formatCurrency(booking.finalPrice || 0) : formatCurrency(booking.depositAmount || 0)}
+                  </span>
+                </div>
+              )}
+              {booking.paymentStatus !== 'paid' && (
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+                  <span className="text-slate-700 font-semibold">Còn lại phải thu:</span>
+                  <span className="font-black text-rose-600">
+                    {formatCurrency(Math.max(0, (booking.finalPrice || booking.totalAmount || 0) - (booking.depositPaid ? (booking.depositAmount || 0) : 0)))}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* CARD 2: GÓI DỊCH VỤ & TIẾN ĐỘ */}
+        <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <Package size={16} className="text-indigo-600" /> Chi tiết Gói Dịch Vụ
+            </h3>
+            {booking.status !== 'completed' && booking.status !== 'cancelled' && !editingSubServices && (
+              <button onClick={handleStartEditSubServices}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl border border-violet-300 bg-violet-50 text-xs font-bold text-violet-700 hover:bg-violet-100 transition-colors cursor-pointer">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg> Chỉnh sửa dịch vụ
               </button>
             )}
           </div>
-          <div>
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Chi tiết thanh toán</h3>
-            <p className="text-sm text-slate-700 mb-1">
-              Tổng tiền: <strong className="text-slate-900">{Number(booking.finalPrice || 0).toLocaleString('vi-VN')}₫</strong>
-            </p>
-            {booking.depositAmount > 0 && (
-              <div className="text-xs text-slate-500 mb-2 space-y-0.5">
-                <p>Tiền cọc: <strong className={booking.depositPaid ? 'text-emerald-600' : 'text-amber-600'}>{Number(booking.depositAmount).toLocaleString('vi-VN')}₫</strong> {booking.depositPaid ? '(đã cọc)' : '(chưa cọc)'}</p>
-                {booking.paymentStatus !== 'paid' && (
-                  <p>Còn lại: <strong className="text-slate-700">{Number(Math.max(0, (booking.finalPrice || 0) - (booking.depositPaid ? booking.depositAmount : 0))).toLocaleString('vi-VN')}₫</strong></p>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-3">
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : booking.paymentStatus === 'deposit_paid' ? 'bg-indigo-100 text-indigo-700' : booking.paymentStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'deposit_paid' ? 'Đã cọc — chờ tất toán' : booking.paymentStatus === 'pending' ? 'Đang chờ thanh toán' : 'Chưa thanh toán'}
-              </span>
-              {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
-                <button disabled={busy} onClick={() => setConfirmCash(true)}
-                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
-                  {booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận tiền mặt'}
-                </button>
-              )}
-            </div>
-          </div>
-          <div>
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Ghi chú</h3>
-            <p className="text-sm text-slate-600 italic">{booking.note || 'Không có ghi chú'}</p>
-          </div>
-          
-          {booking.status === 'cancelled' && (
-            <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-100">
-              <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                <span className="text-sm">🗑️</span> Lý do hủy
-              </h3>
-              <p className="text-sm text-red-700 font-medium">
-                {booking.cancellationReason || 'Không có lý do'}
-              </p>
-              {booking.cancelledAt && (
-                <p className="text-xs text-red-500 mt-1">
-                  Đã hủy lúc: {new Date(booking.cancelledAt).toLocaleString('vi-VN')}
-                </p>
-              )}
 
-              {/* Phần hoàn tiền */}
-              {booking.refundStatus && booking.refundStatus !== 'none' && (
-                <div className="mt-3 pt-3 border-t border-red-200">
-                  <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <span className="text-sm">💵</span> Thông tin hoàn tiền
-                  </h3>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="text-sm font-semibold text-slate-800">
-                      {booking.refundAmount?.toLocaleString('vi-VN')}₫
+          <div className="space-y-3">
+            <div>
+              <p className="text-base font-bold text-slate-900">{booking.packageId?.name || booking.packageName || 'Gói dịch vụ'}</p>
+              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                <Clock size={14} className="text-slate-400" /> Thời gian dự kiến: <strong className="text-slate-800">{booking.packageId?.duration || 45} phút</strong>
+              </p>
+            </div>
+
+            {/* Included & Optional Sub-services */}
+            {editingSubServices ? (() => {
+              const pkgSubs = booking.packageId?.subServices || [];
+              const inc = pkgSubs.filter(s => s.isOptional === false);
+              const opt = pkgSubs.filter(s => s.isOptional !== false);
+              const prevOptNames = (booking.selectedSubServices || []).filter(s => s.isOptional !== false).map(s => s.name);
+              const calcTotal = pkgSubs.filter(s => editedSubServiceNames.includes(s.name)).reduce((sum, s) => sum + (s.price || 0), 0);
+              const deposit = booking.depositAmount || 0;
+              const calcRemaining = Math.max(0, calcTotal - (deposit > 0 ? deposit : 0));
+              return (
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  {inc.length > 0 && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Dịch vụ bao gồm trong gói <span className="font-normal text-slate-400">(Tích chọn/Hủy chọn)</span>:</label>
+                      <div className="space-y-1.5">
+                        {inc.map((sub, i) => {
+                          const checked = editedSubServiceNames.includes(sub.name);
+                          return (
+                            <label key={i} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${checked ? 'bg-white border-emerald-300 text-emerald-800' : 'bg-white/60 border-slate-200 text-slate-400 line-through'}`}>
+                              <input type="checkbox" checked={checked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
+                              <span>{sub.name}{sub.duration ? ` (${sub.duration} phút)` : ''}</span>
+                              <span className="ml-auto text-[11px] font-bold text-emerald-600">Đi kèm (0đ)</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                    {booking.refundStatus === 'pending' ? (
-                      <button 
-                        disabled={busy}
-                        onClick={handleCompleteRefund}
-                        className="rounded-lg bg-orange-100 text-orange-700 px-3 py-1.5 text-xs font-bold hover:bg-orange-200 transition-colors disabled:opacity-50"
-                      >
-                        {busy ? 'Đang xử lý...' : 'Xác nhận đã hoàn'}
-                      </button>
-                    ) : (
-                      <span className="rounded-lg bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-bold">
-                        Đã hoàn tiền
-                      </span>
+                  )}
+                  {opt.length > 0 && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Dịch vụ chọn thêm <span className="font-normal text-slate-400">(Tích để chọn thêm)</span>:</label>
+                      <div className="space-y-1.5">
+                        {opt.map((sub, i) => {
+                          const checked = editedSubServiceNames.includes(sub.name);
+                          const wasPaid = prevOptNames.includes(sub.name) && sub.price > 0;
+                          return (
+                            <label key={i} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${checked ? 'bg-white border-indigo-300 text-indigo-800' : 'bg-white/60 border-slate-200 text-slate-500'}`}>
+                              <input type="checkbox" checked={checked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                              <span>{sub.name}{sub.duration ? ` (${sub.duration} phút)` : ''}</span>
+                              <span className="ml-auto text-[11px] font-bold text-indigo-600">{wasPaid && !checked ? `-${formatCurrency(sub.price)}` : `+${formatCurrency(sub.price)}`}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
+                    <div className="flex justify-between text-slate-700">
+                      <span className="font-medium">Tổng tiền dịch vụ mới:</span>
+                      <span className="font-bold text-slate-900 text-sm">{formatCurrency(calcTotal)}</span>
+                    </div>
+                    {deposit > 0 && (
+                      <div className="flex justify-between text-amber-800">
+                        <span>Tiền cọc:</span>
+                        <span className="font-semibold">-{formatCurrency(deposit)}</span>
+                      </div>
                     )}
+                    <div className="flex justify-between text-emerald-800 font-bold border-t border-amber-200/80 pt-1.5 mt-1 text-sm">
+                      <span>Cần thanh toán còn lại:</span>
+                      <span className="text-emerald-700 font-extrabold">{formatCurrency(calcRemaining)}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={handleSaveSubServices} disabled={savingSubServices}
+                      className="flex-1 py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
+                      {savingSubServices ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Đang lưu...</> : 'Lưu thay đổi dịch vụ'}
+                    </button>
+                    <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}
+                      className="py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors">Hủy</button>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              );
+            })() : (() => {
+              const pkgSubs = booking.packageId?.subServices;
+              const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+              const extra = (booking.selectedSubServices || []).filter(s => s.isOptional !== false);
 
-        {/* ── INVOICE (completed only) ── */}
+              return (
+                <div className="space-y-2 pt-2">
+                  {included.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400 mb-1.5 uppercase">Bao gồm trong gói:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {included.map((sub, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+                            <CheckCircle size={13} weight="fill" className="text-emerald-500" /> {sub.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {extra.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold text-indigo-400 mb-1.5 uppercase">Dịch vụ chọn thêm:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {extra.map((sub, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
+                            <span>+ {sub.name}</span>
+                            <span className="text-[10px] text-indigo-400">({formatCurrency(sub.price)})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <MapPin size={15} className="text-slate-400" /> Chi nhánh: <strong className="text-slate-800">{booking.branchId?.name || booking.branchName || '—'}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── INVOICE (full width, outside grid) ── */}
         {booking.status === 'completed' && (
           <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 overflow-hidden">
             {/* Invoice header */}
@@ -1118,8 +1328,8 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'vnpay',icon:<CreditCard size={16}/>,label:'VNPay'}].map(m => (
+                    <div className="grid grid-cols-2 gap-2">
+                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'}].map(m => (
                         <button key={m.id} type="button"
                           onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
                           className={`flex flex-col items-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
@@ -1134,12 +1344,12 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   </div>
                 )}
 
-                {/* Confirm cash if not yet paid */}
+                {/* Payment confirm button */}
                 {booking.paymentStatus !== 'paid' && (
-                  <button disabled={busy} onClick={() => setConfirmCash(true)}
+                  <button disabled={busy} onClick={handlePaymentClick}
                     className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                     <CurrencyCircleDollar size={15} weight="fill" />
-                    {booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền'}
+                    {managerPayMethod === 'bank' ? 'Tạo mã QR ngân hàng (SePay)' : (booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền')}
                   </button>
                 )}
 
@@ -1183,81 +1393,150 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         )}
 
         {/* QR check-in — chỉ hiển thị khi đơn đã xác nhận / đã check-in / hết hạn */}
-        {(() => {
-          const m = getQrMode(booking);
-          if (!m) return null;
-          const label = m === 'active' ? 'Hiển thị QR cho khách'
-            : m === 'checked_in' ? 'Xem QR (đã check-in)' : 'Xem QR (hết hạn)';
-          const cls = m === 'active' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-            : m === 'checked_in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-            : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
-          return (
-            <div className="mt-4 flex items-center gap-2">
-              <button onClick={() => setShowQR(true)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${cls}`}>
-                <QrCode size={15} />
-                {label}
-              </button>
-            </div>
-          );
-        })()}
-      </div>
+        {renderQrButton()}
 
       {showQR    && <QRDisplayModal      booking={booking} onClose={() => setShowQR(false)} />}
       {showPrint && <PrintReceiptModal   booking={booking} onClose={() => setShowPrint(false)} />}
       
       {/* ADD SERVICE MODAL */}
-      {showAddService && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !addingService && setShowAddService(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ</h3>
-            <p className="text-xs text-slate-500 mb-4">Bạn có thể chọn thêm các dịch vụ phát sinh. Hệ thống sẽ tự động tính lại tổng tiền.</p>
-            
-            <div className="max-h-60 overflow-y-auto space-y-2 mb-4 pr-2">
-              {availableSubServices.length === 0 ? (
-                <p className="text-sm text-slate-500">Đang tải hoặc không có dịch vụ nào thêm...</p>
-              ) : availableSubServices.map((sub, i) => {
-                const alreadyHas = booking?.selectedSubServices?.some(s => s.name === sub.name);
-                const checked = alreadyHas || selectedNewSubs.some(s => s.name === sub.name);
-                return (
-                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${alreadyHas ? 'opacity-60 cursor-not-allowed bg-slate-50 border-slate-200' : checked ? 'border-emerald-400 bg-emerald-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'}`}>
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="hidden" checked={checked} disabled={alreadyHas} onChange={() => {
-                        if (alreadyHas) return;
-                        if (checked) setSelectedNewSubs(prev => prev.filter(s => s.name !== sub.name));
-                        else setSelectedNewSubs(prev => [...prev, sub]);
-                      }} />
-                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? (alreadyHas ? 'bg-slate-400 border-slate-400' : 'bg-emerald-600 border-emerald-600') + ' text-white' : 'border-slate-300'}`}>
-                        {checked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                      </div>
-                      <span className={`text-sm font-medium ${checked ? (alreadyHas ? 'text-slate-500' : 'text-emerald-800') : 'text-slate-700'}`}>{sub.name}</span>
-                    </div>
-                    <span className={`text-sm font-bold ${checked ? (alreadyHas ? 'text-slate-400' : 'text-emerald-600') : 'text-slate-900'}`}>{alreadyHas ? 'Đã có' : `+${(sub.price || 0).toLocaleString('vi-VN')}đ`}</span>
-                  </label>
-                )
-              })}
+      {/* Cash payment confirmation modal */}
+      {confirmCash && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm" onClick={() => setConfirmCash(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center mx-auto mb-3">
+              <CurrencyCircleDollar size={24} weight="fill" className="text-emerald-600" />
             </div>
-            
-            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-slate-100">
-              <button onClick={() => setShowAddService(false)} disabled={addingService} className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
-                Hủy
-              </button>
-              <button onClick={submitAddServices} disabled={addingService || selectedNewSubs.length === 0} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 disabled:opacity-50">
-                {addingService ? 'Đang thêm...' : 'Xác nhận thêm'}
+            <h3 className="text-base font-bold text-slate-900 text-center">Xác nhận thu tiền mặt</h3>
+            <div className="mt-4 bg-slate-50 rounded-xl p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Phương thức:</span>
+                <span className="font-bold text-slate-700">Tiền mặt</span>
+              </div>
+              <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60">
+                <span className="text-slate-500">Số tiền:</span>
+                <span className="font-black text-emerald-600 text-sm">{formatCurrency(booking.paymentStatus === 'paid' ? 0 : (booking.finalPrice || booking.totalAmount || 0) - (booking.depositPaid ? (booking.depositAmount || 0) : 0))}</span>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button onClick={() => setConfirmCash(false)} disabled={busy}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50">Hủy</button>
+              <button onClick={handleCashPayment} disabled={busy}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors disabled:opacity-60 flex items-center gap-1.5">
+                {busy ? '...' : <><CheckCircle size={15} weight="fill" /> Xác nhận</>}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <ConfirmDialog
-        open={confirmCash}
-        title={`Xác nhận thu tiền (${managerPayMethod === 'bank' ? 'Chuyển khoản' : managerPayMethod === 'vnpay' ? 'VNPay' : 'Tiền mặt'})`}
-        message={`Xác nhận khách hàng đã thanh toán bằng ${managerPayMethod === 'bank' ? 'chuyển khoản' : managerPayMethod === 'vnpay' ? 'VNPay' : 'tiền mặt'}?`}
-        confirmLabel="Xác nhận"
-        onConfirm={handleCashPayment}
-        onCancel={() => setConfirmCash(false)}
-      />
+      {/* Refund confirmation for edit flow */}
+      {refundConfirmData && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative border border-emerald-100">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center text-2xl mb-3 mx-auto">💡</div>
+            <h3 className="text-lg font-bold text-slate-900 text-center mb-1">Xác nhận hủy dịch vụ & hoàn tiền vào Ví</h3>
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-4 my-4 space-y-2 text-xs">
+              <div className="text-slate-600 font-medium">Bạn đã bỏ chọn dịch vụ chọn thêm:</div>
+              <div className="font-bold text-emerald-800 bg-white/90 p-2.5 rounded-lg border border-emerald-100/80 leading-relaxed">
+                {refundConfirmData.canceledNames.map((n, i) => <div key={i}>• {String(n).replace(/^\+\s*/, '')}</div>)}
+              </div>
+              <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-sm">
+                <span className="font-medium text-slate-700">Số tiền hoàn về Ví:</span>
+                <span className="font-black text-emerald-600 text-base">+{formatCurrency(refundConfirmData.refundAmount)}</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 text-center mb-4 leading-relaxed">
+              Số tiền trên sẽ được tự động hoàn trực tiếp vào <b>Ví AutoWash Pro</b> của khách hàng ngay khi bấm xác nhận.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setRefundConfirmData(null)} disabled={savingSubServices}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors">Quay lại</button>
+              <button onClick={() => executeSaveSubServices(refundConfirmData.targetSubServices)} disabled={savingSubServices}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition-colors flex items-center justify-center gap-1.5">
+                {savingSubServices ? 'Đang xử lý...' : 'Xác nhận & Hoàn tiền'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR SePay Payment Modal */}
+      {showPaymentQR && paymentQRData && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPaymentQR(false)}>
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-100/80 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="pt-5 pb-2 text-center px-6">
+              <div className="w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-2 bg-emerald-50 border-2 border-emerald-100">
+                <CurrencyCircleDollar size={22} weight="fill" className="text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Chuyển khoản ngân hàng</h3>
+              <p className="text-slate-400 text-[11px] mt-0.5">Quét mã QR để thanh toán</p>
+            </div>
+
+            <div className="px-6 pb-1 flex justify-center">
+              <div className="bg-white rounded-xl border-2 border-slate-100 p-2.5 shadow-sm">
+                {paymentQRData.qrCode ? (
+                  <img src={paymentQRData.qrCode} alt="QR ngân hàng" className="w-36 h-36" />
+                ) : (
+                  <div className="w-36 h-36 flex items-center justify-center text-slate-300 text-[11px]">Đang tải...</div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-1">
+              <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                <div className="text-xs text-slate-400 mb-1">Số tiền</div>
+                <div className="text-2xl font-black text-emerald-600">{Number(paymentQRData.amount || 0).toLocaleString('vi-VN')}đ</div>
+              </div>
+            </div>
+
+            {paymentQRData.bankInfo && (
+              <div className="px-5 space-y-2">
+                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">Ngân hàng</span>
+                    <span className="text-xs font-bold text-slate-700">{paymentQRData.bankInfo.bankName}</span>
+                  </div>
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">Số tài khoản</span>
+                    <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{paymentQRData.bankInfo.accountNumber}</span>
+                  </div>
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">Chủ tài khoản</span>
+                    <span className="text-xs font-bold text-slate-700">{paymentQRData.bankInfo.accountHolder}</span>
+                  </div>
+                  <div className="px-3 py-1.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] text-slate-400 font-semibold">Nội dung chuyển khoản</span>
+                      <button onClick={() => { navigator.clipboard.writeText(paymentQRData.bankInfo.transferContent); alert('Đã copy nội dung CK!'); }}
+                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider">Copy</button>
+                    </div>
+                    <div className="text-sm font-bold text-slate-700 font-mono bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center tracking-wider">
+                      {paymentQRData.bankInfo.transferContent}
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 font-semibold">Mã giao dịch</span>
+                  <span className="text-xs font-bold text-slate-700 font-mono">{paymentQRData.transactionId}</span>
+                </div>
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 pt-0.5 pb-1">
+                  <svg className={`w-3.5 h-3.5 text-emerald-500 ${qrPollCount % 2 === 0 ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
+                  </svg>
+                  Đang kiểm tra thanh toán...
+                </div>
+              </div>
+            )}
+
+            <div className="p-4">
+              <button onClick={() => { setShowPaymentQR(false); setPaymentQRData(null); }}
+                className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                Hủy giao dịch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
