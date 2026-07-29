@@ -7,19 +7,19 @@ const { ROLES } = require('../config/permissions');
 /** POST /api/slot-packs — Khách tạo gói slot mới */
 exports.createSlotPack = catchAsync(async (req, res) => {
   const slotPack = await slotPackService.createSlotPack({ ...req.body, userId: req.userId });
-  success(res, slotPack, 'Slot pack created', 201);
+  success(res, slotPack, 'Tạo gói lượt rửa thành công', 201);
 });
 
 /** GET /api/slot-packs/my — Khách xem gói của mình */
 exports.getMySlotPacks = catchAsync(async (req, res) => {
   const packs = await slotPackService.getMySlotPacks(req.userId, req.query);
-  success(res, packs, 'Slot packs retrieved');
+  success(res, packs, 'Đã lấy danh sách gói lượt rửa');
 });
 
 /** GET /api/slot-packs — Admin/Manager xem tất cả gói (search + pagination) */
 exports.getAllSlotPacks = catchAsync(async (req, res) => {
   const result = await slotPackService.getAllSlotPacks(req.query, req.user.role, req.user.branchId);
-  success(res, result.data, 'All slot packs retrieved', 200, {
+  success(res, result.data, 'Đã lấy toàn bộ danh sách gói lượt rửa', 200, {
     total: result.total,
     page: result.page,
     totalPages: result.totalPages,
@@ -29,19 +29,19 @@ exports.getAllSlotPacks = catchAsync(async (req, res) => {
 /** GET /api/slot-packs/:id — Chi tiết 1 gói */
 exports.getSlotPackById = catchAsync(async (req, res) => {
   const pack = await slotPackService.getSlotPackById(req.params.id, req.userId, req.user.role);
-  success(res, pack, 'Slot pack retrieved');
+  success(res, pack, 'Đã lấy thông tin gói lượt rửa');
 });
 
 /** GET /api/slot-packs/code/:code — Lookup bằng mã (manager checkin) */
 exports.getSlotPackByCode = catchAsync(async (req, res) => {
   const pack = await slotPackService.getSlotPackByCode(req.params.code, req.user.role, req.user.branchId);
-  success(res, pack, 'Slot pack retrieved');
+  success(res, pack, 'Đã lấy thông tin gói lượt rửa');
 });
 
 /** POST /api/slot-packs/:id/use — Manager dùng 1 slot khi khách đến */
 exports.useSlot = catchAsync(async (req, res) => {
   const result = await slotPackService.useSlot(req.params.id, req.userId, req.body);
-  success(res, result, 'Slot used successfully');
+  success(res, result, 'Sử dụng lượt rửa thành công');
 });
 
 /** POST /api/slot-packs/:id/request-cancel-otp — Gửi OTP hủy gói */
@@ -53,7 +53,7 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
 /** POST /api/slot-packs/:id/cancel — Hủy gói */
 exports.cancelSlotPack = catchAsync(async (req, res) => {
   const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role, req.body.otp);
-  success(res, pack, 'Slot pack cancelled');
+  success(res, pack, 'Hủy gói lượt rửa thành công');
 });
 
 /** POST /api/slot-packs/:id/refund-complete — Xác nhận hoàn tiền gói */
@@ -77,7 +77,7 @@ exports.refundComplete = catchAsync(async (req, res) => {
 /** GET /api/slot-packs/usage-history — Lịch sử sử dụng gói lượt (admin/manager) */
 exports.getUsageHistory = catchAsync(async (req, res) => {
   const result = await slotPackService.getUsageHistory(req.query, req.user.role, req.user.branchId);
-  success(res, result.data, 'Usage history retrieved', 200, {
+  success(res, result.data, 'Đã lấy lịch sử sử dụng', 200, {
     total: result.total,
     page: result.page,
     totalPages: result.totalPages,
@@ -95,7 +95,7 @@ exports.getSlotPackUsageHistory = catchAsync(async (req, res) => {
     req.user.role,
     req.user.branchId,
   );
-  success(res, result.data, 'Slot pack usage history retrieved', 200, {
+  success(res, result.data, 'Đã lấy lịch sử sử dụng gói lượt rửa', 200, {
     total: result.total,
     page: result.page,
     totalPages: result.totalPages,
@@ -111,7 +111,7 @@ exports.previewDiscount = catchAsync(async (req, res) => {
     return res.status(400).json({ message: 'totalSlots and unitPrice are required' });
   }
   const preview = slotPackService.previewDiscount(slots, price);
-  success(res, preview, 'Preview calculated');
+  success(res, preview, 'Tính toán xem trước thành công');
 });
 
 /** POST /api/slot-packs/:id/pay — Tạo thanh toán cho gói slot */
@@ -149,7 +149,7 @@ exports.paySlotPack = catchAsync(async (req, res) => {
     accountHolder: process.env.SEPAY_ACCOUNT_NAME || 'CONG TY CO PHAN AUTO WASH PRO',
     transferContent: `THANH TOAN ${payment.transactionId}`,
   };
-  success(res, result, 'Payment created');
+  success(res, result, 'Tạo thanh toán thành công');
 });
 
 /** GET /api/slot-packs/:id/payment — Kiểm tra trạng thái thanh toán */

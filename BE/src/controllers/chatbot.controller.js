@@ -33,7 +33,7 @@ exports.chat = catchAsync(async (req, res) => {
 
   const userInfo = await extractUserInfo(req);
   const result = await chatbotService.chat(sessionId, message.trim(), userInfo.userId, userInfo.role);
-  success(res, result, 'OK');
+  success(res, result, 'Thành công');
 });
 
 // Streaming SSE endpoint
@@ -58,5 +58,5 @@ exports.streamChat = async (req, res) => {
 exports.clearSession = catchAsync(async (req, res) => {
   const { sessionId } = req.body;
   if (sessionId) chatbotService.clearSession(sessionId);
-  success(res, null, 'Session cleared');
+  success(res, null, 'Đã xóa phiên đăng nhập');
 });

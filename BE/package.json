@@ -9,7 +9,9 @@
     "test": "jest --runInBand --detectOpenHandles",
     "seed:full": "node scripts/seed-branches-packages.js",
     "seed:drop-index": "node scripts/drop-bookingcode-index.js",
-    "clear:bookings": "node scripts/clear-all-bookings.js"
+    "clear:bookings": "node scripts/clear-all-bookings.js",
+    "clear:bookings:dry": "node scripts/clear-all-bookings.js --dry-run",
+    "clear:bookings:hard": "node scripts/clear-all-bookings.js --hard --i-understand"
   },
   "dependencies": {
     "@google/genai": "^2.8.0",

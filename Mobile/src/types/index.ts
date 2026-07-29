@@ -127,7 +127,7 @@ export interface Package {
 }
 
 // ============ Booking Types ============
-export type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled';
+export type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'in_progress' | 'awaiting_payment' | 'completed' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'deposit_paid' | 'paid' | 'refunded';
 
 export interface Booking {
@@ -139,6 +139,8 @@ export interface Booking {
   bookingDate: string;
   startTime: string;
   endTime?: string;
+  // Human-readable code (vd: BK-2024-001234) — dùng cho UX.
+  bookingCode?: string;
   status: BookingStatus;
   paymentStatus: PaymentStatus;
   note?: string;
@@ -146,15 +148,14 @@ export interface Booking {
   selectedSubServices?: (SubService | string)[];
   voucherCode?: string;
   discountAmount?: number;
-  // Số tiền cọc cần thu (30% × finalPrice). BE tự tính; FE hiển thị.
-  depositAmount?: number;
-  // Đã cọc hay chưa — guard để biết có cần chặn "Đặt lại" hay không.
-  depositPaid?: boolean;
-  // Phương thức thanh toán đã dùng (cash/momo/vnpay).
-  paymentMethod?: PaymentMethod;
-  // Legacy alias — tránh phá callers cũ (chỉ một số màn dùng).
-  deposit?: number;
+  // Giá gói gốc trước khi subService + voucher.
+  basePrice?: number;
+  // Phụ phí subService optional.
+  extraPrice?: number;
+  // Giá cuối sau khi cộng extraPrice - trừ discount.
   finalPrice: number;
+  // finalPrice - discountAmount (nếu có subService + voucher cùng lúc).
+  finalPriceAfterVoucher?: number;
   totalPrice?: number; // alias kept for legacy callers
   qrCode?: string;
   rating?: number;
@@ -180,11 +181,27 @@ export interface Booking {
   priority?: number;
   slotPackId?: string;
   paidAt?: string;
+  depositPaidAt?: string;
   checkInTime?: string;
   checkOutTime?: string;
   serviceDuration?: number;
   staffId?: string;
   rebookedFromId?: string;
+  // Số tiền cọc cần thu (30% × finalPrice). BE tự tính; FE hiển thị.
+  depositAmount?: number;
+  // Đã cọc hay chưa — guard để biết có cần chặn "Đặt lại" hay không.
+  depositPaid?: boolean;
+  // Phương thức thanh toán đã dùng (cash/momo/vnpay).
+  paymentMethod?: PaymentMethod;
+  // Legacy alias — tránh phá callers cũ (chỉ một số màn dùng).
+  deposit?: number;
+  // H-5: soft delete fields
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: 'admin' | 'system' | 'migration';
+  // Refund tracking
+  refundAmount?: number;
+  refundStatus?: 'pending' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
 }
@@ -237,7 +254,7 @@ export interface AvailableSlot {
 }
 
 // ============ Payment Types ============
-export type PaymentMethod = 'cash' | 'momo' | 'vnpay' | 'bank';
+export type PaymentMethod = 'cash' | 'momo' | 'vnpay' | 'bank' | 'wallet' | 'sepay';
 export type PaymentType = 'deposit' | 'remaining' | 'full';
 
 export interface Payment {

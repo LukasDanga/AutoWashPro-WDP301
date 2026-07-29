@@ -42,9 +42,9 @@ router.post('/vnpay-provisional', authenticate, authorize(ROLES.ADMIN, ROLES.MAN
 
 // POST /api/bookings/recurring/check-conflicts — Kiểm tra trùng lịch trước khi tạo
 router.post('/recurring/check-conflicts', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
-  body('branchId').isMongoId().withMessage('Invalid branch ID'),
-  body('packageId').isMongoId().withMessage('Invalid package ID'),
-  body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
+  body('branchId').isMongoId().withMessage('ID chi nhánh không hợp lệ'),
+  body('packageId').isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
+  body('vehicleId').isMongoId().withMessage('ID xe không hợp lệ'),
   body('weekdays').isArray({ min: 1 }).withMessage('weekdays must be a non-empty array'),
   body('weekdays.*').isInt({ min: 0, max: 6 }).withMessage('Each weekday must be 0-6'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
@@ -53,9 +53,9 @@ router.post('/recurring/check-conflicts', authenticate, authorize(ROLES.ADMIN, R
 
 // POST /api/bookings/recurring — Tạo định kỳ
 router.post('/recurring', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
-  body('branchId').isMongoId().withMessage('Invalid branch ID'),
-  body('packageId').isMongoId().withMessage('Invalid package ID'),
-  body('vehicleId').isMongoId().withMessage('Invalid vehicle ID'),
+  body('branchId').isMongoId().withMessage('ID chi nhánh không hợp lệ'),
+  body('packageId').isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
+  body('vehicleId').isMongoId().withMessage('ID xe không hợp lệ'),
   body('weekdays').isArray({ min: 1 }).withMessage('weekdays must be a non-empty array'),
   body('weekdays.*').isInt({ min: 0, max: 6 }).withMessage('Each weekday must be 0-6'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),

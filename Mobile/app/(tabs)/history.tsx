@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
+  Text as RNText,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -41,7 +42,8 @@ import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { sseService } from '../../src/services/sse';
 import type { Booking, BookingStatus, SlotPack } from '../../src/types';
-import { formatCurrency } from '../../src/utils';
+import { formatCurrency, translateDynamicText } from '../../src/utils';
+import { useTranslation } from 'react-i18next';
 
 type ViewMode = 'calendar' | 'week' | 'list' | 'slot_packs';
 type FilterKey = 'all' | 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
@@ -59,6 +61,9 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Tất cả trạng thái' },
   { value: 'pending', label: 'Chờ xử lý' },
   { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'checked_in', label: 'Đã check-in' },
+  { value: 'in_progress', label: 'Đang rửa' },
+  { value: 'awaiting_payment', label: 'Chờ thanh toán' },
   { value: 'completed', label: 'Hoàn thành' },
   { value: 'cancelled', label: 'Đã hủy' },
 ];
@@ -97,6 +102,9 @@ function getDotColor(status: BookingStatus): string {
     case 'completed': return '#16A34A';
     case 'cancelled': return '#94A3B8';
     case 'pending': return '#F59E0B';
+    // awaiting_payment — xe đã rửa xong, chờ khách trả nốt phần còn lại.
+    // Tông indigo để phân biệt với completed (xanh) và in_progress (cyan).
+    case 'awaiting_payment': return '#6366F1';
     default: return '#10B981';
   }
 }
@@ -106,6 +114,7 @@ function localDateKey(d: Date): string {
 }
 
 export default function HistoryScreen() {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const colors = useColors();
   const toast = useToast();
@@ -241,13 +250,32 @@ export default function HistoryScreen() {
   }, [fetchBookings]);
 
   // Subscribe to real-time events for bookings & feedback updates
+  //
+  // H-7 SAFETY: trước đây 4 listener (`my_bookings_updated`, `booking_update`,
+  // `notification`, `all`) cùng gọi fetchBookings() đồng thời khi BE bắn 1 event
+  // (vd: manager confirm booking → BE gửi cả 3-4 event). Kết quả: 4 request song
+  // song tới /bookings/my, UI nhảy dữ liệu + tốn bandwidth. Giờ debounce 600ms
+  // gom tất cả event trong cùng 1 "burst" thành 1 lần fetch.
   useEffect(() => {
-    const unsub1 = sseService.subscribe('my_bookings_updated', () => fetchBookings());
-    const unsub2 = sseService.subscribe('booking_update', () => fetchBookings());
-    const unsub3 = sseService.subscribe('notification', () => fetchBookings());
-    const unsub4 = sseService.subscribe('all', () => fetchBookings());
+    let sseFetchTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (sseFetchTimer) clearTimeout(sseFetchTimer);
+      sseFetchTimer = setTimeout(() => {
+        fetchBookings();
+        sseFetchTimer = null;
+      }, 600);
+    };
+
+    const unsub1 = sseService.subscribe('my_bookings_updated', debouncedFetch);
+    const unsub2 = sseService.subscribe('booking_update', debouncedFetch);
+    const unsub3 = sseService.subscribe('notification', debouncedFetch);
+    const unsub4 = sseService.subscribe('all', debouncedFetch);
 
     return () => {
+      if (sseFetchTimer) {
+        clearTimeout(sseFetchTimer);
+        sseFetchTimer = null;
+      }
       unsub1();
       unsub2();
       unsub3();
@@ -328,14 +356,15 @@ export default function HistoryScreen() {
 
   // Stats
   const stats = useMemo(() => {
-    let pending = 0, confirmed = 0, completed = 0, cancelled = 0;
+    let pending = 0, confirmed = 0, completed = 0, cancelled = 0, awaitingPayment = 0;
     bookings.forEach(b => {
       if (b.status === 'pending') pending++;
       else if (b.status === 'confirmed') confirmed++;
       else if (b.status === 'completed') completed++;
       else if (b.status === 'cancelled') cancelled++;
+      else if (b.status === 'awaiting_payment') awaitingPayment++;
     });
-    return { pending, confirmed, completed, cancelled };
+    return { pending, confirmed, completed, cancelled, awaitingPayment };
   }, [bookings]);
 
   // Recurring Group
@@ -381,7 +410,9 @@ export default function HistoryScreen() {
     if (filter === 'all') return dropdownFilteredBookings;
     return dropdownFilteredBookings.filter(b => {
       if (filter === 'upcoming') return b.status === 'pending' || b.status === 'confirmed';
-      if (filter === 'in_progress') return b.status === 'checked_in' || b.status === 'in_progress';
+      // 'in_progress' group covers all "active" states where the booking is still
+      // in motion: just-arrived, being washed, or waiting for the remaining payment.
+      if (filter === 'in_progress') return b.status === 'checked_in' || b.status === 'in_progress' || b.status === 'awaiting_payment';
       if (filter === 'completed') return b.status === 'completed';
       if (filter === 'cancelled') return b.status === 'cancelled';
       return true;
@@ -502,8 +533,10 @@ export default function HistoryScreen() {
   }, [detailBooking, toast]);
 
   const renderBookingItem = useCallback((b: Booking) => {
-    const branchName = typeof b.branchId === 'object' ? (b.branchId as any).name : '';
-    const packageName = typeof b.packageId === 'object' ? (b.packageId as any).name : 'Dịch vụ';
+    const rawBranchName = typeof b.branchId === 'object' ? (b.branchId as any).name : '';
+    const rawPackageName = typeof b.packageId === 'object' ? (b.packageId as any).name : 'Dịch vụ';
+    const branchName = translateDynamicText(rawBranchName, i18n.language);
+    const packageName = translateDynamicText(rawPackageName, i18n.language);
     const vehiclePlate = typeof b.vehicleId === 'object' ? (b.vehicleId as any).licensePlate : '';
 
     // "MỚI" badge (web parity): pulse red for bookings created in the
@@ -644,72 +677,113 @@ export default function HistoryScreen() {
           keyExtractor={() => 'main'}
           renderItem={() => (
             <View>
-              {/* Stats Summary */}
-              <View style={styles.statsRow}>
-                {/* 1. Chờ xử lý */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => { setStatusFilter('pending'); setViewMode('list'); }}
-                  style={[
-                    styles.statCard,
-                    {
-                      backgroundColor: '#FFF7ED',
-                      borderColor: '#FDBA74',
-                    },
-                  ]}
-                >
-                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#EA580C' }}>{stats.pending}</AppText>
-                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#C2410C', textAlign: 'center', marginTop: 2 }}>Chờ xử lý</AppText>
-                </TouchableOpacity>
-
-                {/* 2. Đã xác nhận */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => { setStatusFilter('confirmed'); setViewMode('list'); }}
-                  style={[
-                    styles.statCard,
-                    {
-                      backgroundColor: '#EFF6FF',
-                      borderColor: '#93C5FD',
-                    },
-                  ]}
-                >
-                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#2563EB' }}>{stats.confirmed}</AppText>
-                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8', textAlign: 'center', marginTop: 2 }}>Đã xác nhận</AppText>
-                </TouchableOpacity>
-
-                {/* 3. Hoàn thành */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => { setStatusFilter('completed'); setViewMode('list'); }}
-                  style={[
-                    styles.statCard,
-                    {
-                      backgroundColor: '#ECFDF5',
-                      borderColor: '#A7F3D0',
-                    },
-                  ]}
-                >
-                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#059669' }}>{stats.completed}</AppText>
-                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#047857', textAlign: 'center', marginTop: 2 }}>Hoàn thành</AppText>
-                </TouchableOpacity>
-
-                {/* 4. Đã hủy */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => { setStatusFilter('cancelled'); setViewMode('list'); }}
-                  style={[
-                    styles.statCard,
-                    {
-                      backgroundColor: '#F8FAFC',
-                      borderColor: '#CBD5E1',
-                    },
-                  ]}
-                >
-                  <AppText style={{ fontSize: 18, fontWeight: '800', color: '#64748B' }}>{stats.cancelled}</AppText>
-                  <AppText style={{ fontSize: 11, fontWeight: '700', color: '#475569', textAlign: 'center', marginTop: 2 }}>Đã hủy</AppText>
-                </TouchableOpacity>
-              </View>
+              {/* Stats Summary - Horizontal Scroll Pills */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.statsScrollView}
+                contentContainerStyle={styles.statsScrollContent}
+              >
+                {[
+                  {
+                    id: 'pending',
+                    label: 'Chờ xử lý',
+                    count: stats.pending,
+                    color: '#EA580C',
+                    bg: '#FFF7ED',
+                    border: '#FDBA74',
+                    activeBg: '#FFEDD5',
+                    activeBorder: '#EA580C',
+                    activeText: '#C2410C',
+                  },
+                  {
+                    id: 'confirmed',
+                    label: 'Đã xác nhận',
+                    count: stats.confirmed,
+                    color: '#2563EB',
+                    bg: '#EFF6FF',
+                    border: '#93C5FD',
+                    activeBg: '#DBEAFE',
+                    activeBorder: '#2563EB',
+                    activeText: '#1D4ED8',
+                  },
+                  {
+                    id: 'completed',
+                    label: 'Hoàn thành',
+                    count: stats.completed,
+                    color: '#059669',
+                    bg: '#ECFDF5',
+                    border: '#A7F3D0',
+                    activeBg: '#D1FAE5',
+                    activeBorder: '#059669',
+                    activeText: '#047857',
+                  },
+                  {
+                    id: 'awaiting_payment',
+                    label: 'Chờ thanh toán',
+                    count: stats.awaitingPayment,
+                    color: '#4F46E5',
+                    bg: '#EEF2FF',
+                    border: '#A5B4FC',
+                    activeBg: '#E0E7FF',
+                    activeBorder: '#4F46E5',
+                    activeText: '#3730A3',
+                  },
+                  {
+                    id: 'cancelled',
+                    label: 'Đã hủy',
+                    count: stats.cancelled,
+                    color: '#64748B',
+                    bg: '#F8FAFC',
+                    border: '#CBD5E1',
+                    activeBg: '#E2E8F0',
+                    activeBorder: '#64748B',
+                    activeText: '#475569',
+                  },
+                ].map((item) => {
+                  const isActive = statusFilter === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id || 'all'}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setStatusFilter(item.id);
+                        setViewMode('list');
+                      }}
+                      style={[
+                        styles.statChip,
+                        {
+                          backgroundColor: isActive ? item.activeBg : item.bg,
+                          borderColor: isActive ? item.activeBorder : item.border,
+                          borderWidth: isActive ? 2 : 1,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.statChipBadge,
+                          {
+                            backgroundColor: isActive ? item.activeBorder : item.color,
+                          },
+                        ]}
+                      >
+                        <RNText style={styles.statChipCount}>{item.count}</RNText>
+                      </View>
+                      <AppText
+                        style={[
+                          styles.statChipLabel,
+                          {
+                            color: isActive ? item.activeText : colors.textPrimary,
+                            fontWeight: isActive ? '700' : '600',
+                          },
+                        ]}
+                      >
+                        {item.label}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
               {/* View toggle tabs */}
               <View style={[styles.toggleContainer, { backgroundColor: '#F1F5F9', borderColor: colors.border }]}>
@@ -1355,6 +1429,35 @@ export default function HistoryScreen() {
                       </View>
                     </View>
                   )}
+                  {/* Awaiting payment — xe đã rửa xong, chờ khách trả nốt phần còn lại.
+                      Hỗ trợ hủy (BE cho phép awaiting_payment → cancelled) + thanh toán nốt.
+                      Ẩn nút "Thanh toán phần còn lại" khi booking không còn dư nợ
+                      (paymentStatus='paid' hoặc depositAmount<=0 vì slot pack / recurring
+                      buổi sau — BE đã chặn guard, FE hiển thị nhất quán). */}
+                  {detailBooking.status === 'awaiting_payment' && (
+                    <View style={{ gap: spacing.sm }}>
+                      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                        <Button
+                          title="Hủy đơn"
+                          variant="outline"
+                          onPress={handleCancel}
+                          style={styles.modalActionBtn}
+                        />
+                        {detailBooking.depositPaid &&
+                          detailBooking.paymentStatus !== 'paid' &&
+                          (detailBooking.depositAmount || 0) > 0 && (
+                          <Button
+                            title="Thanh toán phần còn lại"
+                            onPress={() => {
+                              setDetailBooking(null);
+                              router.push(`/payment/select?bookingId=${detailBooking._id}&type=remaining` as any);
+                            }}
+                            style={styles.modalActionBtn}
+                          />
+                        )}
+                      </View>
+                    </View>
+                  )}
                   {(detailBooking.status === 'completed' || detailBooking.status === 'cancelled') && (
                     <View style={{ gap: spacing.sm }}>
                       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -1575,6 +1678,7 @@ function getStatusBg(status: BookingStatus, colors: any): string {
     case 'pending': return colors.warningLight;
     case 'confirmed': return colors.primarySubtle;
     case 'checked_in': case 'in_progress': return colors.infoLight;
+    case 'awaiting_payment': return colors.infoLight;
     case 'completed': return colors.successLight;
     case 'cancelled': return colors.errorLight;
     default: return colors.surface;
@@ -1586,6 +1690,7 @@ function getStatusFg(status: BookingStatus, colors: any): string {
     case 'pending': return colors.warning;
     case 'confirmed': return colors.primary;
     case 'checked_in': case 'in_progress': return colors.info;
+    case 'awaiting_payment': return colors.info;
     case 'completed': return colors.success;
     case 'cancelled': return colors.error;
     default: return colors.textSecondary;
@@ -2255,26 +2360,50 @@ const styles = StyleSheet.create({
   },
   
   // Stats
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.screenPadding,
-    marginTop: spacing.md,
-    gap: spacing.sm,
-    justifyContent: 'space-between',
+  statsScrollView: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  statCard: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderRadius: 16,
-    borderWidth: 1.5,
+  statsScrollContent: {
+    paddingHorizontal: spacing.screenPadding,
+    gap: spacing.xs,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    gap: 8,
+    height: 40,
+    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+  },
+  statChipBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  statChipCount: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 22,
+    padding: 0,
+    margin: 0,
+  },
+  statChipLabel: {
+    fontSize: 13,
   },
 
   // Week view

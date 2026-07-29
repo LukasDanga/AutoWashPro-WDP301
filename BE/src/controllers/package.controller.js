@@ -7,25 +7,25 @@ exports.createPackage = catchAsync(async (req, res) => {
     data.branchId = req.user.branchId;
   }
   const pkg = await packageService.createPackage(data);
-  success(res, pkg, 'Package created', 201);
+  success(res, pkg, 'Tạo gói dịch vụ thành công', 201);
 });
 
 exports.getAllPackages = catchAsync(async (req, res) => {
   const result = await packageService.getAllPackages(req.query);
-  success(res, result.data, 'Packages retrieved', 200, result.pagination);
+  success(res, result.data, 'Đã lấy danh sách gói dịch vụ', 200, result.pagination);
 });
 
 exports.getPackageById = catchAsync(async (req, res) => {
   const pkg = await packageService.getPackageById(req.params.id, req.user.role, req.user.branchId);
-  success(res, pkg, 'Package retrieved');
+  success(res, pkg, 'Đã lấy thông tin gói dịch vụ');
 });
 
 exports.updatePackage = catchAsync(async (req, res) => {
   const pkg = await packageService.updatePackage(req.params.id, req.body, req.user.role, req.user.branchId);
-  success(res, pkg, 'Package updated');
+  success(res, pkg, 'Cập nhật gói dịch vụ thành công');
 });
 
 exports.deletePackage = catchAsync(async (req, res) => {
   await packageService.deletePackage(req.params.id, req.user.role, req.user.branchId);
-  success(res, null, 'Package deleted');
+  success(res, null, 'Đã xóa gói dịch vụ');
 });
