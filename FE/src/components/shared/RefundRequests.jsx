@@ -12,6 +12,8 @@ import {
   User,
   Buildings,
   CalendarBlank,
+  Trash,
+  Spinner,
 } from '@phosphor-icons/react';
 
 function api(path, opts = {}) {
@@ -171,12 +173,12 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
             </div>
             <div className="flex gap-2 border-t border-slate-100 pt-4">
               <button onClick={() => onReview('rejected', reviewNote)} disabled={reviewing}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors">
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors cursor-pointer">
                 <XCircle size={14} />
                 Từ chối
               </button>
               <button onClick={() => onReview('approved', reviewNote)} disabled={reviewing}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors">
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors cursor-pointer">
                 {reviewing ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <CheckCircle size={14} />}
                 {reviewing ? 'Đang xử lý…' : 'Phê duyệt & hoàn tiền'}
               </button>
@@ -186,7 +188,7 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
         {request.status !== 'pending' && (
           <div className="border-t border-slate-100 pt-4">
             <button onClick={onClose}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">
               Đóng
             </button>
           </div>
@@ -203,6 +205,13 @@ export default function RefundRequests() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [detail, setDetail] = useState(null);
   const [reviewing, setReviewing] = useState(false);
+
+  // Range Delete states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteDateFrom, setDeleteDateFrom] = useState('');
+  const [deleteDateTo, setDeleteDateTo] = useState('');
+  const [deleteAll, setDeleteAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -240,6 +249,41 @@ export default function RefundRequests() {
     finally { setReviewing(false); }
   }
 
+  async function handleDeleteSingle(r) {
+    if (!confirm('Bạn có chắc chắn muốn xóa yêu cầu hoàn tiền này? Hành động này không thể hoàn tác!')) return;
+    try {
+      const res = await api(`/refund-requests/${r._id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Xóa yêu cầu hoàn tiền thất bại');
+      setRequests(prev => prev.filter(item => item._id !== r._id));
+      if (detail && detail._id === r._id) setDetail(null);
+      showToast('Đã xóa yêu cầu hoàn tiền thành công', 'success');
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  async function deleteRequestsByRange() {
+    if (deleteAll) {
+      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ dữ liệu yêu cầu hoàn tiền? Hành động này không thể hoàn tác!')) return;
+    } else {
+      if (!deleteDateFrom || !deleteDateTo) return showToast('Vui lòng chọn khoảng ngày', 'error');
+      if (!confirm(`Bạn có chắc muốn xóa yêu cầu hoàn tiền từ ${deleteDateFrom} đến ${deleteDateTo}? Hành động này không thể hoàn tác!`)) return;
+    }
+    setDeleting(true);
+    try {
+      const params = deleteAll ? 'all=true' : `dateFrom=${deleteDateFrom}&dateTo=${deleteDateTo}`;
+      const res = await api(`/refund-requests/range?${params}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Xóa thất bại');
+      showToast(data.message || 'Đã xóa thành công', 'success');
+      setShowDeleteModal(false);
+      setDeleteDateFrom('');
+      setDeleteDateTo('');
+      setDeleteAll(false);
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { setDeleting(false); }
+  }
+
   return (
     <div className="space-y-5">
       {/* Stats */}
@@ -268,8 +312,12 @@ export default function RefundRequests() {
           {STATUS_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
         <button onClick={load} disabled={loading}
-          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
+        </button>
+        <button onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-red-500 transition-colors ml-auto cursor-pointer shadow-2xs">
+          <Trash size={13} /> Xóa yêu cầu hoàn tiền
         </button>
       </div>
 
@@ -294,7 +342,7 @@ export default function RefundRequests() {
                 <th className="px-4 py-3 text-right">Số tiền</th>
                 <th className="px-4 py-3">Trạng thái</th>
                 <th className="px-4 py-3">Ngày gửi</th>
-                <th className="px-4 py-3" />
+                <th className="px-4 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -316,11 +364,17 @@ export default function RefundRequests() {
                       <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(r.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <button onClick={() => setDetail(r)} title="Xem chi tiết"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-                        <Eye size={14} />
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => setDetail(r)} title="Xem chi tiết"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer">
+                          <Eye size={14} />
+                        </button>
+                        <button onClick={() => handleDeleteSingle(r)} title="Xóa yêu cầu"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer">
+                          <Trash size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -337,6 +391,52 @@ export default function RefundRequests() {
           onReview={handleReview}
           reviewing={reviewing}
         />
+      )}
+
+      {/* Delete by date range modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => { if (!deleting) setShowDeleteModal(false); }}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800 text-sm">Xóa yêu cầu hoàn tiền theo khoảng ngày</h2>
+              <button disabled={deleting} onClick={() => setShowDeleteModal(false)} className="text-slate-400 hover:text-slate-600 disabled:opacity-30 text-lg cursor-pointer">✕</button>
+            </div>
+            <div className="p-6 space-y-4 text-xs">
+              <p className="text-slate-600">
+                {deleteAll ? 'Bạn sắp xóa toàn bộ dữ liệu yêu cầu hoàn tiền.' : 'Chọn khoảng ngày muốn xóa.'}
+                <span className="font-semibold text-red-600"> Hành động này không thể hoàn tác!</span>
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={deleteAll} onChange={(e) => setDeleteAll(e.target.checked)}
+                  className="rounded border-slate-300 text-red-600 focus:ring-red-400" />
+                <span className="font-medium text-slate-700">Xóa tất cả dữ liệu</span>
+              </label>
+              {!deleteAll && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-slate-500 mb-1 font-medium">Từ ngày</label>
+                    <input type="date" value={deleteDateFrom} onChange={(e) => setDeleteDateFrom(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-slate-500 mb-1 font-medium">Đến ngày</label>
+                    <input type="date" value={deleteDateTo} onChange={(e) => setDeleteDateTo(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="border-t border-slate-100 px-6 py-4 flex gap-3 justify-end">
+              <button disabled={deleting} onClick={() => setShowDeleteModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Hủy</button>
+              <button onClick={deleteRequestsByRange} disabled={deleting || (!deleteAll && (!deleteDateFrom || !deleteDateTo))}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-50 cursor-pointer">
+                {deleting ? <Spinner size={14} className="animate-spin" /> : <Trash size={14} />}
+                {deleting ? 'Đang xóa...' : 'Xóa dữ liệu'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

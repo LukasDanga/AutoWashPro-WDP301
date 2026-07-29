@@ -12,7 +12,7 @@ exports.createRequest = async (bookingId, userId, userRole, reason) => {
     throw Object.assign(new Error('Chỉ có thể yêu cầu hoàn tiền cho đơn đã thanh toán'), { statusCode: 400, code: 'NOT_PAID' });
   }
 
-    if (booking.status === 'completed' && booking.updatedAt) {
+  if (booking.status === 'completed' && booking.updatedAt) {
     const hoursSinceCompletion = (Date.now() - new Date(booking.updatedAt).getTime()) / (1000 * 60 * 60);
     if (hoursSinceCompletion > 24) {
       throw Object.assign(new Error('Chỉ có thể yêu cầu hoàn tiền trong vòng 24 giờ kể từ khi hoàn thành đơn'), { statusCode: 400, code: 'TIME_EXPIRED' });
@@ -93,4 +93,34 @@ exports.reviewRequest = async (id, reviewerId, decision, reviewNote) => {
   await request.save();
 
   return request;
+};
+
+exports.deleteRequest = async (id, userRole) => {
+  const request = await RefundRequest.findById(id);
+  if (!request) throw Object.assign(new Error('Refund request not found'), { statusCode: 404, code: 'NOT_FOUND' });
+  await RefundRequest.findByIdAndDelete(id);
+  return { message: 'Refund request deleted successfully' };
+};
+
+exports.deleteRequestsByDateRange = async (dateFrom, dateTo, deleteAll = false) => {
+  if (deleteAll) {
+    const result = await RefundRequest.deleteMany({});
+    return { message: `Đã xóa tất cả ${result.deletedCount} yêu cầu hoàn tiền` };
+  }
+
+  if (!dateFrom || !dateTo) {
+    throw Object.assign(new Error('Vui lòng chọn từ ngày và đến ngày'), { statusCode: 400, code: 'INVALID_RANGE' });
+  }
+
+  const fromDate = new Date(dateFrom);
+  fromDate.setHours(0, 0, 0, 0);
+
+  const toDate = new Date(dateTo);
+  toDate.setHours(23, 59, 59, 999);
+
+  const result = await RefundRequest.deleteMany({
+    createdAt: { $gte: fromDate, $lte: toDate },
+  });
+
+  return { message: `Đã xóa ${result.deletedCount} yêu cầu hoàn tiền trong khoảng từ ${dateFrom} đến ${dateTo}` };
 };

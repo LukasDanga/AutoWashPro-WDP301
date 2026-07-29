@@ -41,6 +41,17 @@ router.get('/my', authenticate, refundRequestController.getMyRequests);
 
 /**
  * @swagger
+ * /api/refund-requests/range:
+ *   delete:
+ *     summary: Delete refund requests by date range (admin/manager)
+ *     tags: [RefundRequests]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/range', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), refundRequestController.deleteRequestsByDateRange);
+
+/**
+ * @swagger
  * /api/refund-requests/{id}:
  *   get:
  *     summary: Get refund request by ID
@@ -49,6 +60,17 @@ router.get('/my', authenticate, refundRequestController.getMyRequests);
  *       - bearerAuth: []
  */
 router.get('/:id', authenticate, refundRequestValidators.getById, validate, refundRequestController.getRequestById);
+
+/**
+ * @swagger
+ * /api/refund-requests/{id}:
+ *   delete:
+ *     summary: Delete refund request by ID (admin/manager)
+ *     tags: [RefundRequests]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), refundRequestController.deleteRequest);
 
 /**
  * @swagger
