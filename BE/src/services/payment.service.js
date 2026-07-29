@@ -598,7 +598,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   let payment = await Payment.findOne({ bookingId })
-    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
+    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId bookingCode' })
     .populate('userId', 'name email phone');
   if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
@@ -612,7 +612,7 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
       await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
       // Load lại payment sau khi update
       payment = await Payment.findOne({ bookingId })
-        .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
+        .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId bookingCode' })
         .populate('userId', 'name email phone');
     }
   }
@@ -771,7 +771,7 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
 
   const [data, total] = await Promise.all([
     Payment.find(query)
-      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId' })
+      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId bookingCode' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
