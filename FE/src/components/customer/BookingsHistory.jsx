@@ -756,9 +756,72 @@ export default function BookingsHistory({ apiBase, token }) {
               </div>
 
               {/* Info rows */}
-              {[
-                ['📦 Dịch vụ', detailBooking.packageName || detailBooking.packageId?.name || '—'],
-                ['📅 Ngày', formatDate(detailBooking.bookingDate)],
+              {(() => {
+                const pkgSubs = detailBooking.packageId?.subServices || [];
+                const includedList = [];
+
+                if (Array.isArray(pkgSubs)) {
+                  pkgSubs.forEach(s => {
+                    if (s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price))) {
+                      if (!includedList.some(item => item.name === s.name)) {
+                        includedList.push(s);
+                      }
+                    }
+                  });
+                }
+
+                if (Array.isArray(detailBooking.selectedSubServices)) {
+                  detailBooking.selectedSubServices.forEach(s => {
+                    const sName = typeof s === 'string' ? s : s.name;
+                    const sPrice = typeof s === 'object' ? s.price : 0;
+                    const sOpt = typeof s === 'object' ? s.isOptional : undefined;
+                    
+                    if (sOpt === false || (sOpt === undefined && (sPrice === 0 || !sPrice))) {
+                      if (!includedList.some(item => item.name === sName)) {
+                        includedList.push({ name: sName, price: sPrice });
+                      }
+                    }
+                  });
+                }
+
+                const extraList = [];
+                if (Array.isArray(detailBooking.selectedSubServices)) {
+                  detailBooking.selectedSubServices.forEach(s => {
+                    const sName = typeof s === 'string' ? s : s.name;
+                    const isInc = includedList.some(inc => inc.name === sName);
+                    if (!isInc) {
+                      if (!extraList.some(item => item.name === sName)) {
+                        extraList.push(typeof s === 'object' ? s : { name: s });
+                      }
+                    }
+                  });
+                }
+
+                return [
+                  ['📦 Dịch vụ', detailBooking.packageName || detailBooking.packageId?.name || '—'],
+                  ...(includedList.length > 0
+                    ? [['📋 Dịch vụ bao gồm', includedList.map((sub, i) => {
+                        const sName = sub.name || sub;
+                        const dur = sub.duration || (detailBooking.packageId?.subServices || []).find(x => x.name === sName)?.duration;
+                        return (
+                          <span key={i} style={{ fontSize: 11, color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: 12, marginLeft: 4, border: '1px solid #a7f3d0' }}>
+                            {sName} {dur ? `(${dur}p)` : ''}
+                          </span>
+                        );
+                      })]]
+                    : []),
+                  ...(extraList.length > 0
+                    ? [['➕ Dịch vụ thêm', extraList.map((sub, i) => {
+                        const sName = sub.name || sub;
+                        const dur = sub.duration || (detailBooking.packageId?.subServices || []).find(x => x.name === sName)?.duration;
+                        return (
+                          <span key={i} style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, marginLeft: 4 }}>
+                            + {sName} {dur ? `(${dur}p)` : ''}
+                          </span>
+                        );
+                      })]]
+                    : []),
+                  ['📅 Ngày', formatDate(detailBooking.bookingDate)],
                 ['⏰ Giờ', detailBooking.startTime || '—'],
                 ['🏢 Chi nhánh', detailBooking.branchName || detailBooking.branchId?.name || '—'],
                 ['🪪 Biển số', detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || '—'],
@@ -773,15 +836,6 @@ export default function BookingsHistory({ apiBase, token }) {
                   <span style={{ fontSize: 13, color: '#64748b' }}>{label}</span>
                   <div style={{ textAlign: 'right', maxWidth: '60%' }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{value}</span>
-                    {label === '📦 Dịch vụ' && detailBooking.selectedSubServices && detailBooking.selectedSubServices.length > 0 && (
-                      <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
-                        {detailBooking.selectedSubServices.map((sub, idx) => (
-                          <span key={idx} style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12 }}>
-                            + {sub.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
