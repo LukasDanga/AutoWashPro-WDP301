@@ -889,11 +889,12 @@ exports.refundPayment = async (bookingId) => {
       user.walletBalance = (user.walletBalance || 0) + payment.amount;
       await user.save({ session });
       
+      const shortBookingCode = String(bookingId).slice(-6).toUpperCase();
       await mongoose.model('WalletTransaction').create([{
         userId: user._id,
         amount: payment.amount,
         type: 'credit',
-        reason: `Hoàn tiền cho đơn đặt lịch #${bookingId}`,
+        reason: `Hoàn tiền cho đơn đặt lịch #${shortBookingCode}`,
         bookingId: booking._id
       }], { session });
     }

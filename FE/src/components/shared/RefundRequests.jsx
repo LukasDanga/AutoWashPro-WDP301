@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
+import useSSE from '@/hooks/useSSE';
 import {
   ArrowUUpLeft,
   ArrowClockwise,
@@ -217,6 +218,11 @@ export default function RefundRequests() {
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  const token = getStoredToken();
+  useSSE(token, 'refund_request_new', load);
+  useSSE(token, 'refund_request_updated', load);
+  useSSE(token, 'refund_requests_updated', load);
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
   const approvedCount = requests.filter(r => r.status === 'approved').length;

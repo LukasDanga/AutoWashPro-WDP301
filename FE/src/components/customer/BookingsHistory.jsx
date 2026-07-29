@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
+import useSSE from '../../hooks/useSSE';
 import VoucherPicker from '../VoucherPicker.jsx';
 import { Percent, Ticket } from 'lucide-react';
 
@@ -155,28 +156,34 @@ export default function BookingsHistory({ apiBase, token }) {
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState('');
 
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await fetch(`${apiBase}/bookings/my`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error('Không thể tải lịch sử đặt chỗ');
-        const payload = await res.json();
-        const data = payload?.data || payload;
-        if (mounted) setBookings(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (mounted) setError(err.message || 'Lỗi tải lịch sử');
-      } finally {
-        if (mounted) setLoading(false);
-      }
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${apiBase}/bookings/my`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Không thể tải lịch sử đặt chỗ');
+      const payload = await res.json();
+      const data = payload?.data || payload;
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || 'Lỗi tải lịch sử');
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => { mounted = false; };
   }, [apiBase, token]);
+
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
+
+  useSSE(token, 'notification', fetchBookings);
+  useSSE(token, 'my_bookings_updated', fetchBookings);
+  useSSE(token, 'booking_new', fetchBookings);
+  useSSE(token, 'booking_update', fetchBookings);
+  useSSE(token, 'points_updated', fetchBookings);
+  useSSE(token, 'refund_request_updated', fetchBookings);
 
   useEffect(() => {
     let mounted = true;

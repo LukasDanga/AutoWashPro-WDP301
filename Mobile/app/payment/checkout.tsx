@@ -78,7 +78,7 @@ const WEEKDAYS_MAP: Record<number, string> = {
 export default function PaymentCheckoutScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const colors = useColors();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -481,12 +481,11 @@ export default function PaymentCheckoutScreen() {
       const isPaid = await checkPaid();
       if (!isPaid) {
         toast.error('Chưa nhận được thanh toán', 'Vui lòng chờ giây lát hoặc kiểm tra lại sau khi đã chuyển khoản.');
+        setIsProcessing(false);
         return;
       }
       
-      // If paid and in provisional mode, we need to create booking (but since checkPaid requires bookingId, 
-      // provisional payments can't be checked this way without backend support for transaction ID polling).
-      // For now, it will just say not paid.
+      // Only proceed with booking creation after confirmed payment
       if (isProvisional) {
         const payType = paymentMode === 'full' ? 'full' : 'deposit';
         const newBookingId = await createBookingFromDraft();
@@ -1233,7 +1232,7 @@ export default function PaymentCheckoutScreen() {
                 Ví AutoWash
               </AppText>
               <AppText variant="caption" color="textSecondary">
-                Thanh toán ngay bằng số dư ví
+                Số dư: {formatCurrency(user?.walletBalance || 0)}
               </AppText>
             </View>
             {paymentMethod === 'wallet' ? (
@@ -1330,7 +1329,7 @@ export default function PaymentCheckoutScreen() {
       <View style={bottomActionStyle}>
         <View style={styles.bottomRow}>
           <View style={styles.bottomBack}>
-            <Button title="Quay lại" variant="outline" onPress={() => router.back()} fullWidth size="large" />
+            <Button title="Quay lại" variant="outline" onPress={() => router.back()} fullWidth size="medium" />
           </View>
           <View style={styles.bottomPay}>
             <Button
@@ -1339,7 +1338,7 @@ export default function PaymentCheckoutScreen() {
               loading={isProcessing}
               disabled={amount <= 0}
               fullWidth
-              size="large"
+              size="medium"
             />
           </View>
         </View>

@@ -83,7 +83,7 @@ export default function NotificationsScreen() {
   const { isDark } = useTheme();
   const styles = createStyles(colors);
   const { isAuthenticated } = useAuth();
-  const { markAsRead: contextMarkAsRead, markAllAsRead: contextMarkAllAsRead } =
+  const { markAsRead: contextMarkAsRead, markAllAsRead: contextMarkAllAsRead, refreshNotifications } =
     useNotifications();
   const toast = useToast();
 
@@ -106,17 +106,20 @@ export default function NotificationsScreen() {
     try {
       const response = await notificationApi.getNotifications({ limit: 50 });
       setNotifications(response.notifications || []);
+      refreshNotifications();
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, refreshNotifications]);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [fetchNotifications])
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -391,7 +394,15 @@ export default function NotificationsScreen() {
         visible={!!selectedNotification}
         onClose={() => setSelectedNotification(null)}
         showCloseButton={false}
-        snapPoints={[0.6]}
+        snapPoints={[
+          selectedNotification?.data &&
+          (selectedNotification.data.bookingId ||
+            selectedNotification.data.voucherId ||
+            selectedNotification.data.paymentId ||
+            selectedNotification.data.url)
+            ? 0.42
+            : 0.35,
+        ]}
       >
         {selectedNotification && (() => {
           const visual = VISUALS[selectedNotification.type] || {
@@ -506,26 +517,26 @@ export default function NotificationsScreen() {
               </LinearGradient>
 
               {/* Body Content */}
-              <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 16 }}>
+              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, gap: 12 }}>
                 <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.borderLight || '#F1F5F9' }}>
                   <AppText variant="body" color="textSecondary" style={{ lineHeight: 22 }}>
                     {selectedNotification.message}
                   </AppText>
                 </View>
 
-                <View style={{ gap: 12, marginTop: 48 }}>
+                <View style={{ gap: 10, marginTop: 12 }}>
                   {hasLink && (
                     <Button
                       variant="primary"
                       title="Xem chi tiết"
-                      size="large"
+                      size="medium"
                       onPress={handleDeepLink}
                     />
                   )}
                   <Button
                     variant="outline"
                     title="Xóa thông báo"
-                    size="large"
+                    size="medium"
                     style={{ borderColor: colors.error }}
                     textStyle={{ color: colors.error }}
                     onPress={() => {

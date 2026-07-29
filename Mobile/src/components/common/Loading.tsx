@@ -45,7 +45,7 @@ export const Loading: React.FC<LoadingProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, message ? null : styles.containerSmall]}>
       <ActivityIndicator size={size} color={spinnerColor} />
       {message && (
         <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
@@ -109,6 +109,9 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  containerSmall: {
+    padding: 0,
   },
   fullScreenContainer: {
     flex: 1,

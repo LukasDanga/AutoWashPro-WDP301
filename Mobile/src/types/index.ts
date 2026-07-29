@@ -364,7 +364,7 @@ export interface SlotPack {
   priority: number;
   packCode: string;
   expiresAt?: string;
-  status: 'active' | 'exhausted' | 'expired' | 'cancelled';
+  status: 'pending' | 'active' | 'exhausted' | 'expired' | 'cancelled';
   paymentStatus: 'unpaid' | 'paid';
   paidAt?: string;
   createdAt: string;

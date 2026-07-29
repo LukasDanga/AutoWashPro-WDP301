@@ -27,7 +27,14 @@ const SYNC_EVENTS: SSEEventType[] = [
   SOCKET_EVENTS.MY_BOOKINGS_UPDATED,
   SOCKET_EVENTS.FEEDBACK_NEW,
   SOCKET_EVENTS.BOOKING_NEW,
-  SOCKET_EVENTS.MY_VEHICLES_UPDATED
+  SOCKET_EVENTS.MY_VEHICLES_UPDATED,
+  SOCKET_EVENTS.REFUND_REQUEST_UPDATED,
+  SOCKET_EVENTS.REFUND_REQUESTS_UPDATED,
+  SOCKET_EVENTS.POINTS_UPDATED,
+  SOCKET_EVENTS.PAYMENT_CONFIRMED,
+  SOCKET_EVENTS.WALLET_TOPUP_SUCCESS,
+  SOCKET_EVENTS.SPIN_ADDED,
+  SOCKET_EVENTS.SLOT_PACK_PAID,
 ];
 
 class SSEService {
@@ -36,10 +43,14 @@ class SSEService {
   private currentUserId: string | null = null;
 
   async connect(userId: string): Promise<void> {
-    if (this.socket && this.socket.connected && this.currentUserId === userId) {
+    // If already connected to socket AND for the same user, do nothing.
+    if (this.socket?.connected && this.currentUserId === userId) {
       return;
     }
-    this.disconnect();
+    // Tear down old socket if user changed OR socket is in a bad state.
+    if (this.socket) {
+      this.disconnect();
+    }
     this.currentUserId = userId;
 
     const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
@@ -58,20 +69,15 @@ class SSEService {
 
     this.socket.on('connect', () => {
       console.log('[Socket] Connected:', this.socket?.id);
-      
-      // Reconnect recovery strategy: force mounted components to re-fetch critical data
-      SYNC_EVENTS.forEach(eventName => {
-        this.emit(eventName, {
-          type: eventName,
-          data: { isSync: true },
-          timestamp: new Date().toISOString()
-        });
-      });
-      
+
+      // Reconnect recovery: fire a single 'sync_request' event instead of
+      // re-emitting every SYNC_EVENTS entry — that was causing the React
+      // notification/auth contexts to re-fetch 13+ times per reconnect,
+      // which combined with state updates triggered "Maximum update depth".
       this.emit('sync_request', {
         type: 'sync_request',
-        data: {},
-        timestamp: new Date().toISOString()
+        data: { isSync: true },
+        timestamp: new Date().toISOString(),
       });
     });
 
@@ -116,18 +122,21 @@ class SSEService {
     return this.socket ? this.socket.connected : false;
   }
 
+  getCurrentUserId(): string | null {
+    return this.currentUserId;
+  }
+
   private mapEventType(name: string): SSEEventType {
-    switch (name) {
-      case SOCKET_EVENTS.NOTIFICATION: return SOCKET_EVENTS.NOTIFICATION;
-      case SOCKET_EVENTS.BOOKING_NEW: return SOCKET_EVENTS.BOOKING_NEW;
-      case SOCKET_EVENTS.WALLET_TOPUP_SUCCESS: return SOCKET_EVENTS.WALLET_TOPUP_SUCCESS;
-      case SOCKET_EVENTS.SPIN_ADDED: return SOCKET_EVENTS.SPIN_ADDED;
-      case SOCKET_EVENTS.SLOT_PACK_PAID: return SOCKET_EVENTS.SLOT_PACK_PAID;
-      case SOCKET_EVENTS.MY_BOOKINGS_UPDATED: return SOCKET_EVENTS.MY_BOOKINGS_UPDATED;
-      case SOCKET_EVENTS.SLOTS_UPDATED: return SOCKET_EVENTS.SLOTS_UPDATED;
-      case SOCKET_EVENTS.PING: return SOCKET_EVENTS.PING;
-      default: return SOCKET_EVENTS.SYSTEM;
+    // Check if the event name matches any known SOCKET_EVENTS value
+    const knownEvents = Object.values(SOCKET_EVENTS) as string[];
+    if (knownEvents.includes(name)) {
+      return name as SSEEventType;
     }
+    // Also pass through known SSE-only types
+    if (['booking_update', 'payment_update', 'sync_request'].includes(name)) {
+      return name as SSEEventType;
+    }
+    return name as SSEEventType;
   }
 
   private emit(type: SSEEventType | 'all', event: SSEEvent): void {

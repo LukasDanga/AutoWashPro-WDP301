@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, parseISO, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, getDaysInMonth, addDays, subDays } from 'date-fns';
@@ -38,8 +39,9 @@ import {
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
-import { formatCurrency } from '../../src/utils';
+import { sseService } from '../../src/services/sse';
 import type { Booking, BookingStatus, SlotPack } from '../../src/types';
+import { formatCurrency } from '../../src/utils';
 
 type ViewMode = 'calendar' | 'week' | 'list' | 'slot_packs';
 type FilterKey = 'all' | 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
@@ -235,6 +237,21 @@ export default function HistoryScreen() {
     }, 400);
     return () => {
       if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    };
+  }, [fetchBookings]);
+
+  // Subscribe to real-time events for bookings & feedback updates
+  useEffect(() => {
+    const unsub1 = sseService.subscribe('my_bookings_updated', () => fetchBookings());
+    const unsub2 = sseService.subscribe('booking_update', () => fetchBookings());
+    const unsub3 = sseService.subscribe('notification', () => fetchBookings());
+    const unsub4 = sseService.subscribe('all', () => fetchBookings());
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
     };
   }, [fetchBookings]);
 
@@ -574,13 +591,13 @@ export default function HistoryScreen() {
                 <View style={[styles.visPlateTag, { backgroundColor: colors.successLight }]}>
                   <AppText style={[styles.visPlateText, { color: colors.success }]}>Đã TT</AppText>
                 </View>
-              ) : b.depositAmount > 0 && (b.depositPaid || b.paymentStatus === 'deposit_paid') ? (
+              ) : (b.depositAmount ?? 0) > 0 && (b.depositPaid || b.paymentStatus === 'deposit_paid') ? (
                 <View style={[styles.visPlateTag, { backgroundColor: colors.successLight }]}>
-                  <AppText style={[styles.visPlateText, { color: colors.success }]}>Cọc {formatCurrency(b.depositAmount)}</AppText>
+                  <AppText style={[styles.visPlateText, { color: colors.success }]}>Cọc {formatCurrency(b.depositAmount || 0)}</AppText>
                 </View>
-              ) : b.depositAmount > 0 && !b.depositPaid ? (
+              ) : (b.depositAmount ?? 0) > 0 && !b.depositPaid ? (
                 <View style={[styles.visPlateTag, { backgroundColor: colors.warningLight }]}>
-                  <AppText style={[styles.visPlateText, { color: colors.warning }]}>Cọc {formatCurrency(b.depositAmount)}</AppText>
+                  <AppText style={[styles.visPlateText, { color: colors.warning }]}>Cọc {formatCurrency(b.depositAmount || 0)}</AppText>
                 </View>
               ) : null}
             </View>
@@ -1267,7 +1284,7 @@ export default function HistoryScreen() {
                       </View>
                     </View>
                   )}
-                  {detailBooking.depositAmount > 0 && (
+                  {typeof detailBooking.depositAmount === 'number' && detailBooking.depositAmount > 0 && (
                     <View style={styles.infoRow}>
                       <AppText variant="caption" color="textSecondary">Tiền cọc</AppText>
                       <AppText variant="bodySmall" color={detailBooking.depositPaid ? 'success' : 'warning'} style={styles.infoValue}>
@@ -1372,41 +1389,43 @@ export default function HistoryScreen() {
       {/* ═══ CANCEL CONFIRM MODAL ═══ */}
       <Modal visible={showCancelConfirm} transparent animationType="fade" onRequestClose={() => setShowCancelConfirm(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelError(''); } }}>
-          <TouchableOpacity style={[styles.confirmModal, { backgroundColor: colors.background }]} activeOpacity={1}>
-            <AppText variant="h4" color="textPrimary" style={{ textAlign: 'center', marginBottom: spacing.sm }}>Xác nhận hủy đơn</AppText>
-            <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: spacing.lg }}>
-              Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.
-            </AppText>
-            {cancelError ? (
-              <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
-                <AppText variant="caption" color="error">{cancelError}</AppText>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'padding'} style={{ width: '100%', alignItems: 'center' }}>
+            <TouchableOpacity style={[styles.confirmModal, { backgroundColor: colors.background }]} activeOpacity={1}>
+              <AppText variant="h4" color="textPrimary" style={{ textAlign: 'center', marginBottom: spacing.sm }}>Xác nhận hủy đơn</AppText>
+              <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: spacing.lg }}>
+                Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.
+              </AppText>
+              {cancelError ? (
+                <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+                  <AppText variant="caption" color="error">{cancelError}</AppText>
+                </View>
+              ) : null}
+              <TextInput
+                value={cancelReason}
+                onChangeText={setCancelReason}
+                placeholder="Nhập lý do hủy đơn..."
+                style={[styles.reviewInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary, marginBottom: spacing.md, minHeight: 80 }]}
+                placeholderTextColor={colors.textTertiary}
+                multiline
+              />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <Button
+                  title="Không, giữ lại"
+                  variant="outline"
+                  onPress={() => { setShowCancelConfirm(false); setCancelError(''); }}
+                  disabled={cancelLoading}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title={cancelLoading ? 'Đang hủy...' : 'Xác nhận hủy'}
+                  onPress={confirmCancel}
+                  disabled={cancelLoading}
+                  style={{ flex: 1, backgroundColor: colors.error }}
+                  textStyle={{ color: '#FFF' }}
+                />
               </View>
-            ) : null}
-            <TextInput
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              placeholder="Nhập lý do hủy đơn..."
-              style={[styles.reviewInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary, marginBottom: spacing.md, minHeight: 80 }]}
-              placeholderTextColor={colors.textTertiary}
-              multiline
-            />
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Button
-                title="Không, giữ lại"
-                variant="outline"
-                onPress={() => { setShowCancelConfirm(false); setCancelError(''); }}
-                disabled={cancelLoading}
-                style={{ flex: 1 }}
-              />
-              <Button
-                title={cancelLoading ? 'Đang hủy...' : 'Xác nhận hủy'}
-                onPress={confirmCancel}
-                disabled={cancelLoading}
-                style={{ flex: 1, backgroundColor: colors.error }}
-                textStyle={{ color: '#FFF' }}
-              />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
 
@@ -2216,6 +2235,12 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius.xl + 4,
   },
   rebookInput: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    padding: spacing.md,
+    fontSize: 14,
+  },
+  reviewInput: {
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
     padding: spacing.md,
