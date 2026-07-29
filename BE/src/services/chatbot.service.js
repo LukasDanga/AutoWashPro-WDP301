@@ -2,9 +2,17 @@ const { OpenAI } = require('openai');
 const branchService = require('./branch.service');
 const packageService = require('./package.service');
 const bookingService = require('./booking.service');
-const { Vehicle } = require('../models');
+const slotPackService = require('./slotPack.service');
+const authService = require('./auth.service');
+const { Vehicle, User, Branch, Booking, SlotPack, Package } = require('../models');
+const FE_URL = (process.env.FE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+const MOBILE_DEEPLINK = 'autowashpro';
+const BASE_INSTRUCTION = require('./chatbot/base.instruction');
+const CUSTOMER_INSTRUCTION = require('./chatbot/customer.instruction');
+const MANAGER_INSTRUCTION = require('./chatbot/manager.instruction');
+const ADMIN_INSTRUCTION = require('./chatbot/admin.instruction');
 
-// ─── Singleton OpenAI client (khởi tạo 1 lần, tái dùng mọi request) ───────────
+// ─── Singleton OpenAI client ────────────────────────────────────────────────────
 let _openai = null;
 let _modelName = null;
 
@@ -30,7 +38,19 @@ function getOpenAI() {
   return { openai: _openai, modelName: _modelName };
 }
 
-// ─── Session management ────────────────────────────────────────────────────────
+// ─── System prompt composer ──────────────────────────────────────────────────────
+const ROLE_INSTRUCTIONS = {
+  customer: CUSTOMER_INSTRUCTION,
+  manager: MANAGER_INSTRUCTION,
+  admin: ADMIN_INSTRUCTION,
+};
+
+function composeSystemPrompt(role) {
+  const roleInstruction = ROLE_INSTRUCTIONS[role] || CUSTOMER_INSTRUCTION;
+  return `${BASE_INSTRUCTION}\n\n${roleInstruction}`;
+}
+
+// ─── Session management ──────────────────────────────────────────────────────────
 const SESSION_TIMEOUT = 30 * 60 * 1000;
 const sessions = new Map();
 
@@ -47,51 +67,9 @@ function getSession(sessionId) {
   return sessions.get(sessionId);
 }
 
-// ─── System prompt ─────────────────────────────────────────────────────────────
-const SYSTEM_INSTRUCTION = `Bạn là trợ lý AI của AutoWashPro - hệ thống đặt lịch rửa xe thông minh. Nhiệm vụ của bạn là hỗ trợ khách hàng về dịch vụ của AutoWashPro.
+// ─── Tool declarations per role ──────────────────────────────────────────────────
 
-=== KIẾN THỨC VỀ AUTOWASHPRO ===
-
-AutoWashPro là nền tảng đặt lịch rửa xe trực tuyến với các tính năng:
-- Đặt lịch rửa xe trực tuyến (single, recurring, slot pack)
-- Thanh toán: Tiền mặt, chuyển khoản, VNPay, MoMo
-- Tích điểm & hạng thành viên: Đồng (0-99đ), Bạc (100-499đ), Vàng (500-999đ), Kim cương (1000+đ)
-- Giảm giá gói lượt theo hạng: Bạc 5%, Vàng 10%, Kim cương 15%
-- Voucher giảm giá, mã sinh nhật 20%
-- Kho quà tặng đổi bằng điểm
-- AI Chatbot hỗ trợ 24/7
-- Thông báo real-time, nhắc lịch trước 60 phút
-- Tự động hủy no-show sau 5 phút quá giờ
-- QR code check-in/check-out
-- Xếp lịch ưu tiên theo hạng thành viên
-- Hệ thống chi nhánh, gói dịch vụ đa dạng
-- Chính sách bảo mật, điều khoản sử dụng, hủy lịch, hoàn tiền đầy đủ
-
-=== GIỚI HẠN ===
-Bạn CHỈ được trả lời các câu hỏi liên quan đến AutoWashPro và dịch vụ rửa xe. Nếu khách hỏi về chủ đề khác (toán, văn, lập trình, tin tức, thời tiết, sức khỏe,...), hãy lịch sự từ chối:
-"Xin lỗi, tôi chỉ có thể hỗ trợ các câu hỏi liên quan đến dịch vụ rửa xe AutoWashPro. Bạn có muốn tìm hiểu về các gói dịch vụ, đặt lịch rửa xe, hoặc các chính sách của chúng tôi không? 😊"
-
-=== QUY TẮC HỘI THOẠI ===
-- Trả lời bằng ngôn ngữ khách đang dùng (ưu tiên tiếng Việt)
-- Tự hiểu ý dù khách viết sai chính tả, viết tắt, hoặc thiếu dấu
-- Luôn thân thiện, dùng icon phù hợp, xưng hô "bạn", "mình"
-- Câu trả lời ngắn gọn, dễ hiểu, không quá 3-4 câu nếu không cần thiết
-- Luôn chủ động gợi ý bước tiếp theo để giữ cuộc trò chuyện
-
-=== QUY TẮC ĐẶT LỊCH ===
-- Hỏi lần lượt: chi nhánh → gói dịch vụ → ngày → giờ → xe → xác nhận
-- Chỉ gọi create_booking sau khi khách đã xác nhận đầy đủ thông tin
-- Nếu chưa đăng nhập (isLoggedIn = false): chỉ tư vấn, yêu cầu đăng nhập để đặt lịch
-- Sau khi đặt thành công: báo mã booking, thời gian, chi nhánh, tổng tiền, và nhắc khách đến đúng giờ
-
-=== ĐỊNH DẠNG ===
-- Giá tiền: VNĐ (vd: 150.000đ)
-- Thời gian: HH:mm
-- Ngày tháng theo chuẩn Việt Nam
-- Dùng icon phù hợp: 📅 💰 🚗 ✅ 🎉 ⏰ 🏪`;
-
-// ─── Tool declarations ─────────────────────────────────────────────────────────
-const openAiTools = [
+const customerTools = [
   {
     type: 'function',
     function: {
@@ -106,11 +84,9 @@ const openAiTools = [
       name: 'get_packages',
       description: 'Lấy danh sách gói dịch vụ rửa xe của một chi nhánh',
       parameters: {
-        type: 'object',
-        properties: {
+        type: 'object', properties: {
           branchId: { type: 'string', description: 'ID của chi nhánh' },
-        },
-        required: ['branchId'],
+        }, required: ['branchId'],
       },
     }
   },
@@ -120,13 +96,11 @@ const openAiTools = [
       name: 'check_availability',
       description: 'Kiểm tra khung giờ còn trống tại chi nhánh vào một ngày cụ thể với gói dịch vụ đã chọn',
       parameters: {
-        type: 'object',
-        properties: {
+        type: 'object', properties: {
           branchId: { type: 'string', description: 'ID chi nhánh' },
           packageId: { type: 'string', description: 'ID gói dịch vụ' },
           date: { type: 'string', description: 'Ngày kiểm tra định dạng YYYY-MM-DD' },
-        },
-        required: ['branchId', 'packageId', 'date'],
+        }, required: ['branchId', 'packageId', 'date'],
       },
     }
   },
@@ -141,47 +115,319 @@ const openAiTools = [
   {
     type: 'function',
     function: {
+      name: 'get_my_slot_packs',
+      description: 'Lấy danh sách gói lượt (slot pack) của người dùng đang đăng nhập: số lượt còn lại, chi nhánh, hạn sử dụng',
+      parameters: { type: 'object', properties: {}, required: [] },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_my_upcoming_bookings',
+      description: 'Lấy danh sách lịch đặt sắp tới của người dùng đang đăng nhập (bao gồm booking chờ xác nhận hoặc đã xác nhận)',
+      parameters: { type: 'object', properties: {}, required: [] },
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'create_booking',
       description: 'Tạo lịch đặt rửa xe cho người dùng sau khi đã xác nhận đầy đủ thông tin',
       parameters: {
-        type: 'object',
-        properties: {
+        type: 'object', properties: {
           branchId: { type: 'string', description: 'ID chi nhánh' },
           packageId: { type: 'string', description: 'ID gói dịch vụ' },
           vehicleId: { type: 'string', description: 'ID xe của khách hàng' },
           bookingDate: { type: 'string', description: 'Ngày đặt lịch YYYY-MM-DD' },
           startTime: { type: 'string', description: 'Giờ bắt đầu HH:mm' },
           note: { type: 'string', description: 'Ghi chú tuỳ chọn' },
-        },
-        required: ['branchId', 'packageId', 'vehicleId', 'bookingDate', 'startTime'],
+        }, required: ['branchId', 'packageId', 'vehicleId', 'bookingDate', 'startTime'],
       },
     }
   },
 ];
 
-// ─── Tool executor ─────────────────────────────────────────────────────────────
-async function executeTool(name, args, userId) {
+const managerTools = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_branches',
+      description: 'Lấy thông tin chi nhánh bạn đang quản lý',
+      parameters: { type: 'object', properties: {}, required: [] },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_packages',
+      description: 'Xem danh sách gói dịch vụ rửa xe tại chi nhánh của bạn',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID của chi nhánh' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_branch_bookings',
+      description: 'Xem danh sách đặt lịch tại chi nhánh, có thể lọc theo ngày và trạng thái. Nếu không truyền ngày thì mặc định hôm nay.',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID chi nhánh' },
+          date: { type: 'string', description: 'Ngày cần xem (YYYY-MM-DD), mặc định hôm nay' },
+          status: { type: 'string', description: 'Lọc theo trạng thái: pending, confirmed, checked_in, in_progress, completed, cancelled' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_dashboard_stats',
+      description: 'Xem thống kê hôm nay của chi nhánh: số booking, check-in, doanh thu',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID chi nhánh' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_booking_status',
+      description: 'Cập nhật trạng thái một booking: checked_in (khách đã đến), in_progress (đang rửa), completed (hoàn thành), cancelled (hủy)',
+      parameters: {
+        type: 'object', properties: {
+          bookingId: { type: 'string', description: 'ID của booking cần cập nhật' },
+          status: { type: 'string', description: 'Trạng thái mới: checked_in, in_progress, completed, cancelled' },
+        }, required: ['bookingId', 'status'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_customer',
+      description: 'Tìm kiếm khách hàng theo tên hoặc số điện thoại',
+      parameters: {
+        type: 'object', properties: {
+          query: { type: 'string', description: 'Tên hoặc số điện thoại khách hàng' },
+        }, required: ['query'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_branch_slot_packs',
+      description: 'Xem danh sách gói lượt (slot pack) đang hoạt động tại chi nhánh',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID chi nhánh' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+];
+
+const adminTools = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_branches',
+      description: 'Lấy danh sách tất cả chi nhánh. Có thể lọc theo trạng thái hoặc tìm kiếm.',
+      parameters: {
+        type: 'object', properties: {
+          status: { type: 'string', description: 'Lọc: active, inactive' },
+          search: { type: 'string', description: 'Tìm theo tên chi nhánh' },
+        }, required: [],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_branch_details',
+      description: 'Xem chi tiết một chi nhánh: thông tin, quản lý, số gói dịch vụ, booking hôm nay',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID chi nhánh' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_packages',
+      description: 'Xem gói dịch vụ của một chi nhánh',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID của chi nhánh' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_system_stats',
+      description: 'Xem thống kê toàn hệ thống: tổng booking, doanh thu, người dùng, chi nhánh',
+      parameters: { type: 'object', properties: {}, required: [] },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_all_bookings',
+      description: 'Xem tất cả đặt lịch trên toàn hệ thống. Có thể lọc theo ngày, chi nhánh, trạng thái.',
+      parameters: {
+        type: 'object', properties: {
+          date: { type: 'string', description: 'Ngày cần xem (YYYY-MM-DD)' },
+          branchId: { type: 'string', description: 'Lọc theo chi nhánh' },
+          status: { type: 'string', description: 'Lọc theo trạng thái: pending, confirmed, checked_in, in_progress, completed, cancelled' },
+        }, required: [],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_branch_bookings',
+      description: 'Xem đặt lịch của một chi nhánh cụ thể theo ngày và trạng thái',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID chi nhánh' },
+          date: { type: 'string', description: 'Ngày cần xem (YYYY-MM-DD), mặc định hôm nay' },
+          status: { type: 'string', description: 'Lọc theo trạng thái' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_dashboard_stats',
+      description: 'Xem thống kê hôm nay của một chi nhánh',
+      parameters: {
+        type: 'object', properties: {
+          branchId: { type: 'string', description: 'ID chi nhánh' },
+        }, required: ['branchId'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_users',
+      description: 'Tìm kiếm người dùng theo tên, email hoặc số điện thoại',
+      parameters: {
+        type: 'object', properties: {
+          query: { type: 'string', description: 'Tên, email hoặc số điện thoại' },
+        }, required: ['query'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_user_status',
+      description: 'Kích hoạt / vô hiệu hóa / khóa tài khoản người dùng',
+      parameters: {
+        type: 'object', properties: {
+          userId: { type: 'string', description: 'ID người dùng' },
+          status: { type: 'string', description: 'Trạng thái mới: active, inactive, suspended' },
+        }, required: ['userId', 'status'],
+      },
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_customer',
+      description: 'Tìm kiếm khách hàng theo tên hoặc số điện thoại',
+      parameters: {
+        type: 'object', properties: {
+          query: { type: 'string', description: 'Tên hoặc số điện thoại' },
+        }, required: ['query'],
+      },
+    }
+  },
+];
+
+function getToolsForRole(role) {
+  switch (role) {
+    case 'admin': return adminTools;
+    case 'manager': return managerTools;
+    case 'customer': return customerTools;
+    default: return customerTools;
+  }
+}
+
+// ─── Tool executor (role-aware) ──────────────────────────────────────────────────
+
+async function executeTool(name, args, userId, role) {
+  const isCustomer = role === 'customer' || !role;
+  const isManager = role === 'manager';
+  const isAdmin = role === 'admin';
+
   switch (name) {
+    // ── Shared: get_branches ──
     case 'get_branches': {
-      const branches = await branchService.getAllBranches({ status: 'active' });
+      if (isCustomer) {
+        const result = await branchService.getAllBranches({ status: 'active' });
+        const branches = result.data || result;
+        return branches.map(b => ({
+          id: String(b._id), name: b.name, address: b.address,
+          phone: b.phone || '', openingTime: b.openingTime || '07:00', closingTime: b.closingTime || '20:00',
+        }));
+      }
+      if (isManager) {
+        const result = await branchService.getAllBranches({}, { id: userId, role: 'manager' });
+        const branches = result.data || result;
+        return branches.map(b => ({
+          id: String(b._id), name: b.name, address: b.address,
+          phone: b.phone || '', openingTime: b.openingTime || '07:00', closingTime: b.closingTime || '20:00',
+          status: b.status, managerName: b.managerId?.name || '',
+        }));
+      }
+      // Admin
+      const filter = {};
+      if (args.status) filter.status = args.status;
+      if (args.search) filter.search = args.search;
+      const result = await branchService.getAllBranches(filter, { id: userId, role: 'admin' });
+      const branches = result.data || result;
       return branches.map(b => ({
         id: String(b._id), name: b.name, address: b.address,
-        phone: b.phone || '', openingTime: b.openingTime || '07:00', closingTime: b.closingTime || '20:00',
+        phone: b.phone || '', status: b.status || 'active',
+        openingTime: b.openingTime || '07:00', closingTime: b.closingTime || '20:00',
+        managerName: b.managerId?.name || '', managerId: String(b.managerId?._id || ''),
       }));
     }
+
+    // ── Shared: get_packages ──
     case 'get_packages': {
-      const pkgs = await packageService.getAllPackages({ branchId: args.branchId, status: 'active' });
+      const result = await packageService.getAllPackages({ branchId: args.branchId, status: 'active' });
+      const pkgs = result.data || result;
       return pkgs.map(p => ({
         id: String(p._id), name: p.name, price: p.price, duration: p.duration, description: p.description || '',
       }));
     }
+
+    // ── Customer-only tools ──
     case 'check_availability': {
+      if (!isCustomer) return { error: 'Công cụ này chỉ dành cho khách hàng' };
       const slots = await bookingService.getAvailableSlots(args.branchId, args.date, args.packageId);
       const available = slots.filter(s => s.available);
       if (available.length === 0) return { message: 'Không còn khung giờ trống trong ngày này' };
       return available.map(s => ({ startTime: s.startTime, endTime: s.endTime, vipOnly: !!s.vipOnly }));
     }
+
     case 'get_user_vehicles': {
+      if (!isCustomer) return { error: 'Công cụ này chỉ dành cho khách hàng' };
       if (!userId) return { error: 'Chưa đăng nhập' };
       const vehicles = await Vehicle.find({ userId });
       if (!vehicles.length) return { message: 'Bạn chưa có xe nào. Vui lòng thêm xe trong hồ sơ trước.' };
@@ -190,7 +436,9 @@ async function executeTool(name, args, userId) {
         brand: v.brand || '', color: v.color || '',
       }));
     }
+
     case 'create_booking': {
+      if (!isCustomer) return { error: 'Công cụ này chỉ dành cho khách hàng' };
       if (!userId) return { error: 'Bạn cần đăng nhập để đặt lịch' };
       const booking = await bookingService.createBooking({ ...args, userId });
       return {
@@ -200,6 +448,221 @@ async function executeTool(name, args, userId) {
         finalPrice: booking.finalPrice,
       };
     }
+
+    // ── Manager/Admin: get_branch_bookings ──
+    case 'get_branch_bookings': {
+      if (isCustomer) return { error: 'Công cụ này chỉ dành cho quản lý và admin' };
+      const filters = {
+        branchId: args.branchId,
+        status: args.status || undefined,
+        bookingDate: args.date || new Date().toISOString().split('T')[0],
+        limit: '20',
+      };
+      const bookings = await bookingService.getAllBookings(filters, role, userId);
+      const list = bookings?.bookings || bookings?.data || [];
+      return list.map(b => ({
+        id: String(b._id), customerName: b.userId?.name || '',
+        phone: b.userId?.phone || '', licensePlate: b.vehicleId?.licensePlate || '',
+        packageName: b.packageId?.name || '', startTime: b.startTime, endTime: b.endTime,
+        status: b.status, finalPrice: b.finalPrice, bookingDate: b.bookingDate,
+      }));
+    }
+
+    // ── Manager/Admin: get_dashboard_stats ──
+    case 'get_dashboard_stats': {
+      if (isCustomer) return { error: 'Công cụ này chỉ dành cho quản lý và admin' };
+      const today = new Date().toISOString().split('T')[0];
+      const filters = { branchId: args.branchId, bookingDate: today, limit: '100' };
+      const bookings = await bookingService.getAllBookings(filters, role, userId);
+      const list = bookings?.bookings || bookings?.data || [];
+      const total = list.length;
+      const checkedIn = list.filter(b => b.status === 'checked_in').length;
+      const inProgress = list.filter(b => b.status === 'in_progress').length;
+      const completed = list.filter(b => b.status === 'completed').length;
+      const pending = list.filter(b => b.status === 'pending' || b.status === 'confirmed').length;
+      const revenue = list.filter(b => b.status === 'completed').reduce((sum, b) => sum + (b.finalPrice || 0), 0);
+      return {
+        date: today, totalBookings: total, checkedIn, inProgress, completed, pending,
+        totalRevenue: revenue, branchId: args.branchId,
+      };
+    }
+
+    // ── Manager/Admin: update_booking_status ──
+    case 'update_booking_status': {
+      if (isCustomer) return { error: 'Công cụ này chỉ dành cho quản lý và admin' };
+      const branch = isManager ? await Branch.findOne({ managerId: userId }) : null;
+      const branchId = isManager ? (branch?._id?.toString() || null) : null;
+      const updated = await bookingService.updateBookingStatus(args.bookingId, args.status, {}, role, branchId);
+      return {
+        success: true, bookingId: String(updated._id),
+        status: updated.status, message: `Đã cập nhật trạng thái thành: ${updated.status}`,
+      };
+    }
+
+    // ── Manager/Admin: search_customer ──
+    case 'search_customer': {
+      if (isCustomer) return { error: 'Công cụ này chỉ dành cho quản lý và admin' };
+      const re = new RegExp(args.query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const users = await User.find({
+        $or: [{ name: re }, { phone: re }],
+        role: 'customer',
+        isDeleted: { $ne: true },
+      }).limit(10).select('name email phone tier loyaltyPoints status');
+      return users.map(u => ({
+        id: String(u._id), name: u.name, email: u.email,
+        phone: u.phone || '', tier: u.tier, loyaltyPoints: u.loyaltyPoints, status: u.status,
+      }));
+    }
+
+    // ── Customer: get_my_upcoming_bookings ──
+    case 'get_my_upcoming_bookings': {
+      if (!isCustomer) return { error: 'Công cụ này chỉ dành cho khách hàng' };
+      if (!userId) return { error: 'Chưa đăng nhập' };
+      const filters = {
+        bookingDate: { $gte: new Date().toISOString().split('T')[0] },
+        status: { $in: ['pending', 'confirmed'] },
+        limit: '10',
+      };
+      const bookings = await bookingService.getAllBookings(filters, 'customer', userId);
+      const list = bookings?.bookings || bookings?.data || [];
+      if (!list.length) return { message: 'Bạn không có lịch đặt sắp tới nào.' };
+      return list.map(b => ({
+        id: String(b._id),
+        branchName: b.branchId?.name || '',
+        packageName: b.packageId?.name || '',
+        licensePlate: b.vehicleId?.licensePlate || '',
+        bookingDate: b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : '',
+        startTime: b.startTime,
+        endTime: b.endTime,
+        status: b.status,
+        finalPrice: b.finalPrice,
+        bookingType: b.bookingType || 'single',
+        detailUrl: `${FE_URL}/bookings/${b._id}`,
+        mobileDeepLink: `${MOBILE_DEEPLINK}://booking/${b._id}`,
+      }));
+    }
+
+    // ── Customer: get_my_slot_packs ──
+    case 'get_my_slot_packs': {
+      if (!isCustomer) return { error: 'Công cụ này chỉ dành cho khách hàng' };
+      if (!userId) return { error: 'Chưa đăng nhập' };
+      const packs = await slotPackService.getMySlotPacks(userId);
+      if (!packs || packs.length === 0) return { message: 'Bạn chưa có gói lượt nào.' };
+      return packs.map(sp => ({
+        id: String(sp._id), packCode: sp.packCode || '',
+        branchName: sp.branchId?.name || '', branchAddress: sp.branchId?.address || '',
+        packageName: sp.packageId?.name || '', packagePrice: sp.packageId?.price || 0,
+        totalSlots: sp.totalSlots, remainingSlots: sp.remainingSlots || 0,
+        usedSlots: (sp.totalSlots || 0) - (sp.remainingSlots || 0),
+        status: sp.status, expiresAt: sp.expiresAt,
+        createdAt: sp.createdAt,
+      }));
+    }
+
+    // ── Manager/Admin: get_branch_slot_packs ──
+    case 'get_branch_slot_packs': {
+      if (isCustomer) return { error: 'Công cụ này chỉ dành cho quản lý và admin' };
+      const slotPacks = await SlotPack.find({
+        branchId: args.branchId,
+        isDeleted: { $ne: true },
+      }).populate('userId', 'name phone').sort({ createdAt: -1 }).limit(20);
+      return slotPacks.map(sp => ({
+        id: String(sp._id), customerName: sp.userId?.name || '',
+        customerPhone: sp.userId?.phone || '', remainingSlots: sp.remainingSlots || 0,
+        totalSlots: sp.totalSlots, status: sp.status, expiresAt: sp.expiresAt,
+        packCode: sp.packCode || '',
+      }));
+    }
+
+    // ── Admin-only tools ──
+    case 'get_branch_details': {
+      if (!isAdmin) return { error: 'Công cụ này chỉ dành cho admin' };
+      const branch = await Branch.findById(args.branchId)
+        .populate('managerId', 'name email phone');
+      if (!branch) return { error: 'Chi nhánh không tồn tại' };
+      const today = new Date().toISOString().split('T')[0];
+      const bookingCount = await Booking.countDocuments({
+        branchId: args.branchId,
+        bookingDate: { $gte: new Date(today + 'T00:00:00.000Z'), $lte: new Date(today + 'T23:59:59.999Z') },
+      });
+      const packageCount = await Package.countDocuments({ branchId: args.branchId, isDeleted: { $ne: true } });
+      return {
+        id: String(branch._id), name: branch.name, address: branch.address,
+        phone: branch.phone || '', status: branch.status,
+        openingTime: branch.openingTime || '07:00', closingTime: branch.closingTime || '20:00',
+        manager: branch.managerId ? { name: branch.managerId.name, email: branch.managerId.email, phone: branch.managerId.phone } : null,
+        todayBookings: bookingCount, totalPackages: packageCount,
+      };
+    }
+
+    case 'get_system_stats': {
+      if (!isAdmin) return { error: 'Công cụ này chỉ dành cho admin' };
+      const today = new Date().toISOString().split('T')[0];
+      const [totalBranches, totalUsers, totalCustomers, totalManagers, totalAdmins, todayBookings, todayRevenue, totalBookings] = await Promise.all([
+        Branch.countDocuments({ isDeleted: { $ne: true } }),
+        User.countDocuments({ isDeleted: { $ne: true } }),
+        User.countDocuments({ role: 'customer', isDeleted: { $ne: true } }),
+        User.countDocuments({ role: 'manager', isDeleted: { $ne: true } }),
+        User.countDocuments({ role: 'admin', isDeleted: { $ne: true } }),
+        Booking.countDocuments({
+          bookingDate: { $gte: new Date(today + 'T00:00:00.000Z'), $lte: new Date(today + 'T23:59:59.999Z') },
+        }),
+        Booking.aggregate([
+          { $match: { bookingDate: { $gte: new Date(today + 'T00:00:00.000Z'), $lte: new Date(today + 'T23:59:59.999Z') }, status: 'completed' } },
+          { $group: { _id: null, total: { $sum: '$finalPrice' } } },
+        ]),
+        Booking.countDocuments({}),
+      ]);
+      return {
+        totalBranches, totalUsers: { all: totalUsers, customers: totalCustomers, managers: totalManagers, admins: totalAdmins },
+        todayBookings, todayRevenue: todayRevenue[0]?.total || 0, totalBookings,
+        date: today,
+      };
+    }
+
+    case 'get_all_bookings': {
+      if (!isAdmin) return { error: 'Công cụ này chỉ dành cho admin' };
+      const filters = {
+        status: args.status || undefined,
+        branchId: args.branchId || undefined,
+        bookingDate: args.date || undefined,
+        limit: '20',
+      };
+      const bookings = await bookingService.getAllBookings(filters, role, userId);
+      const list = bookings?.bookings || bookings?.data || [];
+      return list.map(b => ({
+        id: String(b._id), customerName: b.userId?.name || '', customerPhone: b.userId?.phone || '',
+        branchName: b.branchId?.name || '', packageName: b.packageId?.name || '',
+        licensePlate: b.vehicleId?.licensePlate || '',
+        startTime: b.startTime, endTime: b.endTime,
+        status: b.status, finalPrice: b.finalPrice, bookingDate: b.bookingDate,
+        bookingType: b.bookingType,
+      }));
+    }
+
+    case 'search_users': {
+      if (!isAdmin) return { error: 'Công cụ này chỉ dành cho admin' };
+      const re = new RegExp(args.query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const users = await User.find({
+        $or: [{ name: re }, { email: re }, { phone: re }],
+        isDeleted: { $ne: true },
+      }).limit(10).select('name email phone role status tier loyaltyPoints');
+      return users.map(u => ({
+        id: String(u._id), name: u.name, email: u.email,
+        phone: u.phone || '', role: u.role, status: u.status,
+        tier: u.tier, loyaltyPoints: u.loyaltyPoints,
+      }));
+    }
+
+    case 'manage_user_status': {
+      if (!isAdmin) return { error: 'Công cụ này chỉ dành cho admin' };
+      const validStatuses = ['active', 'inactive', 'suspended'];
+      if (!validStatuses.includes(args.status)) return { error: `Trạng thái không hợp lệ. Chấp nhận: ${validStatuses.join(', ')}` };
+      const user = await User.findByIdAndUpdate(args.userId, { status: args.status }, { new: true });
+      if (!user) return { error: 'Người dùng không tồn tại' };
+      return { success: true, userId: String(user._id), name: user.name, status: user.status };
+    }
+
     default:
       return { error: `Công cụ không tồn tại: ${name}` };
   }
@@ -224,18 +687,20 @@ function classifyError(err) {
   if (raw.includes('NOT_FOUND') || raw.includes('not found')) {
     return Object.assign(new Error('Model AI không tồn tại hoặc chưa được kích hoạt.'), { statusCode: 503 });
   }
-  console.error('[Chatbot] Gemini API error:', raw);
+  console.error('[Chatbot] API error:', raw);
   return Object.assign(new Error('Chatbot gặp sự cố. Vui lòng thử lại sau.'), { statusCode: 503 });
 }
 
 // ─── Resolve tool calls (shared between chat & stream) ────────────────────────
-async function resolveToolCalls(openai, modelName, session, userId) {
+async function resolveToolCalls(openai, modelName, session, userId, role) {
+  const systemPrompt = composeSystemPrompt(role);
+  const tools = getToolsForRole(role);
   for (let i = 0; i < 5; i++) {
-    const messages = [{ role: 'system', content: SYSTEM_INSTRUCTION }, ...session.history];
+    const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
     const response = await openai.chat.completions.create({
       model: modelName,
       messages,
-      tools: openAiTools,
+      tools,
       tool_choice: 'auto',
       max_tokens: 1024,
     });
@@ -245,18 +710,16 @@ async function resolveToolCalls(openai, modelName, session, userId) {
 
     const toolCalls = responseMessage.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
-      // No tool calls → this is the final text response
       const replyText = (responseMessage.content || '').trim();
       session.history.push({ role: 'assistant', content: replyText });
       return { done: true, reply: replyText };
     }
 
-    // Has tool calls → execute and continue loop
     session.history.push(responseMessage);
     for (const toolCall of toolCalls) {
       let args = {};
       try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch {}
-      const result = await executeTool(toolCall.function.name, args, userId).catch(err => ({ error: err.message }));
+      const result = await executeTool(toolCall.function.name, args, userId, role).catch(err => ({ error: err.message }));
       session.history.push({
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -265,21 +728,21 @@ async function resolveToolCalls(openai, modelName, session, userId) {
       });
     }
   }
-  return null; // exceeded max iterations
+  return null;
 }
 
 // ─── Standard (non-streaming) chat ───────────────────────────────────────────
-exports.chat = async (sessionId, message, userId) => {
+exports.chat = async (sessionId, message, userId, role = 'customer') => {
   const { openai, modelName } = getOpenAI();
   const session = getSession(sessionId);
 
   const userText = session.history.length === 0
-    ? `[isLoggedIn: ${!!userId}]\n${message}`
+    ? `[isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
     : message;
   session.history.push({ role: 'user', content: userText });
 
   try {
-    const result = await resolveToolCalls(openai, modelName, session, userId);
+    const result = await resolveToolCalls(openai, modelName, session, userId, role);
     return { reply: result?.reply || 'Xin lỗi, đã xảy ra lỗi xử lý. Vui lòng thử lại.' };
   } catch (err) {
     throw classifyError(err);
@@ -287,12 +750,14 @@ exports.chat = async (sessionId, message, userId) => {
 };
 
 // ─── Streaming chat (SSE) ─────────────────────────────────────────────────────
-exports.streamChat = async (sessionId, message, userId, res) => {
+exports.streamChat = async (sessionId, message, userId, role, res) => {
   const { openai, modelName } = getOpenAI();
   const session = getSession(sessionId);
+  const systemPrompt = composeSystemPrompt(role);
+  const tools = getToolsForRole(role);
 
   const userText = session.history.length === 0
-    ? `[isLoggedIn: ${!!userId}]\n${message}`
+    ? `[isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
     : message;
   session.history.push({ role: 'user', content: userText });
 
@@ -303,9 +768,9 @@ exports.streamChat = async (sessionId, message, userId, res) => {
   try {
     // Step 1: Resolve all tool calls synchronously (non-streaming)
     for (let i = 0; i < 5; i++) {
-      const messages = [{ role: 'system', content: SYSTEM_INSTRUCTION }, ...session.history];
+      const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
       const response = await openai.chat.completions.create({
-        model: modelName, messages, tools: openAiTools, tool_choice: 'auto',
+        model: modelName, messages, tools, tool_choice: 'auto',
         max_tokens: 1024,
       });
 
@@ -314,18 +779,16 @@ exports.streamChat = async (sessionId, message, userId, res) => {
 
       const toolCalls = responseMessage.tool_calls;
       if (!toolCalls || toolCalls.length === 0) {
-        // No tool calls — has direct text, but we'll re-ask with stream=true below
         break;
       }
 
-      // Notify client we're fetching data
       send({ type: 'thinking' });
 
       session.history.push(responseMessage);
       for (const toolCall of toolCalls) {
         let args = {};
         try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch {}
-        const result = await executeTool(toolCall.function.name, args, userId).catch(err => ({ error: err.message }));
+        const result = await executeTool(toolCall.function.name, args, userId, role).catch(err => ({ error: err.message }));
         session.history.push({
           role: 'tool', tool_call_id: toolCall.id,
           name: toolCall.function.name, content: JSON.stringify(result),
@@ -334,7 +797,7 @@ exports.streamChat = async (sessionId, message, userId, res) => {
     }
 
     // Step 2: Stream the final text response
-    const finalMessages = [{ role: 'system', content: SYSTEM_INSTRUCTION }, ...session.history];
+    const finalMessages = [{ role: 'system', content: systemPrompt }, ...session.history];
     const stream = await openai.chat.completions.create({
       model: modelName,
       messages: finalMessages,

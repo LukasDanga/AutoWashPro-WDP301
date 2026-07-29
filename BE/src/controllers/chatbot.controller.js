@@ -1,19 +1,26 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const chatbotService = require('../services/chatbot.service');
 const { catchAsync, success } = require('../utils/helpers');
+const { User } = require('../models');
 
-const extractUserId = (req) => {
+const extractUserInfo = async (req) => {
   try {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      return decoded.id || null;
+      const userId = decoded.id || null;
+      if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+        const user = await User.findById(userId).select('role name').lean();
+        if (user) return { userId: user._id.toString(), role: user.role, name: user.name };
+      }
+      return { userId, role: 'customer', name: '' };
     }
   } catch {
     // expired or invalid token — treat as anonymous
   }
-  return null;
+  return { userId: null, role: 'customer', name: '' };
 };
 
 // Standard (non-streaming) endpoint — kept as fallback
@@ -24,8 +31,8 @@ exports.chat = catchAsync(async (req, res) => {
   if (!sessionId)
     return res.status(400).json({ success: false, message: 'sessionId is required' });
 
-  const userId = extractUserId(req);
-  const result = await chatbotService.chat(sessionId, message.trim(), userId);
+  const userInfo = await extractUserInfo(req);
+  const result = await chatbotService.chat(sessionId, message.trim(), userInfo.userId, userInfo.role);
   success(res, result, 'OK');
 });
 
@@ -44,8 +51,8 @@ exports.streamChat = async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
   res.flushHeaders();
 
-  const userId = extractUserId(req);
-  await chatbotService.streamChat(sessionId, message.trim(), userId, res);
+  const userInfo = await extractUserInfo(req);
+  await chatbotService.streamChat(sessionId, message.trim(), userInfo.userId, userInfo.role, res);
 };
 
 exports.clearSession = catchAsync(async (req, res) => {
