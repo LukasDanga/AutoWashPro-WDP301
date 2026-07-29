@@ -1,10 +1,27 @@
 // Debug script to test unique index behavior
+//
+// L-4 SAFETY: script này chạy vào production DB và cleanup dữ liệu test.
+// Trước đây ai cũng có thể `node scripts/debug-payment-index.js` → vô tình
+// chạy trên prod → insert test records. Giờ:
+//   - Chỉ chạy khi NODE_ENV !== 'production' (hoặc MONGODB_URI chứa 'localhost' / 'staging')
+//   - Không cleanup data test nếu chạy prod-safe
 const mongoose = require('mongoose');
 require('dotenv').config();
 
 async function run() {
   const uri = process.env.MONGODB_URI;
   if (!uri) { console.error('MONGODB_URI not set'); process.exit(1); }
+
+  // Guard: block nếu NODE_ENV=production trừ khi DEBUG_PROD=1
+  if (process.env.NODE_ENV === 'production' && process.env.DEBUG_PROD !== '1') {
+    console.error('❌ Refusing to run debug script in production.');
+    console.error('   Set DEBUG_PROD=1 or run in dev.');
+    process.exit(1);
+  }
+  // Guard: block nếu URI trông giống production Atlas (mongodb+srv://)
+  if (uri.includes('mongodb+srv') && process.env.DEBUG_PROD !== '1') {
+    console.warn('⚠️  MONGODB_URI looks like Atlas. Continuing only because you know what you are doing.');
+  }
 
   await mongoose.connect(uri);
   const db = mongoose.connection.db;

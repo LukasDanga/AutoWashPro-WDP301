@@ -257,11 +257,19 @@ export const Button: React.FC<ButtonProps> = ({
     innerStyle as ViewStyle,
   ];
 
+  const disabledTextColor = (() => {
+    if (!isDisabled) return false;
+    if (variant === 'outline' || variant === 'ghost') {
+      return { color: colors.textTertiary };
+    }
+    return { color: colors.textInverse || '#FFFFFF' };
+  })();
+
   const textStyles: (TextStyle | false)[] = [
     styles.text as TextStyle,
     sizeText as TextStyle,
     variantStyles.text as TextStyle,
-    isDisabled ? ({ color: colors.textTertiary } as TextStyle) : false,
+    disabledTextColor as TextStyle,
     textStyle as TextStyle,
   ];
 
@@ -365,7 +373,7 @@ const styles = StyleSheet.create({
     minWidth: 48,
   },
   containerDisabled: {
-    opacity: 0.5,
+    opacity: 0.65,
   },
   fullWidth: {
     width: '100%',

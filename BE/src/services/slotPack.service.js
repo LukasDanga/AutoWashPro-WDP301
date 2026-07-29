@@ -41,116 +41,115 @@ async function generateUniquePackCode() {
  * Chiết khấu tự động theo số lượng, sau đó áp thêm voucher nếu có.
  */
 exports.createSlotPack = async (data) => {
+  const { userId, branchId, packageId, vehicleId, totalSlots, voucherCode, expiresAt } = data;
   const session = await mongoose.startSession();
-  session.startTransaction();
+  let slotPack;
 
   try {
-    const { userId, branchId, packageId, vehicleId, totalSlots, voucherCode, expiresAt } = data;
+    await session.withTransaction(async () => {
+      // --- Validate entities ---
+      const [pkg, user] = await Promise.all([
+        Package.findById(packageId).session(session),
+        User.findById(userId).session(session),
+      ]);
 
-    // --- Validate entities ---
-    const [pkg, user] = await Promise.all([
-      Package.findById(packageId).session(session),
-      User.findById(userId).session(session),
-    ]);
-
-    let branch = null;
-    if (branchId) {
-      branch = await Branch.findById(branchId).session(session);
-      if (!branch) throw Object.assign(new Error('Chi nhánh không tồn tại'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
-      if (branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh hiện không khả dụng'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
-    }
-
-    let vehicle = null;
-    if (vehicleId) {
-      vehicle = await Vehicle.findById(vehicleId).session(session);
-      if (!vehicle) throw Object.assign(new Error('Xe không tồn tại'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
-      if (String(vehicle.userId) !== String(userId)) {
-        throw Object.assign(new Error('Xe không thuộc về bạn'), { statusCode: 403, code: 'FORBIDDEN' });
+      let branch = null;
+      if (branchId) {
+        branch = await Branch.findById(branchId).session(session);
+        if (!branch) throw Object.assign(new Error('Chi nhánh không tồn tại'),   { statusCode: 404, code: 'BRANCH_NOT_FOUND' });
+        if (branch.status === 'inactive') throw Object.assign(new Error('Chi nhánh hiện không khả dụng'),   { statusCode: 400, code: 'BRANCH_UNAVAILABLE' });
       }
-    }
 
-    if (!pkg)    throw Object.assign(new Error('Gói dịch vụ không tồn tại'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
-    if (!user)   throw Object.assign(new Error('Người dùng không tồn tại'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
-    if (pkg.status === 'inactive')    throw Object.assign(new Error('Gói dịch vụ hiện không khả dụng'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
-    if (pkg.branchId && branchId && String(pkg.branchId) !== String(branchId)) {
-      throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
-    }
+      let vehicle = null;
+      if (vehicleId) {
+        vehicle = await Vehicle.findById(vehicleId).session(session);
+        if (!vehicle) throw Object.assign(new Error('Xe không tồn tại'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
+        if (String(vehicle.userId) !== String(userId)) {
+          throw Object.assign(new Error('Xe không thuộc về bạn'), { statusCode: 403, code: 'FORBIDDEN' });
+        }
+      }
 
-    if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
-      throw Object.assign(new Error('Số lượng gói phải từ 1 đến 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
-    }
+      if (!pkg)    throw Object.assign(new Error('Gói dịch vụ không tồn tại'),  { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
+      if (!user)   throw Object.assign(new Error('Người dùng không tồn tại'),     { statusCode: 404, code: 'USER_NOT_FOUND' });
+      if (pkg.status === 'inactive')    throw Object.assign(new Error('Gói dịch vụ hiện không khả dụng'),  { statusCode: 400, code: 'PACKAGE_UNAVAILABLE' });
+      if (pkg.branchId && branchId && String(pkg.branchId) !== String(branchId)) {
+        throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
+      }
 
-    // --- Chiết khấu theo số lượng và hạng VIP ---
-    const unitPrice = pkg.price;
-    let discountPercent = getDiscountPercent(totalSlots);
-    if (user.tier === 'diamond') discountPercent += 10;
-    else if (user.tier === 'gold') discountPercent += 5;
-    if (discountPercent > 100) discountPercent = 100;
+      if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
+        throw Object.assign(new Error('Số lượng gói phải từ 1 đến 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
+      }
 
-    const grossTotal = unitPrice * totalSlots;
-    const qtyDiscount = Math.floor(grossTotal * discountPercent / 100);
-    let baseTotal = grossTotal - qtyDiscount; // sau chiết khấu số lượng + VIP
+      // --- Chiết khấu theo số lượng và hạng VIP ---
+      const unitPrice = pkg.price;
+      let discountPercent = getDiscountPercent(totalSlots);
+      if (user.tier === 'diamond') discountPercent += 10;
+      else if (user.tier === 'gold') discountPercent += 5;
+      if (discountPercent > 100) discountPercent = 100;
 
-    // --- Priority dựa theo tier ---
-    const priority = TIER_PRIORITY[user.tier] || 1;
+      const grossTotal = unitPrice * totalSlots;
+      const qtyDiscount = Math.floor(grossTotal * discountPercent / 100);
+      let baseTotal = grossTotal - qtyDiscount; // sau chiết khấu số lượng + VIP
 
-    // --- Voucher (áp trên baseTotal) ---
-    let voucherDiscount = 0;
-    let finalPriceAfterVoucher = baseTotal;
-    let appliedVoucherCode = null;
+      // --- Priority dựa theo tier ---
+      const priority = TIER_PRIORITY[user.tier] || 1;
 
-    if (voucherCode) {
-      const vResult = await voucherService.validateVoucher(voucherCode, { amount: baseTotal }, userId);
-      voucherDiscount = vResult.discountAmount;
-      finalPriceAfterVoucher = Math.max(0, baseTotal - voucherDiscount);
-      appliedVoucherCode = voucherCode.trim().toUpperCase();
-    }
+      // --- Voucher (áp trên baseTotal) ---
+      let voucherDiscount = 0;
+      let finalPriceAfterVoucher = baseTotal;
+      let appliedVoucherCode = null;
 
-    // --- Sinh mã pack ---
-    const packCode = await generateUniquePackCode();
+      if (voucherCode) {
+        const vResult = await voucherService.validateVoucher(voucherCode, { amount: baseTotal }, userId);
+        voucherDiscount = vResult.discountAmount;
+        finalPriceAfterVoucher = Math.max(0, baseTotal - voucherDiscount);
+        appliedVoucherCode = voucherCode.trim().toUpperCase();
+      }
 
-    // --- Tạo SlotPack ---
-    const slotPack = new SlotPack({
-      userId, branchId, packageId, vehicleId,
-      totalSlots,
-      remainingSlots: totalSlots,
-      usedSlots: 0,
-      unitPrice,
-      discountPercent,
-      discountAmount: qtyDiscount,
-      finalPrice: baseTotal,
-      voucherCode: appliedVoucherCode,
-      voucherDiscount,
-      finalPriceAfterVoucher,
-      priority,
-      packCode,
-      expiresAt: expiresAt ? new Date(expiresAt) : null,
-      status: 'active',
-      paymentStatus: 'unpaid',
+      // --- Sinh mã pack ---
+      const packCode = await generateUniquePackCode();
+
+      // --- Tạo SlotPack ---
+      slotPack = new SlotPack({
+        userId, branchId, packageId, vehicleId,
+        totalSlots,
+        remainingSlots: totalSlots,
+        usedSlots: 0,
+        unitPrice,
+        discountPercent,
+        discountAmount: qtyDiscount,
+        finalPrice: baseTotal,
+        voucherCode: appliedVoucherCode,
+        voucherDiscount,
+        finalPriceAfterVoucher,
+        priority,
+        packCode,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        status: 'active',
+        paymentStatus: 'unpaid',
+      });
+
+      await slotPack.save({ session });
+
+      // Reserve voucher nếu có
+      if (appliedVoucherCode) {
+        await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount, session);
+      }
     });
 
-    await slotPack.save({ session });
-
-    // Reserve voucher nếu có
-    if (appliedVoucherCode) {
-      await voucherService.reserveVoucher(appliedVoucherCode, userId, slotPack._id, voucherDiscount, session);
-    }
-
-    await session.commitTransaction();
+    // Populate data for notification
+    const pkg = await Package.findById(packageId);
 
     notificationService.send(
-      userId,
+      data.userId,
       'Đã mua gói slot thành công',
-      `Gói ${totalSlots} lần rửa xe ${pkg.name} — Mã: ${packCode}. ${discountPercent > 0 ? `Chiết khấu ${discountPercent}% số lượng.` : ''}`,
+      `Gói ${data.totalSlots} lần rửa xe ${pkg.name} — Mã: ${slotPack.packCode}. ${slotPack.discountPercent > 0 ? `Chiết khấu ${slotPack.discountPercent}% số lượng.` : ''}`,
       'slot_pack_created',
       { slotPackId: slotPack._id }
     ).catch(() => {});
 
     return slotPack;
   } catch (err) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
     throw err;
   } finally {
     session.endSession();

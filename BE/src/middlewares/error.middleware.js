@@ -14,11 +14,11 @@ const errorHandler = (err, req, res, next) => {
 
   if (err.name === 'ValidationError') {
     const errors = Object.values(err.errors).map((e) => ({ field: e.path, message: e.message }));
-    return res.status(400).json({ success: false, message: 'Validation failed', code: 'VALIDATION_ERROR', errors });
+    return res.status(400).json({ success: false, message: 'Dữ liệu không hợp lệ', code: 'VALIDATION_ERROR', errors });
   }
 
-  if (err.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Invalid token', code: 'INVALID_TOKEN' });
-  if (err.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token expired', code: 'TOKEN_EXPIRED' });
+  if (err.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Token không hợp lệ', code: 'INVALID_TOKEN' });
+  if (err.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token đã hết hạn', code: 'TOKEN_EXPIRED' });
 
   res.status(statusCode).json({ success: false, message, code });
 };

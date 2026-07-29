@@ -159,13 +159,20 @@ exports.deleteRequest = async (id, userRole) => {
   const request = await RefundRequest.findById(id);
   if (!request) throw Object.assign(new Error('Refund request not found'), { statusCode: 404, code: 'NOT_FOUND' });
   await RefundRequest.findByIdAndDelete(id);
-  return { message: 'Refund request deleted successfully' };
+  return { message: 'Xóa yêu cầu hoàn tiền thành công' };
 };
 
 exports.deleteRequestsByDateRange = async (dateFrom, dateTo, deleteAll = false) => {
   if (deleteAll) {
-    const result = await RefundRequest.deleteMany({});
-    return { message: `Đã xóa tất cả ${result.deletedCount} yêu cầu hoàn tiền` };
+    // H-5 SAFETY: log + warn. RefundRequest là audit trail quan trọng cho CSKH.
+    // Hard delete ALL là thao tác cần manager+ approval, không cho phép qua API.
+    console.error(
+      `[deleteRequestsByDateRange] BLOCKED: attempted to hard-delete ALL refund requests. Process: ${process.pid}.`,
+    );
+    throw Object.assign(
+      new Error('Không thể xóa tất cả refund requests qua API. Sử dụng script migration riêng nếu cần.'),
+      { statusCode: 403, code: 'FORBIDDEN_BULK_OP' },
+    );
   }
 
   if (!dateFrom || !dateTo) {
@@ -178,9 +185,13 @@ exports.deleteRequestsByDateRange = async (dateFrom, dateTo, deleteAll = false) 
   const toDate = new Date(dateTo);
   toDate.setHours(23, 59, 59, 999);
 
+  // H-5 SAFETY: log + warn. Hard delete refund request cần approval.
   const result = await RefundRequest.deleteMany({
     createdAt: { $gte: fromDate, $lte: toDate },
   });
+  console.warn(
+    `[deleteRequestsByDateRange] HARD-DELETED ${result.deletedCount} refund requests from ${fromDate.toISOString()} to ${toDate.toISOString()}. Process: ${process.pid}.`,
+  );
 
   return { message: `Đã xóa ${result.deletedCount} yêu cầu hoàn tiền trong khoảng từ ${dateFrom} đến ${dateTo}` };
 };

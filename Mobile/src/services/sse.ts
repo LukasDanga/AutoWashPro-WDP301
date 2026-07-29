@@ -11,6 +11,35 @@ import { SOCKET_EVENTS, SocketEventType } from '../utils/socketEvents';
 
 const ACCESS_TOKEN_KEY = 'aw_accessToken';
 
+// H-6 SAFETY: xác định URL production rõ ràng để tránh app trỏ về localhost
+// khi deploy mà quên set env. Thứ tự ưu tiên:
+//   1. EXPO_PUBLIC_API_URL (chuẩn Expo)
+//   2. REACT_NATIVE_API_URL hoặc API_URL (legacy)
+//   3. Tùy __DEV__: localhost trong dev, fallback rõ ràng trong prod (throw lỗi)
+//
+// Trước đây: production build mà quên set env → app kết nối localhost → fail silent.
+function resolveSocketBaseUrl(): string {
+  const fromEnv =
+    process.env.EXPO_PUBLIC_API_URL ||
+    process.env.REACT_NATIVE_API_URL ||
+    process.env.API_URL;
+
+  if (fromEnv && fromEnv.trim()) {
+    return fromEnv.replace(/\/api$/, '');
+  }
+
+  if (__DEV__) {
+    // dev: cho phép localhost để dễ dev
+    return 'http://localhost:5000';
+  }
+
+  // Production mà không có env → throw lỗi rõ ràng thay vì silent fail.
+  throw new Error(
+    '[Socket] EXPO_PUBLIC_API_URL chưa được set. Production build bắt buộc phải ' +
+      'cấu hình URL backend (vd: https://autowash-be.onrender.com).',
+  );
+}
+
 export type SSEEventType = SocketEventType | 'booking_update' | 'payment_update' | 'sync_request';
 
 export interface SSEEvent {
@@ -21,26 +50,31 @@ export interface SSEEvent {
 
 type EventCallback = (event: SSEEvent) => void;
 
-const SYNC_EVENTS: SSEEventType[] = [
-  SOCKET_EVENTS.SLOTS_UPDATED,
-  SOCKET_EVENTS.VOUCHERS_UPDATED,
-  SOCKET_EVENTS.MY_BOOKINGS_UPDATED,
-  SOCKET_EVENTS.FEEDBACK_NEW,
-  SOCKET_EVENTS.BOOKING_NEW,
-  SOCKET_EVENTS.MY_VEHICLES_UPDATED,
-  SOCKET_EVENTS.REFUND_REQUEST_UPDATED,
-  SOCKET_EVENTS.REFUND_REQUESTS_UPDATED,
-  SOCKET_EVENTS.POINTS_UPDATED,
-  SOCKET_EVENTS.PAYMENT_CONFIRMED,
-  SOCKET_EVENTS.WALLET_TOPUP_SUCCESS,
-  SOCKET_EVENTS.SPIN_ADDED,
-  SOCKET_EVENTS.SLOT_PACK_PAID,
-];
+// L-2 CLEANUP: SYNC_EVENTS array trước đây dùng để fire 13+ events cho "reconnect
+// recovery" — nhưng giờ chỉ cần 1 'sync_request' event là đủ. Sync-flood đó
+// trước đây trigger "Maximum update depth exceeded" trong React vì:
+//   1. SSE reconnect → fire 13 sync events
+//   2. Mỗi event → component fetchBookings()
+//   3. setState dồn dập → React loop
+// Giờ chỉ 1 event, an toàn hơn. Array giữ ở đây để:
+//   - Marketplace 1 re-mount có thể reference các SYNC_EVENTS nếu cần
+//   - 13 entries → comment để cảnh báo dev tuyệt đối KHÔNG fire lại đồng loạt
+// const SYNC_EVENTS_DEPRECATED = [
+//   'slots_updated', 'vouchers_updated', 'my_bookings_updated',
+//   'feedback_new', 'booking_new', 'my_vehicles_updated',
+//   'refund_request_updated', 'refund_requests_updated', 'points_updated',
+//   'payment_confirmed', 'wallet_topup_success', 'spin_added', 'slot_pack_paid',
+// ];
 
 class SSEService {
   private listeners: Map<SSEEventType | 'all', Set<EventCallback>> = new Map();
   private socket: Socket | null = null;
   private currentUserId: string | null = null;
+  // L-2: chống "Maximum update depth" khi socket reconnect nhiều lần liên tiếp.
+  // Mỗi reconnect fire 1 'sync_request' → nếu handler bên trong setState thì
+  // dồn dập → React loop. Debounce 1s gom 1 burst thành 1 emission.
+  private syncRequestTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasInitialSync = false;
 
   async connect(userId: string): Promise<void> {
     // If already connected to socket AND for the same user, do nothing.
@@ -52,6 +86,7 @@ class SSEService {
       this.disconnect();
     }
     this.currentUserId = userId;
+    this.hasInitialSync = false;
 
     const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
     if (!token) {
@@ -59,7 +94,8 @@ class SSEService {
       return;
     }
 
-    const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+    const baseUrl = resolveSocketBaseUrl();
+    console.log('[Socket] Connecting to:', baseUrl);
     
     this.socket = io(baseUrl, {
       auth: { token },
@@ -70,19 +106,28 @@ class SSEService {
     this.socket.on('connect', () => {
       console.log('[Socket] Connected:', this.socket?.id);
 
-      // Reconnect recovery: fire a single 'sync_request' event instead of
-      // re-emitting every SYNC_EVENTS entry — that was causing the React
-      // notification/auth contexts to re-fetch 13+ times per reconnect,
-      // which combined with state updates triggered "Maximum update depth".
-      this.emit('sync_request', {
-        type: 'sync_request',
-        data: { isSync: true },
-        timestamp: new Date().toISOString(),
-      });
+      // L-2: chỉ fire 1 sync_request ở lần initial connect. Reconnect (network blip,
+      // mobile đổi 4G/wifi) sẽ KHÔNG re-sync để tránh "Maximum update depth".
+      // User thấy UI reset → chỉ cần pull-to-refresh / explicit re-login.
+      // Debounce 1s để nếu connect thực sự 2 lần liên tiếp (race), vẫn chỉ 1 emit.
+      if (this.hasInitialSync) return;
+      this.hasInitialSync = true;
+
+      if (this.syncRequestTimer) clearTimeout(this.syncRequestTimer);
+      this.syncRequestTimer = setTimeout(() => {
+        this.syncRequestTimer = null;
+        this.emit('sync_request', {
+          type: 'sync_request',
+          data: { isSync: true },
+          timestamp: new Date().toISOString(),
+        });
+      }, 1000);
     });
 
     this.socket.on('disconnect', () => {
       console.log('[Socket] Disconnected');
+      // Reset để lần reconnect sau (mất mạng lâu / server restart) sẽ re-sync.
+      this.hasInitialSync = false;
     });
     
     this.socket.on('connect_error', (err) => {
@@ -105,7 +150,12 @@ class SSEService {
       this.socket.disconnect();
       this.socket = null;
     }
+    if (this.syncRequestTimer) {
+      clearTimeout(this.syncRequestTimer);
+      this.syncRequestTimer = null;
+    }
     this.currentUserId = null;
+    this.hasInitialSync = false;
   }
 
   subscribe(type: SSEEventType | 'all', callback: EventCallback): () => void {

@@ -19,6 +19,13 @@ services:
         sync: false
       - key: JWT_REFRESH_SECRET
         sync: false
+      # L-3: thêm APP_URL + API_URL để CORS whitelist biết chính xác domain nào hợp lệ.
+      # Trước đây chỉ có FE_URL → trusted origin list rỗng → CORS fallback về
+      # '*.vercel.app' wildcard → quá permissive.
+      - key: APP_URL
+        sync: false
+      - key: API_URL
+        sync: false
       - key: FE_URL
         sync: false
       - key: VNPAY_TMNCODE
@@ -41,3 +48,6 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # C-4: cho phép ops điều chỉnh grace period mà không cần redeploy code.
+      - key: AUTO_CANCEL_GRACE_MINUTES
+        value: "15"

@@ -40,9 +40,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import {
   useBooking,
-  type BookingStep,
   type VoucherState,
 } from '../../src/contexts/BookingContext';
+import { useTranslation } from 'react-i18next';
+import { translateDynamicText } from '../../src/utils';
 import sseService from '../../src/services/sse';
 import { SOCKET_EVENTS } from '../../src/utils/socketEvents';
 import { branchApi, packageApi, vehicleApi, bookingApi, slotPackApi } from '../../src/api';
@@ -110,11 +111,12 @@ const FALLBACK_TIME_SLOTS = [
 
 export default function BookingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const { isAuthenticated, user } = useAuth();
+  const { t, i18n } = useTranslation();
+  const { user, fetchUser: refreshUser, isAuthenticated } = useAuth();
   const colors = useColors();
   const toast = useToast();
   const alertDialog = useAlertDialog();
+  const params = useLocalSearchParams();
 
   const {
     step,
@@ -766,14 +768,14 @@ export default function BookingScreen() {
 
   const stepsForIndicator = STEP_META.map((s) => ({
     key: s.key,
-    label: s.label,
+    label: t(`booking.step_${s.key}` as any),
     icon: STEP_ICONS[s.key],
   }));
 
   return (
     <ScreenContainer edges={['top']} background="subtle">
       <Header 
-        title="Đặt lịch rửa xe" 
+        title={t('home.qs_booking')} 
         showBack 
         onBackPress={handleBack} 
         rightAction={
@@ -807,7 +809,7 @@ export default function BookingScreen() {
         {/* Step 1: Pick branch */}
         {step === 'branch' && (
           <StepLayout
-            title="Chọn chi nhánh gần bạn"
+            title={t('booking.title_branch')}
             subtitle="Chọn chi nhánh thuận tiện nhất với bạn"
             icon={Icons.locationOutline}
           >
@@ -827,13 +829,13 @@ export default function BookingScreen() {
                   selected={selectedBranch?._id === branch._id}
                   onPress={() => !disabled && setSelectedBranch(branch)}
                   icon={Icons.locationOutline}
-                  title={branch.name}
+                  title={translateDynamicText(branch.name, i18n.language)}
                   disabled={disabled}
                   disabledLabel="Chưa có gói dịch vụ"
                   subtitle={
                     <View>
                       <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                        {branch.address}
+                        {translateDynamicText(branch.address, i18n.language)}
                       </AppText>
                       <View style={styles.cardRowMeta}>
                         <Icon name={Icons.timeOutline} size={12} color={colors.textTertiary} />
@@ -853,7 +855,7 @@ export default function BookingScreen() {
         {/* Step 2: Pick package (scoped to the selected branch) */}
         {step === 'package' && (
           <StepLayout
-            title="Chọn gói dịch vụ"
+            title={t('booking.title_package')}
             subtitle={
               selectedBranch
                 ? `Gói dịch vụ tại ${selectedBranch.name}`
@@ -880,26 +882,26 @@ export default function BookingScreen() {
                     const includedServices = (pkg as any).subServices?.filter((s: any) => !s.isOptional) || [];
                     if (includedServices.length > 0) {
                       alertDialog.show({
-                        title: 'Các dịch vụ đi kèm',
+                        title: t('booking.package_includes'),
                         message: includedServices.map((s: any) => `• ${s.name}`).join('\n'),
                         variant: 'info',
                       });
                     } else if (pkg.description) {
                       alertDialog.show({
-                        title: 'Chi tiết gói',
+                        title: t('booking.package_details'),
                         message: pkg.description,
                         variant: 'info',
                       });
                     } else {
                       alertDialog.show({
-                        title: 'Chi tiết gói',
+                        title: t('booking.package_details'),
                         message: 'Không có thông tin chi tiết cho gói này.',
                         variant: 'info',
                       });
                     }
                   }}
                   icon={Icons.sparkle}
-                  title={pkg.name}
+                  title={translateDynamicText(pkg.name, i18n.language)}
                   subtitle={
                     <View>
                       <AppText variant="caption" color="textSecondary">
@@ -953,7 +955,7 @@ export default function BookingScreen() {
                           <View style={styles.optionRow}>
                             <View style={styles.optionInfo}>
                               <AppText variant="body" style={styles.optionTitle}>
-                                {sub.name}
+                                {translateDynamicText(sub.name, i18n.language)}
                               </AppText>
                               <AppText variant="caption" color="textSecondary">
                                 +{sub.duration} phút • <AppText variant="caption" color="primary">+{formatCurrency(sub.price)}</AppText>
@@ -979,7 +981,7 @@ export default function BookingScreen() {
         {/* Step 3: Pick vehicle */}
         {step === 'vehicle' && (
           <StepLayout
-            title="Chọn phương tiện"
+            title={t('booking.title_vehicle')}
             subtitle="Chọn xe để rửa"
             icon={Icons.carOutline}
           >
@@ -991,7 +993,7 @@ export default function BookingScreen() {
                   message="Vui lòng thêm phương tiện trước"
                 />
                 <Button
-                  title="Thêm phương tiện mới"
+                  title={t('booking.vehicle_add_new')}
                   variant="outline"
                   icon={<Icon name={Icons.add} size={20} color={colors.primary} />}
                   onPress={() => {
@@ -1026,7 +1028,7 @@ export default function BookingScreen() {
             )}
             {vehicles.length > 0 ? (
               <Button
-                title="Thêm phương tiện mới"
+                title={t('booking.vehicle_add_new')}
                 variant="outline"
                 icon={<Icon name={Icons.add} size={20} color={colors.primary} />}
                 onPress={() => {
@@ -1043,7 +1045,7 @@ export default function BookingScreen() {
         {/* Step 4: Pick date & time */}
         {step === 'datetime' && (
           <StepLayout
-            title="Chọn ngày và giờ"
+            title={t('booking.title_date')}
             subtitle="Chọn khung giờ thuận tiện"
             icon={Icons.calendarOutline}
           >
@@ -1193,7 +1195,7 @@ export default function BookingScreen() {
             {selectedDate ? (
               <>
                 <AppText variant="label" style={styles.sectionLabel}>
-                  Khung giờ
+                  {t('booking.title_time')}
                 </AppText>
                 {dateSlots[selectedDate] === undefined ? (
                   <View style={styles.timeGrid}>
@@ -1320,20 +1322,20 @@ export default function BookingScreen() {
         {/* Step 5: Confirm */}
         {step === 'confirm' && (
           <StepLayout
-            title="Xác nhận đặt lịch"
+            title={t('booking.step_confirm')}
             subtitle="Kiểm tra thông tin và thanh toán"
             icon={Icons.checkmark}
           >
             <Card style={{ backgroundColor: colors.surface, padding: spacing.md }}>
-              <SummaryRow icon={Icons.locationOutline} label="Chi nhánh" value={selectedBranch?.name} />
+              <SummaryRow icon={Icons.locationOutline} label={t('booking.step_branch')} value={selectedBranch?.name} />
               <SummaryDivider />
-              <SummaryRow icon={Icons.sparkle} label="Gói dịch vụ" value={selectedPackage?.name} />
+              <SummaryRow icon={Icons.sparkle} label={t('booking.step_package')} value={selectedPackage?.name} />
               <SummaryDivider />
-              <SummaryRow icon={Icons.carOutline} label="Phương tiện" value={selectedVehicle?.licensePlate} />
+              <SummaryRow icon={Icons.carOutline} label={t('booking.step_vehicle')} value={selectedVehicle?.licensePlate} />
               <SummaryDivider />
               <SummaryRow
                 icon={Icons.calendarOutline}
-                label="Ngày"
+                label={t('booking.title_date')}
                 value={
                   selectedDate
                     ? new Date(selectedDate).toLocaleDateString('vi-VN', {
@@ -1346,7 +1348,7 @@ export default function BookingScreen() {
                 }
               />
               <SummaryDivider />
-              <SummaryRow icon={Icons.timeOutline} label="Giờ" value={selectedTime ?? undefined} />
+              <SummaryRow icon={Icons.timeOutline} label={t('booking.title_time')} value={selectedTime ?? undefined} />
             </Card>
 
             {/* Slot Pack picker — shown only when at least one usable pack
@@ -1565,7 +1567,7 @@ export default function BookingScreen() {
                   })}
                   <View style={styles.priceRow}>
                     <AppText variant="body" weight="600" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
-                      Giá gốc (Tổng)
+                      {t('booking.summary_subtotal')}
                     </AppText>
                     <AppText variant="body" weight="600" color="textPrimary">
                       {formatCurrency(totalBase)}
@@ -1575,7 +1577,7 @@ export default function BookingScreen() {
               ) : (
                 <View style={styles.priceRow}>
                   <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
-                    Giá gốc
+                    {t('booking.summary_subtotal')}
                   </AppText>
                   <AppText variant="body" color="textPrimary">
                     {formatCurrency(totalBase)}
@@ -1605,7 +1607,7 @@ export default function BookingScreen() {
               <View style={[styles.priceDivider, { backgroundColor: colors.divider }]} />
               <View style={styles.priceRow}>
                 <AppText variant="body" color="textSecondary" style={{ flex: 1, paddingRight: spacing.sm }}>
-                  Thực thu tại tiệm
+                  {t('booking.summary_total')}
                 </AppText>
                 <AppText variant="h3" color="primary">
                   {formatCurrency(finalPrice)}
@@ -1654,7 +1656,7 @@ export default function BookingScreen() {
       >
         {stepIndex > 0 ? (
           <View style={styles.bottomBackButton}>
-            <Button title="Quay lại" variant="outline" onPress={handleBack} fullWidth />
+            <Button title={t('booking.btn_back')} variant="outline" onPress={handleBack} fullWidth />
           </View>
         ) : null}
         <View
@@ -1663,13 +1665,13 @@ export default function BookingScreen() {
           }
         >
           <Button
-            title={step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? 'Xác nhận đặt lịch' : 'Tiếp tục'}
+            title={step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? t('booking.btn_confirm') : t('booking.btn_next')}
             onPress={step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? handleSubmit : handleNext}
             disabled={!canGoNext() || isLoadingSlots}
             loading={isSubmitting}
             fullWidth
             accessibilityLabel={
-              step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? 'Xác nhận đặt lịch' : 'Tiếp tục bước tiếp theo'
+              step === 'confirm' || (params.quickBook === 'true' && step === 'datetime') ? t('booking.btn_confirm') : t('booking.btn_next')
             }
           />
         </View>

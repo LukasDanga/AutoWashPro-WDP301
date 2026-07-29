@@ -47,6 +47,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import type { Notification, NotificationType } from '../../src/types';
+import { useTranslation } from 'react-i18next';
+import { translateDynamicText } from '../../src/utils';
 
 type NotificationVisual = {
   icon: string;
@@ -83,6 +85,7 @@ export default function NotificationsScreen() {
   const { isDark } = useTheme();
   const styles = createStyles(colors);
   const { isAuthenticated } = useAuth();
+  const { i18n } = useTranslation();
   const { markAsRead: contextMarkAsRead, markAllAsRead: contextMarkAllAsRead, refreshNotifications } =
     useNotifications();
   const toast = useToast();
@@ -303,7 +306,7 @@ export default function NotificationsScreen() {
       <Header
         showBack
         title="Thông báo"
-        subtitle={unreadCount > 0 ? `● ${unreadCount} thông báo chưa đọc` : undefined}
+        subtitle={unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : undefined}
         rightAction={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             {unreadCount > 0 && (
@@ -400,9 +403,44 @@ export default function NotificationsScreen() {
             selectedNotification.data.voucherId ||
             selectedNotification.data.paymentId ||
             selectedNotification.data.url)
-            ? 0.42
-            : 0.35,
+            ? 0.55
+            : 0.48,
         ]}
+        footer={
+          selectedNotification ? (() => {
+            const hasLink =
+              selectedNotification.data &&
+              (selectedNotification.data.bookingId ||
+                selectedNotification.data.voucherId ||
+                selectedNotification.data.paymentId ||
+                selectedNotification.data.url);
+            return (
+              <View style={{ gap: 10 }}>
+                {hasLink && (
+                  <Button
+                    variant="primary"
+                    title="Xem chi tiết"
+                    size="medium"
+                    fullWidth
+                    onPress={handleDeepLink}
+                  />
+                )}
+                <Button
+                  variant="outline"
+                  title="Xóa thông báo"
+                  size="medium"
+                  fullWidth
+                  style={{ borderColor: colors.error }}
+                  textStyle={{ color: colors.error }}
+                  onPress={() => {
+                    handleDelete(selectedNotification);
+                    setSelectedNotification(null);
+                  }}
+                />
+              </View>
+            );
+          })() : undefined
+        }
       >
         {selectedNotification && (() => {
           const visual = VISUALS[selectedNotification.type] || {
@@ -436,117 +474,106 @@ export default function NotificationsScreen() {
           }
 
           return (
-            <View style={{ marginHorizontal: -20, marginTop: -8, paddingBottom: 16 }}>
-              {/* Premium Header */}
-              <LinearGradient
-                colors={gradientColors as any}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 20,
-                  paddingVertical: 16,
-                  gap: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                }}
-              >
-                {/* Left Icon circle */}
-                <View
+            <>
+              {/* Scrollable area: header + message */}
+              <View style={{ marginHorizontal: -20, marginTop: -8 }}>
+                {/* Premium Header */}
+                <LinearGradient
+                  colors={gradientColors as any}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    backgroundColor: iconBg,
-                    borderColor: iconBorderColor,
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    paddingHorizontal: 20,
+                    paddingVertical: 16,
+                    gap: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
                   }}
                 >
-                  <Icon name={visual.icon} size={22} color={(colors as any)[visual.fg]} />
-                </View>
-
-                {/* Title & Subtitle */}
-                <View style={{ flex: 1 }}>
-                  <Text
+                  {/* Left Icon circle */}
+                  <View
                     style={{
-                      fontFamily: 'Outfit_700Bold',
-                      fontSize: 16,
-                      fontWeight: '700',
-                      color: colors.textPrimary,
-                      marginBottom: 2,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      backgroundColor: iconBg,
+                      borderColor: iconBorderColor,
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                    numberOfLines={1}
                   >
-                    {selectedNotification.title}
-                  </Text>
-                  <Text
+                    <Icon name={visual.icon} size={22} color={(colors as any)[visual.fg]} />
+                  </View>
+
+                  {/* Title & Subtitle */}
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: 'Outfit_700Bold',
+                        fontSize: 16,
+                        fontWeight: '700',
+                        color: colors.textPrimary,
+                        marginBottom: 2,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {translateDynamicText(selectedNotification.title, i18n.language)}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: 'Outfit_500Medium',
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: subtitleColor,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {formatTime(selectedNotification.createdAt)}
+                    </Text>
+                  </View>
+
+                  {/* Right Close Button */}
+                  <TouchableOpacity
+                    onPress={() => setSelectedNotification(null)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     style={{
-                      fontFamily: 'Outfit_500Medium',
-                      fontSize: 12,
-                      fontWeight: '500',
-                      color: subtitleColor,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                    numberOfLines={1}
+                    accessibilityLabel="Đóng"
+                    accessibilityRole="button"
                   >
-                    {formatTime(selectedNotification.createdAt)}
-                  </Text>
-                </View>
+                    <Icon name={Icons.close} size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </LinearGradient>
 
-                {/* Right Close Button */}
-                <TouchableOpacity
-                  onPress={() => setSelectedNotification(null)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  accessibilityLabel="Đóng"
-                  accessibilityRole="button"
-                >
-                  <Icon name={Icons.close} size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </LinearGradient>
-
-              {/* Body Content */}
-              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, gap: 12 }}>
-                <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.borderLight || '#F1F5F9' }}>
-                  <AppText variant="body" color="textSecondary" style={{ lineHeight: 22 }}>
-                    {selectedNotification.message}
-                  </AppText>
-                </View>
-
-                <View style={{ gap: 10, marginTop: 12 }}>
-                  {hasLink && (
-                    <Button
-                      variant="primary"
-                      title="Xem chi tiết"
-                      size="medium"
-                      onPress={handleDeepLink}
-                    />
-                  )}
-                  <Button
-                    variant="outline"
-                    title="Xóa thông báo"
-                    size="medium"
-                    style={{ borderColor: colors.error }}
-                    textStyle={{ color: colors.error }}
-                    onPress={() => {
-                      handleDelete(selectedNotification);
-                      setSelectedNotification(null);
+                {/* Body Content (message only — buttons moved to footer) */}
+                <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
+                  <View
+                    style={{
+                      backgroundColor: colors.surface,
+                      padding: 16,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: colors.borderLight || '#F1F5F9',
                     }}
-                  />
+                  >
+                    <AppText variant="body" color="textSecondary" style={{ lineHeight: 22 }}>
+                      {translateDynamicText(selectedNotification.message, i18n.language)}
+                    </AppText>
+                  </View>
                 </View>
               </View>
-            </View>
+            </>
           );
         })()}
       </BottomSheet>
@@ -572,6 +599,7 @@ const NotificationCard = React.forwardRef<NotificationCardRef, NotificationCardP
     const [showDelete, setShowDelete] = useState(false);
     const pan = useRef(new Animated.Value(0)).current;
     const opacity = useRef(new Animated.Value(1)).current;
+    const { i18n } = useTranslation();
     
     const close = useCallback(() => {
       Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start(() => {
@@ -709,7 +737,7 @@ const NotificationCard = React.forwardRef<NotificationCardRef, NotificationCardP
                       ]}
                       numberOfLines={1}
                     >
-                      {notification.title}
+                      {translateDynamicText(notification.title, i18n.language)}
                     </Text>
                     <Text style={styles.notificationTime}>
                       {formatTime(notification.createdAt)}
@@ -717,7 +745,7 @@ const NotificationCard = React.forwardRef<NotificationCardRef, NotificationCardP
                   </View>
 
                   <Text style={styles.notificationMessage} numberOfLines={2}>
-                    {notification.message}
+                    {translateDynamicText(notification.message, i18n.language)}
                   </Text>
 
                   <View style={styles.notificationFooterRow}>

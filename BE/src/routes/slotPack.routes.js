@@ -9,9 +9,9 @@ const { ROLES } = require('../config/permissions');
 // ─── Validators ───────────────────────────────────────────────────────────────
 
 const createValidators = [
-  body('branchId').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid branch ID'),
-  body('packageId').isMongoId().withMessage('Invalid package ID'),
-  body('vehicleId').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid vehicle ID'),
+  body('branchId').optional({ values: 'falsy' }).isMongoId().withMessage('ID chi nhánh không hợp lệ'),
+  body('packageId').isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
+  body('vehicleId').optional({ values: 'falsy' }).isMongoId().withMessage('ID xe không hợp lệ'),
   body('totalSlots').isInt({ min: 1, max: 50 }).withMessage('totalSlots must be between 1 and 50'),
   body('voucherCode').optional().trim().isLength({ max: 50 }),
   body('expiresAt').optional().isISO8601().withMessage('Invalid expiry date'),

@@ -26,6 +26,7 @@ import { shadows, layout } from '../../src/theme/spacing';
 import { useColors } from '../../src/theme/ThemeContext';
 import { Text as AppText, useAlertDialog } from '../../src/components/common';
 import type { Branch, Package } from '../../src/types';
+import { useTranslation } from 'react-i18next';
 
 
 
@@ -99,6 +100,7 @@ export default function HomeScreen() {
   const { unreadCount, refreshNotifications } = useNotifications();
   const colors = useColors();
   const alertDialog = useAlertDialog();
+  const { t } = useTranslation();
 
   const [packages, setPackages] = useState<Package[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,7 +154,7 @@ export default function HomeScreen() {
             if (!parsed.timestamp || (now - parsed.timestamp > EXPIRY_MS)) {
               await AsyncStorage.removeItem('aw_recurring_draft');
             } else {
-              setPendingDraft({ url: '/payment/checkout?type=recurring', title: 'Tiếp tục thanh toán 💳', message: 'Bạn có một giao dịch thanh toán định kỳ đang dở dang.', tag: 'Chưa hoàn tất', clearKeys: ['aw_recurring_draft'], isCheckout: true });
+              setPendingDraft({ url: '/payment/checkout?type=recurring', title: t('home.pending_checkout_title'), message: t('home.pending_checkout_msg'), tag: t('home.pending_tag_unfinished'), clearKeys: ['aw_recurring_draft'], isCheckout: true });
               return;
             }
           }
@@ -162,23 +164,23 @@ export default function HomeScreen() {
             if (!parsed.timestamp || (now - parsed.timestamp > EXPIRY_MS)) {
               await AsyncStorage.removeItem('aw_checkout_extras');
             } else {
-              setPendingDraft({ url: '/payment/checkout', title: 'Tiếp tục thanh toán 💳', message: 'Bạn có một giao dịch thanh toán đang dở dang.', tag: 'Chưa hoàn tất', clearKeys: ['aw_checkout_extras'], isCheckout: true });
+              setPendingDraft({ url: '/payment/checkout', title: t('home.pending_checkout_title'), message: t('home.pending_checkout_msg'), tag: t('home.pending_tag_unfinished'), clearKeys: ['aw_checkout_extras'], isCheckout: true });
               return;
             }
           }
 
           if (slotpackStr) {
-            setPendingDraft({ url: '/slot-packs?resumeWizard=true', title: 'Tiếp tục mua gói lượt', message: 'Bạn có tiến trình mua gói lượt chưa hoàn thành.', tag: 'Tiến trình mua', clearKeys: ['aw_slotpack_draft'], isCheckout: false });
+            setPendingDraft({ url: '/slot-packs?resumeWizard=true', title: t('home.pending_slotpack_title'), message: t('home.pending_slotpack_msg'), tag: t('home.pending_tag_purchase'), clearKeys: ['aw_slotpack_draft'], isCheckout: false });
             return;
           }
 
           if (recurringProgressStr) {
-            setPendingDraft({ url: '/booking/recurring', title: 'Tiếp tục đặt lịch định kỳ', message: 'Bạn có tiến trình đặt lịch định kỳ chưa hoàn thành.', tag: 'Tiến trình đặt', clearKeys: ['aw_recurring_draft_progress'], isCheckout: false });
+            setPendingDraft({ url: '/booking/recurring', title: t('home.pending_recurring_title'), message: t('home.pending_recurring_msg'), tag: t('home.pending_tag_progress'), clearKeys: ['aw_recurring_draft_progress'], isCheckout: false });
             return;
           }
 
           setPendingDraft(null);
-        } catch (e) {}
+        } catch (e) { }
       };
       checkPending();
       return () => { cancelled = true; };
@@ -192,9 +194,9 @@ export default function HomeScreen() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Chào buổi sáng,';
-    if (hour < 18) return 'Chào buổi chiều,';
-    return 'Chào buổi tối,';
+    if (hour < 12) return t('home.greeting_morning');
+    if (hour < 18) return t('home.greeting_afternoon');
+    return t('home.greeting_evening');
   };
 
   if (isLoading) {
@@ -258,18 +260,18 @@ export default function HomeScreen() {
 
         {/* Pending Checkout Banner */}
         {pendingDraft && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.promoCard, { backgroundColor: colors.warningLight, borderColor: colors.warning, marginTop: SPACING.sm, marginBottom: 0 }]}
             onPress={() => {
               alertDialog.show({
-                title: pendingDraft.isCheckout ? 'Thanh toán chưa hoàn tất' : 'Tiến trình chưa hoàn tất',
-                message: pendingDraft.isCheckout 
-                  ? 'Bạn muốn tiếp tục thanh toán hay hủy bỏ giao dịch này?'
-                  : 'Bạn muốn tiếp tục hay xóa bỏ tiến trình này?',
+                title: pendingDraft.isCheckout ? t('home.pending_alert_checkout_title') : t('home.pending_alert_progress_title'),
+                message: pendingDraft.isCheckout
+                  ? t('home.pending_alert_checkout_msg')
+                  : t('home.pending_alert_progress_msg'),
                 variant: 'info',
                 actions: [
                   {
-                    text: pendingDraft.isCheckout ? 'Hủy giao dịch' : 'Xóa tiến trình',
+                    text: pendingDraft.isCheckout ? t('home.pending_alert_cancel_checkout') : t('home.pending_alert_cancel_progress'),
                     style: 'destructive',
                     onPress: async () => {
                       for (const key of pendingDraft.clearKeys) {
@@ -279,7 +281,7 @@ export default function HomeScreen() {
                     },
                   },
                   {
-                    text: 'Tiếp tục',
+                    text: t('home.pending_alert_continue'),
                     variant: 'primary',
                     onPress: () => {
                       router.push(pendingDraft.url as any);
@@ -311,15 +313,15 @@ export default function HomeScreen() {
           >
             <View style={styles.heroContent}>
               <View style={styles.heroTextSection}>
-                <AppText variant="h2" style={styles.heroTitle}>Đặt lịch rửa xe ngay</AppText>
+                <AppText variant="h2" style={styles.heroTitle}>{t('home.hero_title')}</AppText>
                 <AppText variant="bodySmall" style={styles.heroSubtitle}>
-                  Tiết kiệm thời gian, an toàn và tiện lợi cho xế cưng.
+                  {t('home.hero_subtitle')}
                 </AppText>
                 <TouchableOpacity
                   style={styles.heroBtn}
                   onPress={() => router.push('/booking')}
                 >
-                  <AppText variant="button" style={{ color: colors.primary }}>Đặt ngay</AppText>
+                  <AppText variant="button" style={{ color: colors.primary }}>{t('home.hero_btn')}</AppText>
                   <Icon name={Icons.chevronRight} size={18} color={colors.primary} />
                 </TouchableOpacity>
               </View>
@@ -337,7 +339,7 @@ export default function HomeScreen() {
           <View style={styles.loyaltyRow}>
             <LoyaltyCard
               icon={Icons.sparkle}
-              label="ĐIỂM TÍCH LŨY"
+              label={t('home.loyalty_points')}
               value={(user.loyaltyPoints || 0).toLocaleString('vi-VN')}
               textColor={colors.primary}
               iconBgColor={`${colors.primary}1A`}
@@ -348,7 +350,7 @@ export default function HomeScreen() {
             />
             <LoyaltyCard
               icon={tierTheme.iconName as any}
-              label="HẠNG THÀNH VIÊN"
+              label={t('home.loyalty_tier')}
               value={tierTheme.label}
               textColor={tierTheme.textColor}
               iconBgColor={`${tierTheme.textColor}1A`}
@@ -363,50 +365,50 @@ export default function HomeScreen() {
         {/* Quick Services */}
         <View style={styles.sectionHeader}>
           <View>
-            <AppText variant="h3" color="textPrimary">Dịch vụ nhanh</AppText>
-            <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: 2 }}>Truy cập nhanh các tính năng</AppText>
+            <AppText variant="h3" color="textPrimary">{t('home.quick_services')}</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: 2 }}>{t('home.quick_services_desc')}</AppText>
           </View>
         </View>
 
         <View style={styles.servicesGrid}>
           <QuickService
             icon={Icons.carOutline}
-            label="Đặt lịch"
+            label={t('home.qs_booking')}
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/booking')}
           />
           <QuickService
             icon={Icons.voucherOutline}
-            label="Voucher"
+            label={t('home.qs_voucher')}
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/rewards')}
           />
           <QuickService
             icon={Icons.listOutline}
-            label="Lịch sử"
+            label={t('home.qs_history')}
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/(tabs)/history')}
           />
           <QuickService
             icon={Icons.layersOutline}
-            label="Gói slot"
+            label={t('home.qs_slot')}
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/slot-packs')}
           />
           <QuickService
             icon={Icons.chatBot}
-            label="Chat AI"
+            label={t('home.qs_chat')}
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/chat')}
           />
           <QuickService
             icon={Icons.locationOutline}
-            label="Chi nhánh"
+            label={t('home.qs_branch')}
             bgColor={colors.primarySubtle}
             iconColor={colors.primary}
             onPress={() => router.push('/branch')}
@@ -417,10 +419,10 @@ export default function HomeScreen() {
         <View style={[styles.promoCard, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryLight }]}>
           <View style={styles.promoContent}>
             <View style={[styles.promoTag, { backgroundColor: colors.primary }]}>
-              <AppText style={[styles.promoTagText, { color: colors.textInverse }]}>Khuyến mãi mới</AppText>
+              <AppText style={[styles.promoTagText, { color: colors.textInverse }]}>{t('home.promo_tag')}</AppText>
             </View>
-            <AppText variant="h4" color="primary" style={{ marginTop: 8 }}>Tặng 20% cho xe Sedan</AppText>
-            <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: 2 }}>Áp dụng cho gói vệ sinh nội thất cao cấp.</AppText>
+            <AppText variant="h4" color="primary" style={{ marginTop: 8 }}>{t('home.promo_title')}</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ marginTop: 2 }}>{t('home.promo_desc')}</AppText>
           </View>
           <View style={styles.promoImageSection}>
             <Icon name={Icons.carOutline} size={40} color={colors.primary} />

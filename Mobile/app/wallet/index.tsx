@@ -17,6 +17,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { walletApi, paymentApi } from '../../src/api';
 import { WalletTransaction } from '../../src/api/wallet';
 import { sseService } from '../../src/services/sse';
@@ -30,8 +31,9 @@ import {
   Loading,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
-import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
-import { formatCurrency, formatDate } from '../../src/utils';
+import { typography } from '../../src/theme/typography';
+import { shadows, layout, borderRadius, spacing } from '../../src/theme/spacing';
+import { formatCurrency, formatDate, translateDynamicText } from '../../src/utils';
 
 const { width } = Dimensions.get('window');
 const PRESET_AMOUNTS = [100000, 200000, 500000, 1000000];
@@ -39,6 +41,7 @@ const PRESET_AMOUNTS = [100000, 200000, 500000, 1000000];
 export default function WalletScreen() {
   const router = useRouter();
   const { user, fetchUser: refreshUser } = useAuth();
+  const { t, i18n } = useTranslation();
   const colors = useColors();
   const styles = createStyles(colors);
 
@@ -278,10 +281,18 @@ export default function WalletScreen() {
   };
 
   const formatTxReason = (text?: string): string => {
-    if (!text) return 'Giao dịch ví';
-    return text.replace(/#([a-f0-9]{12,})/gi, (match, hexId) => {
+    if (!text) return 'Giao dịch';
+    
+    // Original hexId replacement logic
+    const sanitized = text.replace(/#([a-f0-9]{12,})/gi, (match, hexId) => {
       return '#' + hexId.slice(-6).toUpperCase();
     }).trim();
+
+    const translated = translateDynamicText(sanitized, i18n.language);
+    if (translated.length > 55) {
+      return translated.substring(0, 52) + '...';
+    }
+    return translated;
   };
 
   if (loading && !transactions.length) {

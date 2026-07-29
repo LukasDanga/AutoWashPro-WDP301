@@ -2,16 +2,21 @@ const cron = require('node-cron');
 const bookingService = require('../services/booking.service');
 
 // Thời gian khoan dung (phút) sau giờ hẹn trước khi tự động hủy đơn no-show.
-// Chỉ hạ xuống mức chặt (5p) vì đã có lớp đệm: cảnh báo trước + gợi ý đổi giờ +
-// quản lý gia hạn thủ công + strike thay vì chặn thẳng — xem docs/booking-autocancel-improvements.md.
-const GRACE_MINUTES = 5;
+//
+// CHANGE: tăng từ 5 → 15 phút. Lý do:
+//  - 5 phút quá ngắn, khách đến trễ vì kẹt xe / tìm đường / đỗ xe sẽ bị hủy oan.
+//  - Cron chạy mỗi 1 phút → độ trễ thực tế 1-6 phút sau deadline, đã trừ 2 phút
+//    warning (LATE_WARNING_OFFSET_MINUTES), đơn thực tế chỉ có 2 phút trước khi bị hủy.
+//
+// CRON DELAY SAFETY: cron chạy mỗi 1 phút nên tolerance thực tế = graceMinutes + 1 phút.
+// 15 phút grace + 2 phút warning offset → khách có ~12 phút warning + ~3 phút buffer.
+//
+// Environment override: AUTO_CANCEL_GRACE_MINUTES cho phép điều chỉnh không cần sửa code.
+const GRACE_MINUTES = parseInt(process.env.AUTO_CANCEL_GRACE_MINUTES, 10) || 15;
 
 /**
  * Mỗi 1 phút: tự động hủy các đơn 'pending'/'confirmed' mà khách không đến
- * sau GRACE_MINUTES (+ gia hạn thủ công nếu có) kể từ giờ bắt đầu. Giúp giải phóng slot và chống spam.
- * Trước khi hủy, gửi cảnh báo "sắp bị hủy" kèm gợi ý khung giờ trống — xem autoCancelNoShows.
- * Chạy mỗi 1 phút (thay vì 5) vì grace period chỉ còn 5 phút — nếu quét mỗi 5 phút thì độ trễ thực tế
- * có thể lên tới 5-10 phút tùy thời điểm, mất hết ý nghĩa của ngưỡng 5 phút.
+ * sau GRACE_MINUTES (+ gia hạn thủ công nếu có) kể từ giờ bắt đầu.
  */
 function startAutoCancelJob() {
   cron.schedule('*/1 * * * *', async () => {

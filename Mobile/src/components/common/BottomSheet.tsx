@@ -1,8 +1,16 @@
 /**
  * AutoWashPro BottomSheet Component
- * Modal sheet for actions, filters, date pickers
+ * Modal sheet for actions, filters, date pickers, notification details.
+ *
  * Following UX guidelines: modal-motion (slide-from-bottom), back-stack,
- *   swipe-down to dismiss, escape-routes, scrim opacity
+ *   swipe-down to dismiss, escape-routes, scrim opacity.
+ *
+ * Layout strategy (auto-sizing):
+ *   - Sheet height = sum of fixed parts (handle + header + footer)
+ *     + measured ScrollView content height, all clamped to sheetMaxHeight.
+ *   - When content is short, the sheet is short (no empty whitespace below).
+ *   - When content is tall, the sheet grows up to sheetMaxHeight and the
+ *     ScrollView starts scrolling.
  */
 
 import React, {
@@ -40,6 +48,12 @@ interface BottomSheetProps {
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
+  /**
+   * Optional footer rendered below the scrollable content area.
+   * Use this to pin primary action buttons so they remain visible
+   * even when the body content is long.
+   */
+  footer?: React.ReactNode;
   snapPoints?: number[];
   initialSnap?: number;
   showHandle?: boolean;
@@ -49,12 +63,15 @@ interface BottomSheetProps {
   contentStyle?: StyleProp<ViewStyle>;
 }
 
+const MIN_SHEET_HEIGHT = 120;
+
 export const BottomSheet: React.FC<BottomSheetProps> = ({
   visible,
   onClose,
   title,
   subtitle,
   children,
+  footer,
   snapPoints = [0.5],
   initialSnap = 0,
   showHandle = true,
@@ -65,16 +82,36 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 }) => {
   const colors = useColors();
   const screenHeight = Dimensions.get('window').height;
-  const sheetHeight = snapPoints[Math.min(initialSnap, snapPoints.length - 1)] * screenHeight;
+  const sheetMaxHeight = snapPoints[Math.min(initialSnap, snapPoints.length - 1)] * screenHeight;
 
-  const translateY = useRef(new Animated.Value(sheetHeight)).current;
+  const translateY = useRef(new Animated.Value(sheetMaxHeight)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const [shouldRender, setShouldRender] = useState(visible);
+  // Trong lúc sheet đang mở animation (slide-up), giữ height ở
+  // sheetMaxHeight để chuyển động mượt. Sau khi mở xong, cho phép
+  // auto-size co lại theo content thực tế.
+  const [isOpening, setIsOpening] = useState(visible);
+
+  // Chiều cao các phần cố định, đo qua onLayout.
+  const [handleHeight, setHandleHeight] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
+  // Chiều cao nội dung trong ScrollView (do onContentSizeChange đo).
+  const [contentHeight, setContentHeight] = useState(0);
+
+  // Reset measurements mỗi lần sheet mở để tránh giữ giá trị cũ.
+  useEffect(() => {
+    if (visible) {
+      setContentHeight(0);
+      setIsOpening(true);
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
       setShouldRender(true);
+      setIsOpening(true);
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,
@@ -87,11 +124,14 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           duration: duration.medium,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        // Sau khi animation mở hoàn tất, cho phép auto-size.
+        setIsOpening(false);
+      });
     } else if (shouldRender) {
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: sheetHeight,
+          toValue: sheetMaxHeight,
           duration: duration.normal,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
@@ -103,7 +143,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
         }),
       ]).start(() => setShouldRender(false));
     }
-  }, [visible, shouldRender, translateY, backdropAnim, sheetHeight]);
+  }, [visible, shouldRender, translateY, backdropAnim, sheetMaxHeight]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -115,7 +155,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
         }
       },
       onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy > sheetHeight / 3 || gesture.vy > 1.2) {
+        if (gesture.dy > sheetMaxHeight / 3 || gesture.vy > 1.2) {
           onClose();
         } else {
           Animated.spring(dragY, {
@@ -128,6 +168,29 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       },
     }),
   ).current;
+
+  // Chiều cao tối đa cho ScrollView — phần còn lại sau khi trừ
+  // handle + header + footer ra khỏi sheetMaxHeight.
+  const fixedHeight = handleHeight + headerHeight + footerHeight;
+  const scrollMaxHeight = Math.max(0, sheetMaxHeight - fixedHeight);
+
+  // Height thực tế của ScrollView:
+  // - Bằng contentHeight nếu content vừa (sheet co lại bằng content)
+  // - Bằng scrollMaxHeight nếu content vượt (cuộn bên trong)
+  const scrollHeight =
+    contentHeight > 0
+      ? Math.min(contentHeight, scrollMaxHeight)
+      : scrollMaxHeight;
+
+  // Height thực tế của toàn sheet = fixed + scrollHeight.
+  // Trong lúc đang mở animation, giữ ở sheetMaxHeight để chuyển
+  // động mượt; sau khi mở xong sẽ tự co theo content (đã đo).
+  // Luôn clamp trong khoảng MIN_SHEET_HEIGHT và sheetMaxHeight.
+  const sheetHeight = isOpening
+    ? sheetMaxHeight
+    : (contentHeight > 0 || fixedHeight > 0
+        ? Math.max(MIN_SHEET_HEIGHT, Math.min(sheetMaxHeight, fixedHeight + scrollHeight))
+        : sheetMaxHeight);
 
   if (!shouldRender) return null;
 
@@ -179,13 +242,19 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
             {...panResponder.panHandlers}
           >
             {showHandle ? (
-              <View style={styles.handleArea}>
+              <View
+                style={styles.handleArea}
+                onLayout={(e) => setHandleHeight(e.nativeEvent.layout.height)}
+              >
                 <View style={[styles.handle, { backgroundColor: colors.border }]} />
               </View>
             ) : null}
 
             {(title || showCloseButton) ? (
-              <View style={styles.header}>
+              <View
+                style={styles.header}
+                onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+              >
                 <View style={styles.headerText}>
                   {title ? (
                     <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -213,14 +282,34 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
             ) : null}
 
             <ScrollView
-              style={styles.content}
+              style={[styles.content, { maxHeight: scrollHeight }]}
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              onContentSizeChange={(_w, h) => {
+                if (Math.abs(h - contentHeight) > 0.5) setContentHeight(h);
+              }}
             >
               {children}
-              <SafeAreaView edges={['bottom']} />
             </ScrollView>
+
+            {footer ? (
+              <View
+                style={styles.footerWrap}
+                onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+              >
+                <View
+                  style={[
+                    styles.footerDivider,
+                    { backgroundColor: colors.borderLight || '#F1F5F9' },
+                  ]}
+                />
+                {footer}
+                <SafeAreaView edges={['bottom']} />
+              </View>
+            ) : (
+              <SafeAreaView edges={['bottom']} />
+            )}
           </Animated.View>
         </KeyboardAvoidingView>
       </View>
@@ -254,6 +343,8 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -301,11 +392,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    flex: 1,
+    // maxHeight được set inline dựa trên contentSize để sheet tự
+    // co theo nội dung, không có khoảng trắng thừa.
   },
   contentContainer: {
     paddingHorizontal: spacing.screenPadding,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  footerWrap: {
+    paddingHorizontal: spacing.screenPadding,
+    paddingTop: spacing.sm,
+    paddingBottom: 20,
+    backgroundColor: 'transparent',
+  },
+  footerDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: -spacing.screenPadding,
+    marginBottom: spacing.sm,
   },
 });
 
