@@ -182,7 +182,10 @@ exports.createBooking = async (data) => {
     const ADVANCE_BOOKING_DAYS = { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 };
     const maxAdvanceDays = ADVANCE_BOOKING_DAYS[user.tier] || 14;
     const msPerDay = 1000 * 60 * 60 * 24;
-    const daysAhead = Math.floor((bd.setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / msPerDay);
+    // Dùng bookingStr và todayStr (đã tính sẵn) để tránh mutate Date object gốc
+    const daysAhead = Math.floor(
+      (new Date(bookingStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / msPerDay
+    );
     if (daysAhead > maxAdvanceDays) {
       throw Object.assign(
         new Error(`Hạng thành viên của bạn chỉ được đặt trước tối đa ${maxAdvanceDays} ngày. Nâng hạng lên Gold để đặt trước 30 ngày hoặc Diamond để đặt trước 60 ngày.`),
