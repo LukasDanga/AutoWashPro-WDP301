@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, Send, Bot, User, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { sendChatMessage } from '../lib/chatbotService.js';
 
 const WELCOME = 'Xin chào! Tôi là trợ lý AI của AutoWashPro 🚗\nTôi có thể tư vấn dịch vụ và giúp bạn đặt lịch rửa xe. Bạn cần hỗ trợ gì?';
@@ -106,7 +108,24 @@ export default function ChatBot() {
                       ? 'bg-emerald-600 text-white rounded-2xl rounded-tr-sm' 
                       : 'bg-white text-slate-700 rounded-2xl rounded-tl-sm border border-slate-100'
                   }`}>
-                    <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+                    {msg.role === 'user' ? (
+                      <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+                    ) : (
+                      <div className="text-[14px] leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-2 [&_a]:font-medium [&_a:hover]:text-blue-800 [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_code]:text-xs [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:rounded">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ href, children }) => (
+                              <a href={href} target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}
