@@ -305,6 +305,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [selectedDate, setSelectedDate] = useState(null);
   const [detailBooking, setDetailBooking] = useState(null);
+  const [viewBooking, setViewBooking] = useState(null);
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date(); const day = d.getDay();
     d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
@@ -560,7 +561,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       });
       if (res.ok) {
         const payload = await res.json();
-        setDetailBooking(payload.data || payload);
+        setViewBooking(payload.data || payload);
       }
     } catch (error) {
       console.error('Failed to load detail', error);
@@ -624,6 +625,21 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       const bInGroup = recurringGroupBookings.find(b => b._id === detailBooking._id || b.id === detailBooking._id);
       if (bInGroup) {
         setDetailBooking(bInGroup);
+        return;
+      }
+    }
+  }, [bookings, recurringGroupBookings]);
+
+  useEffect(() => {
+    if (viewBooking) {
+      const bInList = bookings.find(b => b._id === viewBooking._id || b.id === viewBooking._id);
+      if (bInList) {
+        setViewBooking(bInList);
+        return;
+      }
+      const bInGroup = recurringGroupBookings.find(b => b._id === viewBooking._id || b.id === viewBooking._id);
+      if (bInGroup) {
+        setViewBooking(bInGroup);
         return;
       }
     }
@@ -1609,7 +1625,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       const canReview = b.status === 'completed';
                       const hasReview = b.rating || b.feedback;
                       return (
-                        <div key={bId} onClick={() => setDetailBooking(b)} className="bg-white rounded-xl p-4 border border-slate-200 cursor-pointer transition-all hover:border-blue-400 hover:shadow-sm">
+                        <div key={bId} onClick={() => setViewBooking(b)} className="bg-white rounded-xl p-4 border border-slate-200 cursor-pointer transition-all hover:border-blue-400 hover:shadow-sm">
                           <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-semibold text-slate-800">{b.packageId?.name || b.packageName || 'Dịch vụ'}</div>
@@ -1770,7 +1786,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                         };
                         const colorCls = colorMap[b.status] || colorMap.pending;
                         return (
-                          <div key={b._id || b.id} onClick={() => setDetailBooking(b)}
+                          <div key={b._id || b.id} onClick={() => setViewBooking(b)}
                             className={`relative rounded-lg border px-2 py-1.5 cursor-pointer transition-opacity hover:opacity-80 ${colorCls}`}>
                             <p className="text-[10px] font-bold leading-tight opacity-75">{b.startTime}{b.endTime ? `-${b.endTime}` : ''}</p>
                             <p className="text-[11px] font-semibold leading-tight truncate">{b.packageId?.name || b.packageName || '—'}</p>
@@ -1970,7 +1986,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     }
                     
                     return (
-                      <div key={bId} onClick={() => setDetailBooking(b)} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden group">
+                      <div key={bId} onClick={() => setViewBooking(b)} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden group">
                         {/* Status color bar */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${
                           b.status === 'completed' ? 'bg-emerald-500' :
@@ -2018,8 +2034,15 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           ))}
                           {hasReview && <span className="text-amber-500 font-medium">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
                         </div>
-                        {(b.status === 'pending' || b.status === 'confirmed' || canReview || hasReview || b.status === 'cancelled') && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 pl-3">
+                            <button onClick={(e) => { e.stopPropagation(); setViewBooking(b); }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors">
+                              Xem chi tiết
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setDetailBooking(b); }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-colors">
+                              Xem hóa đơn
+                            </button>
                             {(b.status === 'pending' || b.status === 'confirmed') && (
                               <button onClick={(e) => { e.stopPropagation(); handleShowQR(b); }}
                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors">
@@ -2084,7 +2107,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               </button>
                             )}
                           </div>
-                        )}
                       </div>
                     );
                   };
@@ -2495,6 +2517,94 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         );
       })()}
 
+      {/* ── VIEW BOOKING MODAL ── */}
+      {viewBooking && (() => {
+        const b = viewBooking;
+        const st = STATUS_MAP[b.status] || { label: b.status, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
+        return (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setViewBooking(null)}>
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">Chi tiết đơn đặt</h2>
+              <button onClick={() => setViewBooking(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-500">Mã đơn:</span>
+                <span className="font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                  #{b.bookingCode || String(b._id || b.id).slice(-8).toUpperCase()}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${st.cls}`}>{st.label}</span>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] gap-y-3 text-sm">
+                <span className="text-slate-500 font-medium">Chi nhánh</span>
+                <span className="text-slate-900 font-semibold">{b.branchId?.name || b.branchName || '—'}</span>
+                <span className="text-slate-500 font-medium">Địa chỉ</span>
+                <span className="text-slate-900">{b.branchId?.address || '—'}</span>
+                <span className="text-slate-500 font-medium">Gói dịch vụ</span>
+                <span className="text-slate-900 font-semibold">{b.packageId?.name || b.packageName || '—'}</span>
+                <span className="text-slate-500 font-medium">Biển số xe</span>
+                <span className="text-slate-900 font-semibold">{b.vehicleId?.licensePlate || b.vehiclePlate || '—'}</span>
+                <span className="text-slate-500 font-medium">Ngày hẹn</span>
+                <span className="text-slate-900">{formatDate(b.bookingDate)}</span>
+                <span className="text-slate-500 font-medium">Giờ</span>
+                <span className="text-slate-900">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span>
+                <span className="text-slate-500 font-medium">Tổng tiền</span>
+                <span className="text-slate-900 font-bold">{formatCurrency(b.finalPrice || b.totalAmount || 0)}</span>
+              </div>
+              {b.depositAmount > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-amber-700">Tiền cọc</span>
+                  <span className="text-sm font-bold text-amber-800">
+                    {b.depositPaid || b.paymentStatus === 'deposit_paid' ? 'Đã cọc ' : 'Cần cọc '}
+                    {formatCurrency(b.depositAmount)}
+                  </span>
+                </div>
+              )}
+              {b.selectedSubServices && b.selectedSubServices.length > 0 && (
+                <div>
+                  <span className="text-sm font-semibold text-slate-500 block mb-2">Dịch vụ thêm</span>
+                  <div className="flex flex-wrap gap-2">
+                    {b.selectedSubServices.map((sub, i) => (
+                      <span key={i} className="px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold">
+                        + {sub.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {b.feedback && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold text-slate-600">Đánh giá:</span>
+                    <div className="flex gap-0.5">
+                      {[1,2,3,4,5].map(s => (
+                        <span key={s} className={`text-base ${s <= (b.rating || 0) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-600 italic">"{b.feedback}"</p>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+              <button onClick={() => { setViewBooking(null); setDetailBooking(b); }}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors text-center">
+                Xem hóa đơn
+              </button>
+              <button onClick={() => setViewBooking(null)}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors text-center">
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
       {/* ── ADD SERVICE MODAL ── */}
       {showAddService && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !addingService && setShowAddService(null)}>
@@ -2688,7 +2798,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     const canReview = b.status === 'completed';
                     const hasReview = b.rating || b.feedback;
                     return (
-                      <div key={bId} onClick={() => setDetailBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
+                      <div key={bId} onClick={() => setViewBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <div className="flex items-center gap-2">
