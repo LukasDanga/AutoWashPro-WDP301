@@ -61,6 +61,10 @@ exports.getMyVehicles = async (userId) => {
   return Vehicle.find({ userId }).sort({ isDefault: -1, createdAt: -1 });
 };
 
+exports.getVehiclesByUserId = async (userId) => {
+  return Vehicle.find({ userId }).sort({ isDefault: -1, createdAt: -1 });
+};
+
 exports.getVehicleById = async (vehicleId, userId) => {
   const vehicle = await Vehicle.findOne({ _id: vehicleId, userId });
   if (!vehicle) throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });

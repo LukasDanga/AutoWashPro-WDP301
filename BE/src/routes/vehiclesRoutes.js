@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middlewares/auth.middleware');
+const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const { validate } = require('../utils/helpers');
 const { vehicleValidators } = require('../utils/validators');
 const vehicleController = require('../controllers/vehicles.controller');
@@ -52,6 +52,8 @@ router.post('/', vehicleValidators.create, validate, vehicleController.addVehicl
  *         description: List of vehicles
  */
 router.get('/', vehicleController.getMyVehicles);
+
+router.get('/user/:userId', authorize('admin', 'manager'), vehicleController.getVehiclesByUserId);
 
 /**
  * @swagger

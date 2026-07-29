@@ -23,6 +23,12 @@ exports.getMyVehicles = catchAsync(async (req, res) => {
   success(res, vehicles, 'Đã lấy danh sách xe');
 });
 
+exports.getVehiclesByUserId = catchAsync(async (req, res) => {
+  const { userId } = req.params;
+  const vehicles = await vehicleService.getVehiclesByUserId(userId);
+  success(res, vehicles, 'Đã lấy danh sách xe');
+});
+
 exports.getVehicleById = catchAsync(async (req, res) => {
   const vehicle = await vehicleService.getVehicleById(req.params.id, req.userId);
   success(res, vehicle, 'Đã lấy thông tin xe');

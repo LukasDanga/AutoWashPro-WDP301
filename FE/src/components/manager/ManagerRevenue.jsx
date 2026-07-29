@@ -100,6 +100,18 @@ function ListTrend({ currentRaw, prevRaw, hideTrend }) {
 function VehicleDetailModal({ vehicle, onClose }) {
   const user = vehicle?.vehicle?.user;
   const [tab, setTab] = useState('info');
+  const [allVehicles, setAllVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+
+  useEffect(() => {
+    if (user?._id) {
+      setLoadingVehicles(true);
+      api(`/vehicles/user/${user._id}`)
+        .then(r => r.json())
+        .then(res => setAllVehicles(res?.data || []))
+        .finally(() => setLoadingVehicles(false));
+    }
+  }, [user?._id]);
 
   if (!vehicle) return null;
 
@@ -170,13 +182,22 @@ function VehicleDetailModal({ vehicle, onClose }) {
               )}
               {tab === 'vehicles' && (
                 <div className="space-y-2">
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600"><Car size={18} /></div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800 uppercase">{vehicle.vehicle?.licensePlate || '—'}</p>
-                      <p className="text-xs text-slate-500 capitalize">{vehicle.vehicle?.vehicleType} · {vehicle.vehicle?.brand} {vehicle.vehicle?.model}</p>
-                    </div>
-                  </div>
+                  {loadingVehicles ? (
+                    <div className="flex justify-center py-6"><Spinner /></div>
+                  ) : allVehicles.length === 0 ? (
+                    <div className="text-center text-sm text-slate-400 py-6">Không có xe nào</div>
+                  ) : (
+                    allVehicles.map((v, i) => (
+                      <div key={v._id || i} className={`p-3 rounded-xl border flex items-center gap-3 ${v._id === vehicle.vehicle?._id ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Car size={18} /></div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-800 uppercase">{v.licensePlate || '—'}</p>
+                          <p className="text-xs text-slate-500 capitalize">{v.vehicleType} · {v.brand} {v.model}</p>
+                        </div>
+                        {v.isDefault && <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Mặc định</span>}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
               {tab === 'wallet' && (
