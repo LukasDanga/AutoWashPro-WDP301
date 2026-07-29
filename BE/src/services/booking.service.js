@@ -1378,7 +1378,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     branchId,
     bookingDate: { $gte: gte, $lte: lte },
     status: { $in: ACTIVE_SLOT_STATUSES },
-  }).select('startTime endTime');
+  }).select('startTime endTime priority');
 
   const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
   const now = new Date();
@@ -1386,13 +1386,15 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
 
   return slots.map((s) => {
     const capacity = branch.capacity || 2;
-    const overlappingCount = existing.filter((b) => {
+    const overlappingBookings = existing.filter((b) => {
       const bs = parseTime(b.startTime);
       const be = parseTime(b.endTime);
       const ns = parseTime(s.startTime);
       const ne = parseTime(s.endTime);
       return bs !== null && be !== null && ns !== null && ne !== null && isSlotOverlap(ns, ne, bs, be);
-    }).length;
+    });
+    const overlappingCount = overlappingBookings.length;
+    const vipBooked = overlappingBookings.some(b => b.priority >= 3);
 
     let available = overlappingCount < capacity;
     let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity;
@@ -1405,7 +1407,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
         vipOnly = false;
       }
     }
-    return { ...s, available, vipOnly };
+    return { ...s, available, vipOnly, vipBooked };
   });
 };
 

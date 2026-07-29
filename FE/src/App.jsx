@@ -154,6 +154,7 @@ export default function App() {
   }, [location]);
 
   async function loginWithCredentials(identifier, password, expectedRole) {
+    console.log('Sending login payload:', { identifier, password });
     const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
