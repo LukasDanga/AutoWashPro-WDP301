@@ -2835,15 +2835,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </p>
 
                 {/* Lucky Spin Notification */}
-                <div className="mt-5 p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 flex items-start sm:items-center gap-3 text-left shadow-inner shadow-white">
-                  <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center text-orange-600 shadow-sm border border-amber-200/50">
-                    <Sparkles className="w-5 h-5" />
+                {(lastBooking.paymentMode === 'full' || lastBooking.isPayingWithPack) && (
+                  <div className="mt-5 p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 flex items-start sm:items-center gap-3 text-left shadow-inner shadow-white">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center text-orange-600 shadow-sm border border-amber-200/50">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="p-6 space-y-4 overflow-y-auto flex-1">

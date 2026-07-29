@@ -15,11 +15,12 @@ function api(path, opts = {}) {
 }
 
 const STATUS_CONFIG = {
-  pending:    { label: 'Chờ xử lý',    color: 'bg-amber-100 text-amber-700' },
-  checked_in: { label: 'Đã check-in',  color: 'bg-blue-100 text-blue-700' },
-  in_progress:{ label: 'Đang rửa',     color: 'bg-purple-100 text-purple-700' },
-  completed:  { label: 'Hoàn thành',   color: 'bg-emerald-100 text-emerald-700' },
-  cancelled:  { label: 'Đã hủy',       color: 'bg-red-100 text-red-700' },
+  pending:          { label: 'Chờ xử lý',      color: 'bg-amber-100 text-amber-700' },
+  checked_in:       { label: 'Đã check-in',    color: 'bg-blue-100 text-blue-700' },
+  in_progress:      { label: 'Đang rửa',       color: 'bg-purple-100 text-purple-700' },
+  awaiting_payment: { label: 'Chờ thanh toán', color: 'bg-orange-100 text-orange-700' },
+  completed:        { label: 'Hoàn thành',     color: 'bg-emerald-100 text-emerald-700' },
+  cancelled:        { label: 'Đã hủy',         color: 'bg-red-100 text-red-700' },
 };
 
 function StatusBadge({ status }) {

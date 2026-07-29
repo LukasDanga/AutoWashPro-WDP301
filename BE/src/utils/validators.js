@@ -144,7 +144,7 @@ const bookingValidators = {
   ],
   updateStatus: [
     param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
-    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled']),
+    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled']),
   ],
   updateSubServices: [
     param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
@@ -258,7 +258,7 @@ const checkinValidators = {
   ],
   updateStatus: [
     param('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['in_progress', 'completed']),
+    body('status').notEmpty().withMessage('Status is required').isIn(['in_progress', 'awaiting_payment', 'completed']),
     body('note').optional().trim().isLength({ max: 500 }),
     body('rating').optional().isInt({ min: 1, max: 5 }),
     body('feedback').optional().trim().isLength({ max: 1000 }),

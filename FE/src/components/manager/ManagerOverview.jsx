@@ -68,12 +68,13 @@ function StatCard({ icon, label, value, sub, color, trend }) {
 }
 
 const STATUS_META = {
-  pending:     { label: 'Chờ xác nhận', color: '#f59e0b' },
-  confirmed:   { label: 'Đã xác nhận', color: '#6366f1' },
-  checked_in:  { label: 'Đã check-in', color: '#06b6d4' },
-  in_progress: { label: 'Đang thực hiện', color: '#3b82f6' },
-  completed:   { label: 'Hoàn thành', color: '#10b981' },
-  cancelled:   { label: 'Đã hủy', color: '#94a3b8' },
+  pending:          { label: 'Chờ xác nhận', color: '#f59e0b' },
+  confirmed:        { label: 'Đã xác nhận', color: '#6366f1' },
+  checked_in:       { label: 'Đã check-in', color: '#06b6d4' },
+  in_progress:      { label: 'Đang thực hiện', color: '#3b82f6' },
+  awaiting_payment: { label: 'Chờ thanh toán', color: '#f97316' },
+  completed:        { label: 'Hoàn thành', color: '#10b981' },
+  cancelled:        { label: 'Đã hủy', color: '#94a3b8' },
 };
 
 const WEEKDAY_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];

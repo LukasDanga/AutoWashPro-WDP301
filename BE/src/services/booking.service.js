@@ -6,14 +6,15 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 const sseService = require('./sse.service');
 
-const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'];
+const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled'];
 
-// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → completed
+// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → awaiting_payment/completed
 const VALID_TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['checked_in', 'cancelled'],
   checked_in: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  in_progress: ['awaiting_payment', 'completed', 'cancelled'],
+  awaiting_payment: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 };
@@ -31,7 +32,7 @@ const GRACE_EXTENSION_STEP_MINUTES = 5;
 const MAX_GRACE_EXTENSION_MINUTES = 15;
 
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
-const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
+const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment'];
 
 const getDepositRate = () => DEPOSIT_RATE;
 
@@ -177,34 +178,61 @@ exports.createBooking = async (data) => {
       }
     }
 
+    // ── Kiểm tra giới hạn đặt trước theo tier ──
+    // Bronze/Silver: 14 ngày | Gold: 30 ngày | Diamond/VIP: 60 ngày
+    const ADVANCE_BOOKING_DAYS = { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 };
+    const maxAdvanceDays = ADVANCE_BOOKING_DAYS[user.tier] || 14;
+    const msPerDay = 1000 * 60 * 60 * 24;
+    // Dùng bookingStr và todayStr (đã tính sẵn) để tránh mutate Date object gốc
+    const daysAhead = Math.floor(
+      (new Date(bookingStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / msPerDay
+    );
+    if (daysAhead > maxAdvanceDays) {
+      throw Object.assign(
+        new Error(`Hạng thành viên của bạn chỉ được đặt trước tối đa ${maxAdvanceDays} ngày. Nâng hạng lên Gold để đặt trước 30 ngày hoặc Diamond để đặt trước 60 ngày.`),
+        { statusCode: 400, code: 'ADVANCE_BOOKING_LIMIT', maxAdvanceDays }
+      );
+    }
+
     const { gte, lte } = getDayBounds(bookingStr);
-    // When checking capacity / VIP for a *new* booking at a given startTime,
-    // we should not count the user's *existing* bookings at the same slot —
-    // those seats are already theirs. We only count *other* people's bookings.
-    // Without this exclusion, a bronze/silver user who already holds one seat
-    // in a capacity-2 slot is incorrectly told the slot is "VIP only" when
-    // they try to add another booking (e.g. a second vehicle) at the same time.
+    // Kiểm tra sức chứa và VIP slot:
+    // - Không đếm booking của chính userId này (tránh tự block chời mình)
+    // - Lấy thêm trường priority để xác định VIP có trong slot không
     const conflicting = await Booking.find({
       branchId,
       bookingDate: { $gte: gte, $lte: lte },
       status: { $in: ACTIVE_SLOT_STATUSES },
       userId: { $ne: userId },
-    }).session(session);
+    }).select('startTime endTime priority').session(session);
 
     const newStart = parseTime(startTime);
     const newEnd = parseTime(endTime);
-    const overlappingCount = conflicting.filter((b) => {
+    const overlappingBookings = conflicting.filter((b) => {
       const bs = parseTime(b.startTime);
       const be = parseTime(b.endTime);
       return bs !== null && be !== null && isSlotOverlap(newStart, newEnd, bs, be);
-    }).length;
+    });
+    const overlappingCount = overlappingBookings.length;
 
     const capacity = branch.capacity || 2;
+
+    // Slot đầy hoàn toàn → từ chối tất cả, kể cả VIP
     if (overlappingCount >= capacity) {
       throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
     }
-    if (capacity > 1 && overlappingCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') {
-      throw Object.assign(new Error('Khung giờ này chỉ dành cho thành viên VIP'), { statusCode: 403, code: 'SLOT_VIP_ONLY' });
+
+    // Slot cuối: chỉ chặn khách không phải VIP nếu ĐANG CÓ VIP giữ chỗ trong slot này.
+    // Nếu không có VIP nào đặt → không giữ chỗ vô ích → tránh mất doanh thu.
+    const VIP_TIERS = ['gold', 'diamond', 'VIP'];
+    const hasVipInSlot = overlappingBookings.some(b => (b.priority || 1) >= 3);
+    const isLastSlot = capacity > 1 && overlappingCount >= capacity - 1;
+    const isNonVip = !VIP_TIERS.includes(user.tier);
+
+    if (isLastSlot && hasVipInSlot && isNonVip) {
+      throw Object.assign(
+        new Error('Khung giờ này đang có thành viên VIP giữ chỗ cuối. Vui lòng chọn khung giờ khác hoặc nâng hạng lên Gold/Diamond.'),
+        { statusCode: 403, code: 'SLOT_VIP_ONLY' }
+      );
     }
 
     let computedDiscountAmount = 0;
@@ -436,7 +464,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     const total = countResult.length > 0 ? countResult[0].total : 0;
 
     await Booking.populate(aggResults, [
-      { path: 'userId', select: 'name email phone tier' },
+      { path: 'userId', select: 'name email phone tier walletBalance' },
       { path: 'branchId', select: 'name address' },
       { path: 'packageId', select: 'name price duration' },
       { path: 'vehicleId', select: 'licensePlate vehicleType brand color' }
@@ -457,7 +485,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
   const [bookings, total] = await Promise.all([
     Booking.find(query)
-      .populate('userId', 'name email phone tier')
+      .populate('userId', 'name email phone tier walletBalance')
       .populate('branchId', 'name address')
       .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color')
@@ -482,7 +510,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
 exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   const booking = await Booking.findById(id)
-    .populate('userId', 'name email phone tier')
+    .populate('userId', 'name email phone tier walletBalance')
     .populate('branchId', 'name address phone')
     .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
@@ -623,8 +651,11 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     if (updateData.staffId) update.staffId = updateData.staffId;
   }
   if (status === 'cancelled') update.cancelledAt = new Date();
-  if (status === 'completed') {
+  if (status === 'awaiting_payment') {
     update.checkOutTime = new Date();
+  }
+  if (status === 'completed') {
+    if (currentBooking.status !== 'awaiting_payment') update.checkOutTime = new Date();
     if (currentBooking.paymentStatus === 'unpaid') {
       update.paymentStatus = 'pending';
     }
@@ -657,6 +688,21 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   }
 
   // Post-completion side effects (async, non-blocking)
+  if (status === 'awaiting_payment') {
+    setImmediate(async () => {
+      try {
+        const plate = booking.vehicleId?.licensePlate || '';
+        await notificationService.send(
+          booking.userId?._id || currentBooking.userId,
+          'Xe đã rửa xong',
+          `Xe ${plate} đã rửa xong. Vui lòng thanh toán phần còn lại để hoàn tất.`,
+          'booking_awaiting_payment',
+          { bookingId: id }
+        );
+      } catch { /* silent */ }
+    });
+  }
+
   if (status === 'completed') {
     setImmediate(async () => {
       try {
@@ -666,7 +712,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
         await notificationService.send(
           booking.userId?._id || currentBooking.userId,
           'Dịch vụ đã hoàn thành',
-          `Xe ${plate} đã rửa xong tại ${branch}. Cảm ơn bạn — hãy để lại đánh giá nhé!`,
+          `Xe ${plate} đã hoàn thành tại ${branch}. Bạn đã nhận được 1 vòng quay may mắn, hãy vào trang Quà Tặng (gifts) để quay nhé!`,
           'booking_completed',
           { bookingId: id }
         );
@@ -688,6 +734,18 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           }
         }
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)
+        // Đồng thời tặng 1 lượt quay vòng quay may mắn nếu đã thanh toán đủ
+        const isFullyPaid = currentBooking.paymentStatus === 'paid' || currentBooking.bookingType === 'slot_pack_usage';
+        if (isFullyPaid) {
+          await User.findOneAndUpdate(
+            { _id: currentBooking.userId },
+            { 
+              $inc: { spinCount: 1 },
+            }
+          ).catch(() => {});
+          sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
+        }
+        
         await User.findOneAndUpdate(
           { _id: currentBooking.userId, noShowCount: { $gt: 0 } },
           { $inc: { noShowCount: -1 } }
@@ -1474,17 +1532,26 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
       return bs !== null && be !== null && ns !== null && ne !== null && isSlotOverlap(ns, ne, bs, be);
     });
     const overlappingCount = overlappingBookings.length;
-    const vipBooked = overlappingBookings.some(b => b.priority >= 3);
+    // vipBooked: có khách VIP (priority >= 3) đang giữ chỗ trong slot này không
+    const vipBooked = overlappingBookings.some(b => (b.priority || 1) >= 3);
 
     let available = overlappingCount < capacity;
-    let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity;
+    // vipOnly = true KHI VÀ CHỈ KHI:
+    //   1. Slot gần đầy (còn đúng 1 chỗ)
+    //   2. VÀ đang có VIP thực sự giữ chỗ trong slot đó
+    // → Không giữ chỗ vô nghĩa khi không có VIP nào đặt → tránh mất doanh thu
+    let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity && vipBooked;
 
     if (dateStr === todayStr) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const slotStartMinutes = parseTime(s.startTime);
       if (slotStartMinutes !== null && slotStartMinutes <= currentMinutes + 30) {
+        // Quá muộn để đặt (cần ít nhất 30 phút chuẩn bị)
         available = false;
         vipOnly = false;
+      } else if (slotStartMinutes !== null && slotStartMinutes - currentMinutes <= 30 * 2) {
+        // Anti-waste: Còn ≤ 60 phút mà chỗ cuối chưa có VIP nào đặt → mở cho tất cả
+        if (!vipBooked) vipOnly = false;
       }
     }
     return { ...s, available, vipOnly, vipBooked };

@@ -169,7 +169,7 @@ function PaymentDetail({ payment, onClose, onConfirm, onRefund, confirming, refu
           <div>
             <span className="block text-xs text-slate-400 font-medium">Trạng thái đơn hàng</span>
             <span className="font-semibold text-slate-700 mt-0.5">
-              {payment.bookingId?.status ? payment.bookingId.status : payment.slotPackId ? `Gói lượt (${payment.slotPackId.status || 'Đã kích hoạt'})` : 'Giao dịch tạm tính'}
+              {payment.bookingId?.status ? (payment.bookingId.status === 'awaiting_payment' ? 'Chờ thanh toán' : payment.bookingId.status === 'completed' ? 'Hoàn thành' : payment.bookingId.status === 'pending' ? 'Chờ xử lý' : payment.bookingId.status === 'checked_in' ? 'Đã check-in' : payment.bookingId.status === 'in_progress' ? 'Đang rửa' : payment.bookingId.status === 'cancelled' ? 'Đã hủy' : payment.bookingId.status) : payment.slotPackId ? `Gói lượt (${payment.slotPackId.status || 'Đã kích hoạt'})` : 'Giao dịch tạm tính'}
             </span>
           </div>
         </div>
