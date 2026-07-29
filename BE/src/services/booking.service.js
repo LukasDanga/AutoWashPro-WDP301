@@ -721,6 +721,9 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
       throw Object.assign(new Error('Không thể cập nhật lịch hẹn đã hoàn thành hoặc đã hủy'), { statusCode: 400, code: 'INVALID_STATUS' });
     }
 
+    const pkg = await Package.findById(booking.packageId).session(session);
+    if (!pkg) throw Object.assign(new Error('Gói dịch vụ không tồn tại'), { statusCode: 404 });
+
     const packages = await Package.find({ isDeleted: false }).session(session);
     const validSubServices = [];
     let addedDuration = 0;
@@ -731,20 +734,49 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
     for (const name of uniqueNames) {
       let found = false;
       
-      // 1. Check if it already exists in the current booking
-      const existingSub = booking.selectedSubServices?.find(s => s.name === name);
-      if (existingSub) {
-        validSubServices.push({ name: existingSub.name, price: existingSub.price, duration: existingSub.duration, isOptional: existingSub.isOptional });
-        addedDuration += existingSub.duration || 0;
-        addedPrice += existingSub.price || 0;
+      // 1. First check if this subservice belongs to the booked package (pkg)
+      const pkgSub = pkg.subServices?.find(s => s.name === name);
+      if (pkgSub) {
+        const isOpt = pkgSub.isOptional !== false;
+        validSubServices.push({
+          name: pkgSub.name,
+          price: pkgSub.price,
+          duration: pkgSub.duration,
+          isOptional: isOpt
+        });
+        // ONLY add duration and price if it is an OPTIONAL EXTRA service!
+        // Included services (isOptional === false) are already in pkg.duration & pkg.price.
+        if (isOpt) {
+          addedDuration += pkgSub.duration || 0;
+          addedPrice += pkgSub.price || 0;
+        }
         found = true;
       }
 
-      // 2. If not found, it is a new subservice. Find the max price across all packages
+      // 2. If not in booked package, check if it exists in current booking's selectedSubServices
+      if (!found) {
+        const existingSub = booking.selectedSubServices?.find(s => s.name === name);
+        if (existingSub) {
+          const isOpt = existingSub.isOptional !== false;
+          validSubServices.push({
+            name: existingSub.name,
+            price: existingSub.price,
+            duration: existingSub.duration,
+            isOptional: isOpt
+          });
+          if (isOpt) {
+            addedDuration += existingSub.duration || 0;
+            addedPrice += existingSub.price || 0;
+          }
+          found = true;
+        }
+      }
+
+      // 3. If still not found, search across all packages for an optional extra subservice
       if (!found) {
         let maxPriceSub = null;
-        for (const pkg of packages) {
-          const sub = pkg.subServices?.find(s => s.name === name);
+        for (const p of packages) {
+          const sub = p.subServices?.find(s => s.name === name);
           if (sub) {
             if (!maxPriceSub || (sub.price || 0) > (maxPriceSub.price || 0)) {
               maxPriceSub = sub;
@@ -753,9 +785,17 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
         }
         
         if (maxPriceSub) {
-          validSubServices.push({ name: maxPriceSub.name, price: maxPriceSub.price, duration: maxPriceSub.duration, isOptional: maxPriceSub.isOptional });
-          addedDuration += maxPriceSub.duration || 0;
-          addedPrice += maxPriceSub.price || 0;
+          const isOpt = maxPriceSub.isOptional !== false;
+          validSubServices.push({
+            name: maxPriceSub.name,
+            price: maxPriceSub.price,
+            duration: maxPriceSub.duration,
+            isOptional: isOpt
+          });
+          if (isOpt) {
+            addedDuration += maxPriceSub.duration || 0;
+            addedPrice += maxPriceSub.price || 0;
+          }
           found = true;
         }
       }
@@ -764,9 +804,6 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
         throw Object.assign(new Error(`Dịch vụ phụ không tồn tại: ${name}`), { statusCode: 404 });
       }
     }
-
-    const pkg = await Package.findById(booking.packageId).session(session);
-    if (!pkg) throw Object.assign(new Error('Gói dịch vụ không tồn tại'), { statusCode: 404 });
 
     const totalDuration = pkg.duration + addedDuration;
     const endTime = computeEndTime(booking.startTime, totalDuration);
@@ -782,22 +819,24 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
     const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : pkg.price;
     const newFinalPrice = Math.max(0, basePrice + addedPrice - (booking.discountAmount || 0));
 
-    // Determine actual amount paid so far by the customer
+    // Determine actual total amount paid so far by the customer
     let actualPaid = 0;
     if (booking.paymentStatus === 'paid') {
-      actualPaid = booking.finalPrice || newFinalPrice;
+      actualPaid = Math.max(booking.finalPrice || 0, booking.depositAmount || 0);
     } else if (booking.paymentStatus === 'deposit_paid' || booking.depositPaid) {
       actualPaid = booking.depositAmount || 0;
     }
 
+    let refundAmount = 0;
+
     if (actualPaid > 0) {
       if (newFinalPrice <= actualPaid) {
-        // Amount paid covers the new total price completely (or price was reduced/reverted)
+        refundAmount = actualPaid - newFinalPrice;
+
         booking.paymentStatus = 'paid';
-        booking.depositAmount = actualPaid;
+        booking.depositAmount = newFinalPrice;
         booking.depositPaid = true;
       } else {
-        // Price increased beyond what was paid: keep paid amount as deposit/prepayment, remaining due at shop
         booking.paymentStatus = 'deposit_paid';
         booking.depositAmount = actualPaid;
         booking.depositPaid = true;
@@ -806,13 +845,37 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
 
     booking.finalPrice = newFinalPrice;
     
+    // Process wallet refund if customer overpaid (canceled paid optional subservices)
+    if (refundAmount > 0 && booking.userId) {
+      const user = await mongoose.model('User').findById(booking.userId).session(session);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + refundAmount;
+        await user.save({ session });
+
+        await mongoose.model('WalletTransaction').create([{
+          userId: user._id,
+          amount: refundAmount,
+          type: 'credit',
+          reason: `Hoàn tiền hủy dịch vụ chọn thêm #${booking.bookingCode || id}`,
+          bookingId: booking._id,
+        }], { session });
+
+        sseService.sendToUser(user._id, 'wallet_updated', { walletBalance: user.walletBalance });
+      }
+    }
+
     await booking.save({ session });
     await session.commitTransaction();
-    return await Booking.findById(booking._id)
-      .populate('userId', 'name email phone tier')
+
+    const updated = await Booking.findById(booking._id)
+      .populate('userId', 'name email phone tier walletBalance')
       .populate('branchId', 'name address phone')
       .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color');
+
+    const result = updated ? updated.toObject() : booking.toObject();
+    result.refundAmount = refundAmount;
+    return result;
   } catch (err) {
     if (session.inTransaction()) {
       await session.abortTransaction();
@@ -842,7 +905,7 @@ exports.confirmBookings = async (ids, userRole, userId) => {
   }
 
   const pending = await Booking.find(query)
-    .populate('packageId', 'name')
+    .populate('packageId', 'name price duration subServices')
     .populate('userId', 'name');
 
   if (pending.length === 0) {
@@ -1924,7 +1987,7 @@ exports.getFeedbacks = async (user, filters = {}) => {
   const [feedbacks, total, statsResult, prevStatsResult] = await Promise.all([
     Booking.find(listQuery)
       .populate('userId', 'name email phone avatar tier')
-      .populate('packageId', 'name')
+      .populate('packageId', 'name price duration subServices')
       .populate('branchId', 'name')
       .sort({ feedbackAt: -1, createdAt: -1 })
       .skip(skip)
@@ -1981,7 +2044,7 @@ exports.submitFeedback = async (bookingId, userId, { rating, feedback }) => {
 
   const updatedBooking = await Booking.findByIdAndUpdate(bookingId, update, { new: true })
     .populate('userId', 'name email phone tier')
-    .populate('packageId', 'name price')
+    .populate('packageId', 'name price duration subServices')
     .populate('branchId', 'name')
     .populate('vehicleId', 'licensePlate vehicleType brand');
 
@@ -2019,7 +2082,7 @@ exports.replyToFeedback = async (bookingId, managerId, reply) => {
     { managerReply: String(reply).trim().slice(0, 1000), managerReplyAt: new Date() },
     { new: true }
   ).populate('userId', 'name email phone tier')
-   .populate('packageId', 'name')
+   .populate('packageId', 'name price duration subServices')
    .populate('branchId', 'name');
 
   notificationService.send(

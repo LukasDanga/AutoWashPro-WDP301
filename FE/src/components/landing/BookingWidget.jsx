@@ -1002,7 +1002,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   // Sub-services
   const pkg = selectedPackage;
   const defaultIncluded = useMemo(() => {
-    return (pkg?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
+    return (pkg?.subServices || []).filter(s => s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))).map(s => s.name);
   }, [pkg]);
 
   const currentSubServices = useMemo(() => {
@@ -1581,14 +1581,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       className="mt-8 p-6 rounded-2xl bg-slate-100/50 border border-slate-200/50"
                     >
                       {/* Included services */}
-                      {selectedPackage.subServices.filter(sub => !sub.isOptional).length > 0 && (
+                      {selectedPackage.subServices.filter(sub => sub.isOptional === false || (sub.isOptional === undefined && (sub.price === 0 || !sub.price))).length > 0 && (
                         <div className="mb-6">
                           <div className="flex items-center gap-2 mb-4">
                             <Check className="w-4 h-4 text-emerald-600" />
                             <h4 className="text-sm font-bold text-slate-700">Dịch vụ đã bao gồm</h4>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {selectedPackage.subServices.filter(sub => !sub.isOptional).map(sub => {
+                            {selectedPackage.subServices.filter(sub => sub.isOptional === false || (sub.isOptional === undefined && (sub.price === 0 || !sub.price))).map(sub => {
                               const pId = selectedPackage._id || selectedPackage.id;
                               const checked = currentSubServices.includes(sub.name);
                               return (
@@ -1597,7 +1597,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                   key={sub.name}
                                   onClick={() => {
                                     setSelectedSubServices(prev => {
-                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
+                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))).map(s => s.name);
                                       return { 
                                         ...prev, 
                                         [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
@@ -1631,7 +1631,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       )}
 
                       {/* Optional extra services */}
-                      {selectedPackage.subServices.filter(sub => sub.isOptional && sub.price > 0).length > 0 && (
+                      {selectedPackage.subServices.filter(sub => sub.isOptional === true).length > 0 && (
                         <div>
                           <div className="flex items-center gap-2 mb-4">
                             <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -1639,7 +1639,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           </div>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {selectedPackage.subServices.filter(sub => sub.isOptional && sub.price > 0).map(sub => {
+                            {selectedPackage.subServices.filter(sub => sub.isOptional === true).map(sub => {
                               const pId = selectedPackage._id || selectedPackage.id;
                               const checked = currentSubServices.includes(sub.name);
                               return (
@@ -1648,7 +1648,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                   key={sub.name}
                                   onClick={() => {
                                     setSelectedSubServices(prev => {
-                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => !s.isOptional).map(s => s.name);
+                                      const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))).map(s => s.name);
                                       return { 
                                         ...prev, 
                                         [pId]: checked ? current.filter(x => x !== sub.name) : [...current, sub.name] 
@@ -2288,7 +2288,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <div className="pb-6 border-b border-dashed border-slate-200 space-y-4">
                         {/* Dịch vụ đã bao gồm trong gói */}
                         {(() => {
-                          const keptIncluded = (pkg?.subServices || []).filter(s => !s.isOptional && currentSubServices.includes(s.name));
+                          const keptIncluded = (pkg?.subServices || []).filter(s => (s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))) && currentSubServices.includes(s.name));
                           if (keptIncluded.length === 0) return null;
                           return (
                             <div>
@@ -2409,7 +2409,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                         {/* Included sub-services (Dịch vụ có sẵn trong gói - Miễn phí) */}
                         {(() => {
-                          const keptIncluded = (pkg?.subServices || []).filter(s => !s.isOptional && currentSubServices.includes(s.name));
+                          const keptIncluded = (pkg?.subServices || []).filter(s => (s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))) && currentSubServices.includes(s.name));
                           if (keptIncluded.length === 0) return null;
                           return (
                             <div className="pl-3 space-y-1 my-1">

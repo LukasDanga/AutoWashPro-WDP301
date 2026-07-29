@@ -217,7 +217,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
       } else {
         await Booking.findByIdAndUpdate(
           booking._id,
-          { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method },
+          { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method, depositPaid: true, depositAmount: booking.finalPrice },
           { session }
         );
         await markRecurringSiblingsPaid(booking, method, session);
@@ -390,7 +390,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
       await markRecurringSiblingsDepositPaid(booking, payment.method, session);
     } else {
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice }).session(session);
       await markRecurringSiblingsPaid(booking, payment.method, session);
       await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
       await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
@@ -529,7 +529,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
         await markRecurringSiblingsDepositPaid(booking, payment.method, session);
       } else {
-        await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method }).session(session);
+        await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice }).session(session);
         await markRecurringSiblingsPaid(booking, payment.method, session);
         await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });

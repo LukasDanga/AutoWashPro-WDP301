@@ -166,7 +166,7 @@ exports.getMySlotPacks = async (userId, filters = {}) => {
 
   return SlotPack.find(query)
     .populate('branchId',  'name address')
-    .populate('packageId', 'name price duration')
+    .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color')
     .sort({ createdAt: -1 });
 };
@@ -207,7 +207,7 @@ exports.getAllSlotPacks = async (filters = {}, userRole, userBranchId) => {
     SlotPack.find(query)
       .populate('userId',    'name email phone tier')
       .populate('branchId',  'name address')
-      .populate('packageId', 'name price duration')
+      .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color')
       .sort({ priority: -1, createdAt: -1 })
       .skip(skip)
@@ -223,7 +223,7 @@ exports.getSlotPackById = async (id, userId, userRole) => {
   const pack = await SlotPack.findById(id)
     .populate('userId',    'name email phone tier')
     .populate('branchId',  'name address')
-    .populate('packageId', 'name price duration')
+    .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 
   if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
@@ -240,7 +240,7 @@ exports.getSlotPackByCode = async (packCode, userRole, userBranchId) => {
   const pack = await SlotPack.findOne({ packCode: packCode.toUpperCase() })
     .populate('userId',    'name email phone tier')
     .populate('branchId',  'name address')
-    .populate('packageId', 'name price duration')
+    .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 
   if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
