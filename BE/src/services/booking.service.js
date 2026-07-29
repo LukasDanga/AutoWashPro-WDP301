@@ -145,10 +145,10 @@ exports.createBooking = async (data) => {
     if (selectedSubServices && Array.isArray(selectedSubServices) && pkg.subServices) {
       for (const serviceName of selectedSubServices) {
         const sub = pkg.subServices.find(s => s.name === serviceName);
-        if (sub) {
+        if (sub && sub.isOptional !== false) {
           extraDuration += sub.duration || 0;
           extraPrice += sub.price || 0;
-          validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration });
+          validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration, isOptional: sub.isOptional });
         }
       }
     }
@@ -459,7 +459,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     Booking.find(query)
       .populate('userId', 'name email phone tier')
       .populate('branchId', 'name address')
-      .populate('packageId', 'name price duration')
+      .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color')
       .sort(sortObj)
       .skip(skip)
@@ -484,7 +484,7 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   const booking = await Booking.findById(id)
     .populate('userId', 'name email phone tier')
     .populate('branchId', 'name address phone')
-    .populate('packageId', 'name price duration')
+    .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
   if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   if (userRole === 'customer' && String(booking.userId._id || booking.userId) !== String(userId)) {
@@ -639,7 +639,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     { new: true }
   ).populate('userId', 'name email phone tier')
    .populate('branchId', 'name address phone')
-   .populate('packageId', 'name price duration')
+   .populate('packageId', 'name price duration subServices')
    .populate('vehicleId', 'licensePlate vehicleType brand color');
   if (!booking) {
     throw Object.assign(new Error('Booking status was changed by another request'), { statusCode: 409, code: 'CONCURRENT_MODIFICATION' });
@@ -780,21 +780,38 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
     booking.selectedSubServices = validSubServices;
     booking.endTime = endTime;
     const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : pkg.price;
-    const newFinalPrice = basePrice + addedPrice - (booking.discountAmount || 0);
-    
-    // If the price increased and it was previously paid, mark as unpaid for the remaining balance.
-    // If we only charge for the newly added services, the finalPrice will increase.
-    if (newFinalPrice > (booking.finalPrice || 0) && booking.paymentStatus === 'paid') {
-        booking.paymentStatus = 'unpaid';
+    const newFinalPrice = Math.max(0, basePrice + addedPrice - (booking.discountAmount || 0));
+
+    // Determine actual amount paid so far by the customer
+    let actualPaid = 0;
+    if (booking.paymentStatus === 'paid') {
+      actualPaid = booking.finalPrice || newFinalPrice;
+    } else if (booking.paymentStatus === 'deposit_paid' || booking.depositPaid) {
+      actualPaid = booking.depositAmount || 0;
     }
-    booking.finalPrice = Math.max(0, newFinalPrice);
+
+    if (actualPaid > 0) {
+      if (newFinalPrice <= actualPaid) {
+        // Amount paid covers the new total price completely (or price was reduced/reverted)
+        booking.paymentStatus = 'paid';
+        booking.depositAmount = actualPaid;
+        booking.depositPaid = true;
+      } else {
+        // Price increased beyond what was paid: keep paid amount as deposit/prepayment, remaining due at shop
+        booking.paymentStatus = 'deposit_paid';
+        booking.depositAmount = actualPaid;
+        booking.depositPaid = true;
+      }
+    }
+
+    booking.finalPrice = newFinalPrice;
     
     await booking.save({ session });
     await session.commitTransaction();
     return await Booking.findById(booking._id)
       .populate('userId', 'name email phone tier')
       .populate('branchId', 'name address phone')
-      .populate('packageId', 'name price duration')
+      .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color');
   } catch (err) {
     if (session.inTransaction()) {
@@ -1471,10 +1488,10 @@ exports.createRecurringBooking = async (data) => {
   if (selectedSubServices && Array.isArray(selectedSubServices) && pkg.subServices) {
     for (const serviceName of selectedSubServices) {
       const sub = pkg.subServices.find(s => s.name === serviceName);
-      if (sub) {
+      if (sub && sub.isOptional !== false) {
         extraDuration += sub.duration || 0;
         extraPrice += sub.price || 0;
-        validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration });
+        validSubServices.push({ name: sub.name, price: sub.price, duration: sub.duration, isOptional: sub.isOptional });
       }
     }
   }
@@ -2136,7 +2153,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
 
   return Booking.findById(newBooking._id)
     .populate('userId', 'name email phone tier')
-    .populate('packageId', 'name price duration')
+    .populate('packageId', 'name price duration subServices')
     .populate('branchId', 'name address')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
 };
