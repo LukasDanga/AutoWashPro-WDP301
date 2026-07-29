@@ -2177,8 +2177,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     else past.push(b);
                   });
                   
-                  upcoming.sort((a, b) => new Date(a.bookingDate) - new Date(b.bookingDate));
-                  past.sort((a, b) => new Date(b.bookingDate) - new Date(a.bookingDate));
+                  upcoming.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id));
+                  past.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id));
                   
                   const isNew = (createdAt) => createdAt && (new Date() - new Date(createdAt)) < 24 * 60 * 60 * 1000;
 
