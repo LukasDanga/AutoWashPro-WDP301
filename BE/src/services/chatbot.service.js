@@ -701,22 +701,17 @@ function classifyError(err) {
   return Object.assign(new Error('Chatbot gặp sự cố. Vui lòng thử lại sau.'), { statusCode: 503 });
 }
 
-// ─── Check if using local Ollama ─────────────────────────────────────────────
-function isOllamaLocal() {
-  return (process.env.CHATBOT_BASE_URL || '').includes('localhost') || (process.env.CHATBOT_BASE_URL || '').includes('127.0.0.1');
-}
-
 // ─── Resolve tool calls (shared between chat & stream) ────────────────────────
 async function resolveToolCalls(openai, modelName, session, userId, role) {
   const systemPrompt = composeSystemPrompt(role);
-  const useTools = !isOllamaLocal();
-  const tools = useTools ? getToolsForRole(role) : undefined;
-  for (let i = 0; i < (useTools ? 5 : 1); i++) {
+  const tools = getToolsForRole(role);
+  for (let i = 0; i < 5; i++) {
     const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
     const response = await openai.chat.completions.create({
       model: modelName,
       messages,
-      ...(tools && { tools, tool_choice: 'auto' }),
+      tools,
+      tool_choice: 'auto',
       max_tokens: 1024,
     });
 
@@ -751,8 +746,9 @@ exports.chat = async (sessionId, message, userId, role = 'customer') => {
   const { openai, modelName } = getOpenAI();
   const session = getSession(sessionId);
 
+  const todayDate = new Date().toISOString().split('T')[0];
   const userText = session.history.length === 0
-    ? `[isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
+    ? `[Hôm nay: ${todayDate}][isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
     : message;
   session.history.push({ role: 'user', content: userText });
 
@@ -769,11 +765,11 @@ exports.streamChat = async (sessionId, message, userId, role, res) => {
   const { openai, modelName } = getOpenAI();
   const session = getSession(sessionId);
   const systemPrompt = composeSystemPrompt(role);
-  const useTools = !isOllamaLocal();
-  const tools = useTools ? getToolsForRole(role) : undefined;
+  const tools = getToolsForRole(role);
 
+  const todayDate = new Date().toISOString().split('T')[0];
   const userText = session.history.length === 0
-    ? `[isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
+    ? `[Hôm nay: ${todayDate}][isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
     : message;
   session.history.push({ role: 'user', content: userText });
 
@@ -783,11 +779,12 @@ exports.streamChat = async (sessionId, message, userId, role, res) => {
 
   try {
     // Step 1: Resolve all tool calls synchronously (non-streaming)
-    for (let i = 0; i < (useTools ? 5 : 1); i++) {
+    for (let i = 0; i < 5; i++) {
       const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
       const response = await openai.chat.completions.create({
         model: modelName, messages,
-        ...(tools && { tools, tool_choice: 'auto' }),
+        tools,
+        tool_choice: 'auto',
         max_tokens: 1024,
       });
 
