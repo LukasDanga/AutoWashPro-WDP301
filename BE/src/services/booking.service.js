@@ -177,34 +177,58 @@ exports.createBooking = async (data) => {
       }
     }
 
+    // ── Kiểm tra giới hạn đặt trước theo tier ──
+    // Bronze/Silver: 14 ngày | Gold: 30 ngày | Diamond/VIP: 60 ngày
+    const ADVANCE_BOOKING_DAYS = { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 };
+    const maxAdvanceDays = ADVANCE_BOOKING_DAYS[user.tier] || 14;
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysAhead = Math.floor((bd.setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / msPerDay);
+    if (daysAhead > maxAdvanceDays) {
+      throw Object.assign(
+        new Error(`Hạng thành viên của bạn chỉ được đặt trước tối đa ${maxAdvanceDays} ngày. Nâng hạng lên Gold để đặt trước 30 ngày hoặc Diamond để đặt trước 60 ngày.`),
+        { statusCode: 400, code: 'ADVANCE_BOOKING_LIMIT', maxAdvanceDays }
+      );
+    }
+
     const { gte, lte } = getDayBounds(bookingStr);
-    // When checking capacity / VIP for a *new* booking at a given startTime,
-    // we should not count the user's *existing* bookings at the same slot —
-    // those seats are already theirs. We only count *other* people's bookings.
-    // Without this exclusion, a bronze/silver user who already holds one seat
-    // in a capacity-2 slot is incorrectly told the slot is "VIP only" when
-    // they try to add another booking (e.g. a second vehicle) at the same time.
+    // Kiểm tra sức chứa và VIP slot:
+    // - Không đếm booking của chính userId này (tránh tự block chời mình)
+    // - Lấy thêm trường priority để xác định VIP có trong slot không
     const conflicting = await Booking.find({
       branchId,
       bookingDate: { $gte: gte, $lte: lte },
       status: { $in: ACTIVE_SLOT_STATUSES },
       userId: { $ne: userId },
-    }).session(session);
+    }).select('startTime endTime priority').session(session);
 
     const newStart = parseTime(startTime);
     const newEnd = parseTime(endTime);
-    const overlappingCount = conflicting.filter((b) => {
+    const overlappingBookings = conflicting.filter((b) => {
       const bs = parseTime(b.startTime);
       const be = parseTime(b.endTime);
       return bs !== null && be !== null && isSlotOverlap(newStart, newEnd, bs, be);
-    }).length;
+    });
+    const overlappingCount = overlappingBookings.length;
 
     const capacity = branch.capacity || 2;
+
+    // Slot đầy hoàn toàn → từ chối tất cả, kể cả VIP
     if (overlappingCount >= capacity) {
       throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
     }
-    if (capacity > 1 && overlappingCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') {
-      throw Object.assign(new Error('Khung giờ này chỉ dành cho thành viên VIP'), { statusCode: 403, code: 'SLOT_VIP_ONLY' });
+
+    // Slot cuối: chỉ chặn khách không phải VIP nếu ĐANG CÓ VIP giữ chỗ trong slot này.
+    // Nếu không có VIP nào đặt → không giữ chỗ vô ích → tránh mất doanh thu.
+    const VIP_TIERS = ['gold', 'diamond', 'VIP'];
+    const hasVipInSlot = overlappingBookings.some(b => (b.priority || 1) >= 3);
+    const isLastSlot = capacity > 1 && overlappingCount >= capacity - 1;
+    const isNonVip = !VIP_TIERS.includes(user.tier);
+
+    if (isLastSlot && hasVipInSlot && isNonVip) {
+      throw Object.assign(
+        new Error('Khung giờ này đang có thành viên VIP giữ chỗ cuối. Vui lòng chọn khung giờ khác hoặc nâng hạng lên Gold/Diamond.'),
+        { statusCode: 403, code: 'SLOT_VIP_ONLY' }
+      );
     }
 
     let computedDiscountAmount = 0;
@@ -1474,17 +1498,26 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
       return bs !== null && be !== null && ns !== null && ne !== null && isSlotOverlap(ns, ne, bs, be);
     });
     const overlappingCount = overlappingBookings.length;
-    const vipBooked = overlappingBookings.some(b => b.priority >= 3);
+    // vipBooked: có khách VIP (priority >= 3) đang giữ chỗ trong slot này không
+    const vipBooked = overlappingBookings.some(b => (b.priority || 1) >= 3);
 
     let available = overlappingCount < capacity;
-    let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity;
+    // vipOnly = true KHI VÀ CHỈ KHI:
+    //   1. Slot gần đầy (còn đúng 1 chỗ)
+    //   2. VÀ đang có VIP thực sự giữ chỗ trong slot đó
+    // → Không giữ chỗ vô nghĩa khi không có VIP nào đặt → tránh mất doanh thu
+    let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity && vipBooked;
 
     if (dateStr === todayStr) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const slotStartMinutes = parseTime(s.startTime);
       if (slotStartMinutes !== null && slotStartMinutes <= currentMinutes + 30) {
+        // Quá muộn để đặt (cần ít nhất 30 phút chuẩn bị)
         available = false;
         vipOnly = false;
+      } else if (slotStartMinutes !== null && slotStartMinutes - currentMinutes <= 30 * 2) {
+        // Anti-waste: Còn ≤ 60 phút mà chỗ cuối chưa có VIP nào đặt → mở cho tất cả
+        if (!vipBooked) vipOnly = false;
       }
     }
     return { ...s, available, vipOnly, vipBooked };
