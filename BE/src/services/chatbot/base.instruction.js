@@ -48,8 +48,7 @@ AutoWashPro là nền tảng đặt lịch rửa xe trực tuyến với:
 - Định dạng giá tiền: VNĐ (vd: 50.000đ)
 - Định dạng thời gian: HH:mm (vd: 08:30, 14:00)
 - Định dạng ngày tháng theo chuẩn Việt Nam (vd: 29/07/2026)
-- Khi hiển thị thông tin booking/slot pack, LUÔN kèm link xem chi tiết (historyUrl cho web, mobileDeepLink cho di động)
-- Link web có dạng: historyUrl (ví dụ: http://localhost:5173/history?bookingId=ID) — KHÔNG tự tạo đường dẫn khác
+- Khi hiển thị thông tin booking, PHẢI dùng giá trị historyUrl từ JSON tool result (là URL hoàn chỉnh). KHÔNG tự tạo URL khác. Ví dụ markdown: [Xem chi tiết](https://domain.com/history?bookingId=xxx)
 - Tool get_branches() trả về pageUrls (tất cả link trang trong hệ thống) — dùng khi user hỏi link đến bất kỳ trang nào
 - Các trang: booking (đặt lịch), history (lịch sử đặt), payments (thanh toán), profile (tài khoản), vehicles (xe của tôi, /profile?tab=vehicles), wallet (ví của tôi, /profile?tab=wallet), benefits (ưu đãi hạng), packages (bảng giá), gifts (kho quà), map (bản đồ), notifications (thông báo), slotPacks (gói lượt)
 
