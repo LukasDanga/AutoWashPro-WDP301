@@ -192,6 +192,7 @@ function buildRevenueFacet() {
             'vehicle.model': 1,
             'vehicle.vehicleType': 1,
             'vehicle.userId': 1,
+            'vehicle.user._id': 1,
             'vehicle.user.name': 1,
             'vehicle.user.email': 1,
             'vehicle.user.phone': 1,
