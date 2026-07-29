@@ -97,11 +97,112 @@ function ListTrend({ currentRaw, prevRaw, hideTrend }) {
   return <div className="mt-1 flex justify-end">{content}</div>;
 }
 
+function VehicleDetailModal({ vehicle, onClose }) {
+  const user = vehicle?.vehicle?.user;
+  const [tab, setTab] = useState('info');
+
+  if (!vehicle) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="p-6 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-lg font-bold text-slate-900">{vehicle.vehicle?.licensePlate || 'Chưa cập nhật'}</p>
+              <p className="text-sm text-slate-500 capitalize">{vehicle.vehicle?.vehicleType} · {vehicle.vehicle?.brand} {vehicle.vehicle?.model}</p>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 mb-5">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
+              {(user?.name || '?').charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-800">{user?.name || 'Không có thông tin'}</p>
+              <p className="text-xs text-slate-500">{user?.phone || ''}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-emerald-600">{(vehicle.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
+              <p className="text-xs text-slate-400">{vehicle.bookingsCount} lượt đặt</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        {user ? (
+          <>
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mx-6 mb-5">
+              {['info', 'benefits', 'vehicles', 'wallet'].map(t => (
+                <button key={t} onClick={() => setTab(t)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}>
+                  {t === 'info' ? 'Thông tin' : t === 'benefits' ? 'Ưu đãi hạng' : t === 'vehicles' ? 'Xe' : 'Ví'}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-6 pb-6 space-y-4">
+              {tab === 'info' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Tên</p><p className="text-sm font-medium text-slate-800 mt-1">{user.name || '—'}</p></div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Email</p><p className="text-sm font-medium text-slate-800 mt-1">{user.email || '—'}</p></div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Số điện thoại</p><p className="text-sm font-medium text-slate-800 mt-1">{user.phone || '—'}</p></div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Ngày tham gia</p><p className="text-sm font-medium text-slate-800 mt-1">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '—'}</p></div>
+                </div>
+              )}
+              {tab === 'benefits' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Hạng thành viên</p><p className="text-sm font-bold text-slate-800 mt-1 capitalize">{user.tier || 'Standard'}</p></div>
+                    {user.tier && <TierBadge tier={user.tier} />}
+                  </div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Điểm tích lũy</p><p className="text-sm font-bold text-slate-800 mt-1">{user.loyaltyPoints || 0}</p></div>
+                    <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 font-bold">{user.loyaltyPoints || 0}</div>
+                  </div>
+                </div>
+              )}
+              {tab === 'vehicles' && (
+                <div className="space-y-2">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600"><Car size={18} /></div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 uppercase">{vehicle.vehicle?.licensePlate || '—'}</p>
+                      <p className="text-xs text-slate-500 capitalize">{vehicle.vehicle?.vehicleType} · {vehicle.vehicle?.brand} {vehicle.vehicle?.model}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {tab === 'wallet' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Số dư ví</p><p className="text-sm font-bold text-slate-800 mt-1">{(user.walletBalance || 0).toLocaleString('vi-VN')}đ</p></div>
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500"><CurrencyCircleDollar size={20} weight="duotone" /></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="px-6 pb-6 text-center text-sm text-slate-400 py-8">Không có thông tin người dùng</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ManagerRevenue() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, month, today
-  const [viewMode, setViewMode] = useState('overview'); // overview, customers
+  const [viewMode, setViewMode] = useState('overview'); // overview, customers, vehicles
+  const [vehicleDetail, setVehicleDetail] = useState(null);
 
   async function loadData() {
     setLoading(true);
@@ -125,6 +226,8 @@ export default function ManagerRevenue() {
   useEffect(() => {
     loadData();
   }, [filter]);
+
+  const openVehicleDetail = (v) => setVehicleDetail(v);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -403,16 +506,17 @@ export default function ManagerRevenue() {
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-100 bg-slate-50/50 text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Xe</th>
-                  <th className="px-5 py-3 font-semibold text-center">Số lượt đặt</th>
-                  <th className="px-5 py-3 font-semibold text-right">Doanh thu mang lại</th>
-                </tr>
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Xe</th>
+                    <th className="px-5 py-3 font-semibold text-center">Số lượt đặt</th>
+                    <th className="px-5 py-3 font-semibold text-right">Doanh thu mang lại</th>
+                    <th className="px-5 py-3 font-semibold text-center">Chi tiết</th>
+                  </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(!data?.byVehicle || data.byVehicle.length === 0) ? (
                   <tr>
-                    <td colSpan={3} className="p-8 text-center text-slate-400">Không có dữ liệu</td>
+                    <td colSpan={4} className="p-8 text-center text-slate-400">Không có dữ liệu</td>
                   </tr>
                 ) : (
                   data.byVehicle.map((v, i) => (
@@ -430,6 +534,11 @@ export default function ManagerRevenue() {
                         <p className="font-semibold text-emerald-600">{(v.totalRevenue || 0).toLocaleString('vi-VN')}đ</p>
                         <ListTrend currentRaw={v.totalRevenue} prevRaw={getPrev(data.previousByVehicle, v._id)} hideTrend={filter === 'all'} />
                       </td>
+                      <td className="px-5 py-4 text-center">
+                        <button onClick={() => openVehicleDetail(v)} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold transition-colors">
+                          Xem chi tiết
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -443,6 +552,7 @@ export default function ManagerRevenue() {
           <p>Không thể tải dữ liệu báo cáo</p>
         </div>
       )}
+      {vehicleDetail && <VehicleDetailModal vehicle={vehicleDetail} onClose={() => setVehicleDetail(null)} />}
     </div>
   );
 }

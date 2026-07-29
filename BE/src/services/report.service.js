@@ -174,6 +174,15 @@ function buildRevenueFacet() {
         },
         { $unwind: { path: '$vehicle', preserveNullAndEmptyArrays: true } },
         {
+          $lookup: {
+            from: 'users',
+            localField: 'vehicle.userId',
+            foreignField: '_id',
+            as: 'vehicle.user',
+          },
+        },
+        { $unwind: { path: '$vehicle.user', preserveNullAndEmptyArrays: true } },
+        {
           $project: {
             _id: 1,
             totalRevenue: 1,
@@ -182,6 +191,14 @@ function buildRevenueFacet() {
             'vehicle.brand': 1,
             'vehicle.model': 1,
             'vehicle.vehicleType': 1,
+            'vehicle.userId': 1,
+            'vehicle.user.name': 1,
+            'vehicle.user.email': 1,
+            'vehicle.user.phone': 1,
+            'vehicle.user.tier': 1,
+            'vehicle.user.loyaltyPoints': 1,
+            'vehicle.user.walletBalance': 1,
+            'vehicle.user.createdAt': 1,
           },
         },
         { $sort: { totalRevenue: -1 } },
