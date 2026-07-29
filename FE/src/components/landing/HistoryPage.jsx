@@ -337,6 +337,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [cancelReason, setCancelReason] = useState('');
   const [cancelStep, setCancelStep] = useState(1);
   const [cancelOtp, setCancelOtp] = useState('');
+  const [cancelPreview, setCancelPreview] = useState(null);
 
   // Cancel recurring confirm modal
   const [showCancelRecurringConfirm, setShowCancelRecurringConfirm] = useState(false);
@@ -655,7 +656,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setCancelReason('');
     setCancelStep(1);
     setCancelOtp('');
+    setCancelPreview(null);
     setShowCancelConfirm(true);
+    // Fetch cancel preview
+    try {
+      const bId = b._id || b.id;
+      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel-preview`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        setCancelPreview(payload?.data || null);
+      }
+    } catch (e) { /* ignore preview errors */ }
   }
 
   async function requestCancelOtp() {
@@ -704,7 +717,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         onUserUpdate({ walletBalance: (user?.walletBalance || 0) + refundAmount });
       }
       showToastMsg(refundAmount > 0 ? `Đã hủy đơn thành công, hoàn ${refundAmount.toLocaleString('vi-VN')}đ vào ví` : 'Đã hủy đơn thành công');
-      setShowCancelConfirm(false); setCancelTarget(null); setCancelReason(''); setCancelOtp(''); setCancelStep(1);
+      setShowCancelConfirm(false); setCancelTarget(null); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null);
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
       if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) { setCancelConfirmError(e.message); }
@@ -2580,7 +2593,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       {/* ── CANCEL CONFIRM MODAL ── */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
-          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); } }}>
+          onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null); } }}>
           <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
             <div className="text-4xl mb-4">{cancelStep === 1 ? '🗑' : '📩'}</div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">{cancelStep === 1 ? 'Xác nhận hủy đơn' : 'Nhập mã xác thực OTP'}</h3>
@@ -2592,6 +2605,30 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
             
             {cancelStep === 1 ? (
               <div className="text-left mb-6">
+                {/* ── Cảnh báo hoàn tiền / phạt ── */}
+                {cancelPreview && cancelPreview.totalPaid > 0 && (
+                  <div className={`mb-4 px-4 py-3 rounded-xl text-sm border ${
+                    cancelPreview.isLateCancel
+                      ? 'bg-amber-50 border-amber-200 text-amber-800'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  }`}>
+                    {cancelPreview.isLateCancel ? (
+                      <>
+                        <div className="flex items-center gap-1.5 font-bold mb-1">⚠️ Hủy sát giờ hẹn ({cancelPreview.minutesBefore} phút trước)</div>
+                        {cancelPreview.penaltyAmount > 0 && (
+                          <div className="text-red-600 font-semibold">Phí phạt: -{cancelPreview.penaltyAmount.toLocaleString('vi-VN')}₫ ({cancelPreview.penaltyPercent}%)</div>
+                        )}
+                        {cancelPreview.refundAmount > 0 ? (
+                          <div className="text-emerald-700 font-semibold">Hoàn lại vào ví: {cancelPreview.refundAmount.toLocaleString('vi-VN')}₫</div>
+                        ) : (
+                          <div className="text-red-600 font-semibold">Mất toàn bộ tiền cọc — không hoàn lại.</div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-1.5 font-bold">✅ Hoàn lại 100% ({cancelPreview.totalPaid.toLocaleString('vi-VN')}₫) vào ví</div>
+                    )}
+                  </div>
+                )}
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
                 <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
                   rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn..."
@@ -2610,7 +2647,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{cancelConfirmError}</div>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); }}
+              <button onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null); }}
                 disabled={cancelLoading}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
                 Không, giữ lại

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Vehicle, Booking } = require('../models');
+const { Vehicle, Booking, SlotPack } = require('../models');
 const { VEHICLE_TYPE } = require('../config/constants');
 
 const SUPPORTED_TYPES = Object.values(VEHICLE_TYPE);
@@ -84,6 +84,26 @@ exports.updateVehicle = async (vehicleId, userId, updates) => {
       throw Object.assign(new Error('Vehicle not found'), { statusCode: 404, code: 'VEHICLE_NOT_FOUND' });
     }
 
+    // Kiểm tra ràng buộc nếu cố gắng sửa thông tin quan trọng
+    if (updates.licensePlate || updates.vehicleType || updates.brand || updates.color) {
+      const activeStatuses = ['pending', 'confirmed', 'checked_in', 'in_progress'];
+      const existingBookings = await Booking.findOne({ vehicleId, status: { $in: activeStatuses } }, null, opts);
+      if (existingBookings) {
+        throw Object.assign(
+          new Error('Không thể sửa thông tin xe vì đang có lịch hẹn đang hoạt động.'),
+          { statusCode: 409, code: 'VEHICLE_HAS_BOOKINGS' }
+        );
+      }
+
+      const existingSlotPack = await SlotPack.findOne({ vehicleId, status: 'active' }, null, opts);
+      if (existingSlotPack) {
+        throw Object.assign(
+          new Error('Không thể sửa thông tin xe vì đang liên kết với gói lượt còn hiệu lực.'),
+          { statusCode: 409, code: 'VEHICLE_HAS_SLOT_PACK' }
+        );
+      }
+    }
+
     if (updates.licensePlate) {
       updates.licensePlate = updates.licensePlate.replace(/\s+/g, '').toUpperCase();
       const dup = await Vehicle.findOne({ _id: { $ne: vehicleId }, userId, licensePlate: updates.licensePlate }, null, opts);
@@ -127,6 +147,15 @@ exports.deleteVehicle = async (vehicleId, userId) => {
     throw Object.assign(
       new Error(`Không thể xóa xe này vì đã có ${existingBookings.length} lịch hẹn đang hoạt động. Mã: ${codes}`),
       { statusCode: 409, code: 'VEHICLE_HAS_BOOKINGS' }
+    );
+  }
+
+  // Check for active slot packs referencing this vehicle
+  const existingSlotPacks = await SlotPack.find({ vehicleId, status: 'active' }).limit(1);
+  if (existingSlotPacks.length > 0) {
+    throw Object.assign(
+      new Error('Không thể xóa xe này vì đang liên kết với gói lượt (Slot Pack) còn hiệu lực.'),
+      { statusCode: 409, code: 'VEHICLE_HAS_SLOT_PACK' }
     );
   }
 

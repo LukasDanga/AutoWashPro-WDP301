@@ -71,8 +71,8 @@ function nextTier(t: UserTier): string {
 }
 
 function computePointsToNext(tier: UserTier, points: number) {
-  const thresholds: Record<UserTier, number> = { bronze: 500, silver: 2000, gold: 5000, diamond: 5000 };
-  const prev: Record<UserTier, number>       = { bronze: 0,   silver: 500,  gold: 2000,  diamond: 5000 };
+  const thresholds: Record<UserTier, number> = { bronze: 100000, silver: 500000, gold: 1000000, diamond: 1000000 };
+  const prev: Record<UserTier, number>       = { bronze: 0,      silver: 100000, gold: 500000,  diamond: 1000000 };
   if (tier === 'diamond') return null;
   const next     = thresholds[tier];
   const from     = prev[tier];
@@ -816,9 +816,10 @@ export default function RewardsScreen() {
     ...(availableVouchers?.tierExclusive || []),
     ...(availableVouchers?.redeemable || []),
   ];
-  const tier         = (user?.tier || 'bronze') as UserTier;
-  const points       = user?.loyaltyPoints || 0;
-  const pointsToNext = computePointsToNext(tier, points);
+  const tier           = (user?.tier || 'bronze') as UserTier;
+  const points         = user?.loyaltyPoints || 0;
+  const lifetimePoints = user?.lifetimePoints || 0;
+  const pointsToNext   = computePointsToNext(tier, lifetimePoints);
 
   return (
     <ScreenContainer background="subtle">

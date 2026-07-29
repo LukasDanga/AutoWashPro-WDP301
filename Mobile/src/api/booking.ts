@@ -80,11 +80,22 @@ export const getBooking = async (id: string): Promise<Booking> => {
   return response.data;
 };
 
+// Get cancel preview
+export const getCancelPreview = async (id: string): Promise<any> => {
+  const response = await apiClient.get(`/bookings/${id}/cancel-preview`);
+  return response.data;
+};
+
+// Request OTP for cancellation
+export const requestCancelOtp = async (id: string): Promise<any> => {
+  const response = await apiClient.post(`/bookings/${id}/cancel-otp`);
+  return response.data;
+};
+
 // Cancel booking
-// BE controller reads req.body.cancellationReason (NOT `reason`).
-// Sending `reason` would be silently dropped by the validator/service.
-export const cancelBooking = async (id: string, cancellationReason?: string): Promise<Booking> => {
-  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason });
+// BE controller reads req.body.cancellationReason and req.body.otp.
+export const cancelBooking = async (id: string, cancellationReason?: string, otp?: string): Promise<Booking> => {
+  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason, otp });
   return response.data;
 };
 
@@ -129,6 +140,8 @@ export const bookingApi = {
   getMyBookings,
   getAvailableSlots,
   getBooking,
+  getCancelPreview,
+  requestCancelOtp,
   cancelBooking,
   submitFeedback,
   rebookBooking,

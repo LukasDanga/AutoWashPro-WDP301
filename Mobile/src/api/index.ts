@@ -19,3 +19,4 @@ export { feedbackApi } from './feedback';
 export type { FeedbackType, FeedbackPayload, FeedbackResponse } from './feedback';
 export { giftApi } from './gift';
 export { refundApi } from './refund';
+export { walletApi } from './wallet';

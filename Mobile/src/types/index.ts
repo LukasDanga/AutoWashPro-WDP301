@@ -14,6 +14,7 @@ export interface User {
   status: 'active' | 'inactive' | 'suspended';
   loyaltyPoints: number;
   lifetimePoints: number;
+  walletBalance: number;
   tier: 'bronze' | 'silver' | 'gold' | 'diamond';
   dateOfBirth?: string;
   branchId?: string;
@@ -384,6 +385,7 @@ export type NotificationType =
   | 'booking_created'
   | 'booking_confirmed'
   | 'booking_cancelled'
+  | 'booking_cancelled_system'
   | 'booking_completed'
   | 'booking_reminder'
   | 'booking_at_risk'
@@ -396,6 +398,9 @@ export type NotificationType =
   | 'voucher_expiring'
   | 'points_earned'
   | 'promotion'
+  | 'profile_updated'
+  | 'vehicle_added'
+  | 'wallet_transaction'
   | 'system';
 
 export interface Notification {

@@ -38,9 +38,15 @@ export const getSlotPack = async (id: string): Promise<SlotPack> => {
   return response.data;
 };
 
+// Request cancel OTP for slot pack
+export const requestCancelOtp = async (id: string): Promise<any> => {
+  const response = await apiClient.post(`/slot-packs/${id}/request-cancel-otp`);
+  return response.data;
+};
+
 // Cancel slot pack
-export const cancelSlotPack = async (id: string): Promise<SlotPack> => {
-  const response = await apiClient.post(`/slot-packs/${id}/cancel`);
+export const cancelSlotPack = async (id: string, otp?: string): Promise<SlotPack> => {
+  const response = await apiClient.post(`/slot-packs/${id}/cancel`, { otp });
   return response.data;
 };
 
@@ -56,6 +62,7 @@ export const slotPackApi = {
   buySlotPack,
   getMySlotPacks,
   getSlotPack,
+  requestCancelOtp,
   cancelSlotPack,
   paySlotPack,
 };

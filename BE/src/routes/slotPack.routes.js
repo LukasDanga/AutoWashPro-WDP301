@@ -137,8 +137,14 @@ router.post('/:id/use', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
  *     security:
  *       - bearerAuth: []
  */
-router.post('/:id/cancel', authenticate, [
+// --- Yêu cầu mã OTP hủy gói lượt (Khách hàng) ---
+router.post('/:id/request-cancel-otp', authenticate, authorize(ROLES.CUSTOMER), [
+  param('id').isMongoId().withMessage('Mã gói lượt không hợp lệ'),
+], validate, slotPackController.requestCancelOtp);
+
+router.post('/:id/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   param('id').isMongoId().withMessage('Invalid slot pack ID'),
+  body('otp').optional().isString(),
 ], validate, slotPackController.cancelSlotPack);
 
 /**

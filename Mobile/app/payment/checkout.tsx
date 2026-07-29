@@ -35,7 +35,7 @@ import type { Booking, Branch, Package, Vehicle } from '../../src/types';
 
 type CheckoutStep = 'amount' | 'qr' | 'vnpay_pending' | 'success';
 type PaymentMode = 'deposit' | 'full';
-type PayMethod = 'bank' | 'vnpay';
+type PayMethod = 'bank' | 'vnpay' | 'wallet';
 
 function nameOf(value: string | { name?: string } | null | undefined): string {
   if (!value) return '—';
@@ -365,6 +365,31 @@ export default function PaymentCheckoutScreen() {
         }
         setStep('qr');
         setPollCount(0);
+      } else if (paymentMethod === 'wallet') {
+        if (isProvisional) {
+          const newBookingId = await createBookingFromDraft();
+          if (newBookingId) {
+            setCreatedBookingId(newBookingId);
+            await paymentApi.createPayment({
+               bookingId: newBookingId,
+               paymentMethod: 'wallet',
+               type: payType,
+             });
+            if (isRecurringType) {
+              await AsyncStorage.removeItem('aw_recurring_draft');
+            }
+            bookingCtx?.resetAll?.();
+            setStep('success');
+          }
+        } else {
+          const p = await paymentApi.createPayment({
+            bookingId,
+            paymentMethod: 'wallet',
+            type: payType,
+          });
+          setPayment(p);
+          setStep('success');
+        }
       } else {
         const apiBase = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.102:5000/api').replace(/\/$/, '');
         const returnUrl = isProvisional
@@ -1182,6 +1207,44 @@ export default function PaymentCheckoutScreen() {
         <AppText variant="label" color="textSecondary" style={[styles.methodLabel, { marginTop: spacing.md, marginBottom: spacing.sm }]}>
           PHƯƠNG THỨC THANH TOÁN
         </AppText>
+
+        <TouchableOpacity
+          onPress={() => setPaymentMethod('wallet')}
+          activeOpacity={0.8}
+        >
+          <View
+            style={[
+              styles.selectableCard,
+              {
+                backgroundColor: paymentMethod === 'wallet' ? colors.primarySubtle : colors.surface,
+                borderColor: paymentMethod === 'wallet' ? colors.primary : colors.border,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+              },
+            ]}
+          >
+            <View style={[styles.methodIconWrap, { backgroundColor: colors.primarySubtle }]}>
+              <Icon name={Icons.wallet} size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="body" style={styles.methodName}>
+                Ví AutoWash
+              </AppText>
+              <AppText variant="caption" color="textSecondary">
+                Thanh toán ngay bằng số dư ví
+              </AppText>
+            </View>
+            {paymentMethod === 'wallet' ? (
+              <View style={[styles.optionCheck, { backgroundColor: colors.primary }]}>
+                <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>
+              </View>
+            ) : (
+              <View style={[styles.optionCheckEmpty, { borderColor: colors.border }]} />
+            )}
+          </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setPaymentMethod('bank')}

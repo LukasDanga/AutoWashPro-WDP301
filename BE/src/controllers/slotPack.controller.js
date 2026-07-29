@@ -44,9 +44,15 @@ exports.useSlot = catchAsync(async (req, res) => {
   success(res, result, 'Slot used successfully');
 });
 
+/** POST /api/slot-packs/:id/request-cancel-otp — Gửi OTP hủy gói */
+exports.requestCancelOtp = catchAsync(async (req, res) => {
+  const result = await slotPackService.requestCancelOtp(req.params.id, req.userId);
+  success(res, null, 'OTP đã được gửi đến email của bạn');
+});
+
 /** POST /api/slot-packs/:id/cancel — Hủy gói */
 exports.cancelSlotPack = catchAsync(async (req, res) => {
-  const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role);
+  const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role, req.body.otp);
   success(res, pack, 'Slot pack cancelled');
 });
 

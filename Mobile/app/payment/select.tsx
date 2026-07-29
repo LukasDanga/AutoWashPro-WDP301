@@ -61,6 +61,12 @@ interface PaymentOption {
 
 const PAYMENT_OPTIONS: PaymentOption[] = [
   {
+    id: 'wallet',
+    name: 'Ví AutoWash',
+    icon: 'wallet-outline',
+    description: 'Thanh toán tức thì bằng số dư ví',
+  },
+  {
     id: 'momo',
     name: 'MoMo',
     icon: 'phone-portrait-outline',
@@ -215,13 +221,14 @@ export default function PaymentSelectScreen() {
         type: payableType as PaymentType,
       });
 
-      if (selectedMethod === 'cash') {
-        // Cash auto-confirm ở BE, payment.status === 'paid' luôn.
+      if (selectedMethod === 'cash' || selectedMethod === 'wallet') {
+        // Cash / Wallet auto-confirm ở BE, payment.status === 'paid' luôn.
         setPaidPayment(payment);
-        toast.success(
-          'Đặt cọc thành công',
-          'Vui lòng thanh toán tiền mặt khi đến chi nhánh',
-        );
+        if (selectedMethod === 'wallet') {
+          toast.success('Thanh toán thành công', 'Đã thanh toán bằng Ví AutoWash');
+        } else {
+          toast.success('Thanh toán thành công', 'Vui lòng thanh toán tiền mặt khi đến chi nhánh');
+        }
       } else {
         // MoMo / VNPay — hiển thị QR để user quét ngay trong app.
         // Nếu gateway trả paymentUrl, mở bằng Linking; nếu không, dùng qrCode.
@@ -290,7 +297,7 @@ export default function PaymentSelectScreen() {
   }
 
   // Trang "kết quả thanh toán" cho MoMo/VNPay (sau khi tạo payment pending).
-  if (paidPayment && selectedMethod !== 'cash') {
+  if (paidPayment && selectedMethod !== 'cash' && selectedMethod !== 'wallet') {
     return (
       <ScreenContainer>
         <Header title="Quét QR để thanh toán" showBack />
@@ -372,12 +379,12 @@ export default function PaymentSelectScreen() {
     );
   }
 
-  // Trang "kết quả" cho cash — booking vẫn ở trạng thái pending cho đến khi
+  // Trang "kết quả" cho cash / wallet — booking vẫn ở trạng thái pending cho đến khi
   // manager xác nhận. Hiển thị nút để user chuyển sang chi tiết.
-  if (paidPayment && selectedMethod === 'cash') {
+  if (paidPayment && (selectedMethod === 'cash' || selectedMethod === 'wallet')) {
     return (
       <ScreenContainer>
-        <Header title="Đặt cọc thành công" showBack />
+        <Header title={selectedMethod === 'wallet' ? 'Thanh toán thành công' : 'Đặt cọc thành công'} showBack />
         <View style={styles.content}>
           <View style={[styles.doubleBezelOuter, { backgroundColor: colors.successSubtle || colors.successLight, borderColor: colors.success, padding: 6, borderRadius: 24 }]}>
             <View style={styles.doubleBezelInner}>
@@ -386,8 +393,8 @@ export default function PaymentSelectScreen() {
                 {TYPE_LABEL[payableType]} thành công
               </AppText>
               <AppText variant="body" color="textSecondary" style={[styles.successText, { lineHeight: 20 }]}>
-                Số tiền {formatCurrency(paidPayment.amount ?? computedAmount)} sẽ được
-                thu khi bạn đến chi nhánh. Đơn của bạn đang chờ nhân viên xác nhận.
+                Số tiền {formatCurrency(paidPayment.amount ?? computedAmount)} đã được
+                {selectedMethod === 'wallet' ? ' thanh toán bằng Ví AutoWash.' : ' lưu ghi chú thu tiền mặt khi bạn đến chi nhánh.'} Đơn của bạn đang chờ nhân viên xác nhận.
               </AppText>
             </View>
           </View>
@@ -593,8 +600,8 @@ export default function PaymentSelectScreen() {
               ? 'Không yêu cầu cọc'
               : isRemainingNotEligible
               ? 'Cần đặt cọc trước'
-              : selectedMethod === 'cash'
-              ? `Xác nhận ${TYPE_LABEL[payableType].toLowerCase()} tại chi nhánh`
+              : (selectedMethod === 'cash' || selectedMethod === 'wallet')
+              ? `Xác nhận ${TYPE_LABEL[payableType].toLowerCase()} bằng ${selectedMethod === 'wallet' ? 'Ví' : 'tiền mặt'}`
               : `Thanh toán ${formatCurrency(computedAmount)} qua ${
                   PAYMENT_OPTIONS.find((o) => o.id === selectedMethod)?.name
                 }`

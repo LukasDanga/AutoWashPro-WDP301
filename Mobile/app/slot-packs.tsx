@@ -11,11 +11,19 @@ import {
   Linking,
   ActivityIndicator,
   Image,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../src/contexts/AuthContext';
-import { slotPackApi, branchApi, packageApi, vehicleApi } from '../src/api';
+import {
+  branchApi,
+  packageApi,
+  slotPackApi,
+  vehicleApi,
+  paymentApi,
+} from '../src/api';
+import { sseService } from '../src/services/sse';
 import {
   Card,
   Loading,
@@ -31,6 +39,8 @@ import {
   PressableScale,
   SegmentedControl,
   BottomSheet,
+  BottomNavBar,
+  StepIndicator,
 } from '../src/components/common';
 import { useColors } from '../src/theme/ThemeContext';
 import { spacing, borderRadius, layout, shadows } from '../src/theme/spacing';
@@ -51,11 +61,18 @@ const DISCOUNT_TIERS = [
 function getDiscountPct(n: number) { return DISCOUNT_TIERS.find(t => n >= t.min && t.max ? n <= t.max : true)?.pct || 0; }
 function getDiscountLabel(n: number) { return DISCOUNT_TIERS.find(t => n >= t.min && t.max ? n <= t.max : true)?.label || ''; }
 
+const STEP_META = [
+  { key: 1, label: 'Chi nhánh', icon: Icons.locationOutline },
+  { key: 2, label: 'Xe & Gói DV', icon: Icons.carOutline },
+  { key: 3, label: 'Số lượng', icon: Icons.cubeOutline },
+  { key: 4, label: 'Thanh toán', icon: Icons.checkmark },
+];
+
 export default function SlotPacksScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const colors = useColors();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
@@ -71,9 +88,18 @@ export default function SlotPacksScreen() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+
+  // Cancel OTP State
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [packToCancel, setPackToCancel] = useState<SlotPack | null>(null);
+  const [isRequestingOtp, setIsRequestingOtp] = useState(false);
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
   // Tracks how many active packages each branch has — used to disable branches
   // with no packages in the step-1 picker.
   const [branchPackageCounts, setBranchPackageCounts] = useState<Record<string, number>>({});
+
+  const otpInputRef = useRef<any>(null);
   
   const startBuying = async () => {
     setIsBuying(true);
@@ -129,7 +155,7 @@ export default function SlotPacksScreen() {
   
   const [buyLoading, setBuyLoading] = useState(false);
   const [buyError, setBuyError] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'bank' | 'vnpay'>('vnpay');
+  const [paymentMethod, setPaymentMethod] = useState<'bank' | 'vnpay' | 'wallet'>('vnpay');
   const [resumingPackId, setResumingPackId] = useState<string | null>(null);
 
   // Bank-transfer QR modal — populated after `paySlotPack('bank')`.
@@ -173,7 +199,12 @@ export default function SlotPacksScreen() {
 
   useEffect(() => {
     fetchSlotPacks();
-  }, [fetchSlotPacks]);
+    
+    if (isAuthenticated) {
+      const unsub = sseService.subscribe('slot_pack_paid', fetchSlotPacks);
+      return () => unsub();
+    }
+  }, [fetchSlotPacks, isAuthenticated]);
 
   // Refetch on screen focus so a pack bought from elsewhere (deep link,
   // promotion tab, etc.) appears without a manual pull-to-refresh.
@@ -256,26 +287,60 @@ export default function SlotPacksScreen() {
   }, [isBuying, step, selectedBranch]);
 
   const handleCancel = (slotPack: SlotPack) => {
+    const isUnused = slotPack.usedSlots === 0;
+    const warningMsg = isUnused 
+      ? 'Bạn có chắc chắn muốn hủy gói lượt này? Hệ thống sẽ gửi mã OTP qua email để xác nhận và hoàn tiền nếu đủ điều kiện.' 
+      : 'Gói của bạn đã được sử dụng nên sẽ KHÔNG được hoàn tiền nếu hủy. Bạn vẫn muốn tiếp tục hủy?';
+
     AlertDialog.confirm(
-      'Hủy gói slot',
-      'Bạn có chắc chắn muốn hủy gói slot này không? Hành động này không thể hoàn tác.',
+      'Yêu cầu hủy gói',
+      warningMsg,
       async () => {
-        setCancellingId(slotPack._id);
+        setIsRequestingOtp(true);
         try {
-          await slotPackApi.cancelSlotPack(slotPack._id);
-          AsyncStorage.removeItem('aw_slot_pending').catch(() => {});
-          toast.success('Đã hủy gói slot', 'Gói slot của bạn đã được hủy');
-          fetchSlotPacks();
+          await slotPackApi.requestCancelOtp(slotPack._id);
+          setPackToCancel(slotPack);
+          setOtpCode('');
+          setShowOtpModal(true);
+          toast.success('Thành công', 'Mã OTP đã được gửi đến email của bạn');
         } catch (error: any) {
-          AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể hủy gói slot');
+          AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể yêu cầu hủy gói');
         } finally {
-          setCancellingId(null);
+          setIsRequestingOtp(false);
         }
       },
       undefined,
-      'Hủy gói slot',
-      'Không'
+      'Đồng ý',
+      'Đóng'
     );
+  };
+
+  const handleConfirmCancelOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      toast.error('Lỗi', 'Vui lòng nhập đúng 6 số OTP');
+      return;
+    }
+    if (!packToCancel) return;
+
+    setIsConfirmingCancel(true);
+    try {
+      await slotPackApi.cancelSlotPack(packToCancel._id, otpCode);
+      AsyncStorage.removeItem('aw_slot_pending').catch(() => {});
+      
+      const isUnused = packToCancel.usedSlots === 0;
+      const successMsg = isUnused 
+        ? 'Hủy gói thành công. Tiền đã được hoàn vào ví hoặc đang xử lý theo chính sách.'
+        : 'Gói đã được hủy. Bạn không được hoàn tiền theo chính sách sử dụng gói.';
+      
+      toast.success('Đã hủy gói', successMsg);
+      setShowOtpModal(false);
+      setPackToCancel(null);
+      fetchSlotPacks();
+    } catch (error: any) {
+      AlertDialog.error('Lỗi', error.response?.data?.message || 'Xác nhận OTP thất bại');
+    } finally {
+      setIsConfirmingCancel(false);
+    }
   };
 
   const handleQuickBook = (item: SlotPack) => {
@@ -427,6 +492,12 @@ export default function SlotPacksScreen() {
         setResumingPackId(null);
         fetchSlotPacks();
         toast.success('Vui lòng hoàn tất thanh toán trên VNPay');
+        return;
+      } else if (paymentMethod === 'wallet') {
+        setIsBuying(false);
+        setResumingPackId(null);
+        fetchSlotPacks();
+        toast.success('Thanh toán bằng ví thành công!');
         return;
       }
 
@@ -674,212 +745,324 @@ export default function SlotPacksScreen() {
               </View>
             }
           />
-          <ScrollView contentContainerStyle={{ padding: 20 }}>
-            {/* Wizard Headers */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 20 }}>
-              {[1, 2, 3, 4].map(s => (
-                <View key={s} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: step >= s ? colors.primary : colors.surfaceDark, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: step >= s ? '#fff' : colors.textTertiary, fontWeight: '700', fontSize: 12 }}>{step > s ? '✓' : s}</Text>
-                  </View>
-                  {s < 4 && <View style={{ width: 20, height: 2, backgroundColor: step > s ? colors.primary : colors.border, marginHorizontal: 4 }} />}
-                </View>
-              ))}
-            </View>
-
+          <View style={[styles.progressContainer, { backgroundColor: colors.background }]}>
+            <StepIndicator
+              steps={STEP_META.map(s => ({ key: String(s.key), label: s.label, icon: s.icon }))}
+              currentIndex={step - 1}
+              onStepPress={(idx) => {
+                if (idx + 1 < step) setStep(idx + 1);
+              }}
+            />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }} showsVerticalScrollIndicator={false}>
             {step === 1 && (
-              <View>
-                <AppText variant="h4" style={{ marginBottom: 16 }}>Chọn chi nhánh</AppText>
-                <PressableScale onPress={() => setSelectedBranch('ALL')} style={[styles.selectCard, selectedBranch === 'ALL' && { borderColor: colors.primary, backgroundColor: colors.primarySubtle }]}>
-                  <AppText variant="body" style={{ fontWeight: '600' }}>🌍 Toàn hệ thống</AppText>
-                  <AppText variant="caption" color="textSecondary">Dùng ở bất kỳ chi nhánh nào</AppText>
-                </PressableScale>
+              <StepLayout
+                title="Chọn chi nhánh"
+                subtitle="Chọn chi nhánh bạn muốn sử dụng gói"
+                icon={Icons.locationOutline}
+              >
+                <SelectableCard
+                  selected={selectedBranch === 'ALL'}
+                  onPress={() => setSelectedBranch('ALL')}
+                  icon={Icons.globeOutline}
+                  title="Toàn hệ thống"
+                  subtitle={
+                    <AppText variant="caption" color="textSecondary">Dùng ở bất kỳ chi nhánh nào</AppText>
+                  }
+                />
                 {branches.map(b => {
                   const pkgCount = branchPackageCounts[b._id] || 0;
                   const disabled = pkgCount === 0;
                   return (
-                  <PressableScale
-                    key={b._id}
-                    onPress={disabled ? undefined : () => setSelectedBranch(b._id)}
-                    style={[
-                      styles.selectCard,
-                      selectedBranch === b._id && !disabled && { borderColor: colors.primary, backgroundColor: colors.primarySubtle },
-                      disabled && { opacity: 0.5 },
-                    ]}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flex: 1 }}>
-                        <AppText variant="body" style={{ fontWeight: '600' }}>{b.name}</AppText>
-                        <AppText variant="caption" color="textSecondary">{b.address}</AppText>
-                      </View>
-                      {disabled ? (
-                        <View style={{ backgroundColor: colors.warningLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
-                          <AppText variant="caption" style={{ color: colors.warning, fontWeight: '600' }}>Chưa có gói</AppText>
+                    <SelectableCard
+                      key={b._id}
+                      selected={selectedBranch === b._id}
+                      onPress={() => !disabled && setSelectedBranch(b._id)}
+                      icon={Icons.locationOutline}
+                      title={b.name}
+                      disabled={disabled}
+                      disabledLabel="Chưa có gói dịch vụ"
+                      subtitle={
+                        <View>
+                          <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+                            {b.address}
+                          </AppText>
+                          {disabled ? null : (
+                            <View style={{ marginTop: 2 }}>
+                              <AppText variant="caption" style={{ color: colors.success, fontWeight: '600' }}>{pkgCount} gói dịch vụ</AppText>
+                            </View>
+                          )}
                         </View>
-                      ) : (
-                        <View style={{ backgroundColor: colors.successLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
-                          <AppText variant="caption" style={{ color: colors.success, fontWeight: '600' }}>{pkgCount} gói</AppText>
-                        </View>
-                      )}
-                    </View>
-                  </PressableScale>
+                      }
+                    />
                   );
                 })}
-              </View>
+              </StepLayout>
             )}
 
             {step === 2 && (
-              <View>
-                <AppText variant="h4" style={{ marginBottom: 16 }}>Chọn xe</AppText>
-                <PressableScale onPress={() => setSelectedVehicle('ALL')} style={[styles.selectCard, selectedVehicle === 'ALL' && { borderColor: colors.primary, backgroundColor: colors.primarySubtle }]}>
-                  <AppText variant="body" style={{ fontWeight: '600' }}>🚗 Tất cả xe</AppText>
-                  <AppText variant="caption" color="textSecondary">Không khóa cứng 1 biển số</AppText>
-                </PressableScale>
+              <StepLayout
+                title="Chọn xe & Gói dịch vụ"
+                subtitle="Tùy chỉnh gói slot theo xe và dịch vụ"
+                icon={Icons.carOutline}
+              >
+                <AppText variant="h4" style={{ marginBottom: spacing.sm }}>Chọn xe</AppText>
+                <SelectableCard
+                  selected={selectedVehicle === 'ALL'}
+                  onPress={() => setSelectedVehicle('ALL')}
+                  icon={Icons.carOutline}
+                  title="Tất cả xe"
+                  subtitle={
+                    <AppText variant="caption" color="textSecondary">Không khóa cứng 1 biển số</AppText>
+                  }
+                />
                 {vehicles.map(v => (
-                  <PressableScale key={v._id} onPress={() => setSelectedVehicle(v._id)} style={[styles.selectCard, selectedVehicle === v._id && { borderColor: colors.primary, backgroundColor: colors.primarySubtle }]}>
-                    <AppText variant="body" style={{ fontWeight: '600' }}>{v.brand} {v.model}</AppText>
-                    <AppText variant="caption" color="textSecondary">{v.licensePlate}</AppText>
-                  </PressableScale>
+                  <SelectableCard
+                    key={v._id}
+                    selected={selectedVehicle === v._id}
+                    onPress={() => setSelectedVehicle(v._id)}
+                    icon={Icons.carOutline}
+                    title={v.licensePlate}
+                    subtitle={
+                      <View>
+                        <AppText variant="caption" color="textSecondary">{v.brand} {v.model}</AppText>
+                      </View>
+                    }
+                  />
                 ))}
 
-                <AppText variant="h4" style={{ marginVertical: 16 }}>Chọn gói dịch vụ</AppText>
-                {packages.length === 0 ? <AppText color="textSecondary">Không có gói khả dụng</AppText> : packages.map(p => (
-                  <PressableScale key={p._id} onPress={() => setSelectedPackage(p._id)} style={[styles.selectCard, selectedPackage === p._id && { borderColor: colors.primary, backgroundColor: colors.primarySubtle }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <AppText variant="body" style={{ fontWeight: '600' }}>{p.name}</AppText>
-                      <AppText variant="body" color="primary" style={{ fontWeight: '700' }}>{formatCurrency(p.price)}</AppText>
-                    </View>
-                    <AppText variant="caption" color="textSecondary">{p.description}</AppText>
-                  </PressableScale>
+                <AppText variant="h4" style={{ marginVertical: spacing.sm, marginTop: spacing.lg }}>Chọn gói dịch vụ</AppText>
+                {packages.length === 0 ? (
+                  <EmptyState
+                    iconName={Icons.sparkle}
+                    title="Chưa có gói dịch vụ"
+                    message="Chi nhánh này chưa có gói dịch vụ nào."
+                  />
+                ) : packages.map(p => (
+                  <SelectableCard
+                    key={p._id}
+                    selected={selectedPackage === p._id}
+                    onPress={() => setSelectedPackage(p._id)}
+                    icon={Icons.sparkle}
+                    title={p.name}
+                    subtitle={
+                      <View>
+                        <AppText variant="body" color="primary" style={styles.priceText}>
+                          {formatCurrency(p.price)}
+                        </AppText>
+                        <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>{p.description}</AppText>
+                      </View>
+                    }
+                  />
                 ))}
-              </View>
+              </StepLayout>
             )}
 
             {step === 3 && (
-              <View>
-                <AppText variant="h4" style={{ marginBottom: 16 }}>Chọn số lần rửa xe</AppText>
+              <StepLayout
+                title="Số lần rửa xe"
+                subtitle="Mua càng nhiều, tiết kiệm càng lớn"
+                icon={Icons.cubeOutline}
+              >
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24, justifyContent: 'center' }}>
                   {DISCOUNT_TIERS.map(t => (
-                    <View key={t.pct} style={{ width: '48%', padding: 12, backgroundColor: slotCount >= t.min && slotCount <= t.max ? colors.primarySubtle : colors.surfaceDark, borderRadius: 12, borderWidth: 1, borderColor: slotCount >= t.min && slotCount <= t.max ? colors.primary : colors.border }}>
+                    <View key={t.pct} style={{ width: '48%', padding: 12, backgroundColor: slotCount >= t.min && slotCount <= t.max ? colors.primarySubtle : colors.surface, borderRadius: 12, borderWidth: 1, borderColor: slotCount >= t.min && slotCount <= t.max ? colors.primary : colors.borderLight, ...shadows.sm }}>
                       <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>{t.min === 20 ? '20+' : `${t.min}-${t.max}`} lần</AppText>
-                      <AppText variant="h4" color={t.pct > 0 ? "primary" : "textPrimary"} style={{ textAlign: 'center' }}>{t.pct > 0 ? `-${t.pct}%` : 'Giá gốc'}</AppText>
+                      <AppText variant="h4" color={t.pct > 0 ? "primary" : "textPrimary"} style={{ textAlign: 'center', marginVertical: 4 }}>{t.pct > 0 ? `-${t.pct}%` : 'Giá gốc'}</AppText>
                       <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>{t.label}</AppText>
                     </View>
                   ))}
                 </View>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 24, marginBottom: 24 }}>
-                  <PressableScale onPress={() => setSlotCount(n => Math.max(1, n - 1))} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surfaceDark, justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 24 }}>-</Text></PressableScale>
+                  <PressableScale onPress={() => setSlotCount(n => Math.max(1, n - 1))} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center', ...shadows.sm }}><Text style={{ fontSize: 24, color: colors.textPrimary }}>-</Text></PressableScale>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 40, fontWeight: '800', color: colors.textPrimary }}>{slotCount}</Text>
-                    <AppText variant="caption" color="textSecondary">lần</AppText>
+                    <Text style={{ fontSize: 40, fontWeight: '800', color: colors.primary }}>{slotCount}</Text>
+                    <AppText variant="caption" color="textSecondary" style={{ marginTop: 4 }}>lượt</AppText>
                   </View>
-                  <PressableScale onPress={() => setSlotCount(n => Math.min(50, n + 1))} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surfaceDark, justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 24 }}>+</Text></PressableScale>
+                  <PressableScale onPress={() => setSlotCount(n => Math.min(50, n + 1))} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', ...shadows.sm }}><Text style={{ fontSize: 24, color: colors.textInverse }}>+</Text></PressableScale>
                 </View>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                   {[1, 3, 5, 10, 15, 20].map(n => (
-                    <PressableScale key={n} onPress={() => setSlotCount(n)} style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, backgroundColor: slotCount === n ? colors.primary : colors.surfaceDark }}>
-                      <Text style={{ color: slotCount === n ? '#fff' : colors.textPrimary, fontWeight: '700' }}>{n}x</Text>
+                    <PressableScale key={n} onPress={() => setSlotCount(n)} style={{ paddingVertical: 10, paddingHorizontal: 18, borderRadius: 12, backgroundColor: slotCount === n ? colors.primary : colors.surface, borderWidth: 1, borderColor: slotCount === n ? colors.primary : colors.borderLight, ...shadows.sm }}>
+                      <Text style={{ color: slotCount === n ? '#fff' : colors.textPrimary, fontWeight: '700' }}>{n} lần</Text>
                     </PressableScale>
                   ))}
                 </View>
-              </View>
+              </StepLayout>
             )}
 
             {step === 4 && (
-              <View>
-                <AppText variant="h4" style={{ marginBottom: 16 }}>Voucher & Thanh toán</AppText>
-                
-                <PressableScale onPress={() => router.push(`/booking/voucher-picker?branchId=${selectedBranch === 'ALL' ? '' : selectedBranch}&orderAmount=${baseTotal}` as any)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Icon name={Icons.giftOutline} size={24} color={colors.primary} />
-                    <View>
-                      <AppText variant="body" style={{ fontWeight: '600' }}>Voucher & Ưu đãi</AppText>
-                      <AppText variant="caption" color="textSecondary">{appliedVoucher ? appliedVoucher.code : 'Chọn mã giảm giá'}</AppText>
+              <StepLayout
+                title="Xác nhận thanh toán"
+                subtitle="Kiểm tra thông tin và chọn phương thức"
+                icon={Icons.checkmark}
+              >
+                <Card style={{ backgroundColor: colors.surface, padding: spacing.md, marginBottom: spacing.md }}>
+                  <SummaryRow icon={Icons.locationOutline} label="Chi nhánh" value={branchObj?.name || 'Toàn hệ thống'} />
+                  <SummaryDivider />
+                  <SummaryRow icon={Icons.sparkle} label="Gói dịch vụ" value={pkg?.name} />
+                  <SummaryDivider />
+                  <SummaryRow icon={Icons.cubeOutline} label="Số lượt" value={`${slotCount} lượt`} />
+                </Card>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[
+                    styles.voucherButton,
+                    {
+                      backgroundColor: appliedVoucher ? '#ECFDF5' : '#F0FDF4',
+                      borderColor: appliedVoucher ? colors.primary : '#A7F3D0',
+                      borderWidth: 1.5,
+                      marginBottom: spacing.md,
+                    },
+                  ]}
+                  onPress={() => router.push(`/booking/voucher-picker?branchId=${selectedBranch === 'ALL' ? '' : selectedBranch}&orderAmount=${baseTotal}` as any)}
+                >
+                  <View style={styles.voucherButtonContent}>
+                    <View style={[
+                      styles.voucherIconBadge,
+                      { backgroundColor: appliedVoucher ? colors.primary : '#10B981' }
+                    ]}>
+                      <Icon
+                        name={appliedVoucher ? Icons.checkmarkCircle : Icons.ticketOutline}
+                        size={20}
+                        color="#FFFFFF"
+                      />
                     </View>
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                      <Text style={[
+                        styles.voucherTagText,
+                        { color: appliedVoucher ? '#059669' : colors.primaryDark }
+                      ]}>
+                        {appliedVoucher ? 'ĐÃ ÁP DỤNG VOUCHER' : 'VOUCHER & ƯU ĐÃI'}
+                      </Text>
+                      {appliedVoucher ? (
+                        <Text style={styles.voucherSelectedText} numberOfLines={1}>
+                          {appliedVoucher.code}
+                          {voucherSavings > 0 ? ` — Tiết kiệm ${formatCurrency(voucherSavings)}` : ''}
+                        </Text>
+                      ) : (
+                        <Text style={styles.voucherPlaceholderText}>
+                          Chọn voucher để tiết kiệm thêm ✨
+                        </Text>
+                      )}
+                    </View>
+                    {appliedVoucher ? (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setAppliedVoucher(null);
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        style={styles.voucherClearBtn}
+                      >
+                        <Icon name={Icons.close} size={14} color="#DC2626" />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.voucherArrowBadge}>
+                        <Icon name={Icons.chevronForward} size={16} color={colors.primary} />
+                      </View>
+                    )}
                   </View>
-                  <Text style={{ color: colors.primary, fontWeight: '600' }}>{appliedVoucher ? 'Thay đổi' : 'Chọn >'}</Text>
-                </PressableScale>
+                </TouchableOpacity>
 
-                <View style={{ padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 16 }}>
-                  <AppText variant="caption" color="textSecondary" style={{ marginBottom: 12, fontWeight: '600' }}>TÓM TẮT ĐƠN HÀNG</AppText>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><AppText variant="bodySmall">Chi nhánh</AppText><AppText variant="bodySmall" style={{ fontWeight: '600' }}>{branchObj?.name || 'Toàn hệ thống'}</AppText></View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><AppText variant="bodySmall">Gói dịch vụ</AppText><AppText variant="bodySmall" style={{ fontWeight: '600' }}>{pkg?.name}</AppText></View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><AppText variant="bodySmall">Số lần</AppText><AppText variant="bodySmall" style={{ fontWeight: '600' }}>{slotCount} lần</AppText></View>
-                  <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><AppText variant="bodySmall">Tạm tính</AppText><AppText variant="bodySmall">{formatCurrency(gross)}</AppText></View>
-                  {discountPct > 0 && <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><AppText variant="bodySmall" color="primary">Chiết khấu SL (-{discountPct}%)</AppText><AppText variant="bodySmall" color="primary">-{formatCurrency(qtyDiscount)}</AppText></View>}
-                  {voucherSavings > 0 && <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><AppText variant="bodySmall" color="primary">Voucher</AppText><AppText variant="bodySmall" color="primary">-{formatCurrency(voucherSavings)}</AppText></View>}
-                  <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><AppText variant="body" style={{ fontWeight: '700' }}>TỔNG THANH TOÁN</AppText><AppText variant="h3" color="primary">{formatCurrency(finalTotal)}</AppText></View>
-                </View>
+                <Card style={styles.priceCard}>
+                  <View style={styles.priceRow}>
+                    <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>Tạm tính ({slotCount} lượt)</AppText>
+                    <AppText variant="body" color="textPrimary">{formatCurrency(gross)}</AppText>
+                  </View>
+                  {discountPct > 0 && (
+                    <View style={styles.priceRow}>
+                      <AppText variant="body" color="primary" style={{ flex: 1 }}>Chiết khấu SL (-{discountPct}%)</AppText>
+                      <AppText variant="body" color="primary">-{formatCurrency(qtyDiscount)}</AppText>
+                    </View>
+                  )}
+                  {voucherSavings > 0 && (
+                    <View style={styles.priceRow}>
+                      <AppText variant="body" color="primary" style={{ flex: 1 }}>Voucher</AppText>
+                      <AppText variant="body" color="primary">-{formatCurrency(voucherSavings)}</AppText>
+                    </View>
+                  )}
+                  <View style={styles.priceDivider} />
+                  <View style={styles.priceRow}>
+                    <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>Thực thu</AppText>
+                    <AppText variant="h3" color="primary">{formatCurrency(finalTotal)}</AppText>
+                  </View>
+                </Card>
 
-                {buyError ? <AppText color="error" style={{ marginBottom: 12, textAlign: 'center' }}>{buyError}</AppText> : null}
+                {buyError ? <AppText color="error" style={{ marginBottom: 12, marginTop: 12, textAlign: 'center' }}>{buyError}</AppText> : null}
 
-                <AppText variant="caption" color="textSecondary" style={{ marginBottom: 8, fontWeight: '600' }}>PHƯƠNG THỨC THANH TOÁN</AppText>
+                <AppText variant="label" style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>Phương thức thanh toán</AppText>
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-                  <PressableScale onPress={() => setPaymentMethod('bank')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'bank' ? colors.primary : colors.border, backgroundColor: paymentMethod === 'bank' ? colors.primarySubtle : colors.surface, alignItems: 'center' }}>
+                  <PressableScale onPress={() => setPaymentMethod('wallet')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'wallet' ? colors.primary : colors.borderLight, backgroundColor: paymentMethod === 'wallet' ? colors.primarySubtle : colors.surface, alignItems: 'center', ...shadows.sm }}>
+                    <AppText variant="bodySmall" style={{ fontWeight: '600', color: paymentMethod === 'wallet' ? colors.primary : colors.textPrimary }}>Ví AutoWash</AppText>
+                    {user?.walletBalance !== undefined && (
+                      <AppText variant="caption" style={{ color: paymentMethod === 'wallet' ? colors.primary : colors.textSecondary, marginTop: 4, fontWeight: '500' }}>
+                        {formatCurrency(user.walletBalance)}
+                      </AppText>
+                    )}
+                  </PressableScale>
+                  <PressableScale onPress={() => setPaymentMethod('bank')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'bank' ? colors.primary : colors.borderLight, backgroundColor: paymentMethod === 'bank' ? colors.primarySubtle : colors.surface, alignItems: 'center', ...shadows.sm }}>
                     <AppText variant="bodySmall" style={{ fontWeight: '600', color: paymentMethod === 'bank' ? colors.primary : colors.textPrimary }}>Ngân hàng</AppText>
                   </PressableScale>
-                  <PressableScale onPress={() => setPaymentMethod('vnpay')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'vnpay' ? colors.primary : colors.border, backgroundColor: paymentMethod === 'vnpay' ? colors.primarySubtle : colors.surface, alignItems: 'center' }}>
+                  <PressableScale onPress={() => setPaymentMethod('vnpay')} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: paymentMethod === 'vnpay' ? colors.primary : colors.borderLight, backgroundColor: paymentMethod === 'vnpay' ? colors.primarySubtle : colors.surface, alignItems: 'center', ...shadows.sm }}>
                     <AppText variant="bodySmall" style={{ fontWeight: '600', color: paymentMethod === 'vnpay' ? colors.primary : colors.textPrimary }}>VNPay</AppText>
                   </PressableScale>
                 </View>
-              </View>
+              </StepLayout>
             )}
           </ScrollView>
           <View
-            style={{
-              paddingHorizontal: 20,
-              paddingTop: 20,
-              paddingBottom: Math.max(insets.bottom + 52, 88),
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-              flexDirection: 'row',
-              gap: 12,
-              backgroundColor: colors.background,
-            }}
+            style={[
+              styles.bottomAction,
+              { backgroundColor: 'transparent', paddingBottom: Math.max(insets.bottom + 20, 20) },
+            ]}
           >
-            {step === 1 || resumingPackId ? (
-              <Button
-                title="Hủy"
-                variant="outline"
-                onPress={() => {
-                  setIsBuying(false);
-                  setResumingPackId(null);
-                }}
-                disabled={buyLoading}
-                style={{ flex: 1 }}
-              />
-            ) : (
-              <Button
-                title="Quay lại"
-                variant="outline"
-                onPress={() => setStep(step - 1)}
-                disabled={buyLoading}
-                style={{ flex: 1 }}
-              />
-            )}
-            {step < 4 ? (
-              <Button
-                title="Tiếp theo"
-                onPress={() => setStep(step + 1)}
-                disabled={
-                  (step === 1 && (!selectedBranch || (selectedBranch !== 'ALL' && (branchPackageCounts[selectedBranch] || 0) === 0))) ||
-                  (step === 2 && (!selectedVehicle || !selectedPackage)) ||
-                  (step === 3 && slotCount < 1)
-                }
-                style={{ flex: 1 }}
-              />
-            ) : (
-              <Button
-                title={`Thanh toán ${formatCurrency(finalTotal)}`}
-                onPress={handleBuy}
-                loading={buyLoading}
-                style={{ flex: 1 }}
-              />
-            )}
+            <View style={styles.bottomBackButton}>
+              {step === 1 || resumingPackId ? (
+                <Button
+                  title="Hủy"
+                  variant="outline"
+                  onPress={() => {
+                    setIsBuying(false);
+                    setResumingPackId(null);
+                  }}
+                  disabled={buyLoading}
+                  fullWidth
+                />
+              ) : (
+                <Button
+                  title="Quay lại"
+                  variant="outline"
+                  onPress={() => setStep(step - 1)}
+                  disabled={buyLoading}
+                  fullWidth
+                />
+              )}
+            </View>
+            <View style={step > 0 ? styles.bottomNextButton : styles.bottomPrimaryButton}>
+              {step < 4 ? (
+                <Button
+                  title="Tiếp theo"
+                  onPress={() => setStep(step + 1)}
+                  disabled={
+                    (step === 1 && (!selectedBranch || (selectedBranch !== 'ALL' && (branchPackageCounts[selectedBranch] || 0) === 0))) ||
+                    (step === 2 && (!selectedVehicle || !selectedPackage)) ||
+                    (step === 3 && slotCount < 1)
+                  }
+                  fullWidth
+                />
+              ) : (
+                <Button
+                  title="Thanh toán"
+                  onPress={handleBuy}
+                  loading={buyLoading}
+                  fullWidth
+                />
+              )}
+            </View>
           </View>
         </ScreenContainer>
       </Modal>
@@ -926,9 +1109,243 @@ export default function SlotPacksScreen() {
           </View>
         </View>
       </BottomSheet>
+      
+      {/* OTP Modal */}
+      <Modal visible={showOtpModal} transparent animationType="fade">
+        <View style={qrStyles.overlay}>
+          <View style={[qrStyles.modal, { backgroundColor: colors.surface }]}>
+            <AppText variant="h3" style={{ marginBottom: 12 }}>Xác thực hủy gói</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
+              Mã OTP đã được gửi đến email của bạn. Vui lòng nhập mã để xác nhận hủy gói lượt.
+            </AppText>
+            
+            {/* Custom OTP UI */}
+            <View style={{ width: '100%', alignItems: 'center', marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {[0, 1, 2, 3, 4, 5].map(i => {
+                  const isActive = otpCode.length === i;
+                  const hasValue = !!otpCode[i];
+                  return (
+                    <View 
+                      key={i} 
+                      style={{ 
+                        width: 45, 
+                        height: 55, 
+                        borderRadius: 12, 
+                        borderWidth: isActive ? 2 : 1, 
+                        borderColor: isActive ? colors.primary : (hasValue ? colors.textPrimary : colors.border), 
+                        backgroundColor: isActive ? colors.primarySubtle : colors.surface,
+                        justifyContent: 'center', 
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="h3" style={{ color: colors.textPrimary }}>
+                        {otpCode[i] || ''}
+                      </AppText>
+                    </View>
+                  );
+                })}
+              </View>
+              
+              {/* Hidden Input overlay */}
+              <TextInput
+                ref={otpInputRef}
+                style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0 }}
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otpCode}
+                onChangeText={setOtpCode}
+                autoFocus
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+              <View style={{ flex: 1 }}>
+                <Button 
+                  title="Đóng" 
+                  variant="outline" 
+                  onPress={() => {
+                    setShowOtpModal(false);
+                    setPackToCancel(null);
+                  }} 
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button 
+                  title="Xác nhận" 
+                  variant="primary" 
+                  loading={isConfirmingCancel}
+                  onPress={handleConfirmCancelOtp} 
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {!isBuying && <BottomNavBar />}
     </ScreenContainer>
   );
 }
+
+interface StepLayoutProps {
+  title: string;
+  subtitle?: string;
+  icon: string;
+  children: React.ReactNode;
+}
+
+const StepLayout: React.FC<StepLayoutProps> = ({ title, subtitle, icon, children }) => {
+  const colors = useColors();
+  return (
+    <View style={{ paddingTop: spacing.md, paddingBottom: spacing.xxl }}>
+      <View style={styles.stepHeader}>
+        <View style={[styles.stepHeaderIcon, { backgroundColor: colors.primarySubtle }]}>
+          <Icon name={icon} size={24} color={colors.primary} />
+        </View>
+        <View style={styles.stepHeaderText}>
+          <AppText variant="h2" style={{ fontWeight: '700' }}>{title}</AppText>
+          {subtitle ? (
+            <AppText variant="body" color="textSecondary" style={{ marginTop: 4 }}>
+              {subtitle}
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+};
+
+interface SelectableCardProps {
+  selected: boolean;
+  onPress: () => void;
+  onInfoPress?: () => void;
+  icon: string;
+  title: string;
+  subtitle: React.ReactNode;
+  disabled?: boolean;
+  disabledLabel?: string;
+}
+
+const SelectableCard: React.FC<SelectableCardProps> = ({
+  selected,
+  onPress,
+  onInfoPress,
+  icon,
+  title,
+  subtitle,
+  disabled,
+  disabledLabel,
+}) => {
+  const colors = useColors();
+  return (
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      accessibilityLabel={title}
+    >
+      <Card
+        style={[
+          styles.optionCard,
+          {
+            backgroundColor: selected ? colors.primarySubtle : colors.surface,
+            borderColor: selected ? colors.primary : colors.borderLight,
+            opacity: disabled ? 0.6 : 1,
+            marginBottom: spacing.md,
+            padding: spacing.lg,
+          },
+        ]}
+      >
+        <View style={styles.optionRow}>
+          <View
+            style={[
+              styles.optionIcon,
+              { backgroundColor: selected ? colors.primary : colors.background },
+              disabled && { elevation: 0, shadowOpacity: 0 }
+            ]}
+          >
+            <Icon
+              name={icon}
+              size={22}
+              color={selected ? colors.textInverse : colors.primary}
+            />
+          </View>
+          <View style={styles.optionInfo}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <AppText variant="body" style={{ fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+                {title}
+              </AppText>
+              {onInfoPress && (
+                <TouchableOpacity
+                  onPress={onInfoPress}
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
+                  style={{ marginLeft: 6 }}
+                >
+                  <Icon name={Icons.informationCircleOutline} size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {subtitle}
+            {disabled && disabledLabel ? (
+              <AppText
+                variant="caption"
+                color="error"
+                style={{ marginTop: spacing.xs, fontWeight: '500' }}
+              >
+                {disabledLabel}
+              </AppText>
+            ) : null}
+          </View>
+          <View style={[
+            selected ? styles.optionCheck : styles.optionCheckEmpty,
+            {
+              backgroundColor: selected ? colors.primary : 'transparent',
+              borderColor: selected ? colors.primary : colors.textTertiary,
+            }
+          ]}>
+            {selected && <Icon name={Icons.checkmark} size={14} color={colors.textInverse} />}
+          </View>
+        </View>
+      </Card>
+    </PressableScale>
+  );
+};
+
+const SummaryDivider: React.FC = () => {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.summaryDivider,
+        { backgroundColor: colors.divider },
+      ]}
+    />
+  );
+};
+
+const SummaryRow: React.FC<{
+  icon: string;
+  label: string;
+  value?: string;
+}> = ({ icon, label, value }) => {
+  const colors = useColors();
+  return (
+    <View style={styles.summaryRow}>
+      <View style={styles.summaryLeft}>
+        <Icon name={icon} size={16} color={colors.textSecondary} />
+        <AppText variant="bodySmall" color="textSecondary">
+          {label}
+        </AppText>
+      </View>
+      <AppText variant="bodySmall" style={styles.summaryValue}>
+        {value || '—'}
+      </AppText>
+    </View>
+  );
+};
 
 const qrStyles = StyleSheet.create({
   overlay: {
@@ -1021,4 +1438,180 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
+  progressContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent',
+  },
+  stepHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  stepHeaderIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  stepHeaderText: { flex: 1 },
+  optionCard: {
+    marginBottom: spacing.sm,
+    borderRadius: layout.cardRadius,
+    ...shadows.md,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  optionInfo: { flex: 1 },
+  optionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+    borderWidth: 1.5,
+  },
+  optionCheckEmpty: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginLeft: spacing.sm,
+  },
+  priceText: {
+    fontWeight: '700',
+    marginTop: spacing.xs,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  summaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    width: 96,
+  },
+  summaryValue: {
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 2,
+  },
+  priceCard: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9', // colors.borderLight
+    borderRadius: layout.cardRadius,
+    padding: spacing.md,
+    ...shadows.md,
+    backgroundColor: '#fff',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  priceDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: spacing.xs,
+    backgroundColor: '#F1F5F9',
+  },
+  voucherButton: {
+    marginTop: spacing.md,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  voucherButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voucherIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voucherTagText: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.6,
+  },
+  voucherSelectedText: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 14,
+    color: '#047857',
+    marginTop: 2,
+  },
+  voucherPlaceholderText: {
+    fontFamily: 'Outfit_500Medium',
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+  },
+  voucherClearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+  voucherArrowBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+  bottomAction: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    borderTopWidth: 0,
+    gap: spacing.sm,
+  },
+  bottomBackButton: { flex: 1 },
+  bottomNextButton: { flex: 1 },
+  bottomPrimaryButton: { flex: 1 },
 });

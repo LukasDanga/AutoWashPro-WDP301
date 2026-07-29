@@ -73,7 +73,7 @@ const bookingSchema = new mongoose.Schema(
     refundAmount: { type: Number, default: 0 },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'momo', 'vnpay', 'bank', 'sepay'],
+      enum: ['cash', 'momo', 'vnpay', 'bank', 'sepay', 'wallet'],
     },
     paidAt: { type: Date },
     // Check-in related fields
