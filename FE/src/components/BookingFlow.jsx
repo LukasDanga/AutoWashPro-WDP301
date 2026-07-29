@@ -515,26 +515,46 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                           </div>
                           <p style={{margin: '8px 0'}}>{p.description}</p>
                         </button>
-                        {isActive && p.subServices && p.subServices.length > 0 && (
-                          <div style={{ marginTop: '10px', padding: '12px', background: 'rgba(16,185,129,0.04)', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.1)' }}>
-                            <strong style={{ fontSize: '0.85rem', color: '#10b981', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
-                            {p.subServices.map((sub) => {
-                              const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
-                              return (
-                                <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                                  <input type="checkbox" checked={isChecked}
-                                    onChange={(e) => { const checked = e.target.checked;
-                                      setSelectedSubServices(prev => { const current = prev[p.id] || [];
-                                        return { ...prev, [p.id]: checked ? [...current, sub.name] : current.filter(x => x !== sub.name) };
-                                      });
-                                    }} disabled={!sub.isOptional} />
-                                  <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
-                                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
+                        {isActive && p.subServices && p.subServices.length > 0 && (() => {
+                          const included = p.subServices.filter(sub => sub.isOptional === false);
+                          const optional = p.subServices.filter(sub => sub.isOptional !== false);
+                          return (
+                            <div style={{ marginTop: '10px', padding: '12px', background: 'rgba(16,185,129,0.04)', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.1)' }}>
+                              {included.length > 0 && (
+                                <div style={{ marginBottom: optional.length > 0 ? '12px' : 0 }}>
+                                  <strong style={{ fontSize: '0.85rem', color: '#10b981', display: 'block', marginBottom: '8px' }}>Dịch vụ bao gồm:</strong>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                    {included.map(sub => (
+                                      <span key={sub.name} style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px', background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+                                        {sub.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {optional.length > 0 && (
+                                <div>
+                                  <strong style={{ fontSize: '0.85rem', color: '#10b981', display: 'block', marginBottom: '8px' }}>Dịch vụ chọn thêm:</strong>
+                                  {optional.map((sub) => {
+                                    const isChecked = (selectedSubServices[p.id] || []).includes(sub.name);
+                                    return (
+                                      <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                        <input type="checkbox" checked={isChecked}
+                                          onChange={(e) => { const checked = e.target.checked;
+                                            setSelectedSubServices(prev => { const current = prev[p.id] || [];
+                                              return { ...prev, [p.id]: checked ? [...current, sub.name] : current.filter(x => x !== sub.name) };
+                                            });
+                                          }} />
+                                        <span style={{ flex: 1 }}>{sub.name} (+{sub.duration}p)</span>
+                                        <span style={{ color: '#10b981', fontWeight: 'bold' }}>{sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}
