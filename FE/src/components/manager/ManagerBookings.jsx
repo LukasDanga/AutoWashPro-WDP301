@@ -600,6 +600,22 @@ function PrintReceiptModal({ booking, onClose }) {
                   <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
                 
+                {/* Included services rows */}
+                {(() => {
+                  const pkgSubs = detailBooking.packageId?.subServices;
+                  const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+                  return included.map((sub, i) => (
+                    <tr key={`inc-${i}`} className="border-b border-slate-100">
+                      <td className="py-2 text-left text-black pl-4 text-emerald-600">
+                        {sub.name} <span className="text-[10px] text-emerald-400 font-normal">(có sẵn)</span>
+                      </td>
+                      <td className="py-2 text-right text-black">—</td>
+                      <td className="py-2 text-right text-black">—</td>
+                      <td className="py-2 text-right text-black">—</td>
+                      <td className="py-2 text-right text-black">—</td>
+                    </tr>
+                  ));
+                })()}
                 {/* Sub-services rows */}
                 {(detailBooking.selectedSubServices || []).filter(s => s.isOptional !== false).map((sub, i) => (
                   <tr key={`sub-${i}`} className="border-b border-slate-100">
@@ -899,17 +915,35 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           <div>
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dịch vụ</h3>
             <p className="font-medium text-slate-800">{booking.packageId?.name || '—'}</p>
-            {(booking.selectedSubServices || []).filter(s => s.isOptional !== false).length > 0 && (
-              <div className="mt-1 mb-2 flex flex-wrap gap-1">
-                {(booking.selectedSubServices || []).filter(s => s.isOptional !== false).map((sub, idx) => (
-                  <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(booking, sub.name); }} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 cursor-pointer">
-                    <span className="font-bold text-[11px] group-hover:hidden">+</span>
-                    <span className="font-bold text-[11px] hidden group-hover:inline">-</span>
-                    <span className="text-[11px] font-bold">{sub.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {(() => {
+              const pkgSubs = booking.packageId?.subServices;
+              const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+              const extra = (booking.selectedSubServices || []).filter(s => s.isOptional !== false);
+              return (
+                <>
+                  {included.length > 0 && (
+                    <div className="mt-1 mb-2 flex flex-wrap gap-1">
+                      {included.map((sub, idx) => (
+                        <div key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-200">
+                          <span className="text-[11px] font-bold">{sub.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {extra.length > 0 && (
+                    <div className="mt-1 mb-2 flex flex-wrap gap-1">
+                      {extra.map((sub, idx) => (
+                        <div key={idx} onClick={(e) => { e.stopPropagation(); handleRemoveSubService(booking, sub.name); }} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 cursor-pointer">
+                          <span className="font-bold text-[11px] group-hover:hidden">+</span>
+                          <span className="font-bold text-[11px] hidden group-hover:inline">-</span>
+                          <span className="text-[11px] font-bold">{sub.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             <p className="text-sm text-slate-600 mt-2">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')} lúc {booking.startTime}</p>
             <p className="text-xs text-slate-500 mt-1">{booking.branchId?.name || '—'}</p>
             {booking.checkInTime && (
