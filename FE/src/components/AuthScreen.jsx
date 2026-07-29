@@ -294,6 +294,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack, o
                     </div>
                     <input
                       id="login-phone"
+                      name="identifier"
                       type="text"
                       placeholder="manager@gmail.com"
                       value={loginPhone}
@@ -311,6 +312,7 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack, o
                     <LockKey size={18} className="text-slate-400 mr-3" />
                     <input
                       id="login-pass"
+                      name="password"
                       type={showLoginPass ? 'text' : 'password'}
                       placeholder="••••••"
                       value={loginPass}

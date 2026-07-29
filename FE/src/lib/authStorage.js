@@ -24,6 +24,9 @@ export function getApiBaseUrl() {
 export async function readApiError(response) {
   try {
     const payload = await response.json();
+    if (payload?.errors && Array.isArray(payload.errors)) {
+      return payload.errors.map(e => e.message).join(', ');
+    }
     return payload?.message || payload?.error || 'Request failed';
   } catch {
     return 'Request failed';

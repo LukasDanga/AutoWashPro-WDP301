@@ -2030,13 +2030,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 const timeLabel = s.startTime;
                                 const isDisabled = !s.available;
                                 const isSelected = selectedTime === timeLabel;
+                                const isVipBooked = s.vipBooked;
                                 return (
                                   <button 
                                     key={timeLabel} 
                                     type="button"
                                     disabled={isDisabled}
                                     onClick={() => setSelectedTime(timeLabel)}
-                                    className={`px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                    className={`relative px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
                                       isSelected
                                         ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
                                         : isDisabled
@@ -2045,6 +2046,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     }`}
                                   >
                                     {timeLabel}
+                                    {isVipBooked && (
+                                      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
+                                        <Sparkles className="w-3 h-3" />
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })}
@@ -2064,13 +2070,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 const timeLabel = s.startTime;
                                 const isDisabled = !s.available;
                                 const isSelected = selectedTime === timeLabel;
+                                const isVipBooked = s.vipBooked;
                                 return (
                                   <button 
                                     key={timeLabel} 
                                     type="button"
                                     disabled={isDisabled}
                                     onClick={() => setSelectedTime(timeLabel)}
-                                    className={`px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                    className={`relative px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
                                       isSelected
                                         ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
                                         : isDisabled
@@ -2079,6 +2086,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     }`}
                                   >
                                     {timeLabel}
+                                    {isVipBooked && (
+                                      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
+                                        <Sparkles className="w-3 h-3" />
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })}
@@ -2694,6 +2706,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                        : `Đã đặt cọc ${formatCurrency(lastBooking.depositAmount || 0)}`)
                     : 'Cảm ơn bạn đã sử dụng dịch vụ của AutoWash Pro'}
                 </p>
+
+                {/* Lucky Spin Notification */}
+                <div className="mt-5 p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 flex items-start sm:items-center gap-3 text-left shadow-inner shadow-white">
+                  <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center text-orange-600 shadow-sm border border-amber-200/50">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
+                  </div>
+                </div>
               </div>
 
               <div className="p-6 space-y-4 overflow-y-auto flex-1">
