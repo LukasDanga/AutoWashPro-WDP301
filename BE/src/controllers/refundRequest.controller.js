@@ -27,3 +27,15 @@ exports.reviewRequest = catchAsync(async (req, res) => {
   const request = await refundRequestService.reviewRequest(req.params.id, req.userId, decision, reviewNote);
   success(res, request, 'Refund request reviewed');
 });
+
+exports.deleteRequest = catchAsync(async (req, res) => {
+  const result = await refundRequestService.deleteRequest(req.params.id, req.user.role);
+  success(res, result, 'Refund request deleted successfully');
+});
+
+exports.deleteRequestsByDateRange = catchAsync(async (req, res) => {
+  const { dateFrom, dateTo, all } = req.query;
+  const deleteAll = all === 'true';
+  const result = await refundRequestService.deleteRequestsByDateRange(dateFrom, dateTo, deleteAll);
+  success(res, result, result.message);
+});
