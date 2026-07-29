@@ -42,42 +42,47 @@ function StepCard({ step, index }) {
     <motion.div
       ref={ref}
       initial={{ opacity: 0, y: 30 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay: index * 0.15, ease: [0.16, 1, 0.3, 1] }}
-      className={`relative z-10 ${index % 2 === 0 ? 'lg:-translate-y-7' : 'lg:translate-y-5'}`}
+      animate={isInView ? { opacity: 1 } : {}}
+      transition={{ duration: 0.6, delay: index * 0.15 }}
+      className={`relative z-10 ${index % 2 === 0 ? 'lg:-translate-y-8' : 'lg:translate-y-6'}`}
     >
-      <div className="group relative p-7 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl shadow-sm hover:shadow-2xl hover:shadow-emerald-200/50 hover:-translate-y-2 transition-all duration-500 text-center flex flex-col items-center">
-        {/* Step Badge */}
-        <div className="absolute -top-3.5 px-3.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-mono font-black text-xs rounded-full shadow-md shadow-emerald-500/25 tracking-wider uppercase">
-          BƯỚC {step.number}
+      {/* Smooth Fluid Wave Motion wrapper */}
+      <motion.div
+        animate={{
+          y: [-20, 20, -20],
+        }}
+        transition={{
+          duration: 5.2,
+          repeat: Infinity,
+          repeatType: 'mirror',
+          ease: 'easeInOut',
+          delay: index * 0.75,
+        }}
+        className="h-full"
+      >
+        <div className="group relative p-8 bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-3xl shadow-sm hover:shadow-2xl hover:shadow-emerald-200/60 hover:-translate-y-2.5 transition-all duration-500 text-center flex flex-col items-center h-full">
+          {/* Step Badge */}
+          <div className="absolute -top-3.5 px-4 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-mono font-black text-xs rounded-full shadow-md shadow-emerald-500/25 tracking-wider uppercase">
+            BƯỚC {step.number}
+          </div>
+
+          {/* Illustration Container */}
+          <div className="w-full aspect-square max-w-[210px] bg-gradient-to-b from-emerald-50/90 to-teal-50/40 rounded-2xl p-4 mt-2 mb-6 overflow-hidden flex items-center justify-center border border-emerald-100/80 group-hover:scale-105 transition-transform duration-500 shadow-2xs">
+            <img
+              src={step.image}
+              alt={step.title}
+              className="w-full h-full object-contain mix-blend-multiply rounded-xl"
+            />
+          </div>
+
+          <h3 className="text-lg font-extrabold text-slate-900 mb-2 group-hover:text-emerald-700 transition-colors">{step.title}</h3>
+          <p className="text-slate-500 text-xs leading-relaxed max-w-xs mb-5">{step.description}</p>
+          
+          <span className="mt-auto inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-bold text-emerald-800 bg-emerald-50/90 border border-emerald-200/70 shadow-2xs">
+            {step.tag}
+          </span>
         </div>
-
-        {/* Illustration Container with Smooth Floating Animation */}
-        <motion.div
-          animate={{ y: [0, -10, 0] }}
-          transition={{
-            duration: 3.2,
-            repeat: Infinity,
-            repeatType: 'reverse',
-            ease: 'easeInOut',
-            delay: index * 0.35,
-          }}
-          className="w-full aspect-square max-w-[200px] bg-gradient-to-b from-emerald-50/80 to-teal-50/30 rounded-2xl p-3 mt-2 mb-5 overflow-hidden flex items-center justify-center border border-emerald-100/80 group-hover:scale-105 transition-transform duration-500 shadow-2xs"
-        >
-          <img
-            src={step.image}
-            alt={step.title}
-            className="w-full h-full object-contain mix-blend-multiply rounded-xl"
-          />
-        </motion.div>
-
-        <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mb-2 group-hover:text-emerald-700 transition-colors">{step.title}</h3>
-        <p className="text-slate-500 text-xs leading-relaxed max-w-xs mb-4">{step.description}</p>
-        
-        <span className="mt-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold text-emerald-800 bg-emerald-50/80 border border-emerald-200/60 shadow-2xs">
-          {step.tag}
-        </span>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -88,19 +93,19 @@ export default function HowItWorksSection() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative py-24 md:py-32 bg-emerald-50/30 overflow-hidden" id="services" ref={ref}>
+    <section className="relative py-28 md:py-36 bg-emerald-50/30 overflow-hidden" id="services" ref={ref}>
       {/* Background Ambient Glow Orbs */}
       <div className="absolute top-1/4 left-10 w-96 h-96 bg-emerald-200/30 blur-3xl rounded-full pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-teal-200/30 blur-3xl rounded-full pointer-events-none" />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
+      <div className="max-w-[1520px] mx-auto px-6 md:px-12 lg:px-16 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="max-w-2xl mx-auto text-center mb-20"
+          className="max-w-2xl mx-auto text-center mb-24"
         >
-          <span className="text-emerald-600 text-xs font-extrabold tracking-widest uppercase mb-3 block px-3 py-1 bg-emerald-100/60 rounded-full w-fit mx-auto border border-emerald-200/60">
+          <span className="text-emerald-600 text-xs font-extrabold tracking-widest uppercase mb-3 block px-3.5 py-1 bg-emerald-100/60 rounded-full w-fit mx-auto border border-emerald-200/60">
             CÁCH HOẠT ĐỘNG
           </span>
           <h2 className="text-4xl md:text-6xl font-extrabold tracking-tighter leading-none text-slate-900 mb-4">
@@ -111,22 +116,25 @@ export default function HowItWorksSection() {
           </p>
         </motion.div>
 
-        {/* Cards Grid with Decorative Staggered Curved Connector Line */}
+        {/* Cards Grid with Widened Spacing & Wave Line */}
         <div className="relative">
           {/* Desktop SVG Dotted Connecting Wave Line */}
-          <div className="hidden lg:block absolute top-1/2 left-12 right-12 -translate-y-1/2 pointer-events-none z-0">
-            <svg className="w-full h-24" viewBox="0 0 1000 100" fill="none" preserveAspectRatio="none">
-              <path
-                d="M 50 60 Q 250 10 500 60 T 950 60"
+          <div className="hidden lg:block absolute top-1/2 left-16 right-16 -translate-y-1/2 pointer-events-none z-0">
+            <svg className="w-full h-32" viewBox="0 0 1000 120" fill="none" preserveAspectRatio="none">
+              <motion.path
+                d="M 50 70 Q 250 15 500 70 T 950 70"
                 stroke="#10b981"
-                strokeWidth="2.5"
-                strokeDasharray="6 6"
-                className="opacity-40"
+                strokeWidth="3"
+                strokeDasharray="8 8"
+                animate={{ strokeDashoffset: [0, -64] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                className="opacity-45"
               />
             </svg>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 items-center relative z-10">
+          {/* Grid with Widened Gap (gap-8 md:gap-10 lg:gap-12 xl:gap-16) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10 lg:gap-12 xl:gap-16 items-center relative z-10">
             {steps.map((step, index) => (
               <StepCard key={step.number} step={step} index={index} />
             ))}
@@ -137,7 +145,7 @@ export default function HowItWorksSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5, delay: 0.6 }}
-          className="mt-16 text-center"
+          className="mt-28 md:mt-36 text-center relative z-20"
         >
           <button
             onClick={() => navigate('/booking')}
