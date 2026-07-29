@@ -1671,9 +1671,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     </div>
                                     <span className="text-sm font-medium">{sub.name}</span>
                                   </div>
-                                  <span className="text-xs font-semibold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg">
-                                    {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {sub.duration > 0 && (
+                                      <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+                                        {sub.duration} phút
+                                      </span>
+                                    )}
+                                    <span className="text-xs font-semibold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg">
+                                      {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}
+                                    </span>
+                                  </div>
                                 </button>
                               );
                             })}

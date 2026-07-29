@@ -50,6 +50,7 @@ const bookingSchema = new mongoose.Schema(
         name: { type: String, required: true },
         price: { type: Number, required: true, min: 0 },
         duration: { type: Number, required: true, min: 0 },
+        isOptional: { type: Boolean, default: true },
       },
     ],
     voucherCode: { type: String, trim: true, uppercase: true },

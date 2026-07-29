@@ -399,41 +399,64 @@ export default function QuickBookModal({ pack, userVehicles = [], branches = [],
               )}
             </div>
 
-            {/* Optional Sub-services */}
-            {pkg?.subServices && pkg.subServices.length > 0 && (
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-2 flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-amber-500" />
-                  Dịch vụ thêm (Tùy chọn)
-                </label>
-                <div className="space-y-2">
-                  {pkg.subServices.map(sub => {
-                    const checked = selectedSubServices.includes(sub.name);
-                    return (
-                      <button
-                        type="button"
-                        key={sub.name}
-                        onClick={() => {
-                          setSelectedSubServices(prev =>
-                             checked ? prev.filter(x => x !== sub.name) : [...prev, sub.name]
+            {/* Included & Optional Sub-services */}
+            {pkg?.subServices && pkg.subServices.length > 0 && (() => {
+              const included = pkg.subServices.filter(sub => sub.isOptional === false);
+              const optional = pkg.subServices.filter(sub => sub.isOptional !== false);
+              return (
+                <div>
+                  {included.length > 0 && (
+                    <div className="mb-3">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-emerald-600" />
+                        Dịch vụ bao gồm
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {included.map(sub => (
+                          <span key={sub.name} className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+                            {sub.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {optional.length > 0 && (
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-amber-500" />
+                        Dịch vụ thêm (Tùy chọn)
+                      </label>
+                      <div className="space-y-2">
+                        {optional.map(sub => {
+                          const checked = selectedSubServices.includes(sub.name);
+                          return (
+                            <button
+                              type="button"
+                              key={sub.name}
+                              onClick={() => {
+                                setSelectedSubServices(prev =>
+                                   checked ? prev.filter(x => x !== sub.name) : [...prev, sub.name]
+                                );
+                              }}
+                              className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs font-semibold transition-all ${
+                                checked
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                              }`}
+                            >
+                              <span>{sub.name}</span>
+                              <span className="text-emerald-600 font-bold">
+                                {sub.price > 0 ? `+${new Intl.NumberFormat('vi-VN').format(sub.price)}đ` : 'Miễn phí'}
+                              </span>
+                            </button>
                           );
-                        }}
-                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs font-semibold transition-all ${
-                          checked
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                        }`}
-                      >
-                        <span>{sub.name}</span>
-                        <span className="text-emerald-600 font-bold">
-                          {sub.price > 0 ? `+${new Intl.NumberFormat('vi-VN').format(sub.price)}đ` : 'Miễn phí'}
-                        </span>
-                      </button>
-                    );
-                  })}
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </form>
 
           {/* Footer Actions */}
