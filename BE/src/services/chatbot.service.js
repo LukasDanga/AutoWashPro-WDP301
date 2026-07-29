@@ -7,6 +7,20 @@ const authService = require('./auth.service');
 const { Vehicle, User, Branch, Booking, SlotPack, Package } = require('../models');
 const FE_URL = (process.env.FE_URL || 'http://localhost:5173').replace(/\/+$/, '');
 const MOBILE_DEEPLINK = 'autowashpro';
+const FE_PAGES = {
+  booking: `${FE_URL}/booking`,
+  history: `${FE_URL}/history`,
+  payments: `${FE_URL}/payments`,
+  profile: `${FE_URL}/profile`,
+  vehicles: `${FE_URL}/profile?tab=vehicles`,
+  wallet: `${FE_URL}/profile?tab=wallet`,
+  benefits: `${FE_URL}/profile?tab=benefits`,
+  packages: `${FE_URL}/packages`,
+  gifts: `${FE_URL}/gifts`,
+  map: `${FE_URL}/map`,
+  notifications: `${FE_URL}/notifications`,
+  slotPacks: `${FE_URL}/history?view=slot_packs`,
+};
 const BASE_INSTRUCTION = require('./chatbot/base.instruction');
 const CUSTOMER_INSTRUCTION = require('./chatbot/customer.instruction');
 const MANAGER_INSTRUCTION = require('./chatbot/manager.instruction');
@@ -384,10 +398,13 @@ async function executeTool(name, args, userId, role) {
       if (isCustomer) {
         const result = await branchService.getAllBranches({ status: 'active' });
         const branches = result.data || result;
-        return branches.map(b => ({
-          id: String(b._id), name: b.name, address: b.address,
-          phone: b.phone || '', openingTime: b.openingTime || '07:00', closingTime: b.closingTime || '20:00',
-        }));
+        return {
+          pageUrls: FE_PAGES,
+          branches: branches.map(b => ({
+            id: String(b._id), name: b.name, address: b.address,
+            phone: b.phone || '', openingTime: b.openingTime || '07:00', closingTime: b.closingTime || '20:00',
+          })),
+        };
       }
       if (isManager) {
         const result = await branchService.getAllBranches({}, { id: userId, role: 'manager' });
@@ -456,6 +473,10 @@ async function executeTool(name, args, userId, role) {
     // ── Manager/Admin: get_branch_bookings ──
     case 'get_branch_bookings': {
       if (isCustomer) return { error: 'Công cụ này chỉ dành cho quản lý và admin' };
+      const STATUS_VI = {
+        pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã check-in',
+        in_progress: 'Đang thực hiện', completed: 'Đã hoàn thành', cancelled: 'Đã hủy',
+      };
       const filters = {
         branchId: args.branchId,
         status: args.status || undefined,
@@ -468,7 +489,7 @@ async function executeTool(name, args, userId, role) {
         id: String(b._id), customerName: b.userId?.name || '',
         phone: b.userId?.phone || '', licensePlate: b.vehicleId?.licensePlate || '',
         packageName: b.packageId?.name || '', startTime: b.startTime, endTime: b.endTime,
-        status: b.status, finalPrice: b.finalPrice, bookingDate: b.bookingDate,
+        status: STATUS_VI[b.status] || b.status, finalPrice: b.finalPrice, bookingDate: b.bookingDate,
       }));
     }
 
@@ -536,6 +557,10 @@ async function executeTool(name, args, userId, role) {
       const list = bookings?.bookings || bookings?.data || [];
       const prefix = args.date ? 'ngày ' + new Date(args.date).toLocaleDateString('vi-VN') : 'sắp tới';
       if (!list.length) return { message: `Bạn không có lịch đặt ${prefix} nào.` };
+      const STATUS_VI = {
+        pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã check-in',
+        in_progress: 'Đang thực hiện', completed: 'Đã hoàn thành', cancelled: 'Đã hủy',
+      };
       return list.map(b => ({
         id: String(b._id),
         branchName: b.branchId?.name || '',
@@ -544,10 +569,10 @@ async function executeTool(name, args, userId, role) {
         bookingDate: b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : '',
         startTime: b.startTime,
         endTime: b.endTime,
-        status: b.status,
+        status: STATUS_VI[b.status] || b.status,
         finalPrice: b.finalPrice,
         bookingType: b.bookingType || 'single',
-        detailUrl: `${FE_URL}/bookings/${b._id}`,
+        historyUrl: `${FE_URL}/history?bookingId=${b._id}`,
         mobileDeepLink: `${MOBILE_DEEPLINK}://booking/${b._id}`,
       }));
     }
@@ -632,6 +657,10 @@ async function executeTool(name, args, userId, role) {
 
     case 'get_all_bookings': {
       if (!isAdmin) return { error: 'Công cụ này chỉ dành cho admin' };
+      const STATUS_VI = {
+        pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã check-in',
+        in_progress: 'Đang thực hiện', completed: 'Đã hoàn thành', cancelled: 'Đã hủy',
+      };
       const filters = {
         status: args.status || undefined,
         branchId: args.branchId || undefined,
@@ -645,7 +674,7 @@ async function executeTool(name, args, userId, role) {
         branchName: b.branchId?.name || '', packageName: b.packageId?.name || '',
         licensePlate: b.vehicleId?.licensePlate || '',
         startTime: b.startTime, endTime: b.endTime,
-        status: b.status, finalPrice: b.finalPrice, bookingDate: b.bookingDate,
+        status: STATUS_VI[b.status] || b.status, finalPrice: b.finalPrice, bookingDate: b.bookingDate,
         bookingType: b.bookingType,
       }));
     }
