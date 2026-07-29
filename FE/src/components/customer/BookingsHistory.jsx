@@ -2,25 +2,50 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import VoucherPicker from '../VoucherPicker.jsx';
-import { Percent, Ticket } from 'lucide-react';
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Car,
+  Search,
+  Filter,
+  RefreshCw,
+  QrCode,
+  Star,
+  DollarSign,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Sparkles,
+  Tag
+} from 'lucide-react';
 
 const DAYS_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
   'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
 const STATUS_MAP = {
-  pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  confirmed:   { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  checked_in:  { label: 'Đã check-in',  cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-  in_progress: { label: 'Đang rửa',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  completed:   { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  cancelled:   { label: 'Đã hủy',       cls: 'bg-slate-100 text-slate-500 border-slate-200' },
-  paid:        { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-700 border-green-200' },
+  pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200/80 icon-amber' },
+  confirmed:   { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-700 border-blue-200/80 icon-blue' },
+  checked_in:  { label: 'Đã check-in',  cls: 'bg-cyan-50 text-cyan-700 border-cyan-200/80 icon-cyan' },
+  in_progress: { label: 'Đang rửa',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200/80 icon-indigo' },
+  completed:   { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 icon-emerald' },
+  cancelled:   { label: 'Đã hủy',       cls: 'bg-slate-100 text-slate-600 border-slate-200 icon-slate' },
+  paid:        { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-700 border-green-200/80' },
 };
 
 function StatusBadge({ status }) {
-  const s = STATUS_MAP[status] ?? { label: status, cls: 'bg-slate-100 text-slate-500 border-slate-200' };
-  return <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.label}</span>;
+  const s = STATUS_MAP[status] ?? { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold shadow-2xs ${s.cls}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+      {s.label}
+    </span>
+  );
 }
 
 /* ── cảnh báo "sắp bị hủy tự động" + đổi giờ nhanh sang slot gợi ý ── */
@@ -49,28 +74,26 @@ function AtRiskBanner({ booking, apiBase, token, onRescheduled }) {
   }
 
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{
-      marginTop: 10, padding: '10px 12px', borderRadius: 10,
-      background: '#fffbeb', border: '1px solid #fde68a',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#b45309' }}>
-        ⏰ Bạn chưa check-in — sắp bị hệ thống tự hủy!
+    <div onClick={(e) => e.stopPropagation()} className="mt-3 p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900">
+      <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+        <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+        <span>Bạn chưa check-in — sắp bị hệ thống tự hủy!</span>
       </div>
       {booking.suggestedSlotStartTime && (
-        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#92400e' }}>
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-amber-700">
             Khung giờ trống gần nhất hôm nay: <b>{booking.suggestedSlotStartTime}</b>
           </span>
-          <button onClick={rescheduleToSuggested} disabled={busy} style={{
-            padding: '5px 12px', borderRadius: 8, border: 'none',
-            background: '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
-            cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
-          }}>
+          <button
+            onClick={rescheduleToSuggested}
+            disabled={busy}
+            className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+          >
             {busy ? 'Đang đổi...' : `Đổi sang ${booking.suggestedSlotStartTime}`}
           </button>
         </div>
       )}
-      {err && <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626' }}>{err}</div>}
+      {err && <div className="mt-1.5 text-xs text-red-600 font-medium">{err}</div>}
     </div>
   );
 }
@@ -102,7 +125,11 @@ export default function BookingsHistory({ apiBase, token }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
+
+  // Filter & Search states for modern UI
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
 
   // Calendar state
   const now = new Date();
@@ -112,7 +139,7 @@ export default function BookingsHistory({ apiBase, token }) {
   const [detailBooking, setDetailBooking] = useState(null);
 
   // View mode: 'calendar' or 'list'
-  const [viewMode, setViewMode] = useState('calendar');
+  const [viewMode, setViewMode] = useState('list');
 
   // Review state
   const [showReview, setShowReview] = useState(false);
@@ -122,23 +149,23 @@ export default function BookingsHistory({ apiBase, token }) {
   const [reviewError, setReviewError] = useState('');
   const [hoverStar, setHoverStar] = useState(0);
   const reviewTextRef = useRef(null);
+
   const [cancelLoading, setCancelLoading] = useState(false);
   const [rebookLoading, setRebookLoading] = useState(false);
+
+  // QR Modal
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState('');
 
   // Rebook modal
-  const [showRebookModal, setShowRebookModal] = useState(false);
   const [rebookTarget, setRebookTarget] = useState(null);
-  const [rebookDate, setRebookDate] = useState('');
-  const [rebookTime, setRebookTime] = useState('');
-  const [rebookError, setRebookError] = useState('');
   const [rebookVoucherCode, setRebookVoucherCode] = useState('');
   const [rebookVoucherDiscount, setRebookVoucherDiscount] = useState(0);
   const [showRebookVoucherModal, setShowRebookVoucherModal] = useState(false);
 
+  // Cancel Confirm Modal
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelError, setCancelError] = useState('');
@@ -201,7 +228,34 @@ export default function BookingsHistory({ apiBase, token }) {
     return refundRequests.find((r) => String(r.bookingId?._id || r.bookingId) === String(bookingId));
   }
 
-  // Group bookings by date
+  // Filtered Bookings for List View
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((b) => {
+      // Status filter
+      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+
+      // Date filter
+      if (dateFilter) {
+        const bDate = new Date(b.bookingDate).toISOString().split('T')[0];
+        if (bDate !== dateFilter) return false;
+      }
+
+      // Search term
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const pkgName = (b.packageName || b.packageId?.name || '').toLowerCase();
+        const branch = (b.branchName || b.branchId?.name || '').toLowerCase();
+        const plate = (b.vehiclePlate || b.vehicleId?.licensePlate || '').toLowerCase();
+        if (!pkgName.includes(term) && !branch.includes(term) && !plate.includes(term)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [bookings, statusFilter, searchTerm, dateFilter]);
+
+  // Group bookings by date for Calendar View
   const bookingsByDate = useMemo(() => {
     const map = {};
     bookings.forEach((b) => {
@@ -212,7 +266,7 @@ export default function BookingsHistory({ apiBase, token }) {
     return map;
   }, [bookings]);
 
-  // Bookings for selected date
+  // Bookings for selected date in Calendar View
   const selectedDateBookings = useMemo(() => {
     if (!selectedDate) return [];
     const key = selectedDate.toISOString().split('T')[0];
@@ -307,7 +361,6 @@ export default function BookingsHistory({ apiBase, token }) {
       }
       const payload = await res.json();
       const updated = payload?.data || payload;
-      // sync local state
       setDetailBooking((prev) => ({ ...prev, ...updated }));
       setBookings((prev) => prev.map((b) => b._id === updated._id ? { ...b, ...updated } : b));
       setShowReview(false);
@@ -435,33 +488,6 @@ export default function BookingsHistory({ apiBase, token }) {
     navigate('/booking', { state: { rebookData: b } });
   }
 
-  async function submitRebook() {
-    if (!rebookTarget) return;
-    setRebookError('');
-    if (!rebookDate) { setRebookError('Vui lòng chọn ngày'); return; }
-    if (!rebookTime) { setRebookError('Vui lòng chọn giờ'); return; }
-    const selected = new Date(rebookDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (selected < today) { setRebookError('Ngày phải từ hôm nay trở đi'); return; }
-    setRebookLoading(true);
-    try {
-      const bId = rebookTarget._id || rebookTarget.id;
-      const res = await fetch(`${apiBase}/bookings/${bId}/rebook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingDate: rebookDate, startTime: rebookTime, voucherCode: rebookVoucherCode }),
-      });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
-      setShowRebookModal(false);
-      setRebookTarget(null);
-      // re-fetch
-      const res2 = await fetch(`${apiBase}/bookings/my`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res2.ok) { const payload = await res2.json(); setBookings(Array.isArray(payload?.data || payload) ? (payload?.data || payload) : []); }
-    } catch (e) { setRebookError(e.message); }
-    finally { setRebookLoading(false); }
-  }
-
   async function handleShowQR(id) {
     setQrLoading(true);
     setQrUrl('');
@@ -492,103 +518,375 @@ export default function BookingsHistory({ apiBase, token }) {
   const stats = getStatusCounts();
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="aw-card-section">
-        <div className="aw-step-title"><span>•</span> LỊCH SỬ RỬA XE</div>
-        <p className="aw-muted">Theo dõi các lịch đặt của bạn trên lịch tháng.</p>
-
-        {/* Stats bar */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 16 }}>
-          {[
-            { label: 'Chờ xác nhận', value: stats.pending, color: '#f59e0b', bg: '#fffbeb' },
-            { label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff' },
-            { label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5' },
-            { label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb' },
-          ].map((s) => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '12px 14px', border: `1px solid ${s.color}20` }}>
-              <div style={{ fontSize: 11, color: s.color, fontWeight: 600, marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      {/* ═══ HEADER & STATS BAR ═══ */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-emerald-600 font-extrabold text-xs uppercase tracking-wider">
+              <Sparkles className="w-4 h-4" />
+              <span>Quản lý lịch hẹn</span>
             </div>
-          ))}
+            <h1 className="text-2xl font-extrabold text-slate-900 mt-1 tracking-tight">Lịch Sử Rửa Xe</h1>
+            <p className="text-slate-500 text-sm mt-0.5">Theo dõi, kiểm tra mã QR và quản lý tất cả các lượt đặt xe của bạn.</p>
+          </div>
+
+          {/* View toggle */}
+          <div className="inline-flex p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 self-start md:self-auto">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>📋 Danh sách</span>
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'calendar'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>📅 Lịch tháng</span>
+            </button>
+          </div>
         </div>
 
-        {/* View toggle */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button
-            onClick={() => setViewMode('calendar')}
-            style={{
-              flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-              fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
-              background: viewMode === 'calendar' ? '#0f172a' : '#f1f5f9',
-              color: viewMode === 'calendar' ? '#fff' : '#64748b',
-            }}
-          >
-            📅 Lịch tháng
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            style={{
-              flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-              fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
-              background: viewMode === 'list' ? '#0f172a' : '#f1f5f9',
-              color: viewMode === 'list' ? '#fff' : '#64748b',
-            }}
-          >
-            📋 Danh sách
-          </button>
+        {/* Interactive Quick Filter Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
+          {[
+            { id: 'all', label: 'Tất cả đơn', count: stats.total, color: 'border-slate-200 text-slate-900 bg-slate-50' },
+            { id: 'pending', label: 'Chờ xác nhận', count: stats.pending, color: 'border-amber-200 text-amber-700 bg-amber-50/60' },
+            { id: 'confirmed', label: 'Đã xác nhận', count: stats.confirmed, color: 'border-blue-200 text-blue-700 bg-blue-50/60' },
+            { id: 'completed', label: 'Hoàn thành', count: stats.completed, countCls: 'text-emerald-600', color: 'border-emerald-200 text-emerald-700 bg-emerald-50/60' },
+            { id: 'cancelled', label: 'Đã hủy', count: stats.cancelled, color: 'border-slate-200 text-slate-600 bg-slate-100/60' },
+          ].map((s) => {
+            const isActive = statusFilter === s.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setStatusFilter(s.id)}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${s.color} ${
+                  isActive ? 'ring-2 ring-emerald-500 border-transparent shadow-xs font-bold' : 'opacity-80 hover:opacity-100'
+                }`}
+              >
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{s.label}</div>
+                <div className={`text-2xl font-extrabold mt-1 ${s.countCls || ''}`}>{s.count}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Loading / Error */}
-      {loading && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Đang tải...</div>}
-      {error && <div style={{ textAlign: 'center', padding: 20, color: '#ef4444', background: '#fef2f2', borderRadius: 12 }}>{error}</div>}
-
-      {/* ═══ CALENDAR VIEW ═══ */}
-      {viewMode === 'calendar' && !loading && (
-        <div className="aw-card-section" style={{ padding: 0, overflow: 'hidden' }}>
-          {/* Calendar header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '16px 20px', borderBottom: '1px solid #e2e8f0',
-            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          }}>
-            <button onClick={handlePrevMonth} style={{
-              width: 36, height: 36, borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer',
-              fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>‹</button>
-
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
-                {MONTHS_VN[viewMonth]} {viewYear}
-              </div>
-              <button onClick={goToday} style={{
-                marginTop: 4, padding: '3px 12px', borderRadius: 20, border: 'none',
-                background: 'rgba(16,185,129,0.2)', color: '#34d399', fontSize: 11,
-                fontWeight: 600, cursor: 'pointer',
-              }}>Hôm nay</button>
-            </div>
-
-            <button onClick={handleNextMonth} style={{
-              width: 36, height: 36, borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer',
-              fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>›</button>
+      {/* ═══ LIST VIEW TOOLBAR ═══ */}
+      {viewMode === 'list' && (
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm theo gói, biển số, chi nhánh..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Day-of-week headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid #e2e8f0' }}>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none"
+              />
+              {dateFilter && (
+                <button onClick={() => setDateFilter('')} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {(searchTerm || dateFilter || statusFilter !== 'all') && (
+              <button
+                onClick={() => { setSearchTerm(''); setDateFilter(''); setStatusFilter('all'); }}
+                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Đặt lại</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Loading / Error */}
+      {loading && (
+        <div className="bg-white rounded-2xl p-12 text-center text-slate-400 font-semibold border border-slate-200">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
+          Đang tải lịch sử đặt xe...
+        </div>
+      )}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium text-center">
+          {error}
+        </div>
+      )}
+
+      {/* ═══ LIST VIEW CONTENT ═══ */}
+      {viewMode === 'list' && !loading && (
+        <div className="space-y-4">
+          {filteredBookings.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 text-center border border-slate-200/80 shadow-xs">
+              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                <FileText className="w-8 h-8" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-800">Không tìm thấy lịch đặt xe nào</h3>
+              <p className="text-slate-500 text-xs mt-1">Thử thay đổi từ khóa hoặc bộ lọc trạng thái để tìm kiếm.</p>
+            </div>
+          ) : (
+            filteredBookings.map((b) => {
+              const pkgSubs = b.packageId?.subServices || [];
+              const includedList = [];
+              if (Array.isArray(pkgSubs)) {
+                pkgSubs.forEach(s => {
+                  if (s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price))) {
+                    if (!includedList.some(item => item.name === s.name)) includedList.push(s);
+                  }
+                });
+              }
+              if (Array.isArray(b.selectedSubServices)) {
+                b.selectedSubServices.forEach(s => {
+                  const sName = typeof s === 'string' ? s : s.name;
+                  const sPrice = typeof s === 'object' ? s.price : 0;
+                  const sOpt = typeof s === 'object' ? s.isOptional : undefined;
+                  if (sOpt === false || (sOpt === undefined && (sPrice === 0 || !sPrice))) {
+                    if (!includedList.some(item => item.name === sName)) includedList.push({ name: sName, price: sPrice });
+                  }
+                });
+              }
+
+              const extraList = [];
+              if (Array.isArray(b.selectedSubServices)) {
+                b.selectedSubServices.forEach(s => {
+                  const sName = typeof s === 'string' ? s : s.name;
+                  const isInc = includedList.some(inc => inc.name === sName);
+                  if (!isInc) {
+                    if (!extraList.some(item => item.name === sName)) extraList.push(typeof s === 'object' ? s : { name: s });
+                  }
+                });
+              }
+
+              return (
+                <div
+                  key={b._id}
+                  onClick={() => loadDetail(b._id)}
+                  className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-all duration-200 hover:border-emerald-500/30 cursor-pointer group"
+                >
+                  {/* Card Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold shrink-0 group-hover:scale-105 transition-transform">
+                        <Car className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-base group-hover:text-emerald-700 transition-colors">
+                          {b.packageName || b.packageId?.name || 'Dịch vụ Rửa Xe'}
+                        </h3>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                          <span className="flex items-center gap-1 font-semibold text-slate-700">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            {b.branchName || b.branchId?.name || '—'}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            {formatDate(b.bookingDate)}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1 font-semibold text-emerald-600">
+                            <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                            {b.startTime || ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center sm:flex-col sm:items-end justify-between gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                      <StatusBadge status={b.status} />
+                      <div className="text-right">
+                        <div className="text-base font-extrabold text-slate-900">
+                          {formatCurrency(b.totalAmount || b.finalPrice)}
+                        </div>
+                        {b.depositAmount > 0 && (
+                          <div className={`text-[11px] font-bold mt-0.5 ${b.depositPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Body - License plate & Sub-services */}
+                  <div className="py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-500 font-medium">Biển số:</span>
+                      <span className="bg-slate-900 text-white font-mono font-bold text-xs px-3 py-1 rounded-md tracking-wider shadow-2xs">
+                        {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}
+                      </span>
+                    </div>
+
+                    {/* Sub services preview */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {includedList.slice(0, 3).map((sub, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-semibold text-[11px]">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          {sub.name || sub}
+                        </span>
+                      ))}
+                      {extraList.slice(0, 2).map((sub, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[11px]">
+                          +{sub.name || sub}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
+
+                  {/* Card Footer Actions */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => loadDetail(b._id)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Chi tiết
+                    </button>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {['pending', 'confirmed'].includes(b.status) && (
+                        <button
+                          onClick={() => handleCancel(b._id)}
+                          disabled={cancelLoading}
+                          className="px-3.5 py-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hủy đơn</span>
+                        </button>
+                      )}
+
+                      {['pending', 'confirmed', 'checked_in'].includes(b.status) && (
+                        <button
+                          onClick={() => handleShowQR(b._id)}
+                          className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Mã QR Check-in</span>
+                        </button>
+                      )}
+
+                      {(b.status === 'completed' || b.status === 'cancelled') && (
+                        <button
+                          onClick={() => handleRebook(b)}
+                          disabled={rebookLoading}
+                          className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Đặt lại lượt này</span>
+                        </button>
+                      )}
+
+                      {b.status === 'completed' && (
+                        <button
+                          onClick={() => { loadDetail(b._id); openReviewForm(); }}
+                          className="px-3.5 py-1.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                          <span>{b.rating ? 'Sửa đánh giá' : 'Đánh giá'}</span>
+                        </button>
+                      )}
+
+                      {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
+                        const existing = findRefundRequest(b._id);
+                        if (existing?.status === 'pending') {
+                          return (
+                            <span className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold flex items-center gap-1">
+                              ⏳ Đang chờ hoàn tiền
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            onClick={() => openRefundRequest(b)}
+                            className="px-3.5 py-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            <span>Yêu cầu hoàn tiền</span>
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ═══ CALENDAR VIEW CONTENT ═══ */}
+      {viewMode === 'calendar' && !loading && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          {/* Calendar Navigation Header */}
+          <div className="p-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+            <button
+              onClick={handlePrevMonth}
+              className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer"
+            >
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </button>
+
+            <div className="text-center">
+              <h2 className="text-lg font-extrabold tracking-tight">
+                {MONTHS_VN[viewMonth]} {viewYear}
+              </h2>
+              <button
+                onClick={goToday}
+                className="mt-1 px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold hover:bg-emerald-500/30 transition-all cursor-pointer"
+              >
+                Hôm nay
+              </button>
+            </div>
+
+            <button
+              onClick={handleNextMonth}
+              className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer"
+            >
+              <ChevronRight className="w-5 h-5 text-white" />
+            </button>
+          </div>
+
+          {/* Days of week header */}
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-extrabold text-slate-500 uppercase tracking-wider">
             {DAYS_VN.map((d, i) => (
-              <div key={d} style={{
-                padding: '10px 0', textAlign: 'center', fontSize: 11, fontWeight: 700,
-                color: i === 0 ? '#ef4444' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em',
-              }}>{d}</div>
+              <div key={d} className={`py-3 ${i === 0 ? 'text-red-500' : ''}`}>{d}</div>
             ))}
           </div>
 
-          {/* Calendar grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {/* Grid Days */}
+          <div className="grid grid-cols-7 divide-x divide-y divide-slate-100">
             {calendarDays.map((day, idx) => {
               const key = day.date.toISOString().split('T')[0];
               const dayBookings = bookingsByDate[key] || [];
@@ -600,41 +898,47 @@ export default function BookingsHistory({ apiBase, token }) {
                 <div
                   key={idx}
                   onClick={() => setSelectedDate(day.date)}
-                  style={{
-                    minHeight: 72, padding: '6px 4px', cursor: 'pointer',
-                    borderRight: (idx % 7) < 6 ? '1px solid #f1f5f9' : 'none',
-                    borderBottom: idx < 35 ? '1px solid #f1f5f9' : 'none',
-                    background: isSelected ? '#eff6ff' : isToday ? '#fefce8' : day.isCurrentMonth ? '#fff' : '#f8fafc',
-                    transition: 'background 0.15s',
-                    position: 'relative',
-                  }}
-                  onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = '#f1f5f9'; }}
-                  onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = day.isCurrentMonth ? '#fff' : '#f8fafc'; }}
+                  className={`min-h-[84px] p-2 cursor-pointer transition-all relative ${
+                    isSelected
+                      ? 'bg-emerald-50/80 ring-2 ring-emerald-500 ring-inset'
+                      : isToday
+                      ? 'bg-amber-50/40'
+                      : day.isCurrentMonth
+                      ? 'bg-white hover:bg-slate-50'
+                      : 'bg-slate-50/60 text-slate-400'
+                  }`}
                 >
-                  {/* Day number */}
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 28, height: 28, borderRadius: 8, fontSize: 13, fontWeight: 600,
-                    background: isToday ? '#0f172a' : 'transparent',
-                    color: isToday ? '#fff' : isSelected ? '#3b82f6' : day.isCurrentMonth ? '#1e293b' : '#cbd5e1',
-                  }}>
+                  <div className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center ${
+                    isToday
+                      ? 'bg-slate-900 text-white'
+                      : isSelected
+                      ? 'text-emerald-700 font-extrabold'
+                      : day.isCurrentMonth
+                      ? 'text-slate-800'
+                      : 'text-slate-400'
+                  }`}>
                     {day.date.getDate()}
                   </div>
 
-                  {/* Booking dots */}
+                  {/* Indicators */}
                   {hasBookings && (
-                    <div style={{ display: 'flex', gap: 3, marginTop: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <div className="mt-1 flex flex-wrap gap-1 justify-center">
                       {dayBookings.slice(0, 3).map((b, i) => (
-                        <div key={i} style={{
-                          width: 7, height: 7, borderRadius: '50%',
-                          background: b.status === 'completed' ? '#10b981'
-                            : b.status === 'cancelled' ? '#94a3b8'
-                            : b.status === 'pending' ? '#f59e0b'
-                            : '#3b82f6',
-                        }} />
+                        <span
+                          key={i}
+                          className={`w-2 h-2 rounded-full ${
+                            b.status === 'completed'
+                              ? 'bg-emerald-500'
+                              : b.status === 'cancelled'
+                              ? 'bg-slate-400'
+                              : b.status === 'pending'
+                              ? 'bg-amber-500'
+                              : 'bg-blue-500'
+                          }`}
+                        />
                       ))}
                       {dayBookings.length > 3 && (
-                        <span style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>+{dayBookings.length - 3}</span>
+                        <span className="text-[9px] font-bold text-slate-500">+{dayBookings.length - 3}</span>
                       )}
                     </div>
                   )}
@@ -643,75 +947,50 @@ export default function BookingsHistory({ apiBase, token }) {
             })}
           </div>
 
-          {/* Selected date panel */}
+          {/* Selected Date Drawer Panel */}
           {selectedDate && (
-            <div style={{
-              borderTop: '2px solid #e2e8f0', background: '#f8fafc',
-              maxHeight: 340, overflow: 'auto',
-            }}>
-              <div style={{
-                padding: '14px 20px', borderBottom: '1px solid #e2e8f0',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1,
-              }}>
+            <div className="border-t-2 border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                  <h3 className="font-extrabold text-slate-900 text-sm">
                     {selectedDate.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                    {selectedDateBookings.length > 0 ? `${selectedDateBookings.length} lịch đặt` : 'Không có lịch đặt'}
-                  </div>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {selectedDateBookings.length > 0 ? `${selectedDateBookings.length} lịch đặt trong ngày` : 'Không có lịch hẹn nào'}
+                  </p>
                 </div>
-                <button onClick={() => setSelectedDate(null)} style={{
-                  width: 30, height: 30, borderRadius: 8, border: '1px solid #e2e8f0',
-                  background: '#fff', cursor: 'pointer', fontSize: 14, color: '#64748b',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>✕</button>
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
               {selectedDateBookings.length === 0 ? (
-                <div style={{ padding: '30px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-                  Không có lịch đặt nào trong ngày này.
+                <div className="text-center py-6 text-slate-400 text-xs font-semibold">
+                  📭 Không có lịch đặt xe trong ngày này.
                 </div>
               ) : (
-                <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="space-y-3">
                   {selectedDateBookings.map((b) => (
                     <div
                       key={b._id}
                       onClick={() => loadDetail(b._id)}
-                      style={{
-                        background: '#fff', borderRadius: 12, padding: '14px 16px',
-                        border: '1px solid #e2e8f0', cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(59,130,246,0.1)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
+                      className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:border-emerald-500 cursor-pointer transition-all flex items-center justify-between"
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{b.packageName || b.packageId?.name || 'Dịch vụ'}</div>
-                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                            {b.branchName || b.branchId?.name || '—'} · {b.startTime || ''}
-                          </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 text-sm">{b.packageName || b.packageId?.name || 'Dịch vụ'}</div>
+                        <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                          <span>📍 {b.branchName || b.branchId?.name || '—'}</span>
+                          <span>•</span>
+                          <span className="font-semibold text-emerald-600">⏰ {b.startTime || ''}</span>
                         </div>
+                      </div>
+                      <div className="text-right">
                         <StatusBadge status={b.status} />
+                        <div className="font-extrabold text-slate-900 text-sm mt-1">{formatCurrency(b.totalAmount || b.finalPrice)}</div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {b.depositAmount > 0 && (
-                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                              background: b.depositPaid ? '#ecfdf5' : '#fffbeb', color: b.depositPaid ? '#059669' : '#d97706',
-                              border: b.depositPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
-                            }}>
-                              {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
-                            </span>
-                          )}
-                          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
-                        </div>
-                      </div>
-                      <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
                     </div>
                   ))}
                 </div>
@@ -723,221 +1002,80 @@ export default function BookingsHistory({ apiBase, token }) {
 
       {/* ═══ DETAIL MODAL ═══ */}
       {detailBooking && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => setDetailBooking(null)}>
-          <div style={{
-            width: '100%', maxWidth: 440, background: '#fff', borderRadius: 20, overflow: 'hidden',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-          }} onClick={(e) => e.stopPropagation()}>
-            {/* Modal header */}
-            <div style={{
-              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={() => setDetailBooking(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between">
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Chi tiết đặt lịch</div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>#{String(detailBooking._id).slice(-8).toUpperCase()}</div>
+                <h3 className="font-extrabold text-lg text-white">Chi Tiết Đặt Lịch</h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">#{String(detailBooking._id).slice(-8).toUpperCase()}</p>
               </div>
-              <button onClick={() => setDetailBooking(null)} style={{
-                width: 32, height: 32, borderRadius: 8, border: 'none',
-                background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: 16,
-              }}>✕</button>
+              <button
+                onClick={() => setDetailBooking(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Modal body */}
-            <div style={{ padding: '20px 24px', maxHeight: '60vh', overflow: 'auto' }}>
-              {/* Status */}
-              <div style={{ marginBottom: 16 }}>
+            {/* Body */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              <div className="flex items-center justify-between">
                 <StatusBadge status={detailBooking.status} />
-                <AtRiskBanner booking={detailBooking} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
+                <span className="text-xs font-bold text-slate-500">
+                  {detailBooking.bookingType === 'recurring' ? '🔄 Đặt định kỳ' : detailBooking.bookingType === 'slot_pack_usage' ? '🎫 Dùng gói lượt' : '⚡ 1 Lượt rửa'}
+                </span>
               </div>
 
-              {/* Info rows */}
-              {(() => {
-                const pkgSubs = detailBooking.packageId?.subServices || [];
-                const includedList = [];
+              <AtRiskBanner booking={detailBooking} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
 
-                if (Array.isArray(pkgSubs)) {
-                  pkgSubs.forEach(s => {
-                    if (s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price))) {
-                      if (!includedList.some(item => item.name === s.name)) {
-                        includedList.push(s);
-                      }
-                    }
-                  });
-                }
-
-                if (Array.isArray(detailBooking.selectedSubServices)) {
-                  detailBooking.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s.name;
-                    const sPrice = typeof s === 'object' ? s.price : 0;
-                    const sOpt = typeof s === 'object' ? s.isOptional : undefined;
-                    
-                    if (sOpt === false || (sOpt === undefined && (sPrice === 0 || !sPrice))) {
-                      if (!includedList.some(item => item.name === sName)) {
-                        includedList.push({ name: sName, price: sPrice });
-                      }
-                    }
-                  });
-                }
-
-                const extraList = [];
-                if (Array.isArray(detailBooking.selectedSubServices)) {
-                  detailBooking.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s.name;
-                    const isInc = includedList.some(inc => inc.name === sName);
-                    if (!isInc) {
-                      if (!extraList.some(item => item.name === sName)) {
-                        extraList.push(typeof s === 'object' ? s : { name: s });
-                      }
-                    }
-                  });
-                }
-
-                return [
-                  ['📦 Dịch vụ', detailBooking.packageName || detailBooking.packageId?.name || '—'],
-                  ...(includedList.length > 0
-                    ? [['📋 Dịch vụ bao gồm', includedList.map((sub, i) => {
-                        const sName = sub.name || sub;
-                        const dur = sub.duration || (detailBooking.packageId?.subServices || []).find(x => x.name === sName)?.duration;
-                        return (
-                          <span key={i} style={{ fontSize: 11, color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: 12, marginLeft: 4, border: '1px solid #a7f3d0' }}>
-                            {sName} {dur ? `(${dur}p)` : ''}
-                          </span>
-                        );
-                      })]]
-                    : []),
-                  ...(extraList.length > 0
-                    ? [['➕ Dịch vụ thêm', extraList.map((sub, i) => {
-                        const sName = sub.name || sub;
-                        const dur = sub.duration || (detailBooking.packageId?.subServices || []).find(x => x.name === sName)?.duration;
-                        return (
-                          <span key={i} style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, marginLeft: 4 }}>
-                            + {sName} {dur ? `(${dur}p)` : ''}
-                          </span>
-                        );
-                      })]]
-                    : []),
-                  ['📅 Ngày', formatDate(detailBooking.bookingDate)],
-                ['⏰ Giờ', detailBooking.startTime || '—'],
-                ['🏢 Chi nhánh', detailBooking.branchName || detailBooking.branchId?.name || '—'],
-                ['🪪 Biển số', detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || '—'],
-                ['💰 Thành tiền', formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)],
-                ['💳 Thanh toán', detailBooking.paymentStatus === 'paid' || detailBooking.paymentStatus === 'deposit_paid' ? 'Đã thanh toán' : 'Chưa thanh toán'],
-                ['📍 Loại đặt', detailBooking.bookingType === 'recurring' ? 'Định kỳ' : detailBooking.bookingType === 'slot_pack_usage' ? 'Gói lượt' : '1 lần'],
-              ].map(([label, value]) => (
-                <div key={label} style={{
-                  display: 'flex', justifyContent: 'space-between', padding: '10px 0',
-                  borderBottom: '1px solid #f1f5f9',
-                }}>
-                  <span style={{ fontSize: 13, color: '#64748b' }}>{label}</span>
-                  <div style={{ textAlign: 'right', maxWidth: '60%' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{value}</span>
-                  </div>
+              {/* Information list */}
+              <div className="bg-slate-50 rounded-xl p-4 space-y-2.5 text-xs">
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">📦 Gói rửa xe:</span>
+                  <span className="font-extrabold text-slate-900">{detailBooking.packageName || detailBooking.packageId?.name || '—'}</span>
                 </div>
-              ))}
-
-              {detailBooking.depositAmount > 0 && (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontSize: 13, color: '#d97706', fontWeight: 600 }}>🔒 Đặt cọc {Math.round((detailBooking.depositAmount || 0) / ((detailBooking.totalAmount || detailBooking.finalPrice || 1)) * 100)}%</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>{formatCurrency(detailBooking.depositAmount)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>📋 Còn lại (thanh toán sau)</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>{formatCurrency(Math.max(0, (detailBooking.totalAmount || detailBooking.finalPrice || 0) - (detailBooking.depositAmount || 0)))}</span>
-                  </div>
-                  {detailBooking.depositPaid && (
-                    <div style={{ marginTop: 8, textAlign: 'center' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 700, border: '1px solid #a7f3d0' }}>
-                        ✅ Đã đặt cọc {formatCurrency(detailBooking.depositAmount)}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Feedback */}
-              {detailBooking.feedback && (
-                <div style={{ marginTop: 16, padding: 14, background: '#fffbeb', borderRadius: 12, border: '1px solid #fef3c7' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', marginBottom: 6 }}>⭐ Đánh giá</div>
-                  <div style={{ display: 'flex', gap: 2, marginBottom: 6 }}>
-                    {[1,2,3,4,5].map((s) => (
-                      <span key={s} style={{ fontSize: 16, color: s <= (detailBooking.rating || 0) ? '#f59e0b' : '#d1d5db' }}>★</span>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 13, color: '#92400e', fontStyle: 'italic' }}>"{detailBooking.feedback}"</div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">🏢 Chi nhánh:</span>
+                  <span className="font-bold text-slate-800">{detailBooking.branchName || detailBooking.branchId?.name || '—'}</span>
                 </div>
-              )}
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">📅 Ngày rửa:</span>
+                  <span className="font-bold text-slate-800">{formatDate(detailBooking.bookingDate)} ({detailBooking.startTime || ''})</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">🪪 Biển số xe:</span>
+                  <span className="bg-slate-900 text-white font-mono font-bold text-xs px-2 py-0.5 rounded">
+                    {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">💰 Thành tiền:</span>
+                  <span className="font-extrabold text-emerald-700 text-sm">{formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)}</span>
+                </div>
+                {detailBooking.depositAmount > 0 && (
+                  <div className="flex justify-between py-1 border-b border-slate-200/60">
+                    <span className="text-amber-700 font-bold">🔒 Tiền cọc:</span>
+                    <span className="font-extrabold text-amber-700">{formatCurrency(detailBooking.depositAmount)}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Modal footer */}
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {(detailBooking.status === 'pending' || detailBooking.status === 'confirmed') && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => handleCancel(detailBooking._id)} disabled={cancelLoading} style={{
-                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #fecaca',
-                    background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'not-allowed' : 'pointer', opacity: cancelLoading ? 0.6 : 1,
-                  }}>
-                    {cancelLoading ? 'Đang hủy...' : '🗑 Hủy đơn'}
-                  </button>
-                  <button onClick={() => handleShowQR(detailBooking._id)} style={{
-                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #bfdbfe',
-                    background: '#eff6ff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  }}>
-                    📱 QR Check-in
-                  </button>
-                </div>
-              )}
-              {(detailBooking.status === 'completed' || detailBooking.status === 'cancelled') && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => handleRebook(detailBooking)} disabled={rebookLoading} style={{
-                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #a7f3d0',
-                    background: '#ecfdf5', color: '#059669', fontSize: 13, fontWeight: 600, cursor: rebookLoading ? 'not-allowed' : 'pointer', opacity: rebookLoading ? 0.6 : 1,
-                  }}>
-                    {rebookLoading ? 'Đang đặt lại...' : '🔄 Đặt lại'}
-                  </button>
-                  {detailBooking.status === 'completed' && (
-                    <button onClick={openReviewForm} style={{
-                      flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
-                      background: detailBooking.rating ? '#fffbeb' : '#f59e0b',
-                      color: detailBooking.rating ? '#b45309' : '#fff',
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      border: detailBooking.rating ? '1px solid #fde68a' : 'none',
-                    }}>
-                      {detailBooking.rating ? '✏️ Sửa đánh giá' : '⭐ Đánh giá'}
-                    </button>
-                  )}
-                </div>
-              )}
-              {['paid', 'deposit_paid'].includes(detailBooking.paymentStatus) && (() => {
-                const existing = findRefundRequest(detailBooking._id);
-                if (existing?.status === 'pending') {
-                  return (
-                    <div style={{
-                      padding: '10px 0', borderRadius: 12, background: '#fffbeb', border: '1px solid #fde68a',
-                      textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#b45309',
-                    }}>
-                      ⏳ Yêu cầu hoàn tiền đang chờ duyệt
-                    </div>
-                  );
-                }
-                return (
-                  <button onClick={() => openRefundRequest(detailBooking)} style={{
-                    width: '100%', padding: '12px 0', borderRadius: 12, border: '1px solid #fecaca',
-                    background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  }}>
-                    💸 Yêu cầu hoàn tiền
-                  </button>
-                );
-              })()}
-              <button onClick={() => setDetailBooking(null)} style={{
-                width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
-                background: '#0f172a', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}>Đóng</button>
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDetailBooking(null)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>
@@ -945,112 +1083,64 @@ export default function BookingsHistory({ apiBase, token }) {
 
       {/* ═══ REVIEW MODAL ═══ */}
       {showReview && detailBooking && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => setShowReview(false)}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          }} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div style={{
-              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Đánh giá dịch vụ</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                  {detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ'}
-                </div>
-              </div>
-              <button onClick={() => setShowReview(false)} style={{
-                width: 32, height: 32, borderRadius: 8, border: '1px solid #e2e8f0',
-                background: '#f8fafc', cursor: 'pointer', fontSize: 16, color: '#64748b',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>✕</button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={() => setShowReview(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-extrabold text-slate-900 text-base">Đánh Giá Dịch Vụ</h3>
+              <button onClick={() => setShowReview(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Body */}
-            <div style={{ padding: '24px' }}>
-              {/* Star selector */}
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-                  Chất lượng dịch vụ <span style={{ color: '#ef4444' }}>*</span>
-                </div>
-                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      onMouseEnter={() => setHoverStar(s)}
-                      onMouseLeave={() => setHoverStar(0)}
-                      onClick={() => setReviewRating(s)}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px',
-                        fontSize: 36, lineHeight: 1,
-                        color: s <= (hoverStar || reviewRating) ? '#f59e0b' : '#d1d5db',
-                        transform: s <= (hoverStar || reviewRating) ? 'scale(1.15)' : 'scale(1)',
-                        transition: 'all 0.1s',
-                      }}
-                    >★</button>
-                  ))}
-                </div>
-                {reviewRating > 0 && (
-                  <div style={{ textAlign: 'center', marginTop: 8, fontSize: 13, color: '#f59e0b', fontWeight: 600 }}>
-                    {['', 'Rất tệ', 'Tệ', 'Bình thường', 'Tốt', 'Xuất sắc'][reviewRating]}
-                  </div>
-                )}
+            <div className="text-center py-2 space-y-3">
+              <div className="flex justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    onMouseEnter={() => setHoverStar(s)}
+                    onMouseLeave={() => setHoverStar(0)}
+                    onClick={() => setReviewRating(s)}
+                    className="p-1 cursor-pointer transition-transform hover:scale-110"
+                  >
+                    <Star
+                      className={`w-8 h-8 ${
+                        s <= (hoverStar || reviewRating) ? 'text-amber-400 fill-amber-400' : 'text-slate-300'
+                      }`}
+                    />
+                  </button>
+                ))}
               </div>
 
-              {/* Text */}
-              <div style={{ marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-                  Nhận xét (tuỳ chọn)
-                </div>
-                <textarea
-                  ref={reviewTextRef}
-                  value={reviewText}
-                  onChange={(e) => setReviewText(e.target.value)}
-                  maxLength={500}
-                  rows={4}
-                  placeholder="Chia sẻ trải nghiệm của bạn về dịch vụ..."
-                  style={{
-                    width: '100%', padding: '12px 14px', borderRadius: 12, resize: 'none',
-                    border: '1.5px solid #e2e8f0', fontSize: 14, color: '#0f172a',
-                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-                    background: '#f8fafc',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#f59e0b'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
-                />
-                <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{reviewText.length}/500</div>
-              </div>
-
-              {reviewError && (
-                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13, marginBottom: 8 }}>
-                  {reviewError}
-                </div>
-              )}
+              <textarea
+                ref={reviewTextRef}
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                maxLength={500}
+                rows={4}
+                placeholder="Chia sẻ nhận xét của bạn về chất lượng rửa xe..."
+                className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:border-amber-400 bg-slate-50"
+              />
             </div>
 
-            {/* Footer */}
-            <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowReview(false)} style={{
-                flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
-                background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}>Huỷ</button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReview(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold"
+              >
+                Hủy
+              </button>
               <button
                 onClick={submitReview}
                 disabled={reviewLoading || reviewRating === 0}
-                style={{
-                  flex: 2, padding: '12px 0', borderRadius: 12, border: 'none',
-                  background: reviewRating === 0 ? '#d1d5db' : '#f59e0b',
-                  color: reviewRating === 0 ? '#9ca3af' : '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: reviewRating === 0 ? 'not-allowed' : 'pointer',
-                  opacity: reviewLoading ? 0.7 : 1,
-                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold disabled:opacity-50"
               >
-                {reviewLoading ? 'Đang gửi...' : '⭐ Gửi đánh giá'}
+                {reviewLoading ? 'Đang gửi...' : 'Gửi Đánh Giá'}
               </button>
             </div>
           </div>
@@ -1059,360 +1149,139 @@ export default function BookingsHistory({ apiBase, token }) {
 
       {/* ═══ QR MODAL ═══ */}
       {showQR && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => setShowQR(false)}>
-          <div style={{
-            width: '100%', maxWidth: 360, background: '#fff', borderRadius: 20, overflow: 'hidden',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: '24px', textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Mã QR Check-in</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>Đưa mã này cho nhân viên khi đến rửa xe</div>
-              {qrLoading ? (
-                <div style={{ padding: '60px 0', color: '#94a3b8' }}>Đang tạo mã QR...</div>
-              ) : qrUrl ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                  <img src={qrUrl} alt="QR Check-in" style={{ width: 200, height: 200, borderRadius: 12 }} />
-                  <a href={qrUrl} target="_blank" rel="noopener noreferrer" style={{
-                    padding: '8px 20px', borderRadius: 10, background: '#0f172a', color: '#fff',
-                    fontSize: 13, fontWeight: 600, textDecoration: 'none',
-                  }}>🔗 Mở trong tab mới</a>
-                </div>
-              ) : qrError ? (
-                <div style={{ padding: '60px 0', color: '#ef4444', fontSize: 13 }}>{qrError}</div>
-              ) : (
-                <div style={{ padding: '60px 0', color: '#94a3b8' }}>Không có dữ liệu QR</div>
-              )}
-              <button onClick={() => setShowQR(false)} style={{
-                width: '100%', marginTop: 20, padding: '12px 0', borderRadius: 12, border: 'none',
-                background: '#0f172a', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}>Đóng</button>
-            </div>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={() => setShowQR(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-extrabold text-slate-900 text-base">Mã QR Check-in</h3>
+            <p className="text-xs text-slate-500">Xuất trình mã này cho nhân viên khi bạn đến chi nhánh.</p>
+
+            {qrLoading ? (
+              <div className="py-8 text-xs text-slate-400 font-semibold">Đang tạo mã QR...</div>
+            ) : qrUrl ? (
+              <div className="space-y-3">
+                <img src={qrUrl} alt="QR Check-in" className="w-48 h-48 mx-auto rounded-xl border p-2 bg-white" />
+                <a
+                  href={qrUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-xs font-bold text-emerald-600 underline"
+                >
+                  Mở ảnh QR nguyên bản
+                </a>
+              </div>
+            ) : (
+              <div className="py-8 text-xs text-red-500">{qrError || 'Không có mã QR'}</div>
+            )}
+
+            <button
+              onClick={() => setShowQR(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold"
+            >
+              Đóng
+            </button>
           </div>
         </div>
       )}
 
       {/* ═══ CONFIRM CANCEL MODAL ═══ */}
       {showCancelConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null); } }}>
-          <div style={{
-            width: '100%', maxWidth: 380, background: '#fff', borderRadius: 20, overflow: 'hidden',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: '24px', textAlign: 'center' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{cancelStep === 1 ? '🗑️' : '📩'}</div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
-                {cancelStep === 1 ? 'Xác nhận hủy đơn' : 'Nhập mã xác thực OTP'}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={() => { if (!cancelLoading) setShowCancelConfirm(false); }}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-2">
+                <AlertTriangle className="w-6 h-6" />
               </div>
-              <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, margin: 0, marginBottom: 16 }}>
-                {cancelStep === 1 
-                  ? 'Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.' 
-                  : 'Chúng tôi đã gửi mã OTP gồm 6 chữ số đến email của bạn. Vui lòng kiểm tra hộp thư.'}
+              <h3 className="font-extrabold text-slate-900 text-base">
+                {cancelStep === 1 ? 'Xác Nhận Hủy Đơn' : 'Nhập Mã OTP Xác Thực'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {cancelStep === 1
+                  ? 'Bạn có chắc chắn muốn hủy đơn rửa xe này không?'
+                  : 'Mã OTP đã được gửi đến email của bạn.'}
               </p>
+            </div>
 
-              {cancelStep === 1 ? (
-                <div style={{ textAlign: 'left', marginBottom: 16 }}>
-                  {cancelPreview && cancelPreview.totalPaid > 0 && (
-                    <div style={{
-                      marginBottom: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
-                      background: cancelPreview.isLateCancel ? '#fffbe6' : '#e6f4ea',
-                      border: cancelPreview.isLateCancel ? '1px solid #ffe58f' : '1px solid #b7eb8f',
-                      color: cancelPreview.isLateCancel ? '#873800' : '#135200'
-                    }}>
-                      {cancelPreview.isLateCancel ? (
-                        <>
-                          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Hủy sát giờ hẹn ({cancelPreview.minutesBefore} phút trước)</div>
-                          {cancelPreview.penaltyAmount > 0 && (
-                            <div style={{ color: '#cf1322', fontWeight: 600 }}>Phí phạt: -{cancelPreview.penaltyAmount.toLocaleString('vi-VN')}₫ ({cancelPreview.penaltyPercent}%)</div>
-                          )}
-                          {cancelPreview.refundAmount > 0 ? (
-                            <div style={{ color: '#389e0d', fontWeight: 600 }}>Hoàn lại vào ví: {cancelPreview.refundAmount.toLocaleString('vi-VN')}₫</div>
-                          ) : (
-                            <div style={{ color: '#cf1322', fontWeight: 600 }}>Mất toàn bộ tiền cọc — không hoàn lại.</div>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ fontWeight: 700, color: '#389e0d' }}>✅ Hoàn lại 100% ({cancelPreview.totalPaid.toLocaleString('vi-VN')}₫) vào ví</div>
-                      )}
-                    </div>
-                  )}
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
-                    Lý do hủy <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <textarea
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    rows={3}
-                    maxLength={500}
-                    placeholder="Nhập lý do hủy..."
-                    style={{
-                      width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0',
-                      fontSize: 13, color: '#0f172a', outline: 'none', resize: 'none', background: '#f8fafc',
-                      fontFamily: 'inherit'
-                    }}
-                    onFocus={(e) => { e.currentTarget.style.border = '1px solid #3b82f6'; e.currentTarget.style.background = '#fff'; }}
-                    onBlur={(e) => { e.currentTarget.style.border = '1px solid #e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-                  />
-                </div>
-              ) : (
-                <div style={{ textAlign: 'left', marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
-                    Mã OTP <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={cancelOtp}
-                    onChange={(e) => setCancelOtp(e.target.value)}
-                    placeholder="Nhập mã 6 số"
-                    style={{
-                      width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0',
-                      fontSize: 18, color: '#0f172a', outline: 'none', background: '#f8fafc',
-                      fontFamily: 'inherit', textAlign: 'center', letterSpacing: '5px', fontWeight: 'bold'
-                    }}
-                    onFocus={(e) => { e.currentTarget.style.border = '1px solid #3b82f6'; e.currentTarget.style.background = '#fff'; }}
-                    onBlur={(e) => { e.currentTarget.style.border = '1px solid #e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-                  />
-                </div>
-              )}
+            {cancelStep === 1 ? (
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Nhập lý do hủy..."
+                className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium bg-slate-50"
+              />
+            ) : (
+              <input
+                type="text"
+                value={cancelOtp}
+                onChange={(e) => setCancelOtp(e.target.value)}
+                placeholder="Mã OTP 6 chữ số"
+                className="w-full p-3 rounded-xl border border-slate-200 text-center font-mono font-bold text-base bg-slate-50"
+              />
+            )}
 
-              {cancelError && (
-                <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>{cancelError}</div>
-              )}
+            {cancelError && <div className="text-xs text-red-600 text-center font-semibold">{cancelError}</div>}
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                <button
-                  onClick={() => { setShowCancelConfirm(false); setCancelTarget(null); setCancelError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); }}
-                  disabled={cancelLoading}
-                  style={{
-                    flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
-                    background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                  }}
-                >Đóng</button>
-                <button
-                  onClick={cancelStep === 1 ? requestCancelOtp : confirmCancel}
-                  disabled={cancelLoading}
-                  style={{
-                    flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
-                    background: cancelLoading ? '#fca5a5' : '#ef4444', color: '#fff',
-                    fontSize: 14, fontWeight: 700, cursor: cancelLoading ? 'not-allowed' : 'pointer',
-                    opacity: cancelLoading ? 0.7 : 1,
-                  }}
-                >{cancelLoading ? 'Đang xử lý...' : (cancelStep === 1 ? 'Lấy mã OTP' : 'Xác nhận hủy')}</button>
-              </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold"
+              >
+                Trở lại
+              </button>
+              <button
+                onClick={cancelStep === 1 ? requestCancelOtp : confirmCancel}
+                disabled={cancelLoading}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-50"
+              >
+                {cancelLoading ? 'Đang xử lý...' : cancelStep === 1 ? 'Lấy mã OTP' : 'Xác nhận hủy'}
+              </button>
             </div>
           </div>
         </div>
       )}
-
-
 
       {/* ═══ REFUND REQUEST MODAL ═══ */}
       {showRefundModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => { if (!refundLoading) { setShowRefundModal(false); setRefundTarget(null); setRefundError(''); } }}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{
-              padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Yêu cầu hoàn tiền</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
-                {refundTarget?.packageName || refundTarget?.packageId?.name || 'Dịch vụ'} · {formatCurrency(refundTarget?.totalAmount || refundTarget?.finalPrice)}
-              </div>
-            </div>
-            <div style={{ padding: '20px 24px' }}>
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px 0' }}>
-                Yêu cầu của bạn sẽ được gửi tới quản lý chi nhánh xem xét. Vui lòng mô tả rõ lý do để được duyệt nhanh hơn.
-              </p>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                Lý do hoàn tiền <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <textarea
-                value={refundReason}
-                onChange={(e) => setRefundReason(e.target.value)}
-                maxLength={500}
-                rows={4}
-                placeholder="Ví dụ: dịch vụ chưa đạt yêu cầu, đặt nhầm lịch..."
-                style={{
-                  width: '100%', padding: '12px 14px', borderRadius: 12, resize: 'none',
-                  border: '1.5px solid #e2e8f0', fontSize: 14, color: '#0f172a',
-                  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-                  background: '#f8fafc',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = '#ef4444'; e.target.style.background = '#fff'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
-              />
-              <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{refundReason.length}/500</div>
-              {refundError && (
-                <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>
-                  {refundError}
-                </div>
-              )}
-            </div>
-            <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={() => { if (!refundLoading) setShowRefundModal(false); }}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-extrabold text-slate-900 text-base">Yêu Cầu Hoàn Tiền</h3>
+            <textarea
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="Nhập lý do chi tiết..."
+              className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium bg-slate-50"
+            />
+            {refundError && <div className="text-xs text-red-600 font-semibold">{refundError}</div>}
+            <div className="flex gap-2">
               <button
-                onClick={() => { setShowRefundModal(false); setRefundTarget(null); setRefundError(''); }}
-                disabled={refundLoading}
-                style={{
-                  flex: 1, padding: '12px 0', borderRadius: 12, border: '1px solid #e2e8f0',
-                  background: '#f8fafc', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                }}
-              >Huỷ</button>
+                onClick={() => setShowRefundModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold"
+              >
+                Hủy
+              </button>
               <button
                 onClick={submitRefundRequest}
                 disabled={refundLoading}
-                style={{
-                  flex: 2, padding: '12px 0', borderRadius: 12, border: 'none',
-                  background: refundLoading ? '#fca5a5' : '#ef4444', color: '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: refundLoading ? 'not-allowed' : 'pointer',
-                  opacity: refundLoading ? 0.7 : 1,
-                }}
-              >{refundLoading ? 'Đang gửi...' : '💸 Gửi yêu cầu'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ LIST VIEW ═══ */}
-      {viewMode === 'list' && !loading && (
-        <div className="aw-card-section">
-          {bookings.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 50, color: '#94a3b8' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Chưa có lịch đặt nào</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {bookings.map((b) => (
-                <div
-                  key={b._id}
-                  onClick={() => loadDetail(b._id)}
-                  style={{
-                    background: '#fff', borderRadius: 14, padding: '16px 18px',
-                    border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(59,130,246,0.08)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{b.packageName || b.packageId?.name || 'Dịch vụ'}</div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
-                        {formatDate(b.bookingDate)} · {b.startTime || ''} · {b.branchName || b.branchId?.name || '—'}
-                      </div>
-                    </div>
-                    <StatusBadge status={b.status} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#64748b' }}>🪪 {b.vehiclePlate || b.vehicleId?.licensePlate || '—'}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {b.depositAmount > 0 && (
-                        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                          background: b.depositPaid ? '#ecfdf5' : '#fffbeb', color: b.depositPaid ? '#059669' : '#d97706',
-                          border: b.depositPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
-                        }}>
-                          {b.depositPaid ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
-                        </span>
-                      )}
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(b.totalAmount || b.finalPrice)}</span>
-                    </div>
-                  </div>
-                  <AtRiskBanner booking={b} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
-                  {(b.status === 'completed' || b.status === 'cancelled') && (
-                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8 }}>
-                      <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
-                        disabled={rebookLoading}
-                        style={{
-                          padding: '6px 14px', borderRadius: 8, border: '1px solid #a7f3d0',
-                          background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 600,
-                          cursor: rebookLoading ? 'not-allowed' : 'pointer', opacity: rebookLoading ? 0.6 : 1,
-                      }}>
-                        {rebookLoading ? '...' : '🔄 Đặt lại'}
-                      </button>
-                      
-                      {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && (() => {
-                        const existing = findRefundRequest(b._id);
-                        if (existing?.status === 'pending') {
-                          return (
-                            <div style={{
-                              padding: '6px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a',
-                              fontSize: 12, fontWeight: 600, color: '#b45309', display: 'flex', alignItems: 'center'
-                            }}>
-                              ⏳ Đang chờ hoàn tiền
-                            </div>
-                          );
-                        }
-                        return (
-                          <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }} style={{
-                            padding: '6px 14px', borderRadius: 8, border: '1px solid #fecaca',
-                            background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                          }}>
-                            💸 Yêu cầu hoàn tiền
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ═══ VOUCHER PICKER MODAL (FOR REBOOK) ═══ */}
-      {showRebookVoucherModal && rebookTarget && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(4px)', padding: 16,
-        }} onClick={() => setShowRebookVoucherModal(false)}>
-          <div style={{
-            background: '#fff', borderRadius: 24, width: '100%', maxWidth: 450, maxHeight: '85vh',
-            display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden'
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ flexShrink: 0, borderBottom: '1px solid #f1f5f9', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: 18 }}>Chọn Ưu Đãi</h3>
-              <button
-                onClick={() => setShowRebookVoucherModal(false)}
-                style={{
-                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 8, background: '#f8fafc', color: '#94a3b8', border: 'none', cursor: 'pointer',
-                }}
-              >✕</button>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-              <VoucherPicker
-                apiBase={apiBase}
-                token={token}
-                selected={{ code: rebookVoucherCode }}
-                onSelect={(voucher) => {
-                  if (voucher) {
-                    setRebookVoucherCode(voucher.code);
-                    setRebookVoucherDiscount(
-                      voucher.type === 'percentage'
-                        ? Math.min((voucher.maxDiscount || 9999999), Math.floor(((rebookTarget?.packageId?.price || 0) + (rebookTarget?.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0)) * voucher.value / 100))
-                        : voucher.value
-                    );
-                  } else {
-                    setRebookVoucherCode('');
-                    setRebookVoucherDiscount(0);
-                  }
-                  setShowRebookVoucherModal(false);
-                }}
-                orderAmount={(rebookTarget?.packageId?.price || 0) + (rebookTarget?.selectedSubServices || []).reduce((sum, ss) => sum + (ss.price || 0), 0)}
-                compact
-                branchId={rebookTarget?.branchId?._id || rebookTarget?.branchId}
-              />
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-50"
+              >
+                {refundLoading ? 'Đang gửi...' : 'Gửi yêu cầu'}
+              </button>
             </div>
           </div>
         </div>

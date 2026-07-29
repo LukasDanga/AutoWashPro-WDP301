@@ -1694,21 +1694,32 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Chờ xử lý', value: stats.pending, color: '#f59e0b', bg: '#fffbeb', icon: '⏳' },
-            { label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff', icon: '✅' },
-            { label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5', icon: '🎉' },
-            { label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb', icon: '❌' },
-          ].map(s => (
-            <div key={s.label} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg" style={{ background: s.bg }}>
-                {s.icon}
+            { id: 'pending', label: 'Chờ xử lý', value: stats.pending, color: '#f59e0b', bg: '#fffbeb', icon: '⏳' },
+            { id: 'confirmed', label: 'Đã xác nhận', value: stats.confirmed, color: '#3b82f6', bg: '#eff6ff', icon: '✅' },
+            { id: 'completed', label: 'Hoàn thành', value: stats.completed, color: '#10b981', bg: '#ecfdf5', icon: '🎉' },
+            { id: 'cancelled', label: 'Đã hủy', value: stats.cancelled, color: '#6b7280', bg: '#f9fafb', icon: '❌' },
+          ].map(s => {
+            const isActive = statusFilter === s.id;
+            return (
+              <div
+                key={s.label}
+                onClick={() => onFilterChange(setStatusFilter, isActive ? '' : s.id)}
+                className={`flex items-center gap-4 rounded-xl border bg-white px-4 py-4 cursor-pointer transition-all ${
+                  isActive
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm bg-emerald-50/10'
+                    : 'border-slate-200 hover:border-slate-300 hover:shadow-xs'
+                }`}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg" style={{ background: s.bg }}>
+                  {s.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl font-bold text-slate-800">{s.value}</p>
+                  <p className={`truncate text-xs font-medium ${isActive ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}>{s.label}</p>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xl font-bold text-slate-800">{s.value}</p>
-                <p className="truncate text-xs text-slate-500">{s.label}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── CALENDAR VIEW ── */}
@@ -2197,66 +2208,95 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                             ) : null}
                           </div>
                         </div>
-                        <div className="mt-4 pl-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
-                          {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="font-semibold text-slate-800">{b.vehicleId.licensePlate || ''}</span></span>}
-                          {b.bookingDate && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">{formatDate(b.bookingDate)}</span></span>}
-                          {b.startTime && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg><span className="font-semibold text-slate-800">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span></span>}
-                          {b.bookingCode && <span className="font-mono text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">#{b.bookingCode}</span>}
-                          {b.recurringGroupId && <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
-                          {b.selectedSubServices && b.selectedSubServices.length > 0 && (() => {
-                            const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
-                            const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
-                            const pkgSubs = Array.isArray(pkgFromList?.subServices) ? pkgFromList.subServices : (Array.isArray(b.packageId?.subServices) ? b.packageId.subServices : []);
-
-                            return b.selectedSubServices.map((sub, idx) => {
-                              const sName = typeof sub === 'string' ? sub : sub?.name;
-                              if (!sName) return null;
-                              const matchingSub = pkgSubs.find(x => (x.name || x) === sName);
-                              
-                              const sOpt = typeof sub === 'object' && sub.isOptional !== undefined ? sub.isOptional : (matchingSub ? matchingSub.isOptional : false);
-                              const sPrice = typeof sub === 'object' && sub.price !== undefined ? sub.price : (matchingSub ? matchingSub.price : 0);
-                              const isExtra = sOpt === true || sPrice > 0;
-
-                              return (
-                                <span key={idx} className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold border ${
-                                  isExtra 
-                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                }`}>
-                                  <span className="font-bold text-[11px]">{isExtra ? '+' : '✓'}</span>
-                                  <span>{sName}</span>
-                                </span>
-                              );
-                            });
-                          })()}
-                          {hasReview && <span className="text-amber-500 font-medium">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</span>}
+                        {/* Row 1: Vehicle & Schedule Details */}
+                        <div className="mt-3 pl-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600 pb-2.5 border-b border-slate-100">
+                          {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="bg-slate-900 text-white font-mono font-bold text-xs px-2.5 py-0.5 rounded tracking-wider shadow-2xs">{b.vehicleId.licensePlate || ''}</span></span>}
+                          {b.bookingDate && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">{formatDate(b.bookingDate)}</span></span>}
+                          {b.startTime && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg><span className="font-semibold text-slate-800">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span></span>}
+                          {b.bookingCode && <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">#{b.bookingCode}</span>}
+                          {b.recurringGroupId && <span className="text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/80 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
                         </div>
-                          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 pl-3">
+
+                        {/* Row 2: Sub-services split into 2 distinct labeled rows */}
+                        {(() => {
+                          const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
+                          const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
+                          const pkgSubs = Array.isArray(pkgFromList?.subServices) ? pkgFromList.subServices : (Array.isArray(b.packageId?.subServices) ? b.packageId.subServices : []);
+
+                          const includedSubs = [];
+                          const extraSubs = [];
+
+                          (b.selectedSubServices || []).forEach(sub => {
+                            const sName = typeof sub === 'string' ? sub : sub?.name;
+                            if (!sName) return;
+                            const matchingSub = pkgSubs.find(x => (x.name || x) === sName);
+                            const sOpt = typeof sub === 'object' && sub.isOptional !== undefined ? sub.isOptional : (matchingSub ? matchingSub.isOptional : false);
+                            const sPrice = typeof sub === 'object' && sub.price !== undefined ? sub.price : (matchingSub ? matchingSub.price : 0);
+                            
+                            if (sOpt === true || sPrice > 0) {
+                              extraSubs.push(sName);
+                            } else {
+                              includedSubs.push(sName);
+                            }
+                          });
+
+                          if (includedSubs.length === 0 && extraSubs.length === 0) return null;
+
+                          return (
+                            <div className="mt-3 pl-3 space-y-2 text-xs">
+                              {includedSubs.length > 0 && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Gói dịch vụ có sẵn:</span>
+                                  {includedSubs.map((sName, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                                      <span className="font-bold text-[11px]">✓</span>
+                                      <span>{sName}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {extraSubs.length > 0 && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Dịch vụ chọn thêm:</span>
+                                  {extraSubs.map((sName, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs">
+                                      <span className="font-bold text-[11px]">+</span>
+                                      <span>{sName}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {hasReview && <div className="text-amber-500 font-medium font-bold text-xs pt-1">{'★'.repeat(b.rating || 0)}{'☆'.repeat(5 - (b.rating || 0))}</div>}
+                            </div>
+                          );
+                        })()}
+                          <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100 pl-3">
                             <button onClick={(e) => { e.stopPropagation(); setViewBooking(b); }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors">
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-all cursor-pointer">
                               Xem chi tiết
                             </button>
                             <button onClick={(e) => { e.stopPropagation(); setDetailBooking(b); }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-colors">
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200/80 transition-all cursor-pointer">
                               Xem hóa đơn
                             </button>
                             {(b.status === 'pending' || b.status === 'confirmed') && (
                               <button onClick={(e) => { e.stopPropagation(); handleShowQR(b); }}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors">
-                                📱 Xem QR
+                                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5">
+                                <span>📱 Xem QR</span>
                               </button>
                             )}
                             {(b.status === 'pending' || b.status === 'confirmed') && b.recurringGroupId && (
                               <button onClick={(e) => { e.stopPropagation(); handleCancelRecurring(b); }}
                                 disabled={cancelLoading}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-all cursor-pointer disabled:opacity-50">
                                 Hủy định kỳ
                               </button>
                             )}
                             {(b.status === 'pending' || b.status === 'confirmed') && (
                               <button onClick={(e) => { e.stopPropagation(); handleCancel(b); }}
                                 disabled={cancelLoading}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors disabled:opacity-50">
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-red-600 bg-red-50/80 hover:bg-red-100 border border-red-200/80 transition-all cursor-pointer disabled:opacity-50">
                                 Hủy đơn
                               </button>
                             )}
@@ -2715,20 +2755,20 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         return (
         <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
           onClick={() => setViewBooking(null)}>
-          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h2 className="text-lg font-bold text-slate-900">Chi tiết đơn đặt</h2>
-              <button onClick={() => setViewBooking(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-7 py-5 border-b border-slate-100 bg-white">
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">Chi tiết đơn đặt</h2>
+                <p className="text-xs sm:text-sm text-slate-400 font-mono mt-0.5">#{b.bookingCode || String(b._id || b.id).slice(-8).toUpperCase()}</p>
+              </div>
+              <button onClick={() => setViewBooking(null)} className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-5">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-slate-500">Mã đơn:</span>
-                <span className="font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                  #{b.bookingCode || String(b._id || b.id).slice(-8).toUpperCase()}
-                </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${st.cls}`}>{st.label}</span>
+            <div className="p-7 overflow-y-auto flex-1 space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">Trạng thái đơn:</span>
+                <span className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-2xs ${st.cls}`}>{st.label}</span>
               </div>
               {(() => {
                 const totalVal = b.finalPrice || b.totalAmount || 0;
@@ -2743,42 +2783,56 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
                 return (
                   <>
-                    <div className="grid grid-cols-[120px_1fr] gap-y-3 text-sm">
-                      <span className="text-slate-500 font-medium">Chi nhánh</span>
-                      <span className="text-slate-900 font-semibold">{b.branchId?.name || b.branchName || '—'}</span>
-                      <span className="text-slate-500 font-medium">Địa chỉ</span>
-                      <span className="text-slate-900">{b.branchId?.address || '—'}</span>
-                      <span className="text-slate-500 font-medium">Gói dịch vụ</span>
-                      <span className="text-slate-900 font-semibold">{b.packageId?.name || b.packageName || '—'}</span>
-                      <span className="text-slate-500 font-medium">Biển số xe</span>
-                      <span className="text-slate-900 font-semibold">{b.vehicleId?.licensePlate || b.vehiclePlate || '—'}</span>
-                      <span className="text-slate-500 font-medium">Ngày hẹn</span>
-                      <span className="text-slate-900">{formatDate(b.bookingDate)}</span>
-                      <span className="text-slate-500 font-medium">Giờ</span>
-                      <span className="text-slate-900">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span>
+                    <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 space-y-3 text-xs sm:text-sm">
+                      <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
+                        <span className="text-slate-500 font-medium">🏢 Chi nhánh:</span>
+                        <span className="text-slate-900 font-bold text-right max-w-[65%]">{b.branchId?.name || b.branchName || '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
+                        <span className="text-slate-500 font-medium">📍 Địa chỉ:</span>
+                        <span className="text-slate-700 text-right max-w-[65%]">{b.branchId?.address || '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+                        <span className="text-slate-500 font-medium">📦 Gói dịch vụ:</span>
+                        <span className="text-slate-900 font-extrabold text-sm sm:text-base">{b.packageId?.name || b.packageName || '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+                        <span className="text-slate-500 font-medium">🪪 Biển số xe:</span>
+                        <span className="bg-slate-800 text-white font-mono font-bold text-xs sm:text-sm px-3 py-1 rounded-md tracking-wider shadow-2xs">
+                          {b.vehicleId?.licensePlate || b.vehiclePlate || '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+                        <span className="text-slate-500 font-medium">📅 Ngày hẹn:</span>
+                        <span className="text-slate-900 font-bold">{formatDate(b.bookingDate)}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1.5">
+                        <span className="text-slate-500 font-medium">⏰ Khung giờ:</span>
+                        <span className="text-emerald-700 font-extrabold text-sm sm:text-base">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span>
+                      </div>
                     </div>
 
-                    {/* FINANCIAL SUMMARY CARD: TỔNG TIỀN - ĐÃ THANH TOÁN - CÒN LẠI */}
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 space-y-2 text-sm shadow-2xs">
+                    {/* FINANCIAL SUMMARY CARD */}
+                    <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-5 space-y-3 shadow-2xs text-xs sm:text-sm">
                       <div className="flex justify-between items-center">
                         <span className="text-slate-600 font-medium">Tổng tiền:</span>
-                        <span className="font-bold text-slate-900 text-base">{formatCurrency(totalVal)}</span>
+                        <span className="font-black text-slate-900 text-base sm:text-lg">{formatCurrency(totalVal)}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-600 font-medium flex items-center gap-1.5">
+                        <span className="text-slate-600 font-medium flex items-center gap-2">
                           Tiền đã thanh toán:
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${isFullyPaid ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : isDepositPaid ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-200 text-slate-600'}`}>
+                          <span className={`text-xs px-3 py-0.5 rounded-full font-bold ${isFullyPaid ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : isDepositPaid ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-200 text-slate-600'}`}>
                             {paidBadgeLabel}
                           </span>
                         </span>
-                        <span className="font-bold text-slate-800">{formatCurrency(paidVal)}</span>
+                        <span className="font-bold text-slate-800 text-sm sm:text-base">{formatCurrency(paidVal)}</span>
                       </div>
-                      <div className="pt-2 border-t border-slate-200/80 flex justify-between items-center font-bold">
-                        <span className="text-slate-800 flex items-center gap-1">
-                          💰 Tiền còn lại
-                          <span className="text-[11px] font-normal text-slate-500">(Tổng tiền - Tiền đã thanh toán)</span>:
-                        </span>
-                        <span className={`text-base ${remainingVal > 0 ? 'text-amber-600 font-extrabold' : 'text-emerald-600 font-extrabold'}`}>
+                      <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center">
+                        <div className="text-xs sm:text-sm font-bold text-amber-700 flex items-center gap-1">
+                          🔥 Tiền còn lại
+                          <span className="text-xs font-normal text-slate-400">(Tổng tiền - Tiền đã thanh toán)</span>:
+                        </div>
+                        <span className={`text-base sm:text-xl font-black ${remainingVal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                           {formatCurrency(remainingVal)}
                         </span>
                       </div>
@@ -2901,20 +2955,20 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 const calcRemaining = Math.max(0, calcTotal - (depositPaidOrActive ? deposit : 0));
 
                 return (
-                  <div className="pt-2 border-t border-slate-100 space-y-3">
+                  <div className="pt-3 border-t border-slate-100 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-slate-800">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                         {editingSubServices ? '✏️ Chỉnh sửa dịch vụ' : 'Danh sách dịch vụ'}
                       </span>
                       {canEdit && (
                         !editingSubServices ? (
                           <button onClick={() => handleStartEditSubServices(b)}
-                            className="text-xs font-semibold text-violet-700 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shadow-2xs">
+                            className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer">
                             ✏️ Chỉnh sửa dịch vụ
                           </button>
                         ) : (
                           <button onClick={() => setEditingSubServices(false)}
-                            className="text-xs font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg transition-colors">
+                            className="text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-3 py-1 rounded-xl transition-colors cursor-pointer">
                             ✕ Hủy sửa
                           </button>
                         )
@@ -2923,21 +2977,22 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
                     {!editingSubServices ? (
                       /* READ-ONLY VIEW */
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {includedList.length > 0 && (
                           <div>
-                            <span className="text-xs font-semibold text-slate-500 block mb-1.5">Dịch vụ bao gồm trong gói</span>
-                            <div className="flex flex-wrap gap-2">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Dịch vụ bao gồm trong gói:</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {includedList.map((sub, i) => {
                                 const sName = sub.name || sub;
                                 const dur = sub.duration || pkgSubs.find(x => x.name === sName)?.duration;
                                 return (
-                                  <span key={i} className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1">
-                                    <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    {sName} {dur ? `(${dur} phút)` : ''}
-                                  </span>
+                                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/70 text-xs font-semibold text-emerald-900 shadow-2xs">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0">✓</div>
+                                      <span className="font-bold truncate">{sName}</span>
+                                    </div>
+                                    {dur && <span className="text-[11px] font-bold text-emerald-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200/60 shrink-0 ml-1">⏱ {dur} phút</span>}
+                                  </div>
                                 );
                               })}
                             </div>
@@ -2946,15 +3001,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
                         {extraList.length > 0 && (
                           <div>
-                            <span className="text-xs font-semibold text-slate-500 block mb-1.5">Dịch vụ chọn thêm</span>
-                            <div className="flex flex-wrap gap-2">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Dịch vụ chọn thêm:</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {extraList.map((sub, i) => {
                                 const sName = sub.name || sub;
                                 const dur = sub.duration || pkgSubs.find(x => x.name === sName)?.duration;
                                 return (
-                                  <span key={i} className="px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold">
-                                    + {sName} {dur ? `(${dur} phút)` : ''}
-                                  </span>
+                                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 shadow-2xs">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-[10px] shrink-0">+</div>
+                                      <span className="font-bold truncate">{sName}</span>
+                                    </div>
+                                    {dur && <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shrink-0 ml-1">⏱ {dur} phút</span>}
+                                  </div>
                                 );
                               })}
                             </div>
@@ -3061,13 +3120,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 </div>
               )}
             </div>
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center gap-3">
               <button onClick={() => { setViewBooking(null); setDetailBooking(b); }}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors text-center">
+                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer text-center">
                 Xem hóa đơn
               </button>
               <button onClick={() => setViewBooking(null)}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors text-center">
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer text-center">
                 Đóng
               </button>
             </div>
