@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Plus, Car, Truck, Bike } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
+
+const VEHICLE_TYPES = [
+  { value: 'sedan', label: 'Sedan' },
+  { value: 'suv', label: 'SUV' },
+  { value: 'pickup', label: 'Pickup' },
+  { value: 'van', label: 'Van' },
+];
 
 const WEEKDAYS = [
   { value: 1, label: 'T2', full: 'Thứ 2' },
@@ -51,6 +59,50 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
   const [weeks, setWeeks] = useState(4);
   const [appliedVoucher, setAppliedVoucher] = useState(null);
 
+  const [localVehicles, setLocalVehicles] = useState([]);
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [addingVehicle, setAddingVehicle] = useState(false);
+  const [vehicleForm, setVehicleForm] = useState({
+    licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '',
+  });
+
+  const allVehicles = [...userVehicles, ...localVehicles];
+  const hasNoVehicles = allVehicles.length === 0;
+
+  function handleVehicleFormChange(field, value) {
+    setVehicleForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  async function handleAddVehicle(e) {
+    e.preventDefault();
+    if (!vehicleForm.licensePlate.trim()) { setError('Vui lòng nhập biển số xe'); return; }
+    if (!vehicleForm.brand.trim()) { setError('Vui lòng nhập hãng xe'); return; }
+    if (!vehicleForm.color.trim()) { setError('Vui lòng nhập màu xe'); return; }
+    setAddingVehicle(true);
+    setError('');
+    try {
+      const body = { ...vehicleForm };
+      if (!body.year) delete body.year;
+      if (!body.model) delete body.model;
+      const res = await fetch(`${apiBase}/vehicles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Thêm xe thất bại');
+      const newVehicle = data?.data || data;
+      setLocalVehicles(prev => [...prev, newVehicle]);
+      setSelectedVehicle(newVehicle._id || newVehicle.id);
+      setShowAddVehicle(false);
+      setVehicleForm({ licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAddingVehicle(false);
+    }
+  }
+
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -86,10 +138,10 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
   }, [selectedBranch, apiBase, token]);
 
   useEffect(() => {
-    if (!selectedVehicle && userVehicles[0]) {
-      setSelectedVehicle(userVehicles[0]._id || userVehicles[0].id || '');
+    if (!selectedVehicle && allVehicles[0]) {
+      setSelectedVehicle(allVehicles[0]._id || allVehicles[0].id || '');
     }
-  }, [userVehicles, selectedVehicle]);
+  }, [allVehicles.length, selectedVehicle]);
 
   const pkg = packages.find(p => p.id === selectedPackage);
   
@@ -174,6 +226,13 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
     }
   }
 
+  const getVehicleIcon = (type) => {
+    const t = (type || '').toLowerCase();
+    if (t.includes('motor') || t.includes('máy')) return <Bike className="w-5 h-5" />;
+    if (t.includes('suv') || t.includes('truck') || t.includes('pickup') || t.includes('van')) return <Truck className="w-5 h-5" />;
+    return <Car className="w-5 h-5" />;
+  };
+
   const tierColor = TIER_COLOR[user?.tier] || '#adb5bd';
   const branchObj = branches.find(b => b.id === selectedBranch);
 
@@ -227,7 +286,81 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
             <article className="aw-card-section">
               <div className="aw-step-title"><span>2</span> CHỌN XE</div>
               <div className="aw-options two-up">
-                {userVehicles.length > 0 ? userVehicles.map(v => {
+                {hasNoVehicles ? (
+                  <div className="max-w-xl mx-auto">
+                    <p className="text-sm text-slate-500 font-medium mb-4 text-center">Bạn chưa có xe nào. Vui lòng thêm xe mới:</p>
+                    <form onSubmit={handleAddVehicle} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biển số xe *</label>
+                          <input required placeholder="Ví dụ: 30A-12345" value={vehicleForm.licensePlate}
+                            onChange={e => handleVehicleFormChange('licensePlate', e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-semibold uppercase tracking-wider font-mono" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Hãng xe *</label>
+                          <input required placeholder="Ví dụ: Toyota, Honda, Hyundai..." value={vehicleForm.brand}
+                            onChange={e => handleVehicleFormChange('brand', e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Dòng xe</label>
+                          <input placeholder="Ví dụ: Camry, Tucson, SH..." value={vehicleForm.model}
+                            onChange={e => handleVehicleFormChange('model', e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Màu xe *</label>
+                          <input required placeholder="Ví dụ: Trắng, Đen, Xanh..." value={vehicleForm.color}
+                            onChange={e => handleVehicleFormChange('color', e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Loại xe *</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {VEHICLE_TYPES.map(t => {
+                              const isSelected = vehicleForm.vehicleType === t.value;
+                              return (
+                                <button type="button" key={t.value}
+                                  onClick={() => handleVehicleFormChange('vehicleType', t.value)}
+                                  className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center text-center gap-1.5 transition-all ${
+                                    isSelected
+                                      ? 'border-emerald-500 bg-emerald-50/20 text-emerald-800 font-bold'
+                                      : 'border-slate-100 bg-slate-50/50 text-slate-500 hover:border-slate-200'
+                                  }`}>
+                                  <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400'}`}>
+                                    {getVehicleIcon(t.value)}
+                                  </div>
+                                  <span className="text-[11px]">{t.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Năm SX</label>
+                          <input type="number" placeholder="2020" value={vehicleForm.year}
+                            onChange={e => handleVehicleFormChange('year', e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button type="submit" disabled={addingVehicle}
+                          className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                          {addingVehicle ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
+                          {addingVehicle ? 'Đang thêm...' : 'Lưu xe'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                ) : allVehicles.map(v => {
                   const vid = v._id || v.id;
                   const vname = v.name || `${v.brand || ''} ${v.model || ''}`.trim() || v.licensePlate;
                   return (
@@ -239,7 +372,7 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                       <small>{v.vehicleType || v.type}</small>
                     </button>
                   );
-                }) : <div className="aw-empty-state"><strong>Chưa có xe.</strong><p>Thêm xe trong hồ sơ cá nhân.</p></div>}
+                })}
               </div>
             </article>
 
