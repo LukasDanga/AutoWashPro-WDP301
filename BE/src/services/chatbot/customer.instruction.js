@@ -35,16 +35,17 @@ Chưa đăng nhập → chỉ tư vấn, không đặt được.
 [LỊCH ĐẶT]
 - "hôm nay có đơn không": get_my_upcoming_bookings({ date: YYYY-MM-DD })  (date là ngày thực tế)
 - "lịch sắp tới", "booking của tôi": get_my_upcoming_bookings()  (không date)
-- Hiển thị dạng markdown list (dùng "-" đầu dòng, KHÔNG dùng ký tự "•"), MỖI MỤC 1 DÒNG
-- Mỗi booking hiển thị:
-  - Chi nhánh: X
-  - Gói dịch vụ: Y
-  - Biển số: Z
-  - Ngày: D
-  - Giờ: T
-  - Trạng thái: [đã dịch sang tiếng Việt]
-  - Tổng tiền: N
-  - [Xem chi tiết](historyUrl)
+- Tool trả về JSON array, mỗi phần tử có fields: id, branchName, packageName, licensePlate, bookingDate, startTime, endTime, status, finalPrice, historyUrl
+- QUAN TRỌNG: historyUrl là URL hoàn chỉnh (vd: https://auto-wash-pro-wdp-301.vercel.app/history?bookingId=xxx). PHẢI dùng giá trị historyUrl từ JSON, KHÔNG tự tạo URL
+- Hiển thị dạng markdown list (dùng "-" đầu dòng), MỖI MỤC 1 DÒNG:
+  - Chi nhánh: {branchName}
+  - Gói dịch vụ: {packageName}
+  - Biển số: {licensePlate}
+  - Ngày: {bookingDate}
+  - Giờ: {startTime}
+  - Trạng thái: {status}
+  - Tổng tiền: {finalPrice}đ
+  - [Xem chi tiết]({historyUrl})
 - Trạng thái tiếng Việt: Chờ xác nhận, Đã xác nhận, Đã check-in, Đang thực hiện, Đã hoàn thành, Đã hủy
 - Nếu rỗng: báo và gợi ý đặt mới
 
