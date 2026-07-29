@@ -58,6 +58,7 @@ const VISUALS: Record<NotificationType, NotificationVisual> = {
   booking_created: { icon: Icons.calendarOutline, bg: 'primarySubtle', fg: 'primary' },
   booking_confirmed: { icon: Icons.checkmark, bg: 'successLight', fg: 'success' },
   booking_cancelled: { icon: Icons.closeCircleOutline || 'close-circle-outline', bg: 'errorLight', fg: 'error' },
+  booking_cancelled_system: { icon: Icons.closeCircleOutline || 'close-circle-outline', bg: 'errorLight', fg: 'error' },
   booking_completed: { icon: Icons.sparkle, bg: 'successLight', fg: 'success' },
   booking_reminder: { icon: Icons.timeOutline, bg: 'warningLight', fg: 'warning' },
   booking_at_risk: { icon: Icons.warningOutline || 'warning-outline', bg: 'errorLight', fg: 'error' },
@@ -70,6 +71,9 @@ const VISUALS: Record<NotificationType, NotificationVisual> = {
   voucher_expiring: { icon: Icons.voucherOutline, bg: 'warningLight', fg: 'warning' },
   points_earned: { icon: Icons.star, bg: 'warningLight', fg: 'warning' },
   promotion: { icon: Icons.sparkle, bg: 'infoLight', fg: 'info' },
+  profile_updated: { icon: Icons.personOutline || 'person-outline', bg: 'infoLight', fg: 'info' },
+  vehicle_added: { icon: Icons.carOutline || 'car-outline', bg: 'successLight', fg: 'success' },
+  wallet_transaction: { icon: Icons.walletOutline || 'wallet-outline', bg: 'successLight', fg: 'success' },
   system: { icon: Icons.informationCircleOutline || 'information-circle-outline', bg: 'surfaceDark', fg: 'textSecondary' },
 };
 

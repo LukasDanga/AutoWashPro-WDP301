@@ -174,21 +174,21 @@ export default function ProfileScreen() {
     const lifetime = user?.lifetimePoints || 0;
     const tier = user?.tier || 'bronze';
     
-    let threshold = 500;
+    let threshold = 100000;
     let nextTierLabel = 'Bạc';
     let isMax = false;
     
     if (tier === 'diamond') {
       isMax = true;
-      threshold = 10000;
+      threshold = 1000000;
     } else if (tier === 'gold') {
-      threshold = 5000;
+      threshold = 1000000;
       nextTierLabel = 'Kim cương';
     } else if (tier === 'silver') {
-      threshold = 2000;
+      threshold = 500000;
       nextTierLabel = 'Vàng';
     } else {
-      threshold = 500;
+      threshold = 100000;
       nextTierLabel = 'Bạc';
     }
     
@@ -282,7 +282,7 @@ onPress={() => router.push('/profile/edit' as any)}
             <AppText variant="label" style={styles.progressText}>Bạn đang ở hạng cao nhất</AppText>
           ) : (
             <AppText variant="label" style={styles.progressText}>
-              Lên hạng {nextTierLabel}: {lifetime} / {threshold} điểm
+              Lên hạng {nextTierLabel}: {lifetime.toLocaleString('vi-VN')} / {threshold.toLocaleString('vi-VN')} điểm
             </AppText>
           )}
           <View style={styles.progressBarBg}>
@@ -333,6 +333,13 @@ onPress={() => router.push('/profile/edit' as any)}
           title="Chỉnh sửa thông tin"
           subtitle="Cập nhật họ tên, số điện thoại"
           onPress={() => router.push('/profile/edit' as any)}
+        />
+        <View style={styles.menuDivider} />
+        <MenuItem
+          icon={Icons.wallet}
+          title="Ví AutoWash"
+          subtitle="Quản lý số dư và nạp tiền"
+          onPress={() => router.push('/wallet' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem

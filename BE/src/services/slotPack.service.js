@@ -342,8 +342,36 @@ exports.useSlot = async (packId, staffId, data = {}) => {
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────
 
-exports.cancelSlotPack = async (packId, userId, userRole) => {
+exports.requestCancelOtp = async (packId, userId) => {
   const pack = await SlotPack.findById(packId);
+  if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
+  if (String(pack.userId) !== String(userId)) {
+    throw Object.assign(new Error('Không có quyền hủy gói lượt này'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (pack.status !== 'active') {
+    throw Object.assign(new Error(`Không thể yêu cầu hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const bcrypt = require('bcryptjs');
+  
+  pack.cancelOtpToken = bcrypt.hashSync(otp, 12);
+  pack.cancelOtpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
+  await pack.save();
+
+  const user = await User.findById(userId);
+  if (user && user.email) {
+    const emailService = require('./email.service');
+    emailService.sendCancellationOtpEmail(user.email, otp).catch(e => console.error('Lỗi gửi OTP hủy gói:', e));
+  }
+  return true;
+};
+
+exports.cancelSlotPack = async (packId, userId, userRole, otp) => {
+  const bcrypt = require('bcryptjs');
+  const pack = await SlotPack.findById(packId);
+  
   if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
   if (userRole === 'customer' && String(pack.userId) !== String(userId)) {
     throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -351,8 +379,18 @@ exports.cancelSlotPack = async (packId, userId, userRole) => {
   if (pack.status !== 'active') {
     throw Object.assign(new Error(`Không thể hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
   }
-  if (pack.usedSlots > 0 && userRole === 'customer') {
-    throw Object.assign(new Error('Không thể hủy gói lượt đã sử dụng một phần. Vui lòng liên hệ hỗ trợ.'), { statusCode: 400, code: 'PARTIALLY_USED' });
+
+  if (userRole === 'customer') {
+    if (!otp) {
+      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy gói'), { statusCode: 400 });
+    }
+    if (!pack.cancelOtpToken || !pack.cancelOtpExpires || Date.now() > pack.cancelOtpExpires) {
+      throw Object.assign(new Error('Mã OTP không hợp lệ hoặc đã hết hạn'), { statusCode: 400 });
+    }
+    const isMatch = bcrypt.compareSync(otp, pack.cancelOtpToken);
+    if (!isMatch) {
+      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
+    }
   }
 
   // Calculate refund
@@ -361,34 +399,55 @@ exports.cancelSlotPack = async (packId, userId, userRole) => {
   
   const now = new Date();
   const createdDate = new Date(pack.createdAt);
-  const hoursSinceBought = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+  const daysSinceBought = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
 
-  if (pack.paymentStatus === 'paid' && pack.usedSlots === 0 && hoursSinceBought <= 48) {
+  // Business Rule 1: <= 7 days and usedSlots == 0 -> Refund
+  if (pack.paymentStatus === 'paid' && pack.usedSlots === 0 && daysSinceBought <= 7) {
     const Payment = mongoose.model('Payment');
     const payment = await Payment.findOne({ slotPackId: pack._id, status: 'paid' });
     if (payment) {
        refundAmount = payment.amount;
-       refundStatus = 'pending';
+       refundStatus = 'completed';
        payment.status = 'refunded';
        payment.refundedAt = new Date();
        await payment.save();
+       
+       // Hoàn tiền trực tiếp vào ví người dùng
+       const WalletTransaction = mongoose.model('WalletTransaction');
+       await User.findByIdAndUpdate(pack.userId, { $inc: { walletBalance: refundAmount } });
+       await WalletTransaction.create({
+         userId: pack.userId,
+         amount: refundAmount,
+         type: 'credit',
+         reason: `Hoàn tiền hủy gói lượt ${pack.packCode}`,
+       });
     }
   }
+  // Business Rule 2: usedSlots > 0 -> Cancelled, but NO Refund (refundAmount = 0).
 
   pack.status = 'cancelled';
   pack.refundStatus = refundStatus;
   pack.refundAmount = refundAmount;
+  pack.cancelOtpToken = undefined;
+  pack.cancelOtpExpires = undefined;
   await pack.save();
 
-  // Send email
+  // Send email and notification
   const user = await User.findById(pack.userId);
   if (user && user.email) {
     const emailService = require('./email.service');
-    emailService.sendCancellationSuccessEmail(user.email, { type: 'slot_pack', code: pack.packCode }, refundAmount).catch(e => console.error('Lỗi gửi email hủy gói:', e));
+    if (typeof emailService.sendCancellationSuccessEmail === 'function') {
+      emailService.sendCancellationSuccessEmail(user.email, { type: 'slot_pack', code: pack.packCode }, refundAmount).catch(e => console.error('Lỗi gửi email hủy gói:', e));
+    }
   }
+  
+  const notificationService = require('./notification.service');
+  const resultMsg = refundAmount > 0 ? `Hủy gói lượt thành công. Số tiền ${refundAmount.toLocaleString('vi-VN')}đ đã được hoàn vào Ví AutoWash của bạn.` : `Gói lượt ${pack.packCode} đã được hủy. Không được hoàn tiền do gói đã được sử dụng.`;
+  notificationService.send(pack.userId, 'Thông báo hủy gói lượt', resultMsg, 'slot_pack_cancelled').catch(() => {});
 
   // Rollback voucher nếu có và chưa dùng
   if (pack.voucherCode && pack.usedSlots === 0) {
+    const voucherService = require('./voucher.service');
     await voucherService.rollbackVoucher(pack.voucherCode, userId, pack._id).catch(() => {});
   }
   return pack;

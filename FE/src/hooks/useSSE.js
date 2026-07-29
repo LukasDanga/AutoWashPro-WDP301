@@ -1,66 +1,74 @@
 import { useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const SYNC_EVENTS = ['slots_updated', 'vouchers_updated', 'my_bookings_updated', 'feedback_new', 'booking_new', 'my_vehicles_updated'];
 
-class SSEManager {
+class SocketManager {
   constructor() {
-    this.es = null;
+    this.socket = null;
     this.token = null;
     this.listeners = new Map(); // eventName -> Set(callback)
-    this.retries = 0;
-    this.retryTimeout = null;
     this.base = API_BASE.replace(/\/api$/, '');
   }
 
   connect(token) {
-    if (this.es && this.token === token) return;
+    if (this.socket && this.token === token) return;
     
     this.disconnect();
     this.token = token;
     
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '?token=null';
-    this.es = new EventSource(`${this.base}/api/sse${tokenParam}`);
+    this.socket = io(this.base, {
+      auth: { token },
+      transports: ['websocket'],
+      autoConnect: true
+    });
 
-    this.es.onerror = () => {
-      this.es.close();
-      this.es = null;
-      this.retries++;
-      if (this.retries < 5) {
-        this.retryTimeout = setTimeout(() => this.connect(this.token), 5000 * this.retries);
-      }
-    };
+    this.socket.on('connect', () => {
+      console.log('[Socket] Connected:', this.socket.id);
+      
+      // Reconnect recovery: trigger sync events so mounted components refresh their data
+      // We skip events like 'notification', 'wallet_topup_success', 'spin_added' which show toasts.
+      SYNC_EVENTS.forEach(eventName => {
+        const callbacks = this.listeners.get(eventName);
+        if (callbacks) {
+          callbacks.forEach(cb => cb({ isSync: true }));
+        }
+      });
+    });
 
-    // Re-attach all existing event listeners to the new EventSource
+    this.socket.on('disconnect', () => {
+      console.log('[Socket] Disconnected');
+    });
+
+    this.socket.on('connect_error', (err) => {
+      console.error('[Socket] Connect Error:', err.message);
+    });
+
+    // Re-attach all existing event listeners to the new socket
     for (const [eventName, callbacks] of this.listeners.entries()) {
-      this.es.addEventListener(eventName, (e) => {
-        this.retries = 0;
-        let data = null;
-        try { data = e.data ? JSON.parse(e.data) : null; } catch { data = e.data; }
+      this.socket.on(eventName, (data) => {
         callbacks.forEach(cb => cb(data));
       });
     }
   }
 
   disconnect() {
-    if (this.es) {
-      this.es.close();
-      this.es = null;
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
-    clearTimeout(this.retryTimeout);
   }
 
   subscribe(token, eventName, callback) {
-    if (!this.es || this.token !== token) {
+    if (!this.socket || this.token !== token) {
       this.connect(token);
     }
 
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, new Set());
-      if (this.es) {
-        this.es.addEventListener(eventName, (e) => {
-          this.retries = 0;
-          let data = null;
-          try { data = e.data ? JSON.parse(e.data) : null; } catch { data = e.data; }
+      if (this.socket) {
+        this.socket.on(eventName, (data) => {
           this.listeners.get(eventName)?.forEach(cb => cb(data));
         });
       }
@@ -74,11 +82,16 @@ class SSEManager {
         callbacks.delete(callback);
         if (callbacks.size === 0) {
           this.listeners.delete(eventName);
+          if (this.socket) {
+            this.socket.off(eventName);
+          }
         }
       }
       
       let total = 0;
-      for (const set of this.listeners.values()) total += set.size;
+      for (const set of this.listeners.values()) {
+        total += set.size;
+      }
       if (total === 0) {
         this.disconnect();
       }
@@ -86,7 +99,7 @@ class SSEManager {
   }
 }
 
-const sseManager = new SSEManager();
+const socketManager = new SocketManager();
 
 export default function useSSE(token, eventName, onEvent) {
   const savedCallback = useRef(onEvent);
@@ -94,8 +107,13 @@ export default function useSSE(token, eventName, onEvent) {
 
   useEffect(() => {
     if (!eventName) return;
-    return sseManager.subscribe(token, eventName, (data) => {
+    
+    const unsubscribe = socketManager.subscribe(token, eventName, (data) => {
       savedCallback.current?.(data);
     });
+
+    return () => {
+      unsubscribe();
+    };
   }, [token, eventName]);
 }

@@ -1,5 +1,6 @@
 const authService = require('../services/auth.service');
 const { catchAsync, success } = require('../utils/helpers');
+const notificationService = require('../services/notification.service');
 
 exports.register = catchAsync(async (req, res) => {
   const result = await authService.register(req.body);
@@ -40,11 +41,23 @@ exports.getCustomerProfile = catchAsync(async (req, res) => {
 
 exports.updateCustomerProfile = catchAsync(async (req, res) => {
   const user = await authService.updateCustomerProfile(req.userId, req.body);
+  notificationService.send(
+    req.userId,
+    'Cập nhật thông tin',
+    'Thông tin cá nhân của bạn đã được cập nhật thành công.',
+    'profile_updated'
+  ).catch(err => console.error('Error sending profile notification:', err));
   success(res, user, 'Customer profile updated');
 });
 
 exports.updateProfile = catchAsync(async (req, res) => {
   const user = await authService.updateProfile(req.userId, req.body);
+  notificationService.send(
+    req.userId,
+    'Cập nhật thông tin',
+    'Thông tin cá nhân của bạn đã được cập nhật thành công.',
+    'profile_updated'
+  ).catch(err => console.error('Error sending profile notification:', err));
   success(res, user, 'Profile updated');
 });
 

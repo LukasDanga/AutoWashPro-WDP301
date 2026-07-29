@@ -28,9 +28,12 @@ interface AuthContextType extends AuthState {
   logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
   refreshTokens: () => Promise<boolean>;
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+import { sseService } from '../services/sse';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
@@ -39,6 +42,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isLoading: false,
     isInitialized: false,
   });
+
+  const fetchUser = useCallback(async () => {
+    try {
+      const user = await authApi.getProfile();
+      setState((prev) => ({ ...prev, user }));
+    } catch (error) {
+      console.warn('Failed to fetch user:', error);
+    }
+  }, []);
+
+  // Listen to SSE events for real-time profile updates
+  useEffect(() => {
+    if (state.isAuthenticated && state.user) {
+      const unsubTopup = sseService.subscribe('wallet_topup_success', fetchUser);
+      const unsubSpin = sseService.subscribe('spin_added', fetchUser);
+      const unsubSlot = sseService.subscribe('slot_pack_paid', fetchUser);
+
+      return () => {
+        unsubTopup();
+        unsubSpin();
+        unsubSlot();
+      };
+    }
+  }, [state.isAuthenticated, state.user, fetchUser]);
 
   // Initialize auth state from storage
   useEffect(() => {
@@ -217,7 +244,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     updateProfile,
     refreshTokens,
-  }), [state, login, loginWithGoogle, register, logout, updateProfile, refreshTokens]);
+    fetchUser,
+  }), [state, login, loginWithGoogle, register, logout, updateProfile, refreshTokens, fetchUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

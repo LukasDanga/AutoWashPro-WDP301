@@ -897,6 +897,82 @@ exports.confirmBookings = async (ids, userRole, userId) => {
     skippedCount: skipped.length,
   };
 };
+// ─── Cancel Preview (tính trước số tiền hoàn/phạt) ────────────────────────
+exports.getCancelPreview = async (id, userId) => {
+  const booking = await Booking.findById(id);
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404 });
+  if (String(booking.userId) !== String(userId)) {
+    throw Object.assign(new Error('Không có quyền'), { statusCode: 403 });
+  }
+
+  const now = new Date();
+  const bookingDateTime = new Date(booking.bookingDate);
+  const [h, m] = booking.startTime.split(':').map(Number);
+  bookingDateTime.setHours(h, m, 0, 0);
+  const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
+  const isLateCancel = minutesBefore < 20;
+
+  let totalPaid = 0;
+  let refundAmount = 0;
+  let penaltyAmount = 0;
+  let penaltyPercent = 0;
+  let policy = '';
+
+  if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
+    const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' });
+    if (paidPayment) {
+      totalPaid = paidPayment.amount;
+      const deposit = booking.depositAmount || 0;
+
+      if (isLateCancel) {
+        if (booking.paymentStatus === 'paid') {
+          // Thanh toán full → mất 30% tổng tiền
+          penaltyPercent = 30;
+          penaltyAmount = Math.round(totalPaid * 0.3);
+          refundAmount = totalPaid - penaltyAmount;
+          policy = `Hủy trong vòng 20 phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
+        } else {
+          // Chỉ đặt cọc → mất hết tiền cọc
+          penaltyAmount = totalPaid;
+          refundAmount = 0;
+          policy = `Hủy trong vòng 20 phút trước giờ hẹn: mất toàn bộ tiền cọc ${totalPaid.toLocaleString('vi-VN')}₫.`;
+        }
+      } else {
+        // Hủy sớm → hoàn 100%
+        refundAmount = totalPaid;
+        penaltyAmount = 0;
+        policy = `Hoàn lại 100% (${totalPaid.toLocaleString('vi-VN')}₫) vào ví.`;
+      }
+    }
+  }
+
+  // Preview cho gói lượt
+  let slotPackRefundInfo = null;
+  if (booking.bookingType === 'slot_pack_usage') {
+    const hoursBefore = minutesBefore / 60;
+    if (hoursBefore >= 24) {
+      slotPackRefundInfo = 'Hủy lịch hẹn trước 24h sẽ được hoàn lại 1 lượt vào gói.';
+    } else {
+      slotPackRefundInfo = 'Hủy lịch hẹn sát giờ (dưới 24h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.';
+    }
+    policy = slotPackRefundInfo;
+  }
+
+  return {
+    bookingId: id,
+    bookingDate: booking.bookingDate,
+    startTime: booking.startTime,
+    paymentStatus: booking.paymentStatus,
+    totalPaid,
+    refundAmount,
+    penaltyAmount,
+    penaltyPercent,
+    isLateCancel,
+    minutesBefore: Math.max(0, Math.round(minutesBefore)),
+    policy,
+    slotPackRefundInfo,
+  };
+};
 
 exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
   if (!cancellationReason || !cancellationReason.trim()) {
@@ -918,13 +994,14 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     if (booking.status === 'cancelled') {
       throw Object.assign(new Error('Lịch hẹn đã được hủy trước đó'), { statusCode: 400, code: 'ALREADY_CANCELLED' });
     }
+    if (booking.status === 'in_progress') {
+      throw Object.assign(new Error('Không thể hủy lịch hẹn đang thực hiện'), { statusCode: 400, code: 'IN_PROGRESS' });
+    }
+
     const now = new Date();
     const bookingDateTime = new Date(booking.bookingDate);
     const [h, m] = booking.startTime.split(':').map(Number);
     bookingDateTime.setHours(h, m, 0, 0);
-    if (booking.status !== 'in_progress' && bookingDateTime - now < 30 * 60 * 1000) {
-      throw Object.assign(new Error('Không thể hủy trong vòng 30 phút trước giờ hẹn'), { statusCode: 400, code: 'CANCEL_WINDOW_PASSED' });
-    }
 
     const cancelledBy = userRole === 'customer' ? 'customer' : userRole === 'admin' ? 'admin' : 'manager';
 
@@ -946,41 +1023,78 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       await voucherService.rollbackVoucher(booking.voucherCode, booking.userId, id, session).catch(() => {});
     }
 
-    // Hoàn lượt nếu khách tự hủy đơn gói lượt (hệ thống hủy thì không hoàn)
-    if (booking.bookingType === 'slot_pack_usage' && cancelledBy === 'customer' && booking.slotPackId) {
-      await SlotPack.findByIdAndUpdate(
-        booking.slotPackId,
-        { $inc: { remainingSlots: 1, usedSlots: -1 } },
-        { session }
-      ).catch(() => {});
+    const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+    // Xử lý gói lượt (Slot Pack)
+    if (booking.bookingType === 'slot_pack_usage' && booking.slotPackId) {
+      const hoursBefore = minutesBefore / 60;
+      let shouldRefundSlot = false;
+      
+      if (cancelledBy === 'customer') {
+        // Hủy đúng hạn >= 24h -> hoàn 1 lượt. Sát giờ -> mất lượt.
+        if (hoursBefore >= 24) {
+          shouldRefundSlot = true;
+        }
+      } else {
+        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng 50 điểm đền bù
+        shouldRefundSlot = true;
+        
+        // Tặng 50 điểm
+        const User = mongoose.model('User');
+        const PointHistory = mongoose.model('PointHistory');
+        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: 50, lifetimePoints: 50 } }, { session }).catch(() => {});
+        await PointHistory.create([{
+          userId: booking.userId,
+          points: 50,
+          type: 'earned',
+          description: 'Hệ thống hủy lịch hẹn - Tặng điểm đền bù',
+          bookingId: booking._id
+        }], { session }).catch(() => {});
+        
+        // Gửi thông báo
+        notificationService.send(
+          booking.userId,
+          'Hệ thống hủy lịch hẹn',
+          'Lịch hẹn bằng gói lượt của bạn đã bị cửa hàng hủy. Bạn được hoàn lại 1 lượt vào gói và nhận 50 điểm đền bù.',
+          'booking_cancelled_system',
+          { bookingId: booking._id }
+        ).catch(() => {});
+      }
+      
+      if (shouldRefundSlot) {
+        await SlotPack.findByIdAndUpdate(
+          booking.slotPackId,
+          { $inc: { remainingSlots: 1, usedSlots: -1 } },
+          { session }
+        ).catch(() => {});
+      }
     }
 
-    // Chuyển sang logic hoàn tiền theo thời gian (>= 12h) thay vì auto-hoàn vào ví
+    // ── Chính sách hoàn tiền ──
+    // > 20 phút trước giờ hẹn → hoàn 100%
+    // ≤ 20 phút (thanh toán full) → mất 30%, hoàn 70% vào ví
+    // ≤ 20 phút (chỉ cọc) → mất hết tiền cọc
     let refundAmount = 0;
     let refundStatus = 'none';
+    const isLateCancel = minutesBefore < 20;
 
     if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
       const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
       
       if (paidPayment) {
         const totalPaid = paidPayment.amount;
-        const deposit = booking.depositAmount || 0;
-        const hoursBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-        if (hoursBefore >= 12) {
-          // Hủy sớm: hoàn 100%
-          refundAmount = totalPaid;
-        } else {
-          // Hủy muộn: Phạt 30% cọc. Nếu thanh toán đủ, hoàn (tổng - cọc).
+        if (isLateCancel) {
           if (booking.paymentStatus === 'paid') {
-            refundAmount = Math.max(0, totalPaid - deposit);
+            // Thanh toán full → mất 30%
+            refundAmount = Math.round(totalPaid * 0.7);
           } else {
-            refundAmount = 0; // chỉ thanh toán cọc thì mất cọc
+            // Chỉ cọc → mất hết
+            refundAmount = 0;
           }
-        }
-
-        if (refundAmount > 0) {
-          refundStatus = 'pending';
+        } else {
+          // Hủy sớm → hoàn 100%
+          refundAmount = totalPaid;
         }
 
         paidPayment.status = 'refunded';
@@ -989,10 +1103,28 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       }
     }
 
-    const updatedBooking = await Booking.findByIdAndUpdate(
+    // Hoàn tiền vào ví ngay lập tức
+    if (refundAmount > 0) {
+      refundStatus = 'completed';
+      const user = await mongoose.model('User').findById(booking.userId).session(session);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + refundAmount;
+        await user.save({ session });
+
+        await mongoose.model('WalletTransaction').create([{
+          userId: user._id,
+          amount: refundAmount,
+          type: 'credit',
+          reason: `Hoàn tiền hủy lịch hẹn #${booking.bookingCode || id}`,
+          bookingId: booking._id,
+        }], { session });
+      }
+    }
+
+    await Booking.findByIdAndUpdate(
       id,
       { 
-        paymentStatus: 'refunded',
+        paymentStatus: refundAmount > 0 ? 'refunded' : booking.paymentStatus,
         refundStatus,
         refundAmount
       },
@@ -1011,7 +1143,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     notificationService.send(
       booking.userId,
       'Lịch hẹn đã bị hủy',
-      `Lịch hẹn rửa xe vào lúc ${booking.startTime} ngày ${new Date(booking.bookingDate).toLocaleDateString('vi-VN')} đã bị hủy${cancellationReason ? `. Lý do: ${cancellationReason}` : ''}.`,
+      `Lịch hẹn rửa xe vào lúc ${booking.startTime} ngày ${new Date(booking.bookingDate).toLocaleDateString('vi-VN')} đã bị hủy${cancellationReason ? `. Lý do: ${cancellationReason}` : ''}.${refundAmount > 0 ? ` Hoàn ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.` : ''}`,
       'booking_cancelled',
       { bookingId: id }
     ).catch(() => {});
@@ -1836,6 +1968,15 @@ exports.submitFeedback = async (bookingId, userId, { rating, feedback }) => {
 
   // Notify manager (and admin) about the new feedback
   sseService.broadcastToManagers(booking.branchId, 'feedback_new', { bookingId: updatedBooking._id });
+
+  // Send thank you notification to user
+  notificationService.send(
+    userId,
+    'Cảm ơn bạn đã đánh giá',
+    `Đánh giá ${update.rating ? update.rating + ' sao' : ''} của bạn đã được ghi nhận. Cảm ơn bạn đã giúp AutoWash cải thiện dịch vụ!`,
+    'feedback_submitted',
+    { bookingId: updatedBooking._id }
+  ).catch(() => {});
 
   return updatedBooking;
 };

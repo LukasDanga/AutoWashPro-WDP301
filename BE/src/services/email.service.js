@@ -121,7 +121,7 @@ exports.sendCancellationSuccessEmail = async (email, info, refundAmount) => {
           <p><strong>Mã đơn:</strong> <span style="font-weight: bold;">${info.code}</span></p>
           ${refundAmount > 0 
             ? `<p style="color: #047857; font-weight: bold;">Số tiền được hoàn lại: ${Number(refundAmount).toLocaleString('vi-VN')}₫</p>
-               <p style="font-size: 13px; margin-top: 5px;">Số tiền này sẽ được hoàn vào tài khoản của bạn. Trạng thái hiện tại: <strong>Chờ hoàn tiền</strong>.</p>` 
+               <p style="font-size: 13px; margin-top: 5px;">Số tiền này đã được cộng trực tiếp vào <strong>Ví điện tử</strong> trên hệ thống của bạn.</p>` 
             : `<p>Đơn của bạn không phát sinh hoàn tiền theo chính sách của hệ thống.</p>`
           }
         </div>

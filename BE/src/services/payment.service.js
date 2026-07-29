@@ -460,6 +460,10 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         }
 
         await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+        
+        await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, payment.slotPackId, session);
+        await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+        sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
       } else {
         payment.status = 'failed';
         await payment.save({ session });
@@ -470,6 +474,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         const sPack = await mongoose.model('SlotPack').findById(payment.slotPackId);
         sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
         const user = await mongoose.model('User').findById(payment.userId);
+        notificationService.send(payment.userId, 'Thanh toán gói lượt thành công', `Gói lượt ${sPack.packCode} đã được kích hoạt.`, 'slot_pack_paid', { slotPackId: payment.slotPackId }).catch(() => {});
         if (user && user.email) {
           emailService.sendSlotPackConfirmationEmail(user.email, sPack).catch(e => console.error('Lỗi gửi email gói lượt:', e));
         }
@@ -494,9 +499,10 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
               userId: payment.userId,
               amount: payment.amount,
               type: 'credit',
-              reason: 'Nạp tiền vào ví'
+              reason: 'Nạp tiền vào ví',
             }], { session });
             sseService.sendToUser(payment.userId, 'wallet_topup_success', { amount: payment.amount });
+            notificationService.send(payment.userId, 'Nạp tiền thành công', `Đã nạp ${payment.amount.toLocaleString('vi-VN')}đ vào ví AutoWash.`, 'wallet_topup_success', {}).catch(() => {});
           }
         }
       } else {

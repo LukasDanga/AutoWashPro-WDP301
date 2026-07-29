@@ -1,4 +1,5 @@
 const { User, PointHistory } = require('../models');
+const notificationService = require('./notification.service');
 
 // Tính điểm dựa trên số tiền (5%) kèm hệ số nhân theo hạng
 const calculatePoints = (amount, tier = 'bronze') => {
@@ -83,6 +84,16 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
   const tierChanged = user.tier !== newTier;
   if (tierChanged) {
     user.tier = newTier;
+    
+    // Only notify if upgrading (not downgrading, though determineTier only upgrades)
+    const tierName = TIER_CONFIG[newTier]?.name || newTier;
+    notificationService.send(
+      userId, 
+      'Chúc mừng thăng hạng', 
+      `Bạn đã được thăng lên hạng ${tierName}. Khám phá ngay các ưu đãi mới!`, 
+      'tier_upgraded', 
+      { newTier }
+    ).catch(() => {});
   }
 
   await user.save({ session });

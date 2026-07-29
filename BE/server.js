@@ -5,6 +5,7 @@ const config = require('./src/config');
 const { connectDB } = require('./src/config/db');
 const { startReminderJob } = require('./src/jobs/reminder.job');
 const { startBirthdayJob } = require('./src/jobs/birthday.job');
+const { startSlotPackExpireJob } = require('./src/jobs/slotPackExpire.job');
 const { startAutoCancelJob } = require('./src/jobs/autoCancel.job');
 
 process.on('SIGTERM', () => {
@@ -21,8 +22,13 @@ const startServer = async () => {
     // Start background jobs
     startReminderJob();
     startBirthdayJob();
+    startSlotPackExpireJob();
     startAutoCancelJob();
   });
+
+  // Initialize Socket.IO
+  const socket = require('./src/socket');
+  socket.init(server);
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
@@ -48,6 +54,7 @@ const startServer = async () => {
             console.log(`Server running on port ${config.PORT} [${config.NODE_ENV}]`);
             startReminderJob();
             startBirthdayJob();
+            startSlotPackExpireJob();
             startAutoCancelJob();
           }).on('error', (e2) => {
             console.error(`Không thể khởi động server trên port ${config.PORT}:`, e2.message);

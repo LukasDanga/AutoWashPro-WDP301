@@ -1,27 +1,17 @@
 /**
- * AutoWashPro SSE Service
+ * AutoWashPro Socket Service (formerly SSE Service)
  *
- * Real-time notifications via Server-Sent Events.
- *
- * React Native doesn't expose `EventSource`, but since Expo SDK 50+ the
- * underlying `fetch` implementation supports streaming via a `ReadableStream`
- * body. We open a streaming GET, parse the SSE frames on the fly, and emit
- * typed events to subscribers.
- *
- * Auto-reconnects with exponential backoff when the stream drops.
+ * Real-time notifications via Socket.IO.
+ * Replaces the old fetch-based SSE for true WebSocket stability.
  */
 
+import { io, Socket } from 'socket.io-client';
 import * as SecureStore from 'expo-secure-store';
+import { SOCKET_EVENTS, SocketEventType } from '../utils/socketEvents';
 
 const ACCESS_TOKEN_KEY = 'aw_accessToken';
 
-export type SSEEventType =
-  | 'notification'
-  | 'booking_update'
-  | 'payment_update'
-  | 'system'
-  | 'booking_new'
-  | 'ping';
+export type SSEEventType = SocketEventType | 'booking_update' | 'payment_update' | 'sync_request';
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -31,61 +21,87 @@ export interface SSEEvent {
 
 type EventCallback = (event: SSEEvent) => void;
 
-const INITIAL_BACKOFF_MS = 2_000;
-const MAX_BACKOFF_MS = 30_000;
+const SYNC_EVENTS: SSEEventType[] = [
+  SOCKET_EVENTS.SLOTS_UPDATED,
+  SOCKET_EVENTS.VOUCHERS_UPDATED,
+  SOCKET_EVENTS.MY_BOOKINGS_UPDATED,
+  SOCKET_EVENTS.FEEDBACK_NEW,
+  SOCKET_EVENTS.BOOKING_NEW,
+  SOCKET_EVENTS.MY_VEHICLES_UPDATED
+];
 
 class SSEService {
   private listeners: Map<SSEEventType | 'all', Set<EventCallback>> = new Map();
-  private isConnected = false;
+  private socket: Socket | null = null;
   private currentUserId: string | null = null;
-  private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private abortController: AbortController | null = null;
-  private intentionalClose = false;
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
-  /**
-   * Connect to the server's SSE stream for a given user.
-   */
   async connect(userId: string): Promise<void> {
-    if (this.isConnected && this.currentUserId === userId) {
+    if (this.socket && this.socket.connected && this.currentUserId === userId) {
       return;
     }
     this.disconnect();
     this.currentUserId = userId;
-    this.intentionalClose = false;
-    await this.openStream();
+
+    const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    if (!token) {
+      console.warn('[Socket] No auth token, skipping stream');
+      return;
+    }
+
+    const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+    
+    this.socket = io(baseUrl, {
+      auth: { token },
+      transports: ['websocket'],
+      autoConnect: true,
+    });
+
+    this.socket.on('connect', () => {
+      console.log('[Socket] Connected:', this.socket?.id);
+      
+      // Reconnect recovery strategy: force mounted components to re-fetch critical data
+      SYNC_EVENTS.forEach(eventName => {
+        this.emit(eventName, {
+          type: eventName,
+          data: { isSync: true },
+          timestamp: new Date().toISOString()
+        });
+      });
+      
+      this.emit('sync_request', {
+        type: 'sync_request',
+        data: {},
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    this.socket.on('disconnect', () => {
+      console.log('[Socket] Disconnected');
+    });
+    
+    this.socket.on('connect_error', (err) => {
+      console.error('[Socket] Connect Error:', err.message);
+    });
+
+    // Listen to all events generically
+    this.socket.onAny((eventName: string, args: any) => {
+      const mappedType = this.mapEventType(eventName);
+      this.emit(mappedType, {
+        type: mappedType,
+        data: args,
+        timestamp: new Date().toISOString(),
+      });
+    });
   }
 
-  /**
-   * Disconnect and cancel any pending reconnect.
-   */
   disconnect(): void {
-    this.intentionalClose = true;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-    if (this.abortController) {
-      try {
-        this.abortController.abort();
-      } catch {
-        /* noop */
-      }
-      this.abortController = null;
-    }
-    this.isConnected = false;
     this.currentUserId = null;
-    this.reconnectAttempts = 0;
   }
 
-  /**
-   * Subscribe to events. Returns an unsubscribe function.
-   */
   subscribe(type: SSEEventType | 'all', callback: EventCallback): () => void {
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set());
@@ -96,173 +112,25 @@ class SSEService {
     };
   }
 
-  /**
-   * Check if connected.
-   */
   isConnectedFn(): boolean {
-    return this.isConnected;
-  }
-
-  // ---------- internals ----------
-
-  private async openStream(): Promise<void> {
-    const userId = this.currentUserId;
-    if (!userId) return;
-
-    const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
-    if (!token) {
-      console.warn('[SSE] No auth token, skipping stream');
-      return;
-    }
-
-    const baseUrl =
-      (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api').replace(
-        /\/api$/,
-        '',
-      );
-    const url = `${baseUrl}/api/sse`;
-
-    this.abortController = new AbortController();
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          // Pass token via header rather than `?token=` query string to avoid
-          // logging it in reverse-proxy access logs and browser history. The
-          // backend SSE controller reads `req.headers.authorization`.
-          Authorization: `Bearer ${token}`,
-        },
-        signal: this.abortController.signal,
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`SSE connect failed: HTTP ${response.status}`);
-      }
-
-      this.isConnected = true;
-      this.reconnectAttempts = 0;
-      console.log('[SSE] Connected');
-
-      // Watchdog — if no data arrives for 60s, assume dead and reconnect.
-      const resetWatchdog = () => {
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = setInterval(() => {
-          console.warn('[SSE] No data for 60s, reconnecting');
-          this.disconnect();
-          this.scheduleReconnect();
-        }, 60_000);
-      };
-      resetWatchdog();
-
-      const reader = (response.body as ReadableStream<Uint8Array>).getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-
-      while (!this.intentionalClose) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        resetWatchdog();
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE frames are separated by a blank line (\n\n).
-        let frameEnd: number;
-        while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
-          const rawFrame = buffer.slice(0, frameEnd);
-          buffer = buffer.slice(frameEnd + 2);
-          this.parseAndDispatch(rawFrame);
-        }
-      }
-
-      this.isConnected = false;
-      if (!this.intentionalClose) {
-        this.scheduleReconnect();
-      }
-    } catch (err: any) {
-      if (
-        err?.name === 'AbortError' ||
-        err?.message?.includes('canceled') ||
-        err?.message?.includes('fetch failed')
-      ) {
-        this.isConnected = false;
-        return;
-      }
-      console.warn('[SSE] Stream error:', err?.message || err);
-      this.isConnected = false;
-      this.scheduleReconnect();
-    }
-  }
-
-  private parseAndDispatch(rawFrame: string): void {
-    let eventName: string | null = null;
-    const dataLines: string[] = [];
-
-    for (const line of rawFrame.split('\n')) {
-      if (!line || line.startsWith(':')) continue;
-      const colon = line.indexOf(':');
-      const field = colon === -1 ? line : line.slice(0, colon);
-      let value = colon === -1 ? '' : line.slice(colon + 1);
-      if (value.startsWith(' ')) value = value.slice(1);
-
-      if (field === 'event') eventName = value;
-      else if (field === 'data') dataLines.push(value);
-    }
-
-    if (!eventName) return;
-
-    const dataStr = dataLines.join('\n').trim() || '{}';
-    let data: any;
-    try {
-      data = JSON.parse(dataStr);
-    } catch {
-      data = dataStr;
-    }
-
-    const mappedType = this.mapEventType(eventName);
-    this.emit(mappedType, {
-      type: mappedType,
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    return this.socket ? this.socket.connected : false;
   }
 
   private mapEventType(name: string): SSEEventType {
     switch (name) {
-      case 'notification':
-        return 'notification';
-      case 'booking_new':
-        return 'booking_new';
-      case 'ping':
-        return 'ping';
-      default:
-        return 'system';
+      case SOCKET_EVENTS.NOTIFICATION: return SOCKET_EVENTS.NOTIFICATION;
+      case SOCKET_EVENTS.BOOKING_NEW: return SOCKET_EVENTS.BOOKING_NEW;
+      case SOCKET_EVENTS.WALLET_TOPUP_SUCCESS: return SOCKET_EVENTS.WALLET_TOPUP_SUCCESS;
+      case SOCKET_EVENTS.SPIN_ADDED: return SOCKET_EVENTS.SPIN_ADDED;
+      case SOCKET_EVENTS.SLOT_PACK_PAID: return SOCKET_EVENTS.SLOT_PACK_PAID;
+      case SOCKET_EVENTS.MY_BOOKINGS_UPDATED: return SOCKET_EVENTS.MY_BOOKINGS_UPDATED;
+      case SOCKET_EVENTS.SLOTS_UPDATED: return SOCKET_EVENTS.SLOTS_UPDATED;
+      case SOCKET_EVENTS.PING: return SOCKET_EVENTS.PING;
+      default: return SOCKET_EVENTS.SYSTEM;
     }
   }
 
-  private scheduleReconnect(): void {
-    if (this.intentionalClose || !this.currentUserId) return;
-    if (this.reconnectTimer) return;
-
-    this.reconnectAttempts += 1;
-    const delay = Math.min(
-      INITIAL_BACKOFF_MS * Math.pow(2, this.reconnectAttempts - 1),
-      MAX_BACKOFF_MS,
-    );
-    console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.openStream().catch(() => {
-        /* openStream already schedules next attempt on failure */
-      });
-    }, delay);
-  }
-
   private emit(type: SSEEventType | 'all', event: SSEEvent): void {
-    // Emit to exact-type listeners and 'all' listeners
     const keys: Array<SSEEventType | 'all'> = [type, 'all'];
     keys.forEach(key => {
       const set = this.listeners.get(key);
@@ -271,38 +139,24 @@ class SSEService {
         try {
           cb(event);
         } catch (err) {
-          console.error('[SSE] Listener error:', err);
+          console.error('[Socket] Listener error:', err);
         }
       });
     });
   }
 
-  // Legacy stubs — kept for backward compatibility with existing imports.
   emitNotification(data: any): void {
-    this.emit('notification', {
-      type: 'notification',
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    this.emit('notification', { type: 'notification', data, timestamp: new Date().toISOString() });
   }
 
   emitBookingUpdate(data: any): void {
-    this.emit('booking_update', {
-      type: 'booking_update',
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    this.emit('booking_update', { type: 'booking_update', data, timestamp: new Date().toISOString() });
   }
 
   emitPaymentUpdate(data: any): void {
-    this.emit('payment_update', {
-      type: 'payment_update',
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    this.emit('payment_update', { type: 'payment_update', data, timestamp: new Date().toISOString() });
   }
 }
 
-// Export singleton instance
 export const sseService = new SSEService();
 export default sseService;
