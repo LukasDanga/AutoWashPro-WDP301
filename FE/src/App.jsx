@@ -259,6 +259,8 @@ export default function App() {
 
   const customerNavProps = {
     user,
+    apiBase,
+    token,
     onLogout: handleLogout,
     onOpenAuth: () => navigate('/auth'),
     onGoToProfile: () => navigate('/profile'),
