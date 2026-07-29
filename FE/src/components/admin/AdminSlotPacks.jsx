@@ -56,19 +56,21 @@ const STATUS_TABS = [
 ];
 
 const BOOKING_STATUS_MAP = {
-  pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-600' },
-  confirmed:   { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-600' },
-  checked_in:  { label: 'Đã check-in',  cls: 'bg-indigo-50 text-indigo-600' },
-  in_progress: { label: 'Đang xử lý',  cls: 'bg-violet-50 text-violet-600' },
-  completed:   { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700' },
-  cancelled:   { label: 'Đã hủy',       cls: 'bg-red-50 text-red-500' },
+  pending:          { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-600' },
+  confirmed:        { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-600' },
+  checked_in:       { label: 'Đã check-in',  cls: 'bg-indigo-50 text-indigo-600' },
+  in_progress:      { label: 'Đang xử lý',   cls: 'bg-violet-50 text-violet-600' },
+  awaiting_payment: { label: 'Chờ thanh toán', cls: 'bg-orange-50 text-orange-600' },
+  completed:        { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700' },
+  cancelled:        { label: 'Đã hủy',       cls: 'bg-red-50 text-red-500' },
 };
 
 const HISTORY_STATUS_TABS = [
-  { key: '',            label: 'Tất cả' },
-  { key: 'in_progress', label: 'Đang xử lý' },
-  { key: 'completed',   label: 'Hoàn thành' },
-  { key: 'cancelled',   label: 'Đã hủy' },
+  { key: '',                 label: 'Tất cả' },
+  { key: 'in_progress',      label: 'Đang xử lý' },
+  { key: 'awaiting_payment', label: 'Chờ thanh toán' },
+  { key: 'completed',        label: 'Hoàn thành' },
+  { key: 'cancelled',        label: 'Đã hủy' },
 ];
 
 const PAGE_SIZE = 9;

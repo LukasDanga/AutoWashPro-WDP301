@@ -73,8 +73,14 @@ export default function VehicleFormScreen() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.licensePlate.trim()) {
+    const licensePlate = formData.licensePlate.trim();
+    if (!licensePlate) {
       newErrors.licensePlate = 'Vui lòng nhập biển số xe';
+    } else {
+      const plateRegex = /^[0-9]{2}[A-Z]{1,2}[0-9]?[-\s]?(\d{4}|\d{5}|\d{3}\.\d{2})$/i;
+      if (!plateRegex.test(licensePlate)) {
+        newErrors.licensePlate = 'Biển số xe chưa đúng định dạng (VD: 30A-12345, 51H-123.45)';
+      }
     }
     if (!formData.brand.trim()) {
       newErrors.brand = 'Vui lòng nhập hãng xe (VD: Honda, Mazda)';

@@ -55,6 +55,9 @@ export const lightColors = {
   statusConfirmed: '#10B981', // emerald-500
   statusCheckedIn: '#9333EA',
   statusInProgress: '#0891B2',
+  // awaiting_payment — xe đã rửa xong, chờ khách thanh toán phần còn lại.
+  // Tông cyan/indigo để dễ phân biệt với in_progress (cyan đậm hơn).
+  statusAwaitingPayment: '#6366F1',
   statusCompleted: '#059669', // emerald-600
   statusCancelled: '#DC2626',
 };
@@ -110,6 +113,7 @@ export const darkColors = {
   statusConfirmed: '#34D399', // emerald-400
   statusCheckedIn: '#A855F7',
   statusInProgress: '#22D3EE',
+  statusAwaitingPayment: '#818CF8',
   statusCompleted: '#10B981', // emerald-500
   statusCancelled: '#F87171',
 };

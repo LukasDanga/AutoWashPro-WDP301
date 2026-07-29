@@ -14,7 +14,7 @@ const bookingSchema = new mongoose.Schema(
     endTime: { type: String, required: true },
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled'],
       default: 'pending',
     },
     note: { type: String, trim: true, maxlength: 500 },
@@ -89,6 +89,10 @@ const bookingSchema = new mongoose.Schema(
     managerReplyAt: { type: Date },
     // For rebook tracking
     rebookedFromId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
+    // H-5: soft delete cho admin (xem booking.service.js deleteBooking)
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date },
+    deletedBy: { type: String, enum: ['admin', 'system', 'migration'] },
   },
   { timestamps: true }
 );

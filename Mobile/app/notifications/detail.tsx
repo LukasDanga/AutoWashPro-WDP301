@@ -35,6 +35,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   booking_created: Icons.calendarOutline,
   booking_confirmed: 'checkmark-circle-outline',
   booking_cancelled: 'close-circle-outline',
+  booking_cancelled_system: 'close-circle-outline',
   booking_completed: 'sparkles-outline',
   booking_reminder: Icons.timeOutline,
   booking_at_risk: 'warning-outline',
@@ -47,6 +48,9 @@ const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   voucher_expiring: 'pricetag-outline',
   points_earned: Icons.star,
   promotion: 'sparkles-outline',
+  profile_updated: 'person-outline',
+  vehicle_added: 'car-outline',
+  wallet_transaction: Icons.walletOutline,
   system: 'information-circle-outline',
 };
 
@@ -152,6 +156,7 @@ export default function NotificationDetailScreen() {
       booking_created: 'Đặt lịch mới',
       booking_confirmed: 'Xác nhận đặt lịch',
       booking_cancelled: 'Đã hủy đặt lịch',
+      booking_cancelled_system: 'Hệ thống hủy lịch',
       booking_completed: 'Hoàn thành dịch vụ',
       booking_reminder: 'Nhắc nhở đặt lịch',
       booking_at_risk: 'Nguy cơ hủy lịch',
@@ -164,6 +169,9 @@ export default function NotificationDetailScreen() {
       voucher_expiring: 'Voucher sắp hết hạn',
       points_earned: 'Tích điểm',
       promotion: 'Khuyến mãi',
+      profile_updated: 'Cập nhật tài khoản',
+      vehicle_added: 'Thêm phương tiện',
+      wallet_transaction: 'Giao dịch ví',
       system: 'Hệ thống',
     };
     return labels[type] || 'Thông báo';

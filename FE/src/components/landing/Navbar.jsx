@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Bell } from 'lucide-react';
 import { getStoredToken } from '@/lib/authStorage';
+import useSSE from '@/hooks/useSSE';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -50,6 +51,7 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
   const [notifications, setNotifications] = useState([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifFilter, setNotifFilter] = useState('all'); // 'all' | 'unread'
+  const [showSpinModal, setShowSpinModal] = useState(false);
 
   const token = getStoredToken();
 
@@ -91,6 +93,13 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, [fetchUnreadCount]);
+
+  useSSE(token, 'notification', useCallback((data) => {
+    fetchUnreadCount();
+    if (data?.type === 'booking_completed') {
+      setShowSpinModal(true);
+    }
+  }, [fetchUnreadCount]));
 
   // Load notifications when dropdown opens
   useEffect(() => {
@@ -458,6 +467,47 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
           )}
         </AnimatePresence>
       </motion.nav>
+
+      {/* Lucky Spin Completion Modal */}
+      {showSpinModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden text-center animate-in zoom-in-95 duration-300">
+            {/* Background effects */}
+            <div className="absolute top-0 inset-x-0 h-24 bg-gradient-to-b from-emerald-100/50 to-transparent pointer-events-none" />
+            <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-400/20 rounded-full blur-3xl" />
+            <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-400/20 rounded-full blur-3xl" />
+            
+            <div className="relative z-10 space-y-4">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20 flex items-center justify-center text-3xl">
+                🎉
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 leading-snug">Dịch vụ hoàn tất!</h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  Đơn đặt lịch của bạn đã hoàn thành. Hệ thống đã tặng bạn <span className="font-bold text-emerald-600">1 lượt quay may mắn</span>. Hãy thử vận may ngay!
+                </p>
+              </div>
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setShowSpinModal(false);
+                    navigate('/gifts');
+                  }}
+                  className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:scale-[1.02] transition-all"
+                >
+                  🎯 Tới Vòng Quay May Mắn
+                </button>
+                <button
+                  onClick={() => setShowSpinModal(false)}
+                  className="w-full rounded-xl bg-slate-100 text-slate-600 px-4 py-3 text-sm font-semibold hover:bg-slate-200 transition-colors"
+                >
+                  Đóng lại
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AnimatePresence>
   );
 }

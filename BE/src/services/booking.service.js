@@ -6,14 +6,15 @@ const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 const sseService = require('./sse.service');
 
-const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'];
+const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled'];
 
-// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → completed
+// Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → awaiting_payment/completed
 const VALID_TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['checked_in', 'cancelled'],
   checked_in: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  in_progress: ['awaiting_payment', 'completed', 'cancelled'],
+  awaiting_payment: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 };
@@ -22,16 +23,23 @@ const VALID_TRANSITIONS = {
 const DEPOSIT_RATE = 0.3;
 
 // Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút.
-// Grace mặc định chỉ 5 phút (xem autoCancel.job.js) nên offset cũng phải nhỏ hơn nó,
-// nếu không cảnh báo sẽ rơi vào trước cả giờ hẹn.
-const LATE_WARNING_OFFSET_MINUTES = 2;
+//
+// CHANGE: tăng từ 2 → 5 phút để khách có đủ thời gian nhận thông báo trên mobile
+// (push notification có thể bị delay) và kịp phản ứng. Grace hiện tại = 15 phút
+// (xem autoCancel.job.js), nên khách có:
+//   - 0-10 phút sau startTime: bình thường
+//   - 10-15 phút (warning window 5p): nhận cảnh báo
+//   - 15+ phút: tự động cancel
+//
+// Nếu grace sau này đổi, nhớ điều chỉnh offset < graceMinutes.
+const LATE_WARNING_OFFSET_MINUTES = 5;
 
 // Mỗi lần quản lý gia hạn thêm cho 1 booking sắp bị auto-cancel, và tổng tối đa được gia hạn
 const GRACE_EXTENSION_STEP_MINUTES = 5;
 const MAX_GRACE_EXTENSION_MINUTES = 15;
 
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
-const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress'];
+const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment'];
 
 const getDepositRate = () => DEPOSIT_RATE;
 
@@ -114,9 +122,9 @@ const findNearestAvailableSlot = async ({ branchId, bookingDateStr, duration, af
 
 exports.createBooking = async (data) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
-
+  let resultBooking;
   try {
+    await session.withTransaction(async () => {
     const { branchId, packageId, vehicleId, userId, bookingDate, startTime, note, voucherCode, discountAmount, finalPrice, selectedSubServices, slotPackId } = data;
 
     const [pkg, branch, vehicle, user] = await Promise.all([
@@ -177,34 +185,40 @@ exports.createBooking = async (data) => {
       }
     }
 
-    const { gte, lte } = getDayBounds(bookingStr);
-    // When checking capacity / VIP for a *new* booking at a given startTime,
-    // we should not count the user's *existing* bookings at the same slot —
-    // those seats are already theirs. We only count *other* people's bookings.
-    // Without this exclusion, a bronze/silver user who already holds one seat
-    // in a capacity-2 slot is incorrectly told the slot is "VIP only" when
-    // they try to add another booking (e.g. a second vehicle) at the same time.
-    const conflicting = await Booking.find({
-      branchId,
-      bookingDate: { $gte: gte, $lte: lte },
-      status: { $in: ACTIVE_SLOT_STATUSES },
-      userId: { $ne: userId },
-    }).session(session);
-
-    const newStart = parseTime(startTime);
-    const newEnd = parseTime(endTime);
-    const overlappingCount = conflicting.filter((b) => {
-      const bs = parseTime(b.startTime);
-      const be = parseTime(b.endTime);
-      return bs !== null && be !== null && isSlotOverlap(newStart, newEnd, bs, be);
-    }).length;
-
-    const capacity = branch.capacity || 2;
-    if (overlappingCount >= capacity) {
-      throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
+    // ── Kiểm tra giới hạn đặt trước theo tier ──
+    // Bronze/Silver: 14 ngày | Gold: 30 ngày | Diamond/VIP: 60 ngày
+    const ADVANCE_BOOKING_DAYS = { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 };
+    const maxAdvanceDays = ADVANCE_BOOKING_DAYS[user.tier] || 14;
+    const msPerDay = 1000 * 60 * 60 * 24;
+    // Dùng bookingStr và todayStr (đã tính sẵn) để tránh mutate Date object gốc
+    const daysAhead = Math.floor(
+      (new Date(bookingStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / msPerDay
+    );
+    if (daysAhead > maxAdvanceDays) {
+      throw Object.assign(
+        new Error(`Hạng thành viên của bạn chỉ được đặt trước tối đa ${maxAdvanceDays} ngày. Nâng hạng lên Gold để đặt trước 30 ngày hoặc Diamond để đặt trước 60 ngày.`),
+        { statusCode: 400, code: 'ADVANCE_BOOKING_LIMIT', maxAdvanceDays }
+      );
     }
-    if (capacity > 1 && overlappingCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') {
-      throw Object.assign(new Error('Khung giờ này chỉ dành cho thành viên VIP'), { statusCode: 403, code: 'SLOT_VIP_ONLY' });
+
+    const capacityService = require('./capacity.service');
+    const capacityResult = await capacityService.checkCapacity({
+      branch,
+      bookingStr,
+      startTime,
+      endTime,
+      userId,
+      userTier: user.tier,
+    }, session);
+
+    if (capacityResult.hasConflict) {
+      if (capacityResult.conflictReason === 'SLOT_FULL_VIP') {
+        throw Object.assign(
+          new Error('Khung giờ này đang có thành viên VIP giữ chỗ cuối. Vui lòng chọn khung giờ khác hoặc nâng hạng lên Gold/Diamond.'),
+          { statusCode: 403, code: 'SLOT_VIP_ONLY' }
+        );
+      }
+      throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
     }
 
     let computedDiscountAmount = 0;
@@ -227,30 +241,48 @@ exports.createBooking = async (data) => {
         { new: true, session }
       );
       if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại hoặc đã hết lượt'), { statusCode: 400, code: 'SLOT_PACK_INVALID' });
-      
-      if (pack.expiresAt && new Date() > pack.expiresAt) {
-        await SlotPack.findByIdAndUpdate(pack._id, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-        throw Object.assign(new Error('Gói lượt đã hết hạn'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
-      }
-      
-      if (pack.branchId && String(pack.branchId) !== String(branchId)) {
-        await SlotPack.findByIdAndUpdate(pack._id, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-        throw Object.assign(new Error('Gói lượt không áp dụng cho chi nhánh này'), { statusCode: 400, code: 'SLOT_PACK_BRANCH_MISMATCH' });
-      }
 
-      if (pack.vehicleId && String(pack.vehicleId) !== String(vehicleId)) {
-        await SlotPack.findByIdAndUpdate(pack._id, { $inc: { remainingSlots: 1, usedSlots: -1 } }, { session });
-        throw Object.assign(new Error('Gói lượt không áp dụng cho xe này'), { statusCode: 400, code: 'SLOT_PACK_VEHICLE_MISMATCH' });
-      }
-      
-      if (pack.remainingSlots === 0) {
-        await SlotPack.findByIdAndUpdate(pack._id, { status: 'exhausted' }, { session });
-      }
+      // H-1 SAFETY: thay vì manual rollback rải rác 3 chỗ (dễ sót), dùng try/finally
+      // để đảm bảo mọi nhánh throw đều hoàn slot. Lưu ý: vì transactions bị no-op
+      // khi patch dev active (BE/src/config/db.js), nên cần rollback thủ công.
+      let slotPackDecremented = true;
+      try {
+        if (pack.expiresAt && new Date() > pack.expiresAt) {
+          throw Object.assign(new Error('Gói lượt đã hết hạn'), { statusCode: 400, code: 'SLOT_PACK_EXPIRED' });
+        }
 
-      computedDiscountAmount = 0;
-      computedFinalPrice = extraPrice;
-      bookingType = 'slot_pack_usage';
-      paymentStatus = extraPrice > 0 ? 'unpaid' : 'paid';
+        if (pack.branchId && String(pack.branchId) !== String(branchId)) {
+          throw Object.assign(new Error('Gói lượt không áp dụng cho chi nhánh này'), { statusCode: 400, code: 'SLOT_PACK_BRANCH_MISMATCH' });
+        }
+
+        if (pack.vehicleId && String(pack.vehicleId) !== String(vehicleId)) {
+          throw Object.assign(new Error('Gói lượt không áp dụng cho xe này'), { statusCode: 400, code: 'SLOT_PACK_VEHICLE_MISMATCH' });
+        }
+
+        if (pack.remainingSlots === 0) {
+          await SlotPack.findByIdAndUpdate(pack._id, { status: 'exhausted' }, { session });
+        }
+
+        computedDiscountAmount = 0;
+        computedFinalPrice = extraPrice;
+        bookingType = 'slot_pack_usage';
+        paymentStatus = extraPrice > 0 ? 'unpaid' : 'paid';
+      } catch (validationErr) {
+        // Rollback decrement vì validation fail sau khi đã $inc.
+        // Log lỗi để vận hành phát hiện nếu rollback cũng fail (DB lúc đó thực sự chết).
+        await SlotPack.findByIdAndUpdate(
+          pack._id,
+          { $inc: { remainingSlots: 1, usedSlots: -1 } },
+          { session },
+        ).catch((rollbackErr) => {
+          console.error(
+            `[createBooking] CRITICAL: slot pack rollback failed for ${pack._id}:`,
+            rollbackErr.message,
+            '— manual fix required.',
+          );
+        });
+        throw validationErr;
+      }
     }
 
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
@@ -280,39 +312,39 @@ exports.createBooking = async (data) => {
     if (voucherCode && computedDiscountAmount > 0) {
       await voucherService.reserveVoucher(voucherCode, userId, booking._id, computedDiscountAmount, session);
     }
+    
+    resultBooking = booking;
+    }); // End of withTransaction
 
-    await session.commitTransaction();
-
+    // ---------- NOTIFICATIONS (Post-transaction) ----------
+    // Gửi thông báo SAU KHI transaction đã commit thành công
+    // để tránh bị gửi trùng lặp nếu withTransaction tự động retry.
     notificationService.send(
-      userId,
+      data.userId,
       'Đặt lịch thành công',
-      `Bạn đã đặt lịch rửa xe ${pkg.name} vào lúc ${startTime} ngày ${bd.toLocaleDateString('vi-VN')}.`,
+      `Bạn đã đặt lịch rửa xe ${resultBooking.packageName} vào lúc ${resultBooking.startTime} ngày ${resultBooking.bookingDate.toLocaleDateString('vi-VN')}.`,
       'booking_created',
-      { bookingId: booking._id }
+      { bookingId: resultBooking._id }
     ).catch(() => {});
 
-    // Notify admin + manager of the branch
     notificationService.sendToAdminAndManager(
-      branchId,
+      data.branchId,
       'Đặt lịch mới',
-      `${user.name || 'Khách hàng'} vừa đặt lịch ${pkg.name} lúc ${startTime} ngày ${bd.toLocaleDateString('vi-VN')}.`,
+      `Khách hàng vừa đặt lịch ${resultBooking.packageName} lúc ${resultBooking.startTime} ngày ${resultBooking.bookingDate.toLocaleDateString('vi-VN')}.`,
       'booking_created',
-      { bookingId: booking._id, branchId }
+      { bookingId: resultBooking._id, branchId: data.branchId }
     ).catch(() => {});
 
-    // Push SSE event to manager so their bell updates in real-time
-    sseService.broadcastToManagers(branchId, 'booking_new', {
-      bookingId: booking._id,
-      branchId,
-      packageName: pkg.name,
-      startTime,
+    sseService.broadcastToManagers(data.branchId, 'booking_new', {
+      bookingId: resultBooking._id,
+      branchId: data.branchId,
+      packageName: resultBooking.packageName,
+      startTime: resultBooking.startTime,
     });
+    sseService.sendToUser(String(data.userId), 'my_bookings_updated', { bookingId: resultBooking._id });
 
-    return booking;
+    return resultBooking;
   } catch (err) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
     throw err;
   } finally {
     session.endSession();
@@ -321,6 +353,11 @@ exports.createBooking = async (data) => {
 
 exports.getAllBookings = async (filters = {}, userRole, userId) => {
   const query = {};
+  // H-5: mặc định ẩn booking đã soft-delete. Admin có thể truyền ?includeDeleted=true
+  // để audit / khôi phục.
+  if (filters.includeDeleted !== 'true' && filters.includeDeleted !== true) {
+    query.isDeleted = { $ne: true };
+  }
   if (userRole === 'customer') {
     query.userId = userId;
   } else if (userRole === 'manager') {
@@ -436,7 +473,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     const total = countResult.length > 0 ? countResult[0].total : 0;
 
     await Booking.populate(aggResults, [
-      { path: 'userId', select: 'name email phone tier' },
+      { path: 'userId', select: 'name email phone tier walletBalance' },
       { path: 'branchId', select: 'name address' },
       { path: 'packageId', select: 'name price duration' },
       { path: 'vehicleId', select: 'licensePlate vehicleType brand color' }
@@ -457,7 +494,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
   const [bookings, total] = await Promise.all([
     Booking.find(query)
-      .populate('userId', 'name email phone tier')
+      .populate('userId', 'name email phone tier walletBalance')
       .populate('branchId', 'name address')
       .populate('packageId', 'name price duration subServices')
       .populate('vehicleId', 'licensePlate vehicleType brand color')
@@ -482,11 +519,15 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 
 exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   const booking = await Booking.findById(id)
-    .populate('userId', 'name email phone tier')
+    .populate('userId', 'name email phone tier walletBalance')
     .populate('branchId', 'name address phone')
     .populate('packageId', 'name price duration subServices')
     .populate('vehicleId', 'licensePlate vehicleType brand color');
   if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  // H-5: nếu booking đã soft-delete, customer/manager không truy cập được, admin thì có (?includeDeleted=true qua getAllBookings)
+  if (booking.isDeleted && userRole !== 'admin') {
+    throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  }
   if (userRole === 'customer' && String(booking.userId._id || booking.userId) !== String(userId)) {
     throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
@@ -616,15 +657,50 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     }
   }
 
+  // Chốt chặn awaiting_payment: trạng thái này chỉ có nghĩa khi booking thực sự
+  // còn DƯ NỢ (depositAmount > 0). Áp dụng cho:
+  //   - single booking đã cọc 30% (depositAmount = 30% × finalPrice).
+  //   - recurring buổi đầu đã cọc gộp cả nhóm (depositAmount = tổng cọc).
+  // Với booking đã thanh toán full ('paid') hoặc không có cọc (slot pack / recurring
+  // buổi sau) thì không có "phần còn lại" — phải chuyển thẳng 'in_progress' → 'completed'.
+  if (status === 'awaiting_payment') {
+    const alreadyPaid = currentBooking.paymentStatus === 'paid';
+    const hasDepositBalance = (currentBooking.depositAmount || 0) > 0;
+    if (alreadyPaid || !hasDepositBalance) {
+      throw Object.assign(
+        new Error(
+          alreadyPaid
+            ? 'Lịch hẹn đã thanh toán đủ — không thể chờ thanh toán phần còn lại'
+            : 'Lịch hẹn không có cọc (đã trả full / slot pack / buổi định kỳ đã gộp cọc) — chuyển thẳng sang "Hoàn thành"',
+        ),
+        { statusCode: 400, code: 'NO_REMAINING_BALANCE' },
+      );
+    }
+  }
+
   const update = { status };
   if (status === 'confirmed') update.confirmedAt = new Date();
   if (status === 'checked_in') {
     update.checkInTime = new Date();
+    // H-3 SAFETY: xóa các cờ warning / grace khi manager xác nhận hoặc check-in.
+    // Tránh trường hợp cron tick kế tiếp xét lại booking đã check-in và cancel nhầm.
+    update.lateWarningSentAt = undefined;
+    update.suggestedSlotStartTime = undefined;
+    update.graceExtensionMinutes = 0;
     if (updateData.staffId) update.staffId = updateData.staffId;
   }
+  // H-3: tương tự cho 'awaiting_payment' và 'completed' — booking đã qua checkpoint
+  // này thì cron auto-cancel không nên xét nữa. Set null grace marker để idempotent.
+  if (status === 'in_progress' || status === 'awaiting_payment' || status === 'completed') {
+    update.lateWarningSentAt = undefined;
+    update.graceExtensionMinutes = 0;
+  }
   if (status === 'cancelled') update.cancelledAt = new Date();
-  if (status === 'completed') {
+  if (status === 'awaiting_payment') {
     update.checkOutTime = new Date();
+  }
+  if (status === 'completed') {
+    if (currentBooking.status !== 'awaiting_payment') update.checkOutTime = new Date();
     if (currentBooking.paymentStatus === 'unpaid') {
       update.paymentStatus = 'pending';
     }
@@ -657,6 +733,21 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   }
 
   // Post-completion side effects (async, non-blocking)
+  if (status === 'awaiting_payment') {
+    setImmediate(async () => {
+      try {
+        const plate = booking.vehicleId?.licensePlate || '';
+        await notificationService.send(
+          booking.userId?._id || currentBooking.userId,
+          'Xe đã rửa xong',
+          `Xe ${plate} đã rửa xong. Vui lòng thanh toán phần còn lại để hoàn tất.`,
+          'booking_awaiting_payment',
+          { bookingId: id }
+        );
+      } catch { /* silent */ }
+    });
+  }
+
   if (status === 'completed') {
     setImmediate(async () => {
       try {
@@ -666,7 +757,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
         await notificationService.send(
           booking.userId?._id || currentBooking.userId,
           'Dịch vụ đã hoàn thành',
-          `Xe ${plate} đã rửa xong tại ${branch}. Cảm ơn bạn — hãy để lại đánh giá nhé!`,
+          `Xe ${plate} đã hoàn thành tại ${branch}. Bạn đã nhận được 1 vòng quay may mắn, hãy vào trang Quà Tặng (gifts) để quay nhé!`,
           'booking_completed',
           { bookingId: id }
         );
@@ -688,6 +779,18 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           }
         }
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)
+        // Đồng thời tặng 1 lượt quay vòng quay may mắn nếu đã thanh toán đủ
+        const isFullyPaid = currentBooking.paymentStatus === 'paid' || currentBooking.bookingType === 'slot_pack_usage';
+        if (isFullyPaid) {
+          await User.findOneAndUpdate(
+            { _id: currentBooking.userId },
+            { 
+              $inc: { spinCount: 1 },
+            }
+          ).catch(() => {});
+          sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
+        }
+        
         await User.findOneAndUpdate(
           { _id: currentBooking.userId, noShowCount: { $gt: 0 } },
           { $inc: { noShowCount: -1 } }
@@ -847,20 +950,39 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
     
     // Process wallet refund if customer overpaid (canceled paid optional subservices)
     if (refundAmount > 0 && booking.userId) {
+      const WalletTx = mongoose.model('WalletTransaction');
       const user = await mongoose.model('User').findById(booking.userId).session(session);
       if (user) {
-        user.walletBalance = (user.walletBalance || 0) + refundAmount;
-        await user.save({ session });
-
-        await mongoose.model('WalletTransaction').create([{
-          userId: user._id,
-          amount: refundAmount,
-          type: 'credit',
-          reason: `Hoàn tiền hủy dịch vụ chọn thêm #${booking.bookingCode || id}`,
+        // H-4 IDEMPOTENCY: chống double-credit khi updateSubServices bị retry.
+        // Ground truth: tìm WalletTransaction 'credit' với reason match pattern
+        // "Hoàn tiền hủy dịch vụ chọn thêm #<bookingCode>" cho booking này.
+        const reasonPattern = new RegExp(
+          `#${(booking.bookingCode || String(id)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+        );
+        const existingRefund = await WalletTx.findOne({
           bookingId: booking._id,
-        }], { session });
+          type: 'credit',
+          reason: { $regex: reasonPattern },
+        }).session(session);
 
-        sseService.sendToUser(user._id, 'wallet_updated', { walletBalance: user.walletBalance });
+        if (existingRefund) {
+          console.warn(
+            `[updateSubServices] Idempotency: refund already exists for booking ${booking._id} (txn ${existingRefund._id}). Skip double-credit.`,
+          );
+        } else {
+          user.walletBalance = (user.walletBalance || 0) + refundAmount;
+          await user.save({ session });
+
+          await WalletTx.create([{
+            userId: user._id,
+            amount: refundAmount,
+            type: 'credit',
+            reason: `Hoàn tiền hủy dịch vụ chọn thêm #${booking.bookingCode || id}`,
+            bookingId: booking._id,
+          }], { session });
+
+          sseService.sendToUser(user._id, 'wallet_updated', { walletBalance: user.walletBalance });
+        }
       }
     }
 
@@ -990,7 +1112,7 @@ exports.getCancelPreview = async (id, userId) => {
   const [h, m] = booking.startTime.split(':').map(Number);
   bookingDateTime.setHours(h, m, 0, 0);
   const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
-  const isLateCancel = minutesBefore < 20;
+  const isLateCancel = minutesBefore <= 60; // Dưới hoặc bằng 1 tiếng
 
   let totalPaid = 0;
   let refundAmount = 0;
@@ -1010,12 +1132,12 @@ exports.getCancelPreview = async (id, userId) => {
           penaltyPercent = 30;
           penaltyAmount = Math.round(totalPaid * 0.3);
           refundAmount = totalPaid - penaltyAmount;
-          policy = `Hủy trong vòng 20 phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
+          policy = `Hủy trong vòng 1 tiếng trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
         } else {
           // Chỉ đặt cọc → mất hết tiền cọc
           penaltyAmount = totalPaid;
           refundAmount = 0;
-          policy = `Hủy trong vòng 20 phút trước giờ hẹn: mất toàn bộ tiền cọc ${totalPaid.toLocaleString('vi-VN')}₫.`;
+          policy = `Hủy trong vòng 1 tiếng trước giờ hẹn: mất toàn bộ tiền cọc ${totalPaid.toLocaleString('vi-VN')}₫.`;
         }
       } else {
         // Hủy sớm → hoàn 100%
@@ -1030,10 +1152,10 @@ exports.getCancelPreview = async (id, userId) => {
   let slotPackRefundInfo = null;
   if (booking.bookingType === 'slot_pack_usage') {
     const hoursBefore = minutesBefore / 60;
-    if (hoursBefore >= 24) {
-      slotPackRefundInfo = 'Hủy lịch hẹn trước 24h sẽ được hoàn lại 1 lượt vào gói.';
+    if (hoursBefore >= 1) {
+      slotPackRefundInfo = 'Hủy lịch hẹn sớm (trước 1h) sẽ được hoàn lại 1 lượt vào gói.';
     } else {
-      slotPackRefundInfo = 'Hủy lịch hẹn sát giờ (dưới 24h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.';
+      slotPackRefundInfo = 'Hủy lịch hẹn sát giờ (dưới 1h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.';
     }
     policy = slotPackRefundInfo;
   }
@@ -1111,21 +1233,21 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       let shouldRefundSlot = false;
       
       if (cancelledBy === 'customer') {
-        // Hủy đúng hạn >= 24h -> hoàn 1 lượt. Sát giờ -> mất lượt.
-        if (hoursBefore >= 24) {
+        // Hủy sớm >= 1h -> hoàn 1 lượt. Sát giờ < 1h -> mất lượt.
+        if (hoursBefore >= 1) {
           shouldRefundSlot = true;
         }
       } else {
-        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng 50 điểm đền bù
+        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng 500 điểm đền bù
         shouldRefundSlot = true;
         
-        // Tặng 50 điểm
+        // Tặng 500 điểm
         const User = mongoose.model('User');
         const PointHistory = mongoose.model('PointHistory');
-        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: 50, lifetimePoints: 50 } }, { session }).catch(() => {});
+        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: 500, lifetimePoints: 500 } }, { session }).catch(() => {});
         await PointHistory.create([{
           userId: booking.userId,
-          points: 50,
+          points: 500,
           type: 'earned',
           description: 'Hệ thống hủy lịch hẹn - Tặng điểm đền bù',
           bookingId: booking._id
@@ -1135,7 +1257,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
         notificationService.send(
           booking.userId,
           'Hệ thống hủy lịch hẹn',
-          'Lịch hẹn bằng gói lượt của bạn đã bị cửa hàng hủy. Bạn được hoàn lại 1 lượt vào gói và nhận 50 điểm đền bù.',
+          'Lịch hẹn bằng gói lượt của bạn đã bị cửa hàng hủy. Bạn được hoàn lại 1 lượt vào gói và nhận 500 điểm đền bù.',
           'booking_cancelled_system',
           { bookingId: booking._id }
         ).catch(() => {});
@@ -1151,14 +1273,76 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     }
 
     // ── Chính sách hoàn tiền ──
-    // > 20 phút trước giờ hẹn → hoàn 100%
-    // ≤ 20 phút (thanh toán full) → mất 30%, hoàn 70% vào ví
-    // ≤ 20 phút (chỉ cọc) → mất hết tiền cọc
     let refundAmount = 0;
     let refundStatus = 'none';
-    const isLateCancel = minutesBefore < 20;
+    const isLateCancel = minutesBefore <= 60;
 
-    if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
+    if (booking.bookingType === 'recurring') {
+      let groupDepositAmount = 0;
+      let recurringTotal = booking.recurringTotal || 1;
+      const firstBooking = booking.isRecurringFirst 
+          ? booking 
+          : await Booking.findOne({ recurringGroupId: booking.recurringGroupId, isRecurringFirst: true }).session(session);
+      
+      if (firstBooking) {
+        groupDepositAmount = firstBooking.depositAmount;
+        recurringTotal = firstBooking.recurringTotal || 1;
+      }
+      const depositShare = Math.round(groupDepositAmount / recurringTotal);
+
+      if (cancelledBy !== 'customer') {
+        refundAmount = depositShare;
+      } else {
+        if (isLateCancel) {
+          refundAmount = 0;
+        } else {
+          refundAmount = depositShare;
+        }
+      }
+
+      if (booking.isRecurringFirst) {
+        const nextBooking = await Booking.findOne({
+          recurringGroupId: booking.recurringGroupId,
+          status: { $in: ['pending', 'confirmed'] },
+          _id: { $ne: id }
+        }).sort({ recurringPosition: 1 }).session(session);
+
+        if (nextBooking) {
+          // Idempotency: chỉ promote nextBooking nếu chưa được set thành "first".
+          // Tránh trường hợp cancel 2 lần liên tiếp (request retry / rollback) ghi đè
+          // depositAmount nhiều lần.
+          if (!nextBooking.isRecurringFirst) {
+            nextBooking.isRecurringFirst = true;
+            nextBooking.depositAmount = Math.max(0, groupDepositAmount - depositShare);
+            nextBooking.paymentStatus = booking.paymentStatus;
+            await nextBooking.save({ session });
+          }
+
+          // Chỉ rebook payment khi payment hiện đang trỏ về booking bị cancel
+          // (chính là `id`). Tránh đè payment của booking khác (recursive case).
+          const payment = await Payment.findOne({ bookingId: id }).session(session);
+          if (payment && String(payment.bookingId) === String(id)) {
+            payment.bookingId = nextBooking._id;
+            await payment.save({ session });
+          }
+        } else {
+          if (refundAmount > 0) {
+            const payment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
+            if (payment) {
+              payment.status = 'refunded';
+              payment.refundedAt = new Date();
+              await payment.save({ session });
+            }
+          }
+        }
+      } else {
+        if (firstBooking && firstBooking._id.toString() !== id) {
+          firstBooking.depositAmount = Math.max(0, firstBooking.depositAmount - depositShare);
+          await firstBooking.save({ session });
+        }
+      }
+
+    } else if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
       const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' }).session(session);
       
       if (paidPayment) {
@@ -1166,14 +1350,11 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
         if (isLateCancel) {
           if (booking.paymentStatus === 'paid') {
-            // Thanh toán full → mất 30%
             refundAmount = Math.round(totalPaid * 0.7);
           } else {
-            // Chỉ cọc → mất hết
             refundAmount = 0;
           }
         } else {
-          // Hủy sớm → hoàn 100%
           refundAmount = totalPaid;
         }
 
@@ -1184,20 +1365,44 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     }
 
     // Hoàn tiền vào ví ngay lập tức
+    //
+    // H-4 IDEMPOTENCY: kiểm tra trước khi cộng wallet để chống double-credit.
+    // Guard dựa trên:
+    //   1. Booking.refundStatus đã 'completed' → đã hoàn rồi, skip
+    //   2. Tồn tại WalletTransaction với cùng bookingId + type='credit' + reason match
+    //
+    // Lý do cần 2 guard: booking.refundStatus có thể đã bị reset do bug hoặc admin
+    // override; WalletTransaction là audit trail bất biến nên làm ground truth.
     if (refundAmount > 0) {
       refundStatus = 'completed';
+      const WalletTx = mongoose.model('WalletTransaction');
       const user = await mongoose.model('User').findById(booking.userId).session(session);
       if (user) {
-        user.walletBalance = (user.walletBalance || 0) + refundAmount;
-        await user.save({ session });
-
-        await mongoose.model('WalletTransaction').create([{
-          userId: user._id,
-          amount: refundAmount,
-          type: 'credit',
-          reason: `Hoàn tiền hủy lịch hẹn #${booking.bookingCode || id}`,
+        // Check WalletTransaction đã tồn tại với reason khớp pattern cho booking này.
+        const reasonPattern = new RegExp(`#${(booking.bookingCode || String(id)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+        const existingRefund = await WalletTx.findOne({
           bookingId: booking._id,
-        }], { session });
+          type: 'credit',
+          reason: { $regex: reasonPattern },
+        }).session(session);
+
+        if (existingRefund) {
+          // Đã hoàn tiền trước đó — skip cộng wallet, chỉ log warning.
+          console.warn(
+            `[cancelBooking] Idempotency: refund already exists for booking ${booking._id} (txn ${existingRefund._id}). Skip double-credit.`,
+          );
+        } else {
+          user.walletBalance = (user.walletBalance || 0) + refundAmount;
+          await user.save({ session });
+
+          await WalletTx.create([{
+            userId: user._id,
+            amount: refundAmount,
+            type: 'credit',
+            reason: `Hoàn tiền hủy lịch hẹn #${booking.bookingCode || id}`,
+            bookingId: booking._id,
+          }], { session });
+        }
       }
     }
 
@@ -1271,7 +1476,7 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
     status: { $in: ['pending', 'confirmed'] },
     bookingDate: { $lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
   })
-    .select('startTime endTime bookingDate status voucherCode userId branchId packageId lateWarningSentAt graceExtensionMinutes')
+    .select('startTime endTime bookingDate status voucherCode userId branchId packageId lateWarningSentAt graceExtensionMinutes cancelledAt')
     .populate('packageId', 'duration');
 
   let cancelledCount = 0;
@@ -1282,8 +1487,12 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
     const endMin = parseTime(b.endTime);
     if (startMin === null) continue;
 
-    const startDateTime = new Date(b.bookingDate);
-    startDateTime.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
+    // Timezone safe logic
+    const bTimeVN = new Date(b.bookingDate.getTime() + 7 * 3600 * 1000);
+    const bDateStr = bTimeVN.toISOString().split('T')[0];
+    const hh = Math.floor(startMin / 60);
+    const mm = startMin % 60;
+    const startDateTime = new Date(`${bDateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+07:00`);
 
     const effectiveGrace = graceMinutes + (b.graceExtensionMinutes || 0);
     const deadline = new Date(startDateTime.getTime() + effectiveGrace * 60 * 1000);
@@ -1291,7 +1500,7 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
 
     if (now < warnAt) continue; // còn sớm, chưa cần quan tâm đơn này
 
-    const bookingDateStr = new Date(b.bookingDate).toISOString().split('T')[0];
+    const bookingDateStr = bDateStr;
     const duration = b.packageId?.duration || (endMin !== null ? endMin - startMin : 30);
 
     if (now < deadline) {
@@ -1336,6 +1545,8 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
       },
       { new: true }
     );
+    // Idempotency: nếu không match (cron tick trước đã cancel) thì skip — không ghi nhận
+    // double-cancel và không gửi notification / rollback voucher lần thứ 2.
     if (!updated) continue;
     cancelledCount += 1;
 
@@ -1421,9 +1632,20 @@ exports.deleteBooking = async (id, userRole) => {
   if (userRole !== 'admin') {
     throw Object.assign(new Error('Chỉ admin mới có thể xóa lịch hẹn'), { statusCode: 403, code: 'FORBIDDEN' });
   }
-  const booking = await Booking.findByIdAndDelete(id);
+  const booking = await Booking.findById(id);
   if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
-  return booking;
+  // H-5 SAFETY: thay vì findByIdAndDelete (không thể khôi phục), dùng soft delete.
+  // - isDeleted + deletedAt + deletedBy để audit.
+  // - Không xóa thật, chỉ ẩn khỏi list queries.
+  // - Admin có thể query bao gồm cả isDeleted nếu cần khôi phục.
+  await Booking.findByIdAndUpdate(id, {
+    isDeleted: true,
+    deletedAt: new Date(),
+    status: 'cancelled', // cũng set cancelled để UI hiển thị đúng
+    cancelledBy: 'admin',
+    cancellationReason: `[ADMIN-SOFT-DELETE] ${booking.cancellationReason || ''}`.slice(0, 500),
+  });
+  return { ...booking.toObject(), isDeleted: true, deletedAt: new Date() };
 };
 
 exports.deleteBookingsByDateRange = async (dateFrom, dateTo) => {
@@ -1433,15 +1655,38 @@ exports.deleteBookingsByDateRange = async (dateFrom, dateTo) => {
   if (isNaN(from.getTime()) || isNaN(to.getTime())) {
     throw Object.assign(new Error('Ngày không hợp lệ'), { statusCode: 400 });
   }
-  const result = await Booking.deleteMany({
-    bookingDate: { $gte: from, $lte: to },
-  });
-  return { deletedCount: result.deletedCount };
+  // H-5 SAFETY: soft delete thay vì hard delete. Tránh mất dữ liệu do click nhầm.
+  const result = await Booking.updateMany(
+    { bookingDate: { $gte: from, $lte: to }, isDeleted: { $ne: true } },
+    {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        status: 'cancelled',
+        cancelledBy: 'admin',
+        cancellationReason: '[ADMIN-BULK-SOFT-DELETE]',
+      },
+    },
+  );
+  return { deletedCount: result.modifiedCount, softDeleted: true };
 };
 
 exports.deleteAllBookings = async () => {
-  const result = await Booking.deleteMany({});
-  return { deletedCount: result.deletedCount };
+  // H-5 SAFETY: hard delete ALL bookings bị cấm bởi default. Chỉ cho phép soft delete.
+  // Nếu cần hard delete thật sự (GDPR / cleanup), phải tạo script riêng có audit log.
+  const result = await Booking.updateMany(
+    { isDeleted: { $ne: true } },
+    {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        status: 'cancelled',
+        cancelledBy: 'admin',
+        cancellationReason: '[ADMIN-ALL-SOFT-DELETE]',
+      },
+    },
+  );
+  return { deletedCount: result.modifiedCount, softDeleted: true, note: 'Hard delete disabled for safety. Use a dedicated migration script if truly needed.' };
 };
 
 exports.getAvailableSlots = async (branchId, date, packageId) => {
@@ -1474,17 +1719,26 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
       return bs !== null && be !== null && ns !== null && ne !== null && isSlotOverlap(ns, ne, bs, be);
     });
     const overlappingCount = overlappingBookings.length;
-    const vipBooked = overlappingBookings.some(b => b.priority >= 3);
+    // vipBooked: có khách VIP (priority >= 3) đang giữ chỗ trong slot này không
+    const vipBooked = overlappingBookings.some(b => (b.priority || 1) >= 3);
 
     let available = overlappingCount < capacity;
-    let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity;
+    // vipOnly = true KHI VÀ CHỈ KHI:
+    //   1. Slot gần đầy (còn đúng 1 chỗ)
+    //   2. VÀ đang có VIP thực sự giữ chỗ trong slot đó
+    // → Không giữ chỗ vô nghĩa khi không có VIP nào đặt → tránh mất doanh thu
+    let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity && vipBooked;
 
     if (dateStr === todayStr) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const slotStartMinutes = parseTime(s.startTime);
       if (slotStartMinutes !== null && slotStartMinutes <= currentMinutes + 30) {
+        // Quá muộn để đặt (cần ít nhất 30 phút chuẩn bị)
         available = false;
         vipOnly = false;
+      } else if (slotStartMinutes !== null && slotStartMinutes - currentMinutes <= 30 * 2) {
+        // Anti-waste: Còn ≤ 60 phút mà chỗ cuối chưa có VIP nào đặt → mở cho tất cả
+        if (!vipBooked) vipOnly = false;
       }
     }
     return { ...s, available, vipOnly, vipBooked };
@@ -1615,8 +1869,9 @@ exports.createRecurringBooking = async (data) => {
     const bookingDate = targetDates[bookingIdx];
     const isFirstInGroup = bookingIdx === 0;
     const session = await mongoose.startSession();
-    session.startTransaction();
+    let savedBooking;
     try {
+      await session.withTransaction(async () => {
       const bookingStr = bookingDate.toLocaleDateString('en-CA');
 
       // Check if it's today and time has passed
@@ -1626,32 +1881,22 @@ exports.createRecurringBooking = async (data) => {
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
         const startMinutes = parseTime(startTime);
         if (startMinutes !== null && startMinutes <= currentMinutes + 30) {
-          await session.abortTransaction();
-          failed.push({ date: bookingStr, reason: 'Thời gian đặt lịch phải cách hiện tại ít nhất 30 phút' });
-          continue;
+          throw new Error('Thời gian đặt lịch phải cách hiện tại ít nhất 30 phút');
         }
       }
 
-      const { gte, lte } = getDayBounds(bookingStr);
-
-      const conflicting = await Booking.find({
-        branchId,
-        bookingDate: { $gte: gte, $lte: lte },
-        status: { $in: ACTIVE_SLOT_STATUSES },
-      }).session(session);
-
+      const capacityService = require('./capacity.service');
+      const capacityResult = await capacityService.checkCapacity({
+        branch,
+        bookingStr,
+        startTime,
+        endTime,
+        userId,
+        userTier: user.tier,
+      }, session);
+      
+      const { hasConflict, conflictingBookings: conflicting } = capacityResult;
       const ns = parseTime(startTime);
-      const ne = parseTime(endTime);
-      const capacity = branch.capacity || 2;
-      const overlappingCount = conflicting.filter((b) => {
-        const bs = parseTime(b.startTime);
-        const be = parseTime(b.endTime);
-        return bs !== null && be !== null && isSlotOverlap(ns, ne, bs, be);
-      }).length;
-
-      let hasConflict = false;
-      if (overlappingCount >= capacity) hasConflict = true;
-      if (capacity > 1 && overlappingCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') hasConflict = true;
 
       let finalStartTime = startTime;
       let finalEndTime = endTime;
@@ -1696,9 +1941,7 @@ exports.createRecurringBooking = async (data) => {
           finalEndTime = bestSlot.endTime;
           finalNote = finalNote ? `${finalNote}\n(Hệ thống tự động đổi giờ sang ${finalStartTime} do trùng slot)` : `(Hệ thống tự động đổi giờ sang ${finalStartTime} do trùng slot)`;
         } else {
-          await session.abortTransaction();
-          failed.push({ date: bookingStr, reason: 'Slot không còn trống và không có giờ thay thế phù hợp' });
-          continue;
+          throw new Error('Slot không còn trống và không có giờ thay thế phù hợp');
         }
       }
 
@@ -1724,12 +1967,10 @@ exports.createRecurringBooking = async (data) => {
         packageDuration: pkg.duration,
       });
       await booking.save({ session });
-      await session.commitTransaction();
-      created.push(booking);
+      savedBooking = booking;
+      }); // End withTransaction
+      created.push(savedBooking);
     } catch (err) {
-      if (session.inTransaction()) {
-        await session.abortTransaction();
-      }
       const bookingStr = bookingDate.toLocaleDateString('en-CA');
       failed.push({ date: bookingStr, reason: err.message || 'Lỗi không xác định' });
     } finally {
@@ -1895,31 +2136,120 @@ exports.checkRecurringConflicts = async (data) => {
  * Chỉ hủy những booking đang pending.
  */
 exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
-  const bookings = await Booking.find({
-    recurringGroupId,
-    status: 'pending',
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (bookings.length === 0) {
-    throw Object.assign(new Error('No pending bookings found for this recurring group'), { statusCode: 404, code: 'NOT_FOUND' });
+  try {
+    const bookings = await Booking.find({
+      recurringGroupId,
+      status: { $in: ['pending', 'confirmed'] },
+    }).session(session);
+
+    if (bookings.length === 0) {
+      throw Object.assign(new Error('No pending bookings found for this recurring group'), { statusCode: 404, code: 'NOT_FOUND' });
+    }
+
+    if (userRole === 'customer' && String(bookings[0].userId) !== String(userId)) {
+      throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+
+    const firstBooking = await Booking.findOne({ recurringGroupId, isRecurringFirst: true }).session(session);
+    const recurringTotal = firstBooking ? (firstBooking.recurringTotal || 1) : 1;
+    const groupDepositAmount = firstBooking ? firstBooking.depositAmount : 0;
+    const depositShare = Math.round(groupDepositAmount / recurringTotal);
+
+    let totalRefundAmount = 0;
+    const now = new Date();
+    const cancelledBy = userRole === 'customer' ? 'customer' : userRole === 'admin' ? 'admin' : 'manager';
+
+    const results = [];
+    for (const b of bookings) {
+      const bookingDateTime = new Date(b.bookingDate);
+      const [h, m] = b.startTime.split(':').map(Number);
+      bookingDateTime.setHours(h, m, 0, 0);
+      const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
+      const isLateCancel = minutesBefore <= 60;
+
+      let refundAmountForThisBooking = 0;
+      if (cancelledBy !== 'customer') {
+        refundAmountForThisBooking = depositShare;
+      } else {
+        if (!isLateCancel) {
+          refundAmountForThisBooking = depositShare;
+        }
+      }
+
+      totalRefundAmount += refundAmountForThisBooking;
+
+      const updated = await Booking.findOneAndUpdate(
+        { _id: b._id, status: { $in: ['pending', 'confirmed'] } },
+        { 
+          status: 'cancelled', 
+          cancelledAt: new Date(), 
+          cancelledBy,
+          refundAmount: refundAmountForThisBooking,
+          paymentStatus: refundAmountForThisBooking > 0 ? 'refunded' : b.paymentStatus
+        },
+        { new: true, session }
+      );
+      if (updated) results.push(updated);
+    }
+
+    if (firstBooking) {
+       firstBooking.depositAmount = 0;
+       await firstBooking.save({ session });
+    }
+    
+    if (firstBooking) {
+      const payment = await mongoose.model('Payment').findOne({ bookingId: firstBooking._id, status: 'paid' }).session(session);
+      if (payment) {
+          payment.status = 'refunded';
+          payment.refundedAt = new Date();
+          await payment.save({ session });
+      }
+    }
+
+    if (totalRefundAmount > 0) {
+      const user = await mongoose.model('User').findById(bookings[0].userId).session(session);
+      if (user) {
+        // H-4 IDEMPOTENCY: chống double-credit khi cancelRecurringGroup bị retry.
+        const WalletTx = mongoose.model('WalletTransaction');
+        const reasonPattern = new RegExp(`#${(recurringGroupId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+        const existingRefund = await WalletTx.findOne({
+          bookingId: bookings[0]._id,
+          type: 'credit',
+          reason: { $regex: reasonPattern },
+        }).session(session);
+
+        if (existingRefund) {
+          console.warn(
+            `[cancelRecurringGroup] Idempotency: refund already exists for group ${recurringGroupId} (txn ${existingRefund._id}). Skip double-credit.`,
+          );
+        } else {
+          user.walletBalance = (user.walletBalance || 0) + totalRefundAmount;
+          await user.save({ session });
+
+          await WalletTx.create([{
+            userId: user._id,
+            amount: totalRefundAmount,
+            type: 'credit',
+            reason: `Hoàn tiền hủy nhóm lịch định kỳ #${recurringGroupId}`,
+            bookingId: bookings[0]._id,
+          }], { session });
+        }
+      }
+    }
+
+    await session.commitTransaction();
+    return { cancelled: results.length, total: bookings.length, totalRefundAmount };
+  } catch (err) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw err;
+  } finally {
+    session.endSession();
   }
-
-  // Validate ownership (nếu là customer)
-  if (userRole === 'customer' && String(bookings[0].userId) !== String(userId)) {
-    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
-  }
-
-  const results = await Promise.allSettled(
-    bookings.map((b) =>
-      Booking.findOneAndUpdate(
-        { _id: b._id, status: 'pending' },
-        { status: 'cancelled', cancelledAt: new Date(), cancelledBy: userRole }
-      )
-    )
-  );
-
-  const cancelled = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
-  return { cancelled: cancelled.length, total: bookings.length };
 };
 
 exports.getFeedbacks = async (user, filters = {}) => {

@@ -25,6 +25,8 @@ import { branchApi } from '../../src/api';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import type { Branch } from '../../src/types';
+import { useTranslation } from 'react-i18next';
+import { translateDynamicText } from '../../src/utils';
 
 type Mode = 'list' | 'map';
 
@@ -32,6 +34,7 @@ export default function BranchScreen() {
   const router = useRouter();
   const colors = useColors();
   const styles = createStyles(colors);
+  const { i18n } = useTranslation();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +97,7 @@ export default function BranchScreen() {
             <View style={styles.info}>
               <View style={styles.titleRow}>
                 <AppText variant="h4" color="textPrimary" numberOfLines={1} style={styles.branchName}>
-                  {item.name}
+                  {translateDynamicText(item.name, i18n.language)}
                 </AppText>
                 <View style={[styles.statusBadge, { backgroundColor: open ? colors.successLight : colors.errorLight }]}>
                   <View style={[styles.statusDot, { backgroundColor: open ? colors.success : colors.error }]} />
@@ -104,7 +107,7 @@ export default function BranchScreen() {
                 </View>
               </View>
               <AppText variant="caption" color="textSecondary" style={styles.addressText} numberOfLines={2}>
-                {item.address}
+                {translateDynamicText(item.address, i18n.language)}
               </AppText>
               <View style={styles.hoursRow}>
                 <Icon name={Icons.timeOutline} size={14} color={colors.textTertiary} />

@@ -7,8 +7,23 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import * as SecureStore from 'expo-secure-store';
 
 // Configuration
+//
+// H-6 SAFETY: cảnh báo rõ ràng khi production build thiếu env. Trước đây fallback
+// silent về localhost, production request đi vào localhost → fail. Giờ:
+//   - Dev (__DEV__ = true): fallback localhost OK cho dev experience.
+//   - Prod (__DEV__ = false): nếu thiếu env → throw error ngay khi load module,
+//     tránh runtime fail mà không ai biết.
 if (!process.env.EXPO_PUBLIC_API_URL) {
-  console.warn('[AutoWashPro] WARNING: EXPO_PUBLIC_API_URL is missing in environment variables. Defaulting to localhost. Production network requests will fail.');
+  if (__DEV__) {
+    console.warn(
+      '[AutoWashPro] EXPO_PUBLIC_API_URL missing in dev → using http://localhost:5000/api. OK for dev only.',
+    );
+  } else {
+    throw new Error(
+      '[AutoWashPro] EXPO_PUBLIC_API_URL is required in production. ' +
+        'Set it in your build environment (EAS Build, app.json, or runtime config).',
+    );
+  }
 }
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 

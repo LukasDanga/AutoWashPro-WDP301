@@ -20,7 +20,7 @@ exports.getMyWalletTransactions = catchAsync(async (req, res) => {
     WalletTransaction.countDocuments(query),
   ]);
 
-  success(res, transactions, 'Wallet transactions retrieved successfully', 200, {
+  success(res, transactions, 'Đã lấy lịch sử giao dịch ví', 200, {
     page,
     limit,
     total,

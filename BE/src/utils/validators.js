@@ -3,43 +3,43 @@ const { body, param, query } = require('express-validator');
 const authValidators = {
   register: [
     body('name').optional().trim().isLength({ max: 100 }),
-    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
+    body('password').isLength({ min: 6 }).withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
     body('phone').optional().trim(),
   ],
   login: [
-    body('identifier').trim().notEmpty().withMessage('Email or phone number is required'),
-    body('password').notEmpty().withMessage('Password is required'),
+    body('identifier').trim().notEmpty().withMessage('Vui lòng nhập email hoặc số điện thoại'),
+    body('password').notEmpty().withMessage('Vui lòng nhập mật khẩu'),
   ],
   googleLogin: [
-    body('idToken').trim().notEmpty().withMessage('Google ID token is required'),
+    body('idToken').trim().notEmpty().withMessage('Bắt buộc có Google ID token'),
   ],
   changePassword: [
-    body('currentPassword').notEmpty().withMessage('Current password is required'),
-    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+    body('currentPassword').notEmpty().withMessage('Vui lòng nhập mật khẩu hiện tại'),
+    body('newPassword').isLength({ min: 6 }).withMessage('Mật khẩu mới phải có ít nhất 6 ký tự'),
   ],
   forgotPassword: [
-    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
   ],
   verifyOtp: [
-    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
-    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+    body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
+    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('Mã OTP phải có 6 chữ số'),
   ],
   resetPassword: [
-    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
-    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
-    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+    body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
+    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('Mã OTP phải có 6 chữ số'),
+    body('newPassword').isLength({ min: 6 }).withMessage('Mật khẩu mới phải có ít nhất 6 ký tự'),
   ],
   createUser: [
-    body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }),
-    body('email').trim().isEmail().withMessage('Invalid email').normalizeEmail(),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('name').trim().notEmpty().withMessage('Vui lòng nhập họ tên').isLength({ max: 100 }),
+    body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
+    body('password').isLength({ min: 6 }).withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
     body('phone').optional().trim(),
-    body('role').notEmpty().withMessage('Role is required').isIn(['admin', 'manager']),
-    body('branchId').optional().isMongoId().withMessage('Invalid branch ID'),
+    body('role').notEmpty().withMessage('Vai trò là bắt buộc').isIn(['admin', 'manager']),
+    body('branchId').optional().isMongoId().withMessage('ID chi nhánh không hợp lệ'),
   ],
   updateUser: [
-    param('id').isMongoId().withMessage('Invalid user ID'),
+    param('id').isMongoId().withMessage('ID người dùng không hợp lệ'),
     body('name').optional().trim().isLength({ max: 100 }),
     body('phone').optional().trim(),
     body('role').optional().isIn(['admin', 'manager']),
@@ -49,16 +49,16 @@ const authValidators = {
 
 const vehicleValidators = {
   create: [
-    body('licensePlate').trim().notEmpty().withMessage('License plate is required').isLength({ max: 20 }),
-    body('vehicleType').isIn(['sedan', 'suv', 'pickup', 'van']).withMessage('Invalid vehicle type'),
-    body('brand').trim().notEmpty().withMessage('Brand is required').isLength({ max: 50 }),
+    body('licensePlate').trim().notEmpty().withMessage('Biển số xe là bắt buộc').isLength({ max: 20 }),
+    body('vehicleType').isIn(['sedan', 'suv', 'pickup', 'van']).withMessage('Loại xe không hợp lệ'),
+    body('brand').trim().notEmpty().withMessage('Hãng xe là bắt buộc').isLength({ max: 50 }),
     body('model').optional().trim().isLength({ max: 50 }),
-    body('color').trim().notEmpty().withMessage('Color is required').isLength({ max: 30 }),
+    body('color').trim().notEmpty().withMessage('Màu xe là bắt buộc').isLength({ max: 30 }),
     body('year').optional().isInt({ min: 1900, max: 2030 }),
     body('isDefault').optional().isBoolean(),
   ],
   update: [
-    param('id').isMongoId().withMessage('Invalid vehicle ID'),
+    param('id').isMongoId().withMessage('ID xe không hợp lệ'),
     body('licensePlate').optional().trim().isLength({ max: 20 }),
     body('vehicleType').optional().isIn(['sedan', 'suv', 'pickup', 'van']),
     body('brand').optional().trim(),
@@ -69,18 +69,18 @@ const vehicleValidators = {
 
 const branchValidators = {
   create: [
-    body('name').trim().notEmpty().withMessage('Branch name is required').isLength({ max: 200 }),
-    body('address').trim().notEmpty().withMessage('Address is required').isLength({ max: 500 }),
+    body('name').trim().notEmpty().withMessage('Tên chi nhánh là bắt buộc').isLength({ max: 200 }),
+    body('address').trim().notEmpty().withMessage('Địa chỉ là bắt buộc').isLength({ max: 500 }),
     body('phone').optional().trim().isLength({ max: 20 }),
-    body('email').optional().trim().isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('email').optional().trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
     body('openingTime').optional().trim(),
     body('closingTime').optional().trim(),
     body('status').optional().isIn(['active', 'inactive']),
     body('image').optional().trim(),
-    body('location.coordinates').optional().isArray().withMessage('Coordinates must be an array [longitude, latitude]'),
+    body('location.coordinates').optional().isArray().withMessage('Tọa độ phải là mảng [longitude, latitude]'),
   ],
   update: [
-    param('id').isMongoId().withMessage('Invalid branch ID'),
+    param('id').isMongoId().withMessage('ID chi nhánh không hợp lệ'),
     body('name').optional().trim().isLength({ max: 200 }),
     body('address').optional().trim().isLength({ max: 500 }),
     body('phone').optional().trim().isLength({ max: 20 }),
@@ -92,31 +92,31 @@ const branchValidators = {
     body('location.coordinates').optional().isArray(),
   ],
   updateStatus: [
-    param('id').isMongoId().withMessage('Invalid branch ID'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['active', 'inactive']),
+    param('id').isMongoId().withMessage('ID chi nhánh không hợp lệ'),
+    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['active', 'inactive']),
   ],
 };
 
 const packageValidators = {
   create: [
-    body('name').trim().notEmpty().withMessage('Package name is required').isLength({ max: 200 }),
+    body('name').trim().notEmpty().withMessage('Tên gói dịch vụ là bắt buộc').isLength({ max: 200 }),
     body('description').optional().trim().isLength({ max: 1000 }),
-    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
-    body('duration').isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
+    body('price').isFloat({ min: 0 }).withMessage('Giá phải là số dương'),
+    body('duration').isInt({ min: 1 }).withMessage('Thời gian tối thiểu là 1 phút'),
     body('image').optional().trim(),
-    body('branchId').optional().isMongoId().withMessage('Invalid branch ID'),
+    body('branchId').optional().isMongoId().withMessage('ID chi nhánh không hợp lệ'),
     body('status').optional().isIn(['active', 'inactive']),
     body('category').optional().isIn(['external', 'internal', 'full']),
     body('vehicleTypes').optional().isArray(),
   ],
   update: [
-    param('id').isMongoId().withMessage('Invalid package ID'),
+    param('id').isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
     body('name').optional().trim().isLength({ max: 200 }),
     body('description').optional().trim().isLength({ max: 1000 }),
     body('price').optional().isFloat({ min: 0 }),
     body('duration').optional().isInt({ min: 1 }),
     body('image').optional().trim(),
-    body('branchId').optional().isMongoId().withMessage('Invalid branch ID'),
+    body('branchId').optional().isMongoId().withMessage('ID chi nhánh không hợp lệ'),
     body('status').optional().isIn(['active', 'inactive']),
     body('category').optional().isIn(['external', 'internal', 'full']),
     body('vehicleTypes').optional().isArray(),
@@ -144,7 +144,7 @@ const bookingValidators = {
   ],
   updateStatus: [
     param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
-    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled']),
+    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled']),
   ],
   updateSubServices: [
     param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
@@ -191,27 +191,27 @@ const refundRequestValidators = {
     body('reason').trim().notEmpty().withMessage('Lý do là bắt buộc').isLength({ max: 500 }),
   ],
   review: [
-    param('id').isMongoId().withMessage('Invalid refund request ID'),
-    body('decision').notEmpty().withMessage('Decision is required').isIn(['approved', 'rejected']),
+    param('id').isMongoId().withMessage('ID yêu cầu hoàn tiền không hợp lệ'),
+    body('decision').notEmpty().withMessage('Quyết định là bắt buộc').isIn(['approved', 'rejected']),
     body('reviewNote').optional().trim().isLength({ max: 500 }),
   ],
   getById: [
-    param('id').isMongoId().withMessage('Invalid refund request ID'),
+    param('id').isMongoId().withMessage('ID yêu cầu hoàn tiền không hợp lệ'),
   ],
 };
 
 const voucherValidators = {
   create: [
-    body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 200 }),
+    body('name').trim().notEmpty().withMessage('Vui lòng nhập họ tên').isLength({ max: 200 }),
     body('description').optional().trim().isLength({ max: 500 }),
-    body('type').notEmpty().withMessage('Type is required').isIn(['percentage', 'fixed']),
-    body('value').isFloat({ min: 0 }).withMessage('Value must be a positive number'),
+    body('type').notEmpty().withMessage('Loại là bắt buộc').isIn(['percentage', 'fixed']),
+    body('value').isFloat({ min: 0 }).withMessage('Giá trị phải là số dương'),
     body('maxDiscount').optional().isFloat({ min: 0 }),
     body('minOrder').optional().isFloat({ min: 0 }),
-    body('quantity').isInt({ min: 0 }).withMessage('Quantity must be at least 0'),
+    body('quantity').isInt({ min: 0 }).withMessage('Số lượng tối thiểu là 0'),
     body('maxUsagePerUser').optional().isInt({ min: 1 }),
-    body('startDate').isISO8601().withMessage('Invalid start date'),
-    body('endDate').isISO8601().withMessage('Invalid end date'),
+    body('startDate').isISO8601().withMessage('Ngày bắt đầu không hợp lệ'),
+    body('endDate').isISO8601().withMessage('Ngày kết thúc không hợp lệ'),
     body('applicablePackages').optional().isArray(),
     body('applicableBranches').optional().isArray(),
     body('applicableToAllPackages').optional().isBoolean(),
@@ -219,7 +219,7 @@ const voucherValidators = {
     body('status').optional().isIn(['active', 'inactive']),
   ],
   update: [
-    param('id').isMongoId().withMessage('Invalid voucher ID'),
+    param('id').isMongoId().withMessage('ID mã giảm giá không hợp lệ'),
     body('name').optional().trim().isLength({ max: 200 }),
     body('description').optional().trim().isLength({ max: 500 }),
     body('type').optional().isIn(['percentage', 'fixed']),
@@ -233,22 +233,22 @@ const voucherValidators = {
     body('status').optional().isIn(['active', 'inactive']),
   ],
   validate: [
-    body('code').trim().notEmpty().withMessage('Voucher code is required'),
-    body('bookingData').isObject().withMessage('Booking data is required'),
+    body('code').trim().notEmpty().withMessage('Mã giảm giá là bắt buộc'),
+    body('bookingData').isObject().withMessage('Dữ liệu đặt lịch là bắt buộc'),
   ],
   redeem: [
-    body('code').trim().notEmpty().withMessage('Voucher code is required'),
+    body('code').trim().notEmpty().withMessage('Mã giảm giá là bắt buộc'),
     body('bookingId').optional().isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
     body('discountAmount').optional().isFloat({ min: 0 }),
   ],
   reserve: [
-    body('code').trim().notEmpty().withMessage('Voucher code is required'),
-    body('bookingId').isMongoId().withMessage('Booking ID is required'),
+    body('code').trim().notEmpty().withMessage('Mã giảm giá là bắt buộc'),
+    body('bookingId').isMongoId().withMessage('ID đặt lịch là bắt buộc'),
     body('discountAmount').optional().isFloat({ min: 0 }),
   ],
   rollback: [
-    body('code').trim().notEmpty().withMessage('Voucher code is required'),
-    body('bookingId').isMongoId().withMessage('Booking ID is required'),
+    body('code').trim().notEmpty().withMessage('Mã giảm giá là bắt buộc'),
+    body('bookingId').isMongoId().withMessage('ID đặt lịch là bắt buộc'),
   ],
 };
 
@@ -258,7 +258,7 @@ const checkinValidators = {
   ],
   updateStatus: [
     param('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
-    body('status').notEmpty().withMessage('Status is required').isIn(['in_progress', 'completed']),
+    body('status').notEmpty().withMessage('Trạng thái là bắt buộc').isIn(['in_progress', 'awaiting_payment', 'completed']),
     body('note').optional().trim().isLength({ max: 500 }),
     body('rating').optional().isInt({ min: 1, max: 5 }),
     body('feedback').optional().trim().isLength({ max: 1000 }),
@@ -267,7 +267,7 @@ const checkinValidators = {
 
 const notificationValidators = {
   markRead: [
-    param('id').isMongoId().withMessage('Invalid notification ID'),
+    param('id').isMongoId().withMessage('ID thông báo không hợp lệ'),
   ],
 };
 

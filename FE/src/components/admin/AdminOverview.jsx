@@ -92,11 +92,12 @@ function getDateRange(key) {
 }
 
 const STATUS_META = {
-  pending:     { label: 'Chờ xử lý',   color: '#f59e0b', bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-400' },
-  checked_in:  { label: 'Đã check-in', color: '#3b82f6', bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-400' },
-  in_progress: { label: 'Đang rửa',    color: '#0ea5e9', bg: 'bg-sky-50',    text: 'text-sky-700',    dot: 'bg-sky-400' },
-  completed:   { label: 'Hoàn thành',  color: '#10b981', bg: 'bg-emerald-50',text: 'text-emerald-700', dot: 'bg-emerald-400' },
-  cancelled:   { label: 'Đã hủy',      color: '#ef4444', bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-400' },
+  pending:          { label: 'Chờ xử lý',      color: '#f59e0b', bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400' },
+  checked_in:       { label: 'Đã check-in',    color: '#3b82f6', bg: 'bg-blue-50',    text: 'text-blue-700',    dot: 'bg-blue-400' },
+  in_progress:      { label: 'Đang rửa',       color: '#0ea5e9', bg: 'bg-sky-50',     text: 'text-sky-700',     dot: 'bg-sky-400' },
+  awaiting_payment: { label: 'Chờ thanh toán', color: '#f97316', bg: 'bg-orange-50',  text: 'text-orange-700',  dot: 'bg-orange-400' },
+  completed:        { label: 'Hoàn thành',     color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400' },
+  cancelled:        { label: 'Đã hủy',         color: '#ef4444', bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-400' },
 };
 
 const PIE_COLORS = ['#f59e0b', '#3b82f6', '#0ea5e9', '#10b981', '#ef4444', '#8b5cf6'];

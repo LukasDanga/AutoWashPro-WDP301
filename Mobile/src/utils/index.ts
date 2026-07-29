@@ -55,3 +55,4 @@ export const parseBookingDateTime = (
 };
 
 export * from './tierHelper';
+export * from './dynamicTranslator';

@@ -56,7 +56,9 @@ interface PaymentOption {
   name: string;
   icon: string;
   description: string;
-  // Một số method không thể chi trả từ xa (cash) — vẫn cho chọn để user linh hoạt.
+  badge?: string;
+  color: string;
+  bg: string;
 }
 
 const PAYMENT_OPTIONS: PaymentOption[] = [
@@ -64,31 +66,35 @@ const PAYMENT_OPTIONS: PaymentOption[] = [
     id: 'wallet',
     name: 'Ví AutoWash',
     icon: 'wallet-outline',
-    description: 'Thanh toán tức thì bằng số dư ví',
-  },
-  {
-    id: 'momo',
-    name: 'MoMo',
-    icon: 'phone-portrait-outline',
-    description: 'Quét QR bằng ứng dụng MoMo',
+    description: 'Thanh toán tức thì bằng số dư ví AutoWash',
+    badge: 'Khuyên dùng',
+    color: '#10B981',
+    bg: 'rgba(16, 185, 129, 0.12)',
   },
   {
     id: 'vnpay',
-    name: 'VNPay',
+    name: 'VNPay QR',
     icon: 'card-outline',
-    description: 'Quét QR bằng ứng dụng ngân hàng hỗ trợ VNPay',
+    description: 'Thẻ ATM / QR Banking hỗ trợ VNPay',
+    badge: 'Nhanh chóng',
+    color: '#005BAA',
+    bg: 'rgba(0, 91, 170, 0.12)',
+  },
+  {
+    id: 'bank',
+    name: 'Chuyển khoản Ngân hàng',
+    icon: 'business-outline',
+    description: 'Tạo VietQR chuyển khoản tự động 24/7',
+    color: '#4F46E5',
+    bg: 'rgba(79, 70, 229, 0.12)',
   },
   {
     id: 'cash',
     name: 'Tiền mặt tại chi nhánh',
     icon: 'cash-outline',
-    description: 'Đến chi nhánh và thanh toán trực tiếp',
-  },
-  {
-    id: 'bank',
-    name: 'Chuyển khoản ngân hàng',
-    icon: 'business-outline',
-    description: 'Quét mã QR để chuyển khoản ngân hàng',
+    description: 'Thanh toán trực tiếp khi đến chi nhánh',
+    color: '#F59E0B',
+    bg: 'rgba(245, 158, 11, 0.12)',
   },
 ];
 
@@ -109,7 +115,7 @@ const TYPE_DESCRIPTION: Record<PayableType, string> = {
 export default function PaymentSelectScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, fetchUser } = useAuth();
   const colors = useColors();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -119,34 +125,31 @@ export default function PaymentSelectScreen() {
     {
       backgroundColor: colors.background,
       borderTopColor: colors.border,
-      paddingBottom: Math.max(insets.bottom, 12) + 12,
+      paddingBottom: Math.max(insets.bottom, 14),
     },
   ];
 
   const bookingId = (params.bookingId as string) || '';
   const rawType = (params.type as PayableType) || 'deposit';
-  // Fallback nếu URL truyền type lạ.
   const payableType: PayableType = ['deposit', 'remaining', 'full'].includes(rawType)
     ? rawType
     : 'deposit';
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [isLoadingBooking, setIsLoadingBooking] = useState(true);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('wallet');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paidPayment, setPaidPayment] = useState<any | null>(null);
 
-  // Tính số tiền cần trả cho payableType — match logic BE.
-  // Với đơn định kỳ (recurring), booking.finalPrice = giá 1 buổi,
-  // nhưng depositAmount = 30% × tổng nhóm (BE đã tính đúng).
-  // Dùng depositAmount / 0.3 để lấy tổng thay vì finalPrice.
+  const walletBalance = user?.walletBalance ?? 0;
+
   const fullAmount = useMemo(() => {
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
     if (beDeposit > 0) {
-      return Math.round((beDeposit / 0.3) / 1000) * 1000; // recurring: tổng nhóm
+      return Math.round((beDeposit / 0.3) / 1000) * 1000;
     }
-    return booking.finalPrice ?? booking.totalPrice ?? 0; // đơn lẻ: giữ nguyên
+    return booking.finalPrice ?? booking.totalPrice ?? 0;
   }, [booking]);
 
   const computedAmount = useMemo(() => {
@@ -154,14 +157,17 @@ export default function PaymentSelectScreen() {
     const deposit = booking.depositAmount ?? 0;
     if (payableType === 'deposit') return deposit;
     if (payableType === 'remaining') {
-      if (booking.depositPaid) return Math.max(0, fullAmount - deposit);
-      return fullAmount;
+      if (booking.depositPaid && deposit > 0) {
+        return Math.max(0, fullAmount - deposit);
+      }
+      return 0;
     }
     return fullAmount;
   }, [booking, payableType, fullAmount]);
 
   useEffect(() => {
     let cancelled = false;
+    if (fetchUser) fetchUser().catch(() => {});
     const load = async () => {
       if (!bookingId) {
         setIsLoadingBooking(false);
@@ -183,7 +189,6 @@ export default function PaymentSelectScreen() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
 
   const handlePayment = async () => {
@@ -192,9 +197,6 @@ export default function PaymentSelectScreen() {
       return;
     }
 
-    // Guard theo nghiệp vụ:
-    // - Cọc: bắt buộc booking có depositAmount > 0 và chưa cọc.
-    // - Phần còn lại: yêu cầu đã cọc trước đó.
     if (payableType === 'deposit') {
       if ((booking.depositAmount ?? 0) <= 0) {
         AlertDialog.error('Không cần cọc', 'Đơn này không yêu cầu đặt cọc.');
@@ -205,12 +207,21 @@ export default function PaymentSelectScreen() {
         return;
       }
     }
-    if (payableType === 'remaining' && !booking.depositPaid) {
-      AlertDialog.error(
-        'Chưa cọc',
-        'Cần đặt cọc trước khi thanh toán phần còn lại.',
-      );
-      return;
+    if (payableType === 'remaining') {
+      if (!booking.depositPaid) {
+        AlertDialog.error(
+          'Chưa cọc',
+          'Cần đặt cọc trước khi thanh toán phần còn lại.',
+        );
+        return;
+      }
+      if ((booking.depositAmount ?? 0) <= 0) {
+        AlertDialog.error(
+          'Không có dư nợ',
+          'Đơn này không có phần còn lại để thanh toán.',
+        );
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -222,21 +233,16 @@ export default function PaymentSelectScreen() {
       });
 
       if (selectedMethod === 'cash' || selectedMethod === 'wallet') {
-        // Cash / Wallet auto-confirm ở BE, payment.status === 'paid' luôn.
         setPaidPayment(payment);
         if (selectedMethod === 'wallet') {
           toast.success('Thanh toán thành công', 'Đã thanh toán bằng Ví AutoWash');
         } else {
-          toast.success('Thanh toán thành công', 'Vui lòng thanh toán tiền mặt khi đến chi nhánh');
+          toast.info('Đã ghi nhận lựa chọn', 'Vui lòng thanh toán tiền mặt trực tiếp khi đến chi nhánh');
         }
       } else {
-        // MoMo / VNPay — hiển thị QR để user quét ngay trong app.
-        // Nếu gateway trả paymentUrl, mở bằng Linking; nếu không, dùng qrCode.
         setPaidPayment(payment);
         if (payment.paymentUrl) {
-          Linking.openURL(payment.paymentUrl).catch(() => {
-            // Fallback: vẫn hiển thị QR trong app.
-          });
+          Linking.openURL(payment.paymentUrl).catch(() => {});
         }
       }
     } catch (error: any) {
@@ -249,8 +255,6 @@ export default function PaymentSelectScreen() {
     }
   };
 
-  // Sau khi thanh toán xong (cash auto-confirm hoặc QR hiển thị), cho user
-  // bấm "Xem chi tiết" để đi tới booking/[id] và thấy paymentStatus cập nhật.
   const handleViewDetail = () => {
     router.replace(`/booking/${bookingId}` as any);
   };
@@ -296,74 +300,66 @@ export default function PaymentSelectScreen() {
     );
   }
 
-  // Trang "kết quả thanh toán" cho MoMo/VNPay (sau khi tạo payment pending).
   if (paidPayment && selectedMethod !== 'cash' && selectedMethod !== 'wallet') {
     return (
       <ScreenContainer>
         <Header title="Quét QR để thanh toán" showBack />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.doubleBezelInner}>
-              <AppText variant="h4" style={styles.cardTitle}>
-                {TYPE_LABEL[payableType]} — {selectedMethod === 'momo' ? 'MoMo' : selectedMethod === 'vnpay' ? 'VNPay' : 'Ngân hàng'}
-              </AppText>
-              <AppText variant="body" color="textSecondary" style={styles.qrCaption}>
-                Mở app {selectedMethod === 'momo' ? 'MoMo' : 'ngân hàng'} và quét mã bên dưới
-              </AppText>
+        <ScrollView contentContainerStyle={styles.scrollContentContainer} showsVerticalScrollIndicator={false}>
+          <View style={[styles.cardContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <AppText variant="h4" style={styles.cardTitle}>
+              {TYPE_LABEL[payableType]} — {selectedMethod === 'vnpay' ? 'VNPay' : 'Ngân hàng'}
+            </AppText>
+            <AppText variant="body" color="textSecondary" style={styles.qrCaption}>
+              Mở app {selectedMethod === 'vnpay' ? 'VNPay / ngân hàng' : 'ngân hàng'} và quét mã bên dưới
+            </AppText>
 
-              {paidPayment.qrCode ? (
-                <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: spacing.md, padding: 6, borderRadius: 24 }]}>
-                  <View style={styles.doubleBezelInner}>
-                    <Image
-                      source={{ uri: paidPayment.qrCode }}
-                      style={styles.qrImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                </View>
-              ) : paidPayment.paymentUrl ? (
-                <View style={styles.urlBox}>
-                  <AppText variant="caption" color="textSecondary" style={styles.urlText}>
-                    {paidPayment.paymentUrl}
-                  </AppText>
-                  <Button
-                    title="Mở cổng thanh toán"
-                    onPress={() => Linking.openURL(paidPayment.paymentUrl)}
-                    style={{ marginTop: spacing.sm }}
-                    size="large"
-                  />
-                </View>
-              ) : (
-                <AppText variant="body" color="textSecondary">
-                  Đang chờ cổng thanh toán xử lý…
-                </AppText>
-              )}
-
-              <View style={[styles.summaryDivider || { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md, width: '100%' }]} />
-
-              <View style={styles.amountRow}>
-                <AppText variant="body" color="textSecondary">Số tiền</AppText>
-                <AppText variant="h3" color="primary" style={{ fontWeight: '700' }}>
-                  {formatCurrency(paidPayment.amount ?? computedAmount)}
-                </AppText>
+            {paidPayment.qrCode ? (
+              <View style={[styles.qrWrapper, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Image
+                  source={{ uri: paidPayment.qrCode }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
               </View>
-              {paidPayment.transactionId ? (
-                <AppText variant="caption" color="textTertiary" style={styles.txnId}>
-                  Mã giao dịch: {paidPayment.transactionId}
+            ) : paidPayment.paymentUrl ? (
+              <View style={styles.urlBox}>
+                <AppText variant="caption" color="textSecondary" style={styles.urlText}>
+                  {paidPayment.paymentUrl}
                 </AppText>
-              ) : null}
+                <Button
+                  title="Mở cổng thanh toán"
+                  onPress={() => Linking.openURL(paidPayment.paymentUrl)}
+                  style={{ marginTop: spacing.sm }}
+                  size="large"
+                />
+              </View>
+            ) : (
+              <AppText variant="body" color="textSecondary">
+                Đang chờ cổng thanh toán xử lý…
+              </AppText>
+            )}
+
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+
+            <View style={styles.amountRow}>
+              <AppText variant="body" color="textSecondary">Số tiền</AppText>
+              <AppText variant="h3" color="primary" style={{ fontWeight: '700' }}>
+                {formatCurrency(paidPayment.amount ?? computedAmount)}
+              </AppText>
             </View>
+            {paidPayment.transactionId ? (
+              <AppText variant="caption" color="textTertiary" style={styles.txnId}>
+                Mã giao dịch: {paidPayment.transactionId}
+              </AppText>
+            ) : null}
           </View>
 
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.infoSubtle || colors.infoLight, borderColor: colors.info, padding: 6, borderRadius: 24 }]}>
-            <View style={styles.doubleBezelInner}>
-              <Icon name="information-circle-outline" size={20} color={colors.info} />
-              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-                Sau khi quét QR và xác nhận trên app, hệ thống sẽ tự cập nhật trạng
-                thái thanh toán trong vài giây. Bạn có thể quay lại trang chi tiết
-                đơn để xem trạng thái mới nhất.
-              </AppText>
-            </View>
+          <View style={[styles.infoCardBox, { backgroundColor: colors.infoLight, borderColor: colors.info }]}>
+            <Icon name="information-circle-outline" size={20} color={colors.info} />
+            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+              Sau khi quét QR và xác nhận trên app, hệ thống sẽ tự cập nhật trạng
+              thái thanh toán trong vài giây.
+            </AppText>
           </View>
         </ScrollView>
 
@@ -379,22 +375,19 @@ export default function PaymentSelectScreen() {
     );
   }
 
-  // Trang "kết quả" cho cash / wallet — booking vẫn ở trạng thái pending cho đến khi
-  // manager xác nhận. Hiển thị nút để user chuyển sang chi tiết.
-  if (paidPayment && (selectedMethod === 'cash' || selectedMethod === 'wallet')) {
+  if (paidPayment && selectedMethod === 'wallet') {
     return (
       <ScreenContainer>
-        <Header title={selectedMethod === 'wallet' ? 'Thanh toán thành công' : 'Đặt cọc thành công'} showBack />
+        <Header title="Thanh toán bằng Ví thành công" showBack />
         <View style={styles.content}>
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.successSubtle || colors.successLight, borderColor: colors.success, padding: 6, borderRadius: 24 }]}>
-            <View style={styles.doubleBezelInner}>
+          <View style={[styles.cardContainer, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
               <Icon name="checkmark-circle" size={56} color={colors.success} />
               <AppText variant="h3" style={styles.successTitle}>
-                {TYPE_LABEL[payableType]} thành công
+                Thanh toán thành công
               </AppText>
-              <AppText variant="body" color="textSecondary" style={[styles.successText, { lineHeight: 20 }]}>
-                Số tiền {formatCurrency(paidPayment.amount ?? computedAmount)} đã được
-                {selectedMethod === 'wallet' ? ' thanh toán bằng Ví AutoWash.' : ' lưu ghi chú thu tiền mặt khi bạn đến chi nhánh.'} Đơn của bạn đang chờ nhân viên xác nhận.
+              <AppText variant="body" color="textSecondary" style={[styles.successText, { textAlign: 'center', lineHeight: 20 }]}>
+                Số tiền {formatCurrency(paidPayment.amount ?? computedAmount)} đã được trừ trực tiếp từ Ví AutoWash của bạn.
               </AppText>
             </View>
           </View>
@@ -406,216 +399,233 @@ export default function PaymentSelectScreen() {
     );
   }
 
-  const isDepositAlreadyPaid =
-    payableType === 'deposit' && booking.depositPaid;
+  if (paidPayment && selectedMethod === 'cash') {
+    return (
+      <ScreenContainer>
+        <Header title="Ghi nhận phương thức tiền mặt" showBack />
+        <View style={styles.content}>
+          <View style={[styles.cardContainer, { backgroundColor: colors.warningLight || '#FEF3C7', borderColor: colors.warning || '#F59E0B' }]}>
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Icon name="time-outline" size={56} color={colors.warning || '#F59E0B'} />
+              <AppText variant="h3" style={[styles.successTitle, { color: colors.textPrimary }]}>
+                Đã ghi nhận phương thức Tiền mặt
+              </AppText>
+              <AppText variant="body" color="textSecondary" style={[styles.successText, { textAlign: 'center', lineHeight: 22, marginTop: 8 }]}>
+                Bạn đã chọn thanh toán {formatCurrency(paidPayment.amount ?? computedAmount)} bằng tiền mặt. Vui lòng thanh toán trực tiếp cho nhân viên khi đến chi nhánh. Quản lý / nhân viên chi nhánh sẽ kiểm tra và xác nhận thanh toán cho bạn.
+              </AppText>
+            </View>
+          </View>
+        </View>
+        <View style={bottomActionStyle}>
+          <Button title="Tôi đã hiểu — Xem chi tiết đơn" onPress={handleViewDetail} fullWidth size="large" />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  const isDepositAlreadyPaid = payableType === 'deposit' && booking.depositPaid;
   const isRemainingNotEligible =
-    payableType === 'remaining' && !booking.depositPaid;
+    payableType === 'remaining' &&
+    (!booking.depositPaid || (booking.depositAmount ?? 0) <= 0);
   const isZeroDeposit = (booking.depositAmount ?? 0) <= 0;
   const isFullyPaid = booking.paymentStatus === 'paid';
 
+  const isDisabled =
+    isFullyPaid ||
+    isDepositAlreadyPaid ||
+    (isZeroDeposit && payableType === 'deposit') ||
+    isRemainingNotEligible;
+
+  const getButtonTitle = () => {
+    if (isFullyPaid) return 'Đơn đã thanh toán đủ';
+    if (isDepositAlreadyPaid) return 'Đã đặt cọc đơn này';
+    if (isZeroDeposit && payableType === 'deposit') return 'Không yêu cầu cọc';
+    if (isRemainingNotEligible) return 'Cần đặt cọc trước';
+    if (selectedMethod === 'cash') return `Xác nhận trả tiền mặt (${formatCurrency(computedAmount)})`;
+    return `Thanh toán ${formatCurrency(computedAmount)}`;
+  };
+
   return (
-    <ScreenContainer>
+    <ScreenContainer background="subtle">
       <Header title="Thanh toán" showBack />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Booking summary */}
-        <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.doubleBezelInner}>
-            <View style={styles.summaryHeader}>
-              <View style={[styles.iconWrap, { backgroundColor: colors.primarySubtle }]}>
-                <Icon name="receipt-outline" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppText variant="bodySmall" color="textSecondary">
-                  Mã đặt lịch
-                </AppText>
-                <AppText variant="body" style={{ fontWeight: '600' }}>
-                  #{booking._id.slice(-8).toUpperCase()}
-                </AppText>
-              </View>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Booking summary card */}
+        <View style={[styles.cardContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.summaryHeader}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.primarySubtle }]}>
+              <Icon name="receipt-outline" size={20} color={colors.primary} />
             </View>
-            <View style={[styles.summaryDivider || { height: 1, backgroundColor: colors.divider, marginVertical: spacing.sm }]} />
-            <View style={styles.summaryRow}>
-              <AppText variant="caption" color="textSecondary">Gói dịch vụ</AppText>
-              <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
-                {(booking.packageId as any)?.name || '—'}
+            <View style={{ flex: 1 }}>
+              <AppText variant="caption" color="textSecondary">
+                Mã đặt lịch
+              </AppText>
+              <AppText variant="h4" color="textPrimary" style={{ fontWeight: '700' }}>
+                #{booking._id.slice(-8).toUpperCase()}
               </AppText>
             </View>
-            <View style={styles.summaryRow}>
-              <AppText variant="caption" color="textSecondary">Ngày giờ</AppText>
-              <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
-                {formatDate(booking.bookingDate)} • {booking.startTime}
-              </AppText>
-            </View>
-            <View style={styles.summaryRow}>
-              <AppText variant="caption" color="textSecondary">Tổng đơn</AppText>
-              <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
-                {formatCurrency(fullAmount)}
-              </AppText>
-            </View>
-            {booking.depositAmount ? (
-              <View style={styles.summaryRow}>
-                <AppText variant="caption" color="textSecondary">Cọc (30%)</AppText>
-                <AppText variant="bodySmall" style={[styles.summaryValue, { fontWeight: '600', color: colors.textPrimary }]}>
-                  {formatCurrency(booking.depositAmount)}
-                  {booking.depositPaid ? ' • đã cọc' : ' • chưa cọc'}
-                </AppText>
-              </View>
-            ) : null}
           </View>
+
+          <View style={[styles.dividerLine, { backgroundColor: colors.borderLight || '#F1F5F9' }]} />
+
+          <View style={styles.summaryRow}>
+            <AppText variant="caption" color="textSecondary">Gói dịch vụ</AppText>
+            <AppText variant="bodySmall" style={styles.summaryValue}>
+              {(booking.packageId as any)?.name || 'Gói dịch vụ rửa xe'}
+            </AppText>
+          </View>
+          <View style={styles.summaryRow}>
+            <AppText variant="caption" color="textSecondary">Ngày giờ</AppText>
+            <AppText variant="bodySmall" style={styles.summaryValue}>
+              {formatDate(booking.bookingDate)} • {booking.startTime}
+            </AppText>
+          </View>
+          <View style={styles.summaryRow}>
+            <AppText variant="caption" color="textSecondary">Tổng đơn</AppText>
+            <AppText variant="bodySmall" style={styles.summaryValue}>
+              {formatCurrency(fullAmount)}
+            </AppText>
+          </View>
+          {booking.depositAmount ? (
+            <View style={styles.summaryRow}>
+              <AppText variant="caption" color="textSecondary">Cọc (30%)</AppText>
+              <AppText variant="bodySmall" style={[styles.summaryValue, { color: booking.depositPaid ? colors.success : colors.warning }]}>
+                {formatCurrency(booking.depositAmount)}
+                {booking.depositPaid ? ' • đã cọc' : ' • chưa cọc'}
+              </AppText>
+            </View>
+          ) : null}
         </View>
 
-        {/* Trạng thái chặn thanh toán */}
-        {isFullyPaid ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: colors.successSubtle || colors.successLight, borderColor: colors.success, padding: 6, borderRadius: 24 }]}>
-            <View style={styles.doubleBezelInner}>
-              <Icon name="checkmark-circle" size={20} color={colors.success} />
-              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-                Đơn này đã được thanh toán đủ. Không cần đặt cọc thêm.
-              </AppText>
-            </View>
+        {/* Blocking alerts */}
+        {isFullyPaid && (
+          <View style={[styles.infoCardBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+            <Icon name="checkmark-circle" size={20} color={colors.success} />
+            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+              Đơn này đã được thanh toán đủ. Không cần đặt cọc thêm.
+            </AppText>
           </View>
-        ) : null}
-        {isDepositAlreadyPaid ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: (colors as any).infoSubtle || (colors as any).infoLight || colors.primary, borderColor: colors.info, padding: 6, borderRadius: 24 }]}>
-            <View style={styles.doubleBezelInner}>
-              <Icon name="information-circle-outline" size={20} color={colors.info} />
-              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-                Bạn đã đặt cọc cho đơn này. Có thể thanh toán phần còn lại sau khi dịch vụ hoàn thành.
-              </AppText>
-            </View>
+        )}
+        {isDepositAlreadyPaid && (
+          <View style={[styles.infoCardBox, { backgroundColor: colors.infoLight, borderColor: colors.info }]}>
+            <Icon name="information-circle-outline" size={20} color={colors.info} />
+            <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
+              Bạn đã đặt cọc cho đơn này. Có thể thanh toán phần còn lại sau khi dịch vụ hoàn thành.
+            </AppText>
           </View>
-        ) : null}
-        {isZeroDeposit && payableType === 'deposit' ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: (colors as any).warningSubtle || (colors as any).warningLight || colors.warning, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
-            <View style={styles.doubleBezelInner}>
-              <Icon name="alert-circle-outline" size={20} color={colors.warning} />
-              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-                Đơn này không yêu cầu đặt cọc (gói slot / thanh toán trọn gói).
-              </AppText>
-            </View>
-          </View>
-        ) : null}
-        {isRemainingNotEligible ? (
-          <View style={[styles.doubleBezelOuter, { backgroundColor: (colors as any).warningSubtle || (colors as any).warningLight || colors.warning, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
-            <View style={styles.doubleBezelInner}>
-              <Icon name="alert-circle-outline" size={20} color={colors.warning} />
-              <AppText variant="bodySmall" color="textPrimary" style={styles.infoText}>
-                Cần đặt cọc trước khi thanh toán phần còn lại.
-              </AppText>
-            </View>
-          </View>
-        ) : null}
+        )}
 
-        {/* Số tiền cần trả */}
-        <View style={[styles.doubleBezelOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.doubleBezelInner}>
-            <AppText variant="label" color="textSecondary">
-              {TYPE_LABEL[payableType]}
-            </AppText>
-            <AppText variant="h1" color="primary" style={[styles.amountText, { fontWeight: '700' }]}>
-              {formatCurrency(computedAmount)}
-            </AppText>
-            <AppText variant="caption" color="textTertiary">
-              {TYPE_DESCRIPTION[payableType]}
-            </AppText>
-          </View>
+        {/* Amount to Pay Hero Card */}
+        <View style={[styles.amountHeroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <AppText variant="caption" color="textSecondary" style={{ fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {TYPE_LABEL[payableType]}
+          </AppText>
+          <AppText variant="h1" color="primary" style={styles.amountHeroText}>
+            {formatCurrency(computedAmount)}
+          </AppText>
+          <AppText variant="caption" color="textTertiary" style={{ lineHeight: 18 }}>
+            {TYPE_DESCRIPTION[payableType]}
+          </AppText>
         </View>
 
-        {/* Phương thức */}
+        {/* Payment Methods Section Header */}
         <AppText variant="h4" style={styles.sectionTitle}>
           Chọn phương thức thanh toán
         </AppText>
 
-        {PAYMENT_OPTIONS.map((option) => (
-          <TouchableOpacity
-            key={option.id}
-            onPress={() => setSelectedMethod(option.id)}
-            activeOpacity={0.8}
-            disabled={
-              isFullyPaid ||
-              isZeroDeposit ||
-              isRemainingNotEligible ||
-              isDepositAlreadyPaid
-            }
-          >
-            <View
-              style={[
-                styles.doubleBezelOuter,
-                {
-                  backgroundColor: selectedMethod === option.id ? colors.primarySubtle : colors.surface,
-                  borderColor: selectedMethod === option.id ? colors.primary : colors.border,
-                  opacity: (isFullyPaid || isZeroDeposit || isRemainingNotEligible || isDepositAlreadyPaid) ? 0.5 : 1,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.doubleBezelInner,
-                  { backgroundColor: selectedMethod === option.id ? colors.primarySubtle : colors.background }
-                ]}
+        {/* Payment Methods Options List */}
+        <View style={styles.optionsList}>
+          {PAYMENT_OPTIONS.map((option) => {
+            const isSelected = selectedMethod === option.id;
+            return (
+              <TouchableOpacity
+                key={option.id}
+                onPress={() => setSelectedMethod(option.id)}
+                activeOpacity={0.8}
+                disabled={isDisabled}
               >
-                <View style={styles.paymentContent}>
-                  <View style={[styles.paymentIcon, { backgroundColor: colors.primarySubtle }]}>
-                    <Icon name={option.icon} size={24} color={colors.primary} />
+                <View
+                  style={[
+                    styles.paymentOptionCard,
+                    {
+                      backgroundColor: isSelected ? colors.surface : colors.surface,
+                      borderColor: isSelected ? colors.primary : (colors.borderLight || '#E2E8F0'),
+                      borderWidth: isSelected ? 2 : 1,
+                      opacity: isDisabled ? 0.5 : 1,
+                    },
+                    isSelected && shadows.sm,
+                  ]}
+                >
+                  {/* Left Icon Wrap */}
+                  <View style={[styles.paymentOptionIconWrap, { backgroundColor: option.bg }]}>
+                    <Icon name={option.icon} size={22} color={option.color} />
                   </View>
-                  <View style={styles.paymentInfo}>
-                    <AppText variant="body" style={styles.paymentName}>
-                      {option.name}
-                    </AppText>
-                    <AppText variant="caption" color="textSecondary">
-                      {option.description}
-                    </AppText>
-                  </View>
-                  {selectedMethod === option.id ? (
-                    <View style={[styles.optionCheck, { backgroundColor: (colors as any).primary }]}>
-                      <AppText style={{ color: 'white', fontSize: 12 }}>✓</AppText>
-                    </View>
-                  ) : (
-                    <View style={[styles.optionCheckEmpty, { borderColor: (colors as any).border }]} />
-                  )}
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
 
+                  {/* Option info */}
+                  <View style={styles.paymentOptionInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <AppText variant="body" style={{ fontWeight: '700', color: colors.textPrimary }}>
+                        {option.name}
+                      </AppText>
+                      {option.badge ? (
+                        <View style={[styles.badgeTag, { backgroundColor: `${option.color}1F` }]}>
+                          <AppText style={[styles.badgeTagText, { color: option.color }]}>
+                            {option.badge}
+                          </AppText>
+                        </View>
+                      ) : null}
+                    </View>
+                    <AppText
+                      variant="caption"
+                      style={{
+                        marginTop: 2,
+                        color: option.id === 'wallet' && walletBalance < computedAmount ? colors.error : colors.textSecondary,
+                        fontWeight: option.id === 'wallet' ? '600' : '400',
+                      }}
+                    >
+                      {option.id === 'wallet'
+                        ? `Số dư: ${formatCurrency(walletBalance)}${walletBalance < computedAmount ? ' (Không đủ số dư)' : ' • Thanh toán tức thì'}`
+                        : option.description}
+                    </AppText>
+                  </View>
+
+                  {/* Radio / Check indicator */}
+                  <View
+                    style={[
+                      styles.radioCircle,
+                      isSelected
+                        ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                        : { borderColor: colors.border },
+                    ]}
+                  >
+                    {isSelected && <Icon name="checkmark" size={14} color="#FFFFFF" />}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Security badge */}
         <View style={styles.securityNote}>
           <Icon name="shield-checkmark-outline" size={18} color={colors.success} />
           <AppText variant="caption" color="textSecondary" style={styles.securityText}>
-            Thanh toán an toàn và bảo mật
+            Thanh toán an toàn và bảo mật 100% qua AutoWash Pro
           </AppText>
         </View>
       </ScrollView>
 
-      {/* Bottom Action */}
+      {/* Bottom Action Button Container */}
       <View style={bottomActionStyle}>
         <Button
-          title={
-            isFullyPaid
-              ? 'Đơn đã thanh toán đủ'
-              : isDepositAlreadyPaid
-              ? 'Đã đặt cọc'
-              : isZeroDeposit
-              ? 'Không yêu cầu cọc'
-              : isRemainingNotEligible
-              ? 'Cần đặt cọc trước'
-              : (selectedMethod === 'cash' || selectedMethod === 'wallet')
-              ? `Xác nhận ${TYPE_LABEL[payableType].toLowerCase()} bằng ${selectedMethod === 'wallet' ? 'Ví' : 'tiền mặt'}`
-              : `Thanh toán ${formatCurrency(computedAmount)} qua ${
-                  PAYMENT_OPTIONS.find((o) => o.id === selectedMethod)?.name
-                }`
-          }
+          title={getButtonTitle()}
           onPress={handlePayment}
           loading={isProcessing}
-          disabled={
-            !bookingId ||
-            isProcessing ||
-            isFullyPaid ||
-            isDepositAlreadyPaid ||
-            isZeroDeposit ||
-            isRemainingNotEligible
-          }
+          disabled={!bookingId || isProcessing || isDisabled}
           fullWidth
           size="large"
         />
@@ -625,29 +635,25 @@ export default function PaymentSelectScreen() {
 }
 
 const styles = StyleSheet.create({
-  doubleBezelOuter: {
-    padding: spacing.lg,
-    borderRadius: layout.cardRadius,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    marginBottom: spacing.md,
-    backgroundColor: '#FFFFFF',
-    ...shadows.md,
-  },
-  doubleBezelInner: {
-    backgroundColor: 'transparent',
-  },
   content: {
     flex: 1,
+  },
+  scrollContentContainer: {
     padding: spacing.md,
+    paddingBottom: 150,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  summaryCard: {
+  cardContainer: {
+    padding: spacing.lg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     marginBottom: spacing.md,
+    ...shadows.sm,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -661,10 +667,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  divider: {
+  dividerLine: {
     height: 1,
-    backgroundColor: '#eee',
-    marginVertical: spacing.sm,
+    marginVertical: spacing.md,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -676,65 +681,71 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
     marginLeft: spacing.md,
+    fontWeight: '600',
   },
-  amountCard: {
+  infoCardBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  amountHeroCard: {
+    padding: spacing.lg,
+    borderRadius: 20,
+    borderWidth: 1,
     marginBottom: spacing.lg,
-    alignItems: 'flex-start',
+    ...shadows.sm,
   },
-  amountText: {
+  amountHeroText: {
+    fontSize: 32,
+    fontWeight: '800',
     marginVertical: spacing.xs,
+    letterSpacing: -0.5,
   },
   sectionTitle: {
     marginBottom: spacing.md,
   },
-  paymentCard: {
-    marginBottom: spacing.sm,
+  optionsList: {
+    gap: 12,
+    marginBottom: spacing.md,
   },
-  paymentContent: {
+  paymentOptionCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 16,
   },
-  paymentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  paymentOptionIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  paymentInfo: {
+  paymentOptionInfo: {
     flex: 1,
   },
-  paymentName: {
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  radio: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  radioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: spacing.xs,
   },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  badgeTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
-  warnCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    gap: spacing.sm,
+  badgeTagText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   infoText: {
     flex: 1,
@@ -743,7 +754,7 @@ const styles = StyleSheet.create({
   securityNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -752,13 +763,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   bottomAction: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-  },
-  // QR / success
-  qrCard: {
-    marginBottom: spacing.md,
-    alignItems: 'center',
   },
   cardTitle: {
     marginBottom: spacing.xs,
@@ -768,15 +775,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     textAlign: 'center',
   },
-  qrBox: {
+  qrWrapper: {
     padding: spacing.md,
-    backgroundColor: '#fff',
-    borderRadius: borderRadius.md,
+    borderRadius: 20,
+    borderWidth: 1,
     marginBottom: spacing.md,
+    alignItems: 'center',
   },
   qrImage: {
-    width: 260,
-    height: 260,
+    width: 240,
+    height: 240,
   },
   urlBox: {
     marginBottom: spacing.md,
@@ -790,15 +798,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
   },
   txnId: {
     marginTop: spacing.sm,
-  },
-  successCard: {
-    alignItems: 'center',
-    padding: spacing.lg,
   },
   successTitle: {
     marginTop: spacing.md,

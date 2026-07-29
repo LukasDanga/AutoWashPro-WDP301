@@ -10,6 +10,8 @@ import { useColors } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import { spacing, borderRadius, layout } from '../../theme/spacing';
 import { Icon, Icons } from './Icon';
+import { useTranslation } from 'react-i18next';
+import { translateDynamicText } from '../../utils';
 
 type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'default' | 'primary';
 type BadgeSize = 'small' | 'medium';
@@ -106,20 +108,24 @@ export const BookingStatusBadge: React.FC<{ status: string }> = ({ status }) => 
       confirmed: { variant: 'primary', label: 'Đã xác nhận' },
       checked_in: { variant: 'primary', label: 'Đã check-in' },
       in_progress: { variant: 'primary', label: 'Đang rửa' },
+      awaiting_payment: { variant: 'info', label: 'Chờ thanh toán' },
       completed: { variant: 'success', label: 'Hoàn thành' },
       cancelled: { variant: 'error', label: 'Đã hủy' },
     };
 
-    return statusMap[status.toLowerCase()] || { variant: 'default', label: status };
+    return statusMap[String(status).toLowerCase()] || { variant: 'default', label: status || 'N/A' };
   };
 
+  const { i18n } = useTranslation();
   const config = getStatusConfig();
+  const translatedLabel = translateDynamicText(config.label, i18n.language);
+
   return (
     <Badge
-      label={config.label}
+      label={translatedLabel}
       variant={config.variant}
       showIcon
-      accessibilityLabel={`Trạng thái đặt lịch: ${config.label}`}
+      accessibilityLabel={`Trạng thái đặt lịch: ${translatedLabel}`}
     />
   );
 };
@@ -134,16 +140,19 @@ export const PaymentStatusBadge: React.FC<{ status: string }> = ({ status }) => 
       refunded: { variant: 'default', label: 'Đã hoàn tiền' },
     };
 
-    return statusMap[status.toLowerCase()] || { variant: 'default', label: status };
+    return statusMap[String(status).toLowerCase()] || { variant: 'default', label: status || 'N/A' };
   };
 
+  const { i18n } = useTranslation();
   const config = getStatusConfig();
+  const translatedLabel = translateDynamicText(config.label, i18n.language);
+
   return (
     <Badge
-      label={config.label}
+      label={translatedLabel}
       variant={config.variant}
       showIcon
-      accessibilityLabel={`Trạng thái thanh toán: ${config.label}`}
+      accessibilityLabel={`Trạng thái thanh toán: ${translatedLabel}`}
     />
   );
 };
@@ -154,6 +163,8 @@ import { Ionicons } from '@expo/vector-icons';
 // Tier badge helper
 export const TierBadge: React.FC<{ tier: string }> = ({ tier }) => {
   const theme = getTierTheme(tier);
+  const { i18n } = useTranslation();
+  const translatedLabel = translateDynamicText(theme.label, i18n.language);
 
   return (
     <View
@@ -162,12 +173,12 @@ export const TierBadge: React.FC<{ tier: string }> = ({ tier }) => {
         styles.containerSmall,
         { backgroundColor: theme.bgColor, borderColor: theme.borderColor, borderWidth: 1 },
       ]}
-      accessibilityLabel={`Hạng thành viên: ${theme.label}`}
+      accessibilityLabel={`Hạng thành viên: ${translatedLabel}`}
       accessibilityRole="text"
     >
       <Ionicons name={theme.iconName as any} size={12} color={theme.textColor} />
       <Text style={[styles.textSmall, { color: theme.textColor, fontWeight: '700' }]}>
-        {theme.label}
+        {translatedLabel}
       </Text>
     </View>
   );

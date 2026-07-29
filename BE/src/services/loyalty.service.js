@@ -1,5 +1,6 @@
 const { User, PointHistory } = require('../models');
 const notificationService = require('./notification.service');
+const sseService = require('./sse.service');
 
 // Tính điểm dựa trên số tiền (5%) kèm hệ số nhân theo hạng
 const calculatePoints = (amount, tier = 'bronze') => {
@@ -106,6 +107,25 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
     description: `Tích lũy ${pointsEarned} điểm từ thanh toán hóa đơn.`,
     referenceId: bookingId,
   }], { session });
+
+  // Real-time broadcasts for points & booking history
+  notificationService.send(
+    userId,
+    'Tích điểm thành công',
+    `Bạn vừa được cộng +${pointsEarned} điểm thưởng từ dịch vụ.`,
+    'points_earned',
+    { pointsEarned, bookingId, loyaltyPoints: user.loyaltyPoints, tier: user.tier }
+  ).catch(() => {});
+
+  const userIdStr = String(userId);
+  sseService.sendToUser(userIdStr, 'points_updated', {
+    pointsEarned,
+    loyaltyPoints: user.loyaltyPoints,
+    lifetimePoints: user.lifetimePoints,
+    tier: user.tier,
+    bookingId: String(bookingId),
+  });
+  sseService.sendToUser(userIdStr, 'my_bookings_updated', { bookingId: String(bookingId) });
 
   return { pointsEarned, newTier, tierChanged };
 };

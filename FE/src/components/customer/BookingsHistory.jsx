@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
+import useSSE from '../../hooks/useSSE';
 import VoucherPicker from '../VoucherPicker.jsx';
 import {
   Calendar,
@@ -29,13 +30,14 @@ const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', '
   'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
 const STATUS_MAP = {
-  pending:     { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200/80 icon-amber' },
-  confirmed:   { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-700 border-blue-200/80 icon-blue' },
-  checked_in:  { label: 'Đã check-in',  cls: 'bg-cyan-50 text-cyan-700 border-cyan-200/80 icon-cyan' },
-  in_progress: { label: 'Đang rửa',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200/80 icon-indigo' },
-  completed:   { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 icon-emerald' },
-  cancelled:   { label: 'Đã hủy',       cls: 'bg-slate-100 text-slate-600 border-slate-200 icon-slate' },
-  paid:        { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-700 border-green-200/80' },
+  pending:          { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  confirmed:        { label: 'Đã xác nhận',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  checked_in:       { label: 'Đã check-in',  cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  in_progress:      { label: 'Đang rửa',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  awaiting_payment: { label: 'Chờ thanh toán', cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+  completed:        { label: 'Hoàn thành',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cancelled:        { label: 'Đã hủy',       cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  paid:             { label: 'Đã thanh toán', cls: 'bg-green-50 text-green-700 border-green-200' },
 };
 
 function StatusBadge({ status }) {
@@ -182,28 +184,34 @@ export default function BookingsHistory({ apiBase, token }) {
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState('');
 
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await fetch(`${apiBase}/bookings/my`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error('Không thể tải lịch sử đặt chỗ');
-        const payload = await res.json();
-        const data = payload?.data || payload;
-        if (mounted) setBookings(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (mounted) setError(err.message || 'Lỗi tải lịch sử');
-      } finally {
-        if (mounted) setLoading(false);
-      }
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${apiBase}/bookings/my`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Không thể tải lịch sử đặt chỗ');
+      const payload = await res.json();
+      const data = payload?.data || payload;
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || 'Lỗi tải lịch sử');
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => { mounted = false; };
   }, [apiBase, token]);
+
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
+
+  useSSE(token, 'notification', fetchBookings);
+  useSSE(token, 'my_bookings_updated', fetchBookings);
+  useSSE(token, 'booking_new', fetchBookings);
+  useSSE(token, 'booking_update', fetchBookings);
+  useSSE(token, 'points_updated', fetchBookings);
+  useSSE(token, 'refund_request_updated', fetchBookings);
 
   useEffect(() => {
     let mounted = true;
@@ -1033,7 +1041,111 @@ export default function BookingsHistory({ apiBase, token }) {
                 </span>
               </div>
 
-              <AtRiskBanner booking={detailBooking} apiBase={apiBase} token={token} onRescheduled={handleRescheduled} />
+              {/* Info rows */}
+              {(() => {
+                const pkgSubs = detailBooking.packageId?.subServices || [];
+                const includedList = [];
+
+                if (Array.isArray(pkgSubs)) {
+                  pkgSubs.forEach(s => {
+                    if (s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price))) {
+                      if (!includedList.some(item => item.name === s.name)) {
+                        includedList.push(s);
+                      }
+                    }
+                  });
+                }
+
+                if (Array.isArray(detailBooking.selectedSubServices)) {
+                  detailBooking.selectedSubServices.forEach(s => {
+                    const sName = typeof s === 'string' ? s : s.name;
+                    const sPrice = typeof s === 'object' ? s.price : 0;
+                    const sOpt = typeof s === 'object' ? s.isOptional : undefined;
+                    
+                    if (sOpt === false || (sOpt === undefined && (sPrice === 0 || !sPrice))) {
+                      if (!includedList.some(item => item.name === sName)) {
+                        includedList.push({ name: sName, price: sPrice });
+                      }
+                    }
+                  });
+                }
+
+                const extraList = [];
+                if (Array.isArray(detailBooking.selectedSubServices)) {
+                  detailBooking.selectedSubServices.forEach(s => {
+                    const sName = typeof s === 'string' ? s : s.name;
+                    const isInc = includedList.some(inc => inc.name === sName);
+                    if (!isInc) {
+                      if (!extraList.some(item => item.name === sName)) {
+                        extraList.push(typeof s === 'object' ? s : { name: s });
+                      }
+                    }
+                  });
+                }
+
+                return [
+                  ['📦 Dịch vụ', detailBooking.packageName || detailBooking.packageId?.name || '—'],
+                  ...(includedList.length > 0
+                    ? [['📋 Dịch vụ bao gồm', includedList.map((sub, i) => {
+                        const sName = sub.name || sub;
+                        const dur = sub.duration || (detailBooking.packageId?.subServices || []).find(x => x.name === sName)?.duration;
+                        return (
+                          <span key={i} style={{ fontSize: 11, color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: 12, marginLeft: 4, border: '1px solid #a7f3d0' }}>
+                            {sName} {dur ? `(${dur}p)` : ''}
+                          </span>
+                        );
+                      })]]
+                    : []),
+                  ...(extraList.length > 0
+                    ? [['➕ Dịch vụ thêm', extraList.map((sub, i) => {
+                        const sName = sub.name || sub;
+                        const dur = sub.duration || (detailBooking.packageId?.subServices || []).find(x => x.name === sName)?.duration;
+                        return (
+                          <span key={i} style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, marginLeft: 4 }}>
+                            + {sName} {dur ? `(${dur}p)` : ''}
+                          </span>
+                        );
+                      })]]
+                    : []),
+                  ['📅 Ngày', formatDate(detailBooking.bookingDate)],
+                ['⏰ Giờ', detailBooking.startTime || '—'],
+                ['🏢 Chi nhánh', detailBooking.branchName || detailBooking.branchId?.name || '—'],
+                ['🪪 Biển số', detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || '—'],
+                ['💰 Thành tiền', formatCurrency(detailBooking.totalAmount || detailBooking.finalPrice)],
+                ['💳 Thanh toán', detailBooking.paymentStatus === 'paid' || detailBooking.paymentStatus === 'deposit_paid' ? 'Đã thanh toán' : 'Chưa thanh toán'],
+                ['📍 Loại đặt', detailBooking.bookingType === 'recurring' ? 'Định kỳ' : detailBooking.bookingType === 'slot_pack_usage' ? 'Gói lượt' : '1 lần'],
+              ].map(([label, value]) => (
+                <div key={label} style={{
+                  display: 'flex', justifyContent: 'space-between', padding: '10px 0',
+                  borderBottom: '1px solid #f1f5f9',
+                }}>
+                  <span style={{ fontSize: 13, color: '#64748b' }}>{label}</span>
+                  <div style={{ textAlign: 'right', maxWidth: '60%' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{value}</span>
+                  </div>
+                </div>
+              ));
+            })()}
+
+              {detailBooking.depositAmount > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 13, color: '#d97706', fontWeight: 600 }}>🔒 Đặt cọc {Math.round((detailBooking.depositAmount || 0) / ((detailBooking.totalAmount || detailBooking.finalPrice || 1)) * 100)}%</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>{formatCurrency(detailBooking.depositAmount)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 13, color: '#64748b' }}>📋 Còn lại (thanh toán sau)</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>{formatCurrency(Math.max(0, (detailBooking.totalAmount || detailBooking.finalPrice || 0) - (detailBooking.depositAmount || 0)))}</span>
+                  </div>
+                  {detailBooking.depositPaid && (
+                    <div style={{ marginTop: 8, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 700, border: '1px solid #a7f3d0' }}>
+                        ✅ Đã đặt cọc {formatCurrency(detailBooking.depositAmount)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Information list */}
               <div className="bg-slate-50 rounded-xl p-4 space-y-2.5 text-xs">
