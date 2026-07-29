@@ -124,8 +124,12 @@ const customerTools = [
     type: 'function',
     function: {
       name: 'get_my_upcoming_bookings',
-      description: 'Lấy danh sách lịch đặt sắp tới của người dùng đang đăng nhập (bao gồm booking chờ xác nhận hoặc đã xác nhận)',
-      parameters: { type: 'object', properties: {}, required: [] },
+      description: 'Lấy danh sách lịch đặt của người dùng đang đăng nhập. Nếu không truyền date thì lấy từ hôm nay trở đi. Nếu truyền date thì chỉ lấy đúng ngày đó.',
+      parameters: {
+        type: 'object', properties: {
+          date: { type: 'string', description: 'Ngày cần tra cứu (YYYY-MM-DD), để trống nếu muốn xem tất cả sắp tới' },
+        }, required: [],
+      },
     }
   },
   {
@@ -518,14 +522,20 @@ async function executeTool(name, args, userId, role) {
     case 'get_my_upcoming_bookings': {
       if (!isCustomer) return { error: 'Công cụ này chỉ dành cho khách hàng' };
       if (!userId) return { error: 'Chưa đăng nhập' };
+      const today = new Date().toISOString().split('T')[0];
       const filters = {
-        bookingDate: { $gte: new Date().toISOString().split('T')[0] },
-        status: { $in: ['pending', 'confirmed'] },
+        status: ['pending', 'confirmed'],
         limit: '10',
       };
+      if (args.date) {
+        filters.bookingDate = args.date;
+      } else {
+        filters.dateFrom = today;
+      }
       const bookings = await bookingService.getAllBookings(filters, 'customer', userId);
       const list = bookings?.bookings || bookings?.data || [];
-      if (!list.length) return { message: 'Bạn không có lịch đặt sắp tới nào.' };
+      const prefix = args.date ? 'ngày ' + new Date(args.date).toLocaleDateString('vi-VN') : 'sắp tới';
+      if (!list.length) return { message: `Bạn không có lịch đặt ${prefix} nào.` };
       return list.map(b => ({
         id: String(b._id),
         branchName: b.branchId?.name || '',
@@ -691,17 +701,22 @@ function classifyError(err) {
   return Object.assign(new Error('Chatbot gặp sự cố. Vui lòng thử lại sau.'), { statusCode: 503 });
 }
 
+// ─── Check if using local Ollama ─────────────────────────────────────────────
+function isOllamaLocal() {
+  return (process.env.CHATBOT_BASE_URL || '').includes('localhost') || (process.env.CHATBOT_BASE_URL || '').includes('127.0.0.1');
+}
+
 // ─── Resolve tool calls (shared between chat & stream) ────────────────────────
 async function resolveToolCalls(openai, modelName, session, userId, role) {
   const systemPrompt = composeSystemPrompt(role);
-  const tools = getToolsForRole(role);
-  for (let i = 0; i < 5; i++) {
+  const useTools = !isOllamaLocal();
+  const tools = useTools ? getToolsForRole(role) : undefined;
+  for (let i = 0; i < (useTools ? 5 : 1); i++) {
     const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
     const response = await openai.chat.completions.create({
       model: modelName,
       messages,
-      tools,
-      tool_choice: 'auto',
+      ...(tools && { tools, tool_choice: 'auto' }),
       max_tokens: 1024,
     });
 
@@ -754,7 +769,8 @@ exports.streamChat = async (sessionId, message, userId, role, res) => {
   const { openai, modelName } = getOpenAI();
   const session = getSession(sessionId);
   const systemPrompt = composeSystemPrompt(role);
-  const tools = getToolsForRole(role);
+  const useTools = !isOllamaLocal();
+  const tools = useTools ? getToolsForRole(role) : undefined;
 
   const userText = session.history.length === 0
     ? `[isLoggedIn: ${!!userId}][role: ${role}]\n${message}`
@@ -767,10 +783,11 @@ exports.streamChat = async (sessionId, message, userId, role, res) => {
 
   try {
     // Step 1: Resolve all tool calls synchronously (non-streaming)
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < (useTools ? 5 : 1); i++) {
       const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
       const response = await openai.chat.completions.create({
-        model: modelName, messages, tools, tool_choice: 'auto',
+        model: modelName, messages,
+        ...(tools && { tools, tool_choice: 'auto' }),
         max_tokens: 1024,
       });
 
