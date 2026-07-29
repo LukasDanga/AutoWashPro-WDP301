@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Clock, ShieldCheck, Car, Truck, Bike, Calendar, Tag, Check, 
-  ArrowLeft, ArrowRight, RefreshCw, AlertCircle, Sparkles, Sun, Sunset, 
+  ArrowLeft, ArrowRight, RefreshCw, AlertCircle, Sparkles, Sun, Sunset, Plus,
   Copy, Info, CheckCircle2, X
 } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
@@ -130,6 +130,52 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [vnpayLoading, setVnpayLoading] = useState(false);
   const [depositPollCount, setDepositPollCount] = useState(0);
   const [voucherModalOpen, setVoucherModalOpen] = useState(false);
+
+  // Add vehicle inline
+  const [localVehicles, setLocalVehicles] = useState([]);
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [addingVehicle, setAddingVehicle] = useState(false);
+  const [vehicleForm, setVehicleForm] = useState({
+    licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '',
+  });
+
+  const allVehicles = [...userVehicles, ...localVehicles];
+  const hasNoVehicles = allVehicles.length === 0;
+
+  function handleVehicleFormChange(field, value) {
+    setVehicleForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  async function handleAddVehicle(e) {
+    e.preventDefault();
+    if (!vehicleForm.licensePlate.trim()) { setError('Vui lòng nhập biển số xe'); return; }
+    if (!vehicleForm.brand.trim()) { setError('Vui lòng nhập hãng xe'); return; }
+    if (!vehicleForm.color.trim()) { setError('Vui lòng nhập màu xe'); return; }
+    setAddingVehicle(true);
+    setError('');
+    try {
+      const body = { ...vehicleForm };
+      if (!body.year) delete body.year;
+      if (!body.model) delete body.model;
+      const res = await fetch(`${apiBase}/vehicles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Thêm xe thất bại');
+      const newVehicle = data?.data || data;
+      setLocalVehicles(prev => [...prev, newVehicle]);
+      setSelectedVehicle(newVehicle._id || newVehicle.id);
+      setShowAddVehicle(false);
+      setVehicleForm({ licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '' });
+      showToast('Đã thêm xe thành công!', 'success');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAddingVehicle(false);
+    }
+  }
 
   // Draft data để tạo booking sau khi payment confirm
   const [depositDraft, setDepositDraft] = useState(null);
@@ -280,8 +326,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   // Auto-select first vehicle (only fires when selectedVehicle is truly unset)
   useEffect(() => {
-    if (!selectedVehicle && userVehicles[0]) {
-      setSelectedVehicle(userVehicles[0]._id || userVehicles[0].id || '');
+    if (!selectedVehicle && allVehicles[0]) {
+      setSelectedVehicle(allVehicles[0]._id || allVehicles[0].id || '');
     }
   }, [userVehicles, selectedVehicle]);
 
@@ -359,7 +405,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     const isRecurring = options.tab === 'recurring';
     const endpoint = isRecurring ? `${apiBase}/bookings/recurring` : `${apiBase}/bookings`;
     
-    let vehicleId = selectedVehicle || (userVehicles && userVehicles.length > 0 ? (userVehicles[0]._id || userVehicles[0].id) : '');
+    let vehicleId = selectedVehicle || (allVehicles[0]?._id || allVehicles[0]?.id || '');
     
     const body = {
       branchId: selectedBranch?._id || selectedBranch?.id,
@@ -449,7 +495,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         }
       } else {
         // Use selected or first existing vehicle
-        vehicleId = selectedVehicle || userVehicles[0]?._id || userVehicles[0]?.id || '';
+        vehicleId = selectedVehicle || allVehicles[0]?._id || allVehicles[0]?.id || '';
       }
 
       // Show payment modal first; booking is only created after user picks payment method.
@@ -531,7 +577,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         // Draft: lưu data, tạo provisional bank payment (có QR code)
         const pb = pendingDeposit._pendingData;
         const isRec = pendingDeposit.tab === 'recurring';
-        const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
+        const vId = pendingDeposit._vehicleId || selectedVehicle || (allVehicles[0]?._id || allVehicles[0]?.id || '');
         const draft = {
           branchId: pb?.branchId || selectedBranch?._id || selectedBranch?.id,
           packageId: pb?.packageId || pkg?._id || pkg?.id,
@@ -645,7 +691,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       if (pendingDeposit.isDraft) {
         // Draft: lưu draft, tạo provisional VNPay — chưa tạo booking
         const isRec = pendingDeposit.tab === 'recurring';
-        const vId = pendingDeposit._vehicleId || selectedVehicle || (userVehicles[0]?._id || userVehicles[0]?.id || '');
+        const vId = pendingDeposit._vehicleId || selectedVehicle || (allVehicles[0]?._id || allVehicles[0]?.id || '');
         const pb = pendingDeposit._pendingData;
         const fullPrice = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
         const depositAmt = pendingDeposit.depositAmount || 0;
@@ -1057,7 +1103,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const total = Math.max(0, effectiveBase - discount);
   const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
 
-  const vehicle = userVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
+  const vehicle = allVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
 
   const previewDates = useMemo(() => {
     if (tab !== 'recurring' || selectedDays.length === 0) return [];
@@ -1763,17 +1809,90 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               {step === 3 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   {isLoggedIn ? (
-                    <>
+                    <div className="logged-in-vehicles">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Car className="w-5 h-5 text-emerald-600" />
                           <h3 className="text-lg font-bold text-slate-800">Chọn xe của bạn</h3>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {userVehicles.length === 0 ? (
-                          <div className="col-span-2 text-center text-slate-400 py-8">Chưa có xe nào.</div>
-                        ) : userVehicles.map(v => {
+                      {hasNoVehicles ? (
+                        <div className="max-w-xl mx-auto">
+                          <p className="text-sm text-emerald-700 font-medium mb-4 text-center">Bạn chưa có xe nào. Vui lòng thêm xe mới:</p>
+                          <form onSubmit={handleAddVehicle} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biển số xe *</label>
+                                <input required placeholder="Ví dụ: 30A-12345" value={vehicleForm.licensePlate}
+                                  onChange={e => handleVehicleFormChange('licensePlate', e.target.value)}
+                                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-semibold uppercase tracking-wider font-mono" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Hãng xe *</label>
+                                <input required placeholder="Ví dụ: Toyota, Honda, Hyundai..." value={vehicleForm.brand}
+                                  onChange={e => handleVehicleFormChange('brand', e.target.value)}
+                                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Dòng xe</label>
+                                <input placeholder="Ví dụ: Camry, Tucson, SH..." value={vehicleForm.model}
+                                  onChange={e => handleVehicleFormChange('model', e.target.value)}
+                                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Màu xe *</label>
+                                <input required placeholder="Ví dụ: Trắng, Đen, Xanh..." value={vehicleForm.color}
+                                  onChange={e => handleVehicleFormChange('color', e.target.value)}
+                                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Loại xe *</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                  {VEHICLE_TYPES.map(t => {
+                                    const isSelected = vehicleForm.vehicleType === t.value;
+                                    return (
+                                      <button type="button" key={t.value}
+                                        onClick={() => handleVehicleFormChange('vehicleType', t.value)}
+                                        className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center text-center gap-1.5 transition-all ${
+                                          isSelected
+                                            ? 'border-emerald-500 bg-emerald-50/20 text-emerald-800 font-bold'
+                                            : 'border-slate-100 bg-slate-50/50 text-slate-500 hover:border-slate-200'
+                                        }`}>
+                                        <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400'}`}>
+                                          {getVehicleIcon(t.value)}
+                                        </div>
+                                        <span className="text-[11px]">{t.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Năm SX</label>
+                                <input type="number" placeholder="2020" value={vehicleForm.year}
+                                  onChange={e => handleVehicleFormChange('year', e.target.value)}
+                                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+                              </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                              <button type="submit" disabled={addingVehicle}
+                                className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                                {addingVehicle ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
+                                {addingVehicle ? 'Đang thêm...' : 'Lưu xe'}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {allVehicles.map(v => {
                           const vId = v._id || v.id;
                           const isSelected = selectedVehicle === vId;
                           return (
@@ -1809,7 +1928,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           );
                         })}
                       </div>
-                    </>
+                      )}
+                    </div>
                   ) : (
                     <>
                       <div className="flex items-center gap-2 mb-2">
