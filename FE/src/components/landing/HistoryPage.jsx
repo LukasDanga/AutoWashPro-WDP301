@@ -1952,8 +1952,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   function goToday() { const d = new Date(); d.setHours(0, 0, 0, 0); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()); setSelectedDate(new Date(d)); }
 
   const stats = useMemo(() => {
-    const s = { total: bookings.length, pending: 0, confirmed: 0, completed: 0, cancelled: 0 };
-    bookings.forEach(b => { if (s[b.status] !== undefined) s[b.status]++; });
+    const s = { total: 0, pending: 0, confirmed: 0, completed: 0, cancelled: 0 };
+    bookings.forEach(b => { 
+      const count = b.isGroup ? (b.groupCount || 1) : 1;
+      s.total += count;
+      if (s[b.status] !== undefined) s[b.status] += count; 
+    });
     return s;
   }, [bookings]);
 
