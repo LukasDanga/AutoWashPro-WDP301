@@ -256,8 +256,8 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
   const effectiveRate = Number((baseRate * multiplier).toFixed(2));
 
   const detailedDesc = bookingCode
-    ? `Tích lũy +${pointsEarned.toLocaleString('vi-VN')} điểm từ thanh toán đơn hàng ${bookingCode}`
-    : `Tích lũy +${pointsEarned.toLocaleString('vi-VN')} điểm từ thanh toán hóa đơn`;
+    ? `Tích lũy +${pointsEarned.toLocaleString('vi-VN')} điểm từ hoàn thành đơn hàng ${bookingCode}`
+    : `Tích lũy +${pointsEarned.toLocaleString('vi-VN')} điểm từ hoàn thành hóa đơn`;
 
   // Ghi log kèm snapshot bất biến
   await PointHistory.create([{
@@ -330,9 +330,9 @@ exports.checkAndExpirePoints = async (userId) => {
 };
 
 /**
- * Thu hồi điểm thưởng khi đơn hàng bị hủy
- * @param {string} bookingId - ID của booking bị hủy
- * @param {string} cancellationReason - Lý do hủy
+ * Thu hồi điểm thưởng khi đơn hàng được hoàn tiền
+ * @param {string} bookingId - ID của booking
+ * @param {string} cancellationReason - Lý do hoàn tiền
  * @param {object} parentSession - Mongoose session để chạy trong transaction (optional)
  */
 exports.deductPointsForCancelledBooking = async (bookingId, cancellationReason = '', parentSession = null) => {
@@ -379,8 +379,8 @@ exports.deductPointsForCancelledBooking = async (bookingId, cancellationReason =
 
     const bookingCode = earnedHistory.snapshot?.bookingCode || '';
     const desc = bookingCode
-      ? `Truy thu -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng do đơn hàng ${bookingCode} bị hủy`
-      : `Truy thu -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng do đơn hàng bị hủy`;
+      ? `Truy thu -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng do đơn hàng ${bookingCode} được hoàn tiền`
+      : `Truy thu -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng do đơn hàng được hoàn tiền`;
 
     await exec.create(PointHistoryModel, {
       userId: targetUser._id,
@@ -409,8 +409,8 @@ exports.deductPointsForCancelledBooking = async (bookingId, cancellationReason =
     // Thông báo
     notificationService.send(
       targetUser._id,
-      'Trừ điểm thưởng do hủy đơn',
-      `Đơn hàng ${bookingCode || ''} đã bị hủy. Hệ thống đã thu hồi -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng tương ứng.`,
+      'Trừ điểm thưởng do hoàn tiền',
+      `Đơn hàng ${bookingCode || ''} đã được hoàn tiền. Hệ thống đã thu hồi -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng tương ứng.`,
       'points_deducted',
       { pointsDeducted, bookingId, loyaltyPoints: targetUser.loyaltyPoints }
     ).catch(() => {});
@@ -424,7 +424,7 @@ exports.deductPointsForCancelledBooking = async (bookingId, cancellationReason =
 
     return true;
   } catch (err) {
-    console.error('Lỗi khi thu hồi điểm thưởng do hủy đơn:', err);
+    console.error('Lỗi khi thu hồi điểm thưởng do hoàn tiền:', err);
     if (!parentSession) return null;
     throw err;
   }
