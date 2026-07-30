@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CameraView } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { bookingApi } from '../../src/api/booking';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -436,16 +436,15 @@ const NoBookingCard: React.FC<{ onSelectMode: () => void }> = ({ onSelectMode })
 
 // ─── ScanModeContent ──────────────────────────────────────────────────────────
 const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onScanned }) => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [manualCode, setManualCode] = useState('');
 
   useEffect(() => {
-    (async () => {
-      const { status } = await require('expo-camera').Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
+    if (!permission?.granted) {
+      requestPermission();
+    }
+  }, [permission, requestPermission]);
 
   const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
     if (scanned) return;
@@ -460,18 +459,23 @@ const ScanModeContent: React.FC<{ onScanned: (data: string) => void }> = ({ onSc
         Quét mã QR trên booking để check-in nhanh tại quầy
       </Text>
 
-      {hasPermission === null ? (
+      {!permission ? (
         <View style={styles.cameraPlaceholder}>
           <Icon name={Icons.timeOutline} size={48} color={staticColors.textTertiary} />
           <Text style={styles.cameraPlaceholderText}>Đang yêu cầu quyền camera...</Text>
         </View>
-      ) : hasPermission === false ? (
+      ) : !permission.granted ? (
         <View style={styles.cameraPlaceholder}>
           <Icon name={Icons.error} size={48} color={staticColors.error} />
           <Text style={styles.cameraPlaceholderText}>Không có quyền camera</Text>
           <Text style={styles.cameraPlaceholderSubtext}>
             Vui lòng cấp quyền camera trong Cài đặt thiết bị
           </Text>
+          <Button
+            title="Cấp quyền camera"
+            onPress={requestPermission}
+            style={{ marginTop: 8 }}
+          />
         </View>
       ) : (
         <View style={styles.cameraContainer}>
@@ -905,13 +909,15 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     width: '100%',
+    height: 280,
     borderRadius: 16,
-    overflow: 'hidden',
     marginBottom: 8,
+    backgroundColor: '#000000',
   },
   camera: {
     width: '100%',
-    height: 260,
+    height: 280,
+    borderRadius: 16,
   },
   cameraOverlay: {
     flex: 1,

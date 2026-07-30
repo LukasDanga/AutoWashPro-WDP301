@@ -104,7 +104,7 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   if (req.body.status === 'checked_in') {
     updateData.staffId = req.userId;
   }
-  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId);
+  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
   success(res, booking, 'Cập nhật trạng thái đặt lịch thành công');

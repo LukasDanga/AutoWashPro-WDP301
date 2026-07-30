@@ -10,7 +10,7 @@ const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'aw
 
 // Luồng: pending → (manager xác nhận) confirmed → (khách đến) checked_in → in_progress → awaiting_payment/completed
 const VALID_TRANSITIONS = {
-  pending: ['confirmed', 'cancelled'],
+  pending: ['confirmed', 'checked_in', 'cancelled'],
   confirmed: ['checked_in', 'cancelled'],
   checked_in: ['in_progress', 'cancelled'],
   in_progress: ['awaiting_payment', 'completed', 'cancelled'],
@@ -656,13 +656,22 @@ exports.updateBooking = async (id, updates, userRole, userId) => {
   }
 };
 
-exports.updateBookingStatus = async (id, status, updateData = {}, userRole, userBranchId) => {
+exports.updateBookingStatus = async (id, status, updateData = {}, userRole, userBranchId, userId) => {
   if (!VALID_STATUSES.includes(status)) {
     throw Object.assign(new Error('Trạng thái không hợp lệ'), { statusCode: 400, code: 'INVALID_STATUS' });
   }
 
   const currentBooking = await Booking.findById(id);
   if (!currentBooking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+
+  if (userRole === 'customer') {
+    if (String(currentBooking.userId) !== String(userId)) {
+      throw Object.assign(new Error('Bạn không có quyền thực hiện thao tác trên lịch hẹn này'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+    if (status !== 'checked_in') {
+      throw Object.assign(new Error('Khách hàng chỉ có thể tự thực hiện Check-in tại quầy'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
 
   if (userRole === 'manager') {
     if (!userBranchId || String(userBranchId) !== String(currentBooking.branchId)) {
