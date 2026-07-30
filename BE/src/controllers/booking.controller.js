@@ -168,34 +168,8 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
 });
 
 exports.cancelBooking = catchAsync(async (req, res) => {
-  const bcrypt = require('bcryptjs');
-  const Booking = require('../models/booking.schema');
-
-  if (req.user.role === 'customer') {
-    if (!req.body.otp) {
-      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy đơn'), { statusCode: 400 });
-    }
-    const booking = await Booking.findById(req.params.id);
-    if (!booking || !booking.cancelOtpToken || !booking.cancelOtpExpires) {
-      throw Object.assign(new Error('Yêu cầu OTP không hợp lệ hoặc đã hết hạn'), { statusCode: 400 });
-    }
-    if (Date.now() > booking.cancelOtpExpires) {
-      throw Object.assign(new Error('Mã OTP đã hết hạn, vui lòng lấy mã mới'), { statusCode: 400 });
-    }
-    const isMatch = bcrypt.compareSync(req.body.otp, booking.cancelOtpToken);
-    if (!isMatch) {
-      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
-    }
-  }
-
-  const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, req.body.cancellationReason);
-  
-  if (req.user.role === 'customer') {
-    // Xóa OTP
-    await Booking.findByIdAndUpdate(req.params.id, {
-      $unset: { cancelOtpToken: "", cancelOtpExpires: "" }
-    });
-  }
+  const reason = req.body.cancellationReason || req.body.reason || 'Khách hàng yêu cầu hủy đơn';
+  const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, reason);
 
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});

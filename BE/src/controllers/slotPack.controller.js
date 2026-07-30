@@ -52,7 +52,8 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
 
 /** POST /api/slot-packs/:id/cancel — Hủy gói */
 exports.cancelSlotPack = catchAsync(async (req, res) => {
-  const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role, req.body.otp);
+  const reason = req.body.reason || req.body.cancellationReason || 'Khách hàng yêu cầu hủy gói';
+  const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role, reason);
   success(res, pack, 'Hủy gói lượt rửa thành công');
 });
 

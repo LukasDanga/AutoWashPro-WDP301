@@ -50,9 +50,8 @@ app.use(cors({
       }
     }
 
-    // Localhost (chỉ dev) — production vẫn chấp nhận để tiện smoke test qua
-    // browser, có thể siết lại bằng cách remove nếu muốn.
-    if (isDev && origin.includes('localhost')) {
+    // Localhost & 127.0.0.1 — cho phép để FE local (localhost:5173) gọi được BE
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
 

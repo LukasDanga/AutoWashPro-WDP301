@@ -93,9 +93,8 @@ export const requestCancelOtp = async (id: string): Promise<any> => {
 };
 
 // Cancel booking
-// BE controller reads req.body.cancellationReason and req.body.otp.
-export const cancelBooking = async (id: string, cancellationReason?: string, otp?: string): Promise<Booking> => {
-  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason, otp });
+export const cancelBooking = async (id: string, cancellationReason?: string): Promise<Booking> => {
+  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason });
   return response.data;
 };
 

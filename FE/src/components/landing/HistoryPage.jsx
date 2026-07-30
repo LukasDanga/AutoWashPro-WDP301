@@ -988,7 +988,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     } catch (e) { /* ignore preview errors */ }
   }
 
-  async function requestCancelOtp() {
+  async function confirmCancel() {
     if (!cancelTarget) return;
     if (!cancelReason.trim()) {
       setCancelConfirmError('Vui lòng nhập lý do hủy đơn');
@@ -998,33 +998,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     setCancelConfirmError('');
     try {
       const bId = cancelTarget._id || cancelTarget.id;
-      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể yêu cầu OTP'); }
-      setCancelStep(2);
-    } catch (e) {
-      setCancelConfirmError(e.message);
-    } finally {
-      setCancelLoading(false);
-    }
-  }
-
-  async function confirmCancel() {
-    if (!cancelTarget) return;
-    if (cancelStep === 2 && !cancelOtp.trim()) {
-      setCancelConfirmError('Vui lòng nhập mã OTP');
-      return;
-    }
-    setCancelLoading(true);
-    setCancelConfirmError('');
-    try {
-      const bId = cancelTarget._id || cancelTarget.id;
       const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cancellationReason: cancelReason.trim(), otp: cancelOtp.trim() }),
+        body: JSON.stringify({ cancellationReason: cancelReason.trim() }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Không thể hủy đơn'); }
       const cancelPayload = await res.json().catch(() => ({}));
@@ -3661,57 +3638,47 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         )}
       </AnimatePresence>
 
+      {/* ── CANCEL CONFIRM MODAL ── */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
           onClick={() => { if (!cancelLoading) { setShowCancelConfirm(false); setCancelTarget(null); setCancelConfirmError(''); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null); } }}>
           <div className="bg-white rounded-[1.5rem] w-full max-w-sm p-8 shadow-xl text-center" onClick={e => e.stopPropagation()}>
-            <div className="text-4xl mb-4">{cancelStep === 1 ? '🗑' : '📩'}</div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">{cancelStep === 1 ? 'Xác nhận hủy đơn' : 'Nhập mã xác thực OTP'}</h3>
-            <p className="text-sm text-slate-500 mb-4">
-              {cancelStep === 1 
-                ? 'Bạn có chắc muốn hủy đơn này? Hành động này không thể hoàn tác.' 
-                : 'Chúng tôi đã gửi mã OTP gồm 6 chữ số đến email của bạn. Vui lòng kiểm tra hộp thư.'}
+            <div className="text-4xl mb-4">⚠️</div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận hủy lịch hẹn</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Bạn có chắc chắn muốn hủy đơn hàng này? Vui lòng nhập lý do hủy bên dưới.
             </p>
             
-            {cancelStep === 1 ? (
-              <div className="text-left mb-6">
-                {/* ── Cảnh báo hoàn tiền / phạt ── */}
-                {cancelPreview && cancelPreview.totalPaid > 0 && (
-                  <div className={`mb-4 px-4 py-3 rounded-xl text-sm border ${
-                    cancelPreview.isLateCancel
-                      ? 'bg-amber-50 border-amber-200 text-amber-800'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  }`}>
-                    {cancelPreview.isLateCancel ? (
-                      <>
-                        <div className="flex items-center gap-1.5 font-bold mb-1">⚠️ Hủy sát giờ hẹn ({cancelPreview.minutesBefore} phút trước)</div>
-                        {cancelPreview.penaltyAmount > 0 && (
-                          <div className="text-red-600 font-semibold">Phí phạt: -{cancelPreview.penaltyAmount.toLocaleString('vi-VN')}₫ ({cancelPreview.penaltyPercent}%)</div>
-                        )}
-                        {cancelPreview.refundAmount > 0 ? (
-                          <div className="text-emerald-700 font-semibold">Hoàn lại vào ví: {cancelPreview.refundAmount.toLocaleString('vi-VN')}₫</div>
-                        ) : (
-                          <div className="text-red-600 font-semibold">Mất toàn bộ tiền cọc — không hoàn lại.</div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-1.5 font-bold">✅ Hoàn lại 100% ({cancelPreview.totalPaid.toLocaleString('vi-VN')}₫) vào ví</div>
-                    )}
-                  </div>
-                )}
-                <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
-                <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                  rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn..."
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none" />
-              </div>
-            ) : (
-              <div className="text-left mb-6">
-                <label className="text-xs font-medium text-slate-500 block mb-1.5">Mã OTP <span className="text-red-500">*</span></label>
-                <input type="text" value={cancelOtp} onChange={e => setCancelOtp(e.target.value)}
-                  placeholder="Nhập mã 6 số"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-bold tracking-[5px] text-center focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400" />
-              </div>
-            )}
+            <div className="text-left mb-6">
+              {/* ── Cảnh báo hoàn tiền / phạt ── */}
+              {cancelPreview && cancelPreview.totalPaid > 0 && (
+                <div className={`mb-4 px-4 py-3 rounded-xl text-sm border ${
+                  cancelPreview.isLateCancel
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
+                  {cancelPreview.isLateCancel ? (
+                    <>
+                      <div className="flex items-center gap-1.5 font-bold mb-1">⚠️ Hủy sát giờ hẹn ({cancelPreview.minutesBefore} phút trước)</div>
+                      {cancelPreview.penaltyAmount > 0 && (
+                        <div className="text-red-600 font-semibold">Phí phạt: -{cancelPreview.penaltyAmount.toLocaleString('vi-VN')}₫ ({cancelPreview.penaltyPercent}%)</div>
+                      )}
+                      {cancelPreview.refundAmount > 0 ? (
+                        <div className="text-emerald-700 font-semibold">Hoàn lại vào ví: {cancelPreview.refundAmount.toLocaleString('vi-VN')}₫</div>
+                      ) : (
+                        <div className="text-red-600 font-semibold">Mất toàn bộ tiền cọc — không hoàn lại.</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-1.5 font-bold">✅ Hoàn lại 100% ({cancelPreview.totalPaid.toLocaleString('vi-VN')}₫) vào ví</div>
+                  )}
+                </div>
+              )}
+              <label className="text-xs font-medium text-slate-500 block mb-1.5">Lý do hủy <span className="text-red-500">*</span></label>
+              <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                rows={3} maxLength={500} placeholder="Nhập lý do hủy đơn..."
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none" />
+            </div>
             
             {cancelConfirmError && (
               <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{cancelConfirmError}</div>
@@ -3722,9 +3689,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
                 Không, giữ lại
               </button>
-              <button onClick={cancelStep === 1 ? requestCancelOtp : confirmCancel} disabled={cancelLoading}
+              <button onClick={confirmCancel} disabled={cancelLoading}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-400 transition-colors disabled:opacity-50">
-                {cancelLoading ? 'Đang xử lý...' : (cancelStep === 1 ? 'Lấy mã OTP' : 'Xác nhận hủy')}
+                {cancelLoading ? 'Đang xử lý...' : 'Xác nhận hủy'}
               </button>
             </div>
           </div>

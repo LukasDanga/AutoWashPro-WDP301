@@ -376,8 +376,7 @@ exports.requestCancelOtp = async (packId, userId) => {
   return true;
 };
 
-exports.cancelSlotPack = async (packId, userId, userRole, otp) => {
-  const bcrypt = require('bcryptjs');
+exports.cancelSlotPack = async (packId, userId, userRole, reason) => {
   const pack = await SlotPack.findById(packId);
   
   if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
@@ -386,19 +385,6 @@ exports.cancelSlotPack = async (packId, userId, userRole, otp) => {
   }
   if (pack.status !== 'active') {
     throw Object.assign(new Error(`Không thể hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
-  }
-
-  if (userRole === 'customer') {
-    if (!otp) {
-      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy gói'), { statusCode: 400 });
-    }
-    if (!pack.cancelOtpToken || !pack.cancelOtpExpires || Date.now() > pack.cancelOtpExpires) {
-      throw Object.assign(new Error('Mã OTP không hợp lệ hoặc đã hết hạn'), { statusCode: 400 });
-    }
-    const isMatch = bcrypt.compareSync(otp, pack.cancelOtpToken);
-    if (!isMatch) {
-      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
-    }
   }
 
   // Calculate refund
