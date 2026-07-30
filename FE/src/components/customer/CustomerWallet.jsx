@@ -46,13 +46,19 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
   const [showVnpaySuccessModal, setShowVnpaySuccessModal] = useState(false);
   const [successAmount, setSuccessAmount] = useState(0);
 
+  // Pagination state (10 items per page)
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+
   // Lắng nghe sự kiện nạp tiền thành công
   useSSE(token, 'wallet_topup_success', (data) => {
     setMessage(`Nạp tiền thành công: +${formatCurrency(data?.amount)}`);
     setSepayData(null);
     setShowTopupModal(false);
     refreshUser();
-    fetchTransactions();
+    fetchTransactions(1, false);
     setTimeout(() => setMessage(''), 5000);
   });
 
@@ -70,7 +76,7 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
           setSuccessAmount(amt);
           setShowVnpaySuccessModal(true);
           refreshUser();
-          fetchTransactions();
+          fetchTransactions(1, false);
         } else {
           setMessage(parsed?.message || 'Thanh toán VNPay thất bại');
         }
@@ -86,25 +92,45 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
     }
   }, [token]);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (targetPage = 1, isAppend = false) => {
     try {
-      setLoading(true);
-      const res = await fetch(`${apiBase}/wallet-transactions/my?limit=50`, {
+      if (isAppend) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      const res = await fetch(`${apiBase}/wallet-transactions/my?page=${targetPage}&limit=10`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const payload = await res.json();
       if (res.ok) {
-        setTransactions(payload.data || []);
+        const newData = payload.data || [];
+        const pagination = payload.pagination || {};
+        if (isAppend) {
+          setTransactions(prev => [...prev, ...newData]);
+        } else {
+          setTransactions(newData);
+        }
+        setHasMore(pagination.hasNextPage || false);
+        setTotalCount(pagination.total || 0);
+        setPage(targetPage);
       }
     } catch (e) {
       console.error('Lỗi khi tải lịch sử ví:', e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchTransactions(page + 1, true);
     }
   };
 
   useEffect(() => {
-    if (token) fetchTransactions();
+    if (token) fetchTransactions(1, false);
   }, [token]);
 
   const handleTopup = async () => {
@@ -223,34 +249,57 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
             <p className="text-slate-500 text-sm">Khi bạn nạp tiền hoặc nhận hoàn tiền, lịch sử sẽ xuất hiện ở đây.</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {transactions.map(tx => {
-              const isCredit = tx.type === 'credit';
-              const Icon = isCredit ? ArrowDownCircle : ArrowUpCircle;
-              return (
-                <div key={tx._id} className="p-4 md:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2.5 rounded-xl flex-shrink-0 ${isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                      <Icon size={24} />
+          <>
+            <div className="divide-y divide-slate-100">
+              {transactions.map(tx => {
+                const isCredit = tx.type === 'credit';
+                const Icon = isCredit ? ArrowDownCircle : ArrowUpCircle;
+                return (
+                  <div key={tx._id} className="p-4 md:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2.5 rounded-xl flex-shrink-0 ${isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                        <Icon size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm md:text-base">{tx.reason}</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {new Date(tx.createdAt).toLocaleString('vi-VN')}
+                          {tx.bookingId && (() => {
+                            const bc = typeof tx.bookingId === 'object' ? tx.bookingId.bookingCode : null;
+                            return bc ? ` • Mã đơn: ${bc}` : '';
+                          })()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm md:text-base">{tx.reason}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {new Date(tx.createdAt).toLocaleString('vi-VN')}
-                        {tx.bookingId && (() => {
-                          const bc = typeof tx.bookingId === 'object' ? tx.bookingId.bookingCode : null;
-                          return bc ? ` • Mã đơn: ${bc}` : '';
-                        })()}
-                      </p>
+                    <div className={`font-black text-sm md:text-base whitespace-nowrap ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {isCredit ? '+' : '-'}{formatCurrency(tx.amount)}
                     </div>
                   </div>
-                  <div className={`font-black text-sm md:text-base whitespace-nowrap ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {isCredit ? '+' : '-'}{formatCurrency(tx.amount)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+
+            {hasMore && (
+              <div className="p-4 border-t border-slate-100 text-center bg-slate-50/50">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="px-6 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm transition-colors border border-emerald-200/60 inline-flex items-center gap-2 disabled:opacity-50 shadow-sm"
+                >
+                  {loadingMore ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                      Đang tải thêm...
+                    </>
+                  ) : (
+                    <>
+                      Hiển thị thêm ({transactions.length}/{totalCount})
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
