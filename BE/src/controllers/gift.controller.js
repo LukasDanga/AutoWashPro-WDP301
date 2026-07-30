@@ -30,3 +30,8 @@ exports.spinWheel = catchAsync(async (req, res) => {
   const result = await giftService.spinWheel(req.user._id);
   success(res, result, 'Quay thưởng thành công');
 });
+
+exports.getMySpinHistory = catchAsync(async (req, res) => {
+  const history = await giftService.getMySpinHistory(req.userId || req.user?._id);
+  success(res, history, 'Đã lấy lịch sử trúng quà');
+});

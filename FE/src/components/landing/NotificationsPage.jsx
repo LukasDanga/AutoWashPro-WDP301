@@ -60,6 +60,7 @@ export default function NotificationsPage({ onBack, apiBase, token }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       setNotifications(prev => prev.map(n => (n._id === id ? { ...n, isRead: true } : n)));
+      window.dispatchEvent(new CustomEvent('unread_notifications_updated'));
     } catch (e) { showToast('Không thể đánh dấu đã đọc', 'error'); }
   }
 
@@ -71,6 +72,7 @@ export default function NotificationsPage({ onBack, apiBase, token }) {
       });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       showToast('Đã đánh dấu tất cả là đã đọc');
+      window.dispatchEvent(new CustomEvent('unread_notifications_updated'));
     } catch (e) { showToast('Không thể đánh dấu đã đọc', 'error'); }
   }
 
@@ -82,6 +84,7 @@ export default function NotificationsPage({ onBack, apiBase, token }) {
       });
       setNotifications([]);
       showToast('Đã xóa tất cả thông báo');
+      window.dispatchEvent(new CustomEvent('unread_notifications_updated'));
     } catch (e) { showToast('Không thể xóa thông báo', 'error'); }
   }
 
@@ -98,8 +101,8 @@ export default function NotificationsPage({ onBack, apiBase, token }) {
           <div className="flex gap-2">
             {unreadCount > 0 && (
               <button onClick={markAllRead}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                Đọc tất cả
+                className="px-3.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                ✓ Đọc hết
               </button>
             )}
             {notifications.length > 0 && (

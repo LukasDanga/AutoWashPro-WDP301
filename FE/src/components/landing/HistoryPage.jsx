@@ -52,13 +52,45 @@ function StatusBadge({ status }) {
 }
 
 function StarRating({ value, onChange }) {
+  const [hover, setHover] = useState(0);
+  const RATING_LABELS = {
+    1: '😞 Chưa hài lòng',
+    2: '😐 Cần cải thiện',
+    3: '🙂 Bình thường',
+    4: '😊 Tốt & Hài lòng',
+    5: '🌟 Xuất sắc & Tuyệt vời!',
+  };
+  const activeRating = hover || value;
+
   return (
-    <div className="flex gap-1">
-      {[1,2,3,4,5].map(s => (
-        <button key={s} type="button" onClick={() => onChange(s)}
-          className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all ${
-            s <= value ? 'text-amber-400' : 'text-slate-200 hover:text-amber-300'}`}>★</button>
-      ))}
+    <div className="flex flex-col items-center gap-2 my-2">
+      <div className="flex gap-2">
+        {[1, 2, 3, 4, 5].map(s => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onChange(s)}
+            onMouseEnter={() => setHover(s)}
+            onMouseLeave={() => setHover(0)}
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center text-2xl transition-all duration-150 transform hover:scale-110 active:scale-95 cursor-pointer ${
+              s <= activeRating
+                ? 'text-amber-400 bg-amber-50 shadow-xs border border-amber-200'
+                : 'text-slate-300 bg-slate-50 hover:bg-slate-100 hover:text-amber-300 border border-slate-100'
+            }`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      <div className="h-6 flex items-center justify-center">
+        {activeRating > 0 ? (
+          <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200/80 animate-in fade-in zoom-in-95 duration-100">
+            {RATING_LABELS[activeRating]}
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-slate-400">Chọn mức độ hài lòng của bạn</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -319,6 +351,85 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [selectedDate, setSelectedDate] = useState(null);
   const [detailBooking, setDetailBooking] = useState(null);
   const [viewBooking, setViewBooking] = useState(null);
+
+  const [viewedBookingIds, setViewedBookingIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('autowash_viewed_bookings');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const markBookingAsViewed = useCallback((id) => {
+    if (!id) return;
+    const strId = String(id);
+    setViewedBookingIds(prev => {
+      if (prev.has(strId)) return prev;
+      const updated = new Set(prev).add(strId);
+      try {
+        localStorage.setItem('autowash_viewed_bookings', JSON.stringify(Array.from(updated)));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
+  const handleOpenViewBooking = useCallback((b) => {
+    if (!b) return;
+    if (b._id) markBookingAsViewed(b._id);
+    if (b.id) markBookingAsViewed(b.id);
+    if (b.recurringGroupId) markBookingAsViewed(b.recurringGroupId);
+    setViewBooking(b);
+  }, [markBookingAsViewed]);
+
+  const handleOpenDetailBooking = useCallback((b) => {
+    if (!b) return;
+    if (b._id) markBookingAsViewed(b._id);
+    if (b.id) markBookingAsViewed(b.id);
+    if (b.recurringGroupId) markBookingAsViewed(b.recurringGroupId);
+    setDetailBooking(b);
+  }, [markBookingAsViewed]);
+
+  const checkIsNew = useCallback((b) => {
+    if (!b) return false;
+    const bId = String(b._id || b.id || '');
+    const gId = b.recurringGroupId ? String(b.recurringGroupId) : null;
+    
+    // 1. Người dùng đã mở xem chi tiết / xem hóa đơn / click card => không còn là MỚI
+    if (viewedBookingIds.has(bId) || (gId && viewedBookingIds.has(gId))) {
+      return false;
+    }
+    
+    // 2. Thanh toán thành công (100% paid) => không còn là MỚI
+    if (b.paymentStatus === 'paid') {
+      return false;
+    }
+
+    // 3. Nếu đã qua ngày (ngày hẹn hoặc ngày tạo trước ngày hôm nay) => không còn là MỚI
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    if (b.bookingDate) {
+      const bDate = new Date(b.bookingDate);
+      bDate.setHours(0, 0, 0, 0);
+      if (bDate < startOfToday) return false;
+    }
+
+    if (b.createdAt) {
+      const cDate = new Date(b.createdAt);
+      cDate.setHours(0, 0, 0, 0);
+      if (cDate < startOfToday) return false;
+    }
+
+    // 4. Nếu tạo trong ngày hôm nay và chưa xem/thanh toán => Hiển thị MỚI
+    if (b.createdAt) {
+      const diffMs = new Date() - new Date(b.createdAt);
+      return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
+    }
+
+    return false;
+  }, [viewedBookingIds]);
+
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date(); const day = d.getDay();
     d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
@@ -650,6 +761,24 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   function resetFilters() { setKeyword(''); setStatusFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setSort('-createdAt'); setPage(1); }
   function onFilterChange(setter, value) { setter(value); setPage(1); }
 
+  const refreshUserProfile = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        const freshUser = payload?.data || payload;
+        if (freshUser && typeof onUserUpdate === 'function') {
+          onUserUpdate(freshUser);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh user profile:', err);
+    }
+  };
+
   const handleDateFromChange = (val) => {
     if (dateTo && val && val > dateTo) {
       showToast('Ngày bắt đầu không được lớn hơn ngày kết thúc', 'error');
@@ -836,6 +965,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       }
       showToastMsg(refundAmount > 0 ? `Đã hủy đơn thành công, hoàn ${refundAmount.toLocaleString('vi-VN')}đ vào ví` : 'Đã hủy đơn thành công');
       setShowCancelConfirm(false); setCancelTarget(null); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null);
+      refreshUserProfile();
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
       if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) { setCancelConfirmError(e.message); }
@@ -1625,6 +1755,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       setViewBooking(updated);
       setEditingSubServices(false);
       setRefundConfirmData(null);
+      refreshUserProfile();
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (err) {
       showToast(err.message, 'error');
@@ -1635,8 +1766,34 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
   const handleSaveSubServices = async (b) => {
     const currentPaid = b.paymentStatus === 'paid'
-      ? (b.finalPrice || 0)
+      ? Math.max(b.finalPrice || 0, b.depositAmount || 0)
       : (b.depositPaid || b.paymentStatus === 'deposit_paid' ? (b.depositAmount || 0) : 0);
+
+    const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
+    const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
+    const pkgObj = (pkgFromList && Array.isArray(pkgFromList.subServices) && pkgFromList.subServices.length > 0)
+      ? pkgFromList
+      : (typeof b.packageId === 'object' && b.packageId !== null ? b.packageId : pkgFromList);
+
+    const pkgSubs = Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
+    const basePrice = b.bookingType === 'slot_pack_usage' ? 0 : (pkgObj?.price || b.packageId?.price || 0);
+
+    let editedExtraPrice = 0;
+    editedSubServiceNames.forEach(name => {
+      const foundPkgSub = pkgSubs.find(s => (s.name || s) === name);
+      const foundSelectedSub = Array.isArray(b.selectedSubServices) ? b.selectedSubServices.find(s => (s.name || s) === name) : null;
+      const subObj = foundPkgSub || foundSelectedSub;
+      
+      const isOpt = typeof subObj === 'object' ? subObj?.isOptional !== false : true;
+      const price = typeof subObj === 'object' ? (subObj?.price || 0) : 0;
+
+      if (isOpt && price > 0) {
+        editedExtraPrice += price;
+      }
+    });
+
+    const newFinalPrice = Math.max(0, basePrice + editedExtraPrice - (b.discountAmount || 0));
+    const actualRefundAmount = Math.max(0, currentPaid - newFinalPrice);
 
     const prevSubServices = Array.isArray(b.selectedSubServices) ? b.selectedSubServices : [];
     const removedOptionalSubs = prevSubServices.filter(s => {
@@ -1645,14 +1802,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       return isOpt && !editedSubServiceNames.includes(name);
     });
 
-    const refundAmountPreview = removedOptionalSubs.reduce((sum, s) => {
-      const price = typeof s === 'object' ? (s.price || 0) : 0;
-      return sum + price;
-    }, 0);
-
-    const actualRefundAmount = Math.min(refundAmountPreview, currentPaid);
-
-    if (currentPaid > 0 && actualRefundAmount > 0) {
+    if (currentPaid > 0 && actualRefundAmount > 0 && removedOptionalSubs.length > 0) {
       const canceledNames = removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name);
       setRefundConfirmData({
         booking: b,
@@ -1685,6 +1835,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       showToastMsg('Đã hủy toàn bộ lịch định kỳ');
       setShowCancelRecurringConfirm(false); setCancelRecurringTarget(null);
       setShowRecurringGroupModal(false);
+      refreshUserProfile();
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
     } catch (e) { showToastMsg(e.message, 'error'); }
     finally { setCancelLoading(false); }
@@ -1939,7 +2090,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                                 disabled={rebookLoading}
                                 className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 border-none bg-transparent cursor-pointer disabled:opacity-50">
-                                🔄 Đặt lại
+                                Đặt lại
                               </button>
                               {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
                                 const existing = findRefundRequest(b._id || b.id);
@@ -1947,7 +2098,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                                 return (
                                   <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }}
                                     className="text-[11px] font-semibold text-rose-600 hover:text-rose-500 border-none bg-transparent cursor-pointer">
-                                    💸 Hoàn tiền
+                                    Yêu cầu hoàn tiền
                                   </button>
                                 );
                               })()}
@@ -2180,18 +2331,15 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   upcoming.sort((a, b) => new Date(a.bookingDate) - new Date(b.bookingDate));
                   past.sort((a, b) => new Date(b.bookingDate) - new Date(a.bookingDate));
                   
-                  const isNew = (createdAt) => createdAt && (new Date() - new Date(createdAt)) < 24 * 60 * 60 * 1000;
-
                   const renderBookingCard = (b) => {
                     const bId = b._id || b.id;
-                    const st = STATUS_MAP[b.status] || { label: b.status, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
                     const canReview = b.status === 'completed';
                     const hasReview = b.rating || b.feedback;
-                    const isNewB = isNew(b.createdAt);
+                    const isNewB = checkIsNew(b);
                     
                     if (b.isGroup) {
                       return (
-                        <div key={bId} onClick={() => { setRecurringGroupTarget(b); setShowRecurringGroupModal(true); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
+                        <div key={bId} onClick={() => { markBookingAsViewed(bId || b.recurringGroupId); setRecurringGroupTarget(b); setShowRecurringGroupModal(true); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
                           <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
                           <div className="flex items-start justify-between gap-4 pl-3">
                             <div className="min-w-0 flex-1">
@@ -2231,7 +2379,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     }
                     
                     return (
-                      <div key={bId} onClick={() => setViewBooking(b)} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden group">
+                      <div key={bId} onClick={() => handleOpenViewBooking(b)} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden group">
                         {/* Status color bar */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${
                           b.status === 'completed' ? 'bg-emerald-500' :
@@ -2328,25 +2476,25 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                           );
                         })()}
                           <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100 pl-3">
-                            <button onClick={(e) => { e.stopPropagation(); setViewBooking(b); }}
+                            <button onClick={(e) => { e.stopPropagation(); handleOpenViewBooking(b); }}
                               className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-all cursor-pointer">
                               Xem chi tiết
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); setDetailBooking(b); }}
+                            <button onClick={(e) => { e.stopPropagation(); handleOpenDetailBooking(b); }}
                               className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200/80 transition-all cursor-pointer">
                               Xem hóa đơn
                             </button>
                             {b.status !== 'cancelled' && b.paymentStatus !== 'paid' && (
                               <button onClick={(e) => { e.stopPropagation(); handlePayRemaining(b); }}
                                 disabled={cancelLoading}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-600 transition-colors shadow-sm disabled:opacity-50">
-                                💳 Thanh toán ngay
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-500/20 transition-all shadow-xs cursor-pointer disabled:opacity-50">
+                                Thanh toán ngay
                               </button>
                             )}
                             {(b.status === 'pending' || b.status === 'confirmed') && (
                               <button onClick={(e) => { e.stopPropagation(); handleShowQR(b); }}
-                                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5">
-                                <span>📱 Xem QR</span>
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all shadow-xs cursor-pointer">
+                                Xem QR
                               </button>
                             )}
                             {(b.status === 'pending' || b.status === 'confirmed') && b.recurringGroupId && (
@@ -2367,22 +2515,22 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                               <>
                                 <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                                   disabled={rebookLoading}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
-                                  🔄 Đặt lại
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all disabled:opacity-50">
+                                  Đặt lại
                                 </button>
                                 {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
                                   const existing = findRefundRequest(b._id || b.id);
                                   if (existing?.status === 'pending') {
                                     return (
-                                      <div className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 cursor-default" onClick={e => e.stopPropagation()}>
+                                      <div className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 cursor-default" onClick={e => e.stopPropagation()}>
                                         ⏳ Đang chờ hoàn tiền
                                       </div>
                                     );
                                   }
                                   return (
                                     <button onClick={(e) => { e.stopPropagation(); openRefundRequest(b); }}
-                                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors">
-                                      💸 Yêu cầu hoàn tiền
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all">
+                                      Yêu cầu hoàn tiền
                                     </button>
                                   );
                                 })()}
@@ -2494,7 +2642,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   <svg className="w-8 h-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
                 </div>
                 <p className="text-slate-500 font-medium">Bạn chưa mua gói lượt nào</p>
-                <button onClick={() => window.location.href = '/dat-lich'} className="mt-4 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors">Mua ngay</button>
+                <button onClick={() => navigate('/booking?tab=slot_pack')} className="mt-4 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors cursor-pointer">Mua ngay</button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3184,14 +3332,14 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               )}
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center gap-3">
-              <button onClick={() => { setViewBooking(null); setDetailBooking(b); }}
+              <button onClick={() => { setViewBooking(null); handleOpenDetailBooking(b); }}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer text-center">
                 Xem hóa đơn
               </button>
               {b.status !== 'cancelled' && b.paymentStatus !== 'paid' && (
                 <button onClick={() => { handlePayRemaining(b); }} disabled={cancelLoading}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors text-center shadow-sm disabled:opacity-50">
-                  💳 Thanh toán ngay
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer text-center disabled:opacity-50 border border-emerald-500/20">
+                  Thanh toán ngay
                 </button>
               )}
               <button onClick={() => setViewBooking(null)}
@@ -3250,34 +3398,56 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
 
       {/* ── REVIEW MODAL ── */}
       {showReviewModal && reviewTarget && (
-        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+        <div className="fixed inset-0 z-[9999] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={() => { setShowReviewModal(false); setReviewTarget(null); }}>
-          <div className="bg-white rounded-[1.5rem] w-full max-w-md p-8 shadow-xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Đánh giá dịch vụ</h3>
-            <p className="text-sm text-slate-400 mb-6">{reviewTarget.packageId?.name || 'Dịch vụ'} tại {reviewTarget.branchId?.name || ''}</p>
-            <form onSubmit={handleSubmitReview} className="space-y-5">
-              <div>
-                <label className="text-xs font-medium text-slate-500 block mb-2">Chất lượng dịch vụ</label>
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative border border-slate-100 animate-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => { setShowReviewModal(false); setReviewTarget(null); }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-200 flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white flex items-center justify-center text-2xl mb-3 shadow-md shadow-amber-500/20">
+              ⭐
+            </div>
+
+            <h3 className="text-xl font-black text-slate-900 mb-0.5">Đánh giá dịch vụ</h3>
+            <p className="text-xs font-medium text-slate-500 mb-4">
+              {reviewTarget.packageId?.name || 'Dịch vụ'} · {reviewTarget.branchId?.name || 'Chi nhánh'}
+            </p>
+
+            <form onSubmit={handleSubmitReview} className="space-y-4">
+              <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-center">
+                <label className="text-xs font-bold text-slate-700 block mb-1 uppercase tracking-wider">Chất lượng dịch vụ</label>
                 <StarRating value={rating} onChange={setRating} />
               </div>
+
               <div>
-                <label className="text-xs font-medium text-slate-500 block mb-1.5">Nhận xét (không bắt buộc)</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Nhận xét của bạn (không bắt buộc)</label>
                 <textarea value={feedbackText} onChange={e => setFeedbackText(e.target.value)}
-                  rows={4} maxLength={1000} placeholder="Chia sẻ trải nghiệm của bạn..."
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 resize-none" />
-                <p className="text-[10px] text-slate-400 mt-1 text-right">{feedbackText.length}/1000</p>
+                  rows={3} maxLength={1000} placeholder="Chia sẻ trải nghiệm sử dụng dịch vụ của bạn tại AutoWash Pro..."
+                  className="w-full rounded-2xl border border-slate-200 p-3.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 resize-none transition-all placeholder:text-slate-400" />
+                <p className="text-[10px] font-medium text-slate-400 mt-1 text-right">{feedbackText.length}/1000</p>
               </div>
+
               {reviewTarget.managerReply && (
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
-                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-1">Phản hồi từ chi nhánh</p>
-                  <p className="text-sm text-emerald-800 italic">{reviewTarget.managerReply}</p>
+                <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-3.5 text-xs">
+                  <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px] mb-1 uppercase tracking-wider">
+                    <span>💬</span> Phản hồi từ chi nhánh
+                  </div>
+                  <p className="text-emerald-900 italic font-medium leading-relaxed">"{reviewTarget.managerReply}"</p>
                 </div>
               )}
-              <div className="flex gap-3 pt-2">
+
+              <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => { setShowReviewModal(false); setReviewTarget(null); }}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Hủy</button>
+                  className="flex-1 py-3 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">
+                  Hủy
+                </button>
                 <button type="submit" disabled={submitting || rating === 0}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-400 transition-colors disabled:opacity-50">
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white text-xs font-bold transition-all shadow-md shadow-amber-500/20 disabled:opacity-40 disabled:shadow-none cursor-pointer">
                   {submitting ? 'Đang gửi...' : 'Gửi đánh giá'}
                 </button>
               </div>
@@ -3676,8 +3846,13 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               <div className="text-slate-600 font-medium">
                 Bạn đã bỏ chọn dịch vụ chọn thêm:
               </div>
-              <div className="font-bold text-emerald-800 bg-white/90 p-2.5 rounded-lg border border-emerald-100/80 leading-relaxed">
-                {refundConfirmData.canceledNames.map(n => `• ${String(n).replace(/^\+\s*/, '')}`).join('\n')}
+              <div className="font-bold text-emerald-800 bg-white/90 p-2.5 rounded-lg border border-emerald-100/80 space-y-1.5">
+                {refundConfirmData.canceledNames.map((n, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <span className="text-emerald-500 font-bold">•</span>
+                    <span>{String(n).replace(/^\+\s*/, '')}</span>
+                  </div>
+                ))}
               </div>
               <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-sm">
                 <span className="font-medium text-slate-700">Số tiền hoàn về Ví:</span>

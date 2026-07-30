@@ -1,7 +1,6 @@
 import { motion, useInView } from 'framer-motion';
-import { useRef, useState, useEffect } from 'react';
-import { PrizeWheel } from '@mertercelik/react-prize-wheel';
-import '@mertercelik/react-prize-wheel/style.css';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import CustomLuckyWheel from './CustomLuckyWheel.jsx';
 import { storageKeys } from '../../lib/authStorage.js';
 import { showToast } from '@/lib/toast';
 import { Trophy, CheckCircle, Warning, ClockCounterClockwise } from '@phosphor-icons/react';
@@ -128,12 +127,34 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   
+  const [spinHistory, setSpinHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const wheelRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
   const [spinResult, setSpinResult] = useState(null);
 
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
+
+  const fetchSpinHistory = useCallback(async () => {
+    if (!user) return;
+    setHistoryLoading(true);
+    try {
+      const token = localStorage.getItem(storageKeys.accessToken);
+      const res = await fetch(`${API_BASE}/gifts/my-history`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        setSpinHistory(Array.isArray(payload?.data) ? payload.data : []);
+      }
+    } catch (e) {
+      console.error('Lỗi lấy lịch sử quay quà:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     async function loadWheel() {
@@ -142,21 +163,28 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
         if (resGifts.ok) {
           const payload = await resGifts.json();
           const items = payload?.data || [];
+          const PALETTE = ['#10b981', '#06b6d4', '#f59e0b', '#6366f1', '#ec4899', '#14b8a6'];
           if (items.length > 0) {
             setWheelSectors(items.map((it, idx) => ({
               id: it._id,
               label: it.name,
               probability: it.probability,
-              color: it.color || (idx % 2 === 0 ? '#10b981' : '#34d399')
+              color: it.color || PALETTE[idx % PALETTE.length]
             })));
           } else {
-             setWheelSectors([{ id: '1', label: 'Rỗng', color: '#ccc' }]);
+             setWheelSectors([{ id: '1', label: 'Rỗng', color: '#94a3b8' }]);
           }
         }
       } catch(e) {}
     }
     loadWheel();
   }, []);
+
+  useEffect(() => {
+    if (user && activeTab === 'wheel') {
+      fetchSpinHistory();
+    }
+  }, [user, activeTab, fetchSpinHistory]);
 
   useEffect(() => {
     async function loadVouchers() {
@@ -172,7 +200,6 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
              setUserPoints(prof.data.loyaltyPoints || 0);
            }
         }
-
 
         const resV = await fetch(`${API_BASE}/vouchers/available?type=${filterType}&page=${page}&limit=6`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -230,7 +257,6 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
       const createdVoucher = data.data.voucher;
 
       if (wheelRef.current) {
-        // find index in wheelSectors matching wonPrize._id
         const targetSector = wheelSectors.find(s => String(s.id) === String(wonPrize._id));
         if (targetSector) {
            wheelRef.current.spin(targetSector.id);
@@ -239,8 +265,6 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
         }
       }
 
-      // We wait for onSpinEnd to show result. We store createdVoucher info in spinResult there.
-      // But we can just set it immediately in a ref or state and use it in onSpinEnd.
       window.__lastSpinResult = {
         prize: wonPrize,
         voucher: createdVoucher
@@ -258,9 +282,9 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
     if (result) {
        setSpinResult(result);
        if (result.voucher) {
-          // add to vouchers list automatically
           setVouchers(prev => [result.voucher, ...prev]);
        }
+       fetchSpinHistory();
     }
   };
 
@@ -287,10 +311,10 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
 
         {/* Tabs */}
         <div className="flex justify-center mb-12">
-          <div className="bg-slate-100 p-1 rounded-2xl flex items-center shadow-inner">
+          <div className="bg-slate-100 p-1.5 rounded-2xl flex items-center shadow-inner flex-wrap justify-center gap-1.5 border border-slate-200/60">
             <button
               onClick={() => setActiveTab('redeem')}
-              className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
+              className={`px-6 sm:px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
                 activeTab === 'redeem' 
                   ? 'bg-white text-emerald-600 shadow-md' 
                   : 'text-slate-500 hover:text-slate-700'
@@ -300,13 +324,23 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
             </button>
             <button
               onClick={() => setActiveTab('wheel')}
-              className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
+              className={`px-6 sm:px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
                 activeTab === 'wheel' 
                   ? 'bg-white text-emerald-600 shadow-md' 
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Quà Tặng (Vòng Quay)
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-6 sm:px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
+                activeTab === 'history' 
+                  ? 'bg-white text-emerald-600 shadow-md' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Lịch Sử Quay Thưởng
             </button>
           </div>
         </div>
@@ -387,77 +421,199 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
           </div>
         )}
       </div>
-    ) : (
-          <div className="flex flex-col items-center justify-center py-16 bg-white border border-slate-200 rounded-3xl shadow-sm relative overflow-hidden">
-             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.05),transparent_70%)]" />
-             
-             <h3 className="text-3xl font-black text-slate-800 mb-2 relative z-10">Vòng Quay Trúng Thưởng</h3>
-             <p className="text-slate-500 mb-4 relative z-10 max-w-md text-center">Thanh toán thành công đơn hàng để nhận thêm lượt quay!</p>
-             
-             <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-6 py-3 mb-10 relative z-10">
-               <span className="text-emerald-700 font-bold">Lượt quay của bạn: <span className="text-xl ml-1">{user ? spinCount : 0}</span></span>
-             </div>
+    ) : activeTab === 'wheel' ? (
+          <div className="space-y-12">
+            {/* ── Spin Wheel Container Card ── */}
+            <div className="flex flex-col items-center justify-center py-16 px-6 bg-gradient-to-b from-white via-emerald-50/60 to-teal-50/40 border border-emerald-100/90 rounded-3xl shadow-xl relative overflow-hidden text-slate-900 text-center">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.12),transparent_70%)] pointer-events-none" />
+              
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-100/80 border border-emerald-200/80 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-3 relative z-10">
+                ✨ Vòng Quay May Mắn
+              </div>
 
-             <div className="relative z-10 scale-[1.15] md:scale-125 origin-top mt-4 mb-20">
-                {wheelSectors.length > 1 && (
-                  <PrizeWheel
-                    ref={wheelRef}
-                    sectors={wheelSectors}
-                    onSpinEnd={onSpinEnd}
-                    textColor="#ffffff"
-                    middleDotColor="#ffffff"
-                    frameColor="#0f172a"
-                    minSpins={3}
-                  />
-                )}
-             </div>
+              <h3 className="text-3xl md:text-4xl font-black text-slate-900 mb-2 relative z-10 tracking-tight">Vòng Quay Trúng Thưởng</h3>
+              <p className="text-slate-500 mb-6 relative z-10 max-w-md text-xs md:text-sm font-medium leading-relaxed">Thanh toán thành công đơn dịch vụ để tích lũy thêm lượt quay và săn quà độc quyền!</p>
+              
+              <div className="bg-white/90 border border-emerald-200/90 rounded-full px-7 py-3 mb-8 relative z-10 shadow-sm flex items-center gap-2.5">
+                <span className="text-slate-700 text-sm font-bold">Lượt quay khả dụng:</span>
+                <span className="text-emerald-600 text-2xl font-black">{user ? spinCount : 0}</span>
+              </div>
 
-             <div className="mt-12 relative z-10 flex flex-col items-center">
-                <button 
-                  onClick={handleSpinClick}
-                  disabled={spinning || (user && spinCount <= 0)}
-                  className={`px-14 py-5 rounded-full font-black text-xl transition-all shadow-xl ${
-                    spinning 
-                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' 
-                      : (user && spinCount <= 0)
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                        : 'bg-emerald-500 text-white shadow-emerald-500/30 hover:bg-emerald-400 hover:shadow-emerald-400/50 hover:-translate-y-1'
-                  }`}
-                >
-                  {spinning ? 'ĐANG QUAY...' : 'QUAY NGAY'}
+              <div className="relative z-10 scale-[0.9] sm:scale-100 origin-center my-4">
+                 {wheelSectors.length > 0 && (
+                   <CustomLuckyWheel
+                     ref={wheelRef}
+                     sectors={wheelSectors}
+                     onSpinEnd={onSpinEnd}
+                     onCenterClick={handleSpinClick}
+                   />
+                 )}
+              </div>
+
+              <div className="mt-8 relative z-10 flex flex-col items-center">
+                 <button 
+                   onClick={handleSpinClick}
+                   disabled={spinning || (user && spinCount <= 0)}
+                   className={`px-16 py-4.5 rounded-full font-black text-xl transition-all shadow-xl cursor-pointer ${
+                     spinning 
+                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none border border-slate-300' 
+                       : (user && spinCount <= 0)
+                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-300'
+                         : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/30 hover:from-emerald-500 hover:to-teal-500 hover:shadow-emerald-500/40 hover:scale-105 active:scale-95 border border-emerald-500/20'
+                   }`}
+                 >
+                   {spinning ? 'ĐANG QUAY...' : 'QUAY NGAY'}
+                 </button>
+              </div>
+
+              {spinResult && (() => {
+                const prizeName = (spinResult.prize?.name || '').toLowerCase();
+                const isNoPrize = !spinResult.voucher && (prizeName.includes('may mắn') || prizeName.includes('không trúng'));
+
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    className="absolute inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-6"
+                  >
+                     <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl text-center max-w-sm w-full relative border border-slate-100 text-slate-900">
+                       <button onClick={() => setSpinResult(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-sm">
+                         ✕
+                       </button>
+                       <div className={`w-20 h-20 rounded-2xl text-white flex items-center justify-center mx-auto mb-5 shadow-lg text-3xl ${
+                         isNoPrize 
+                           ? 'bg-gradient-to-br from-slate-400 to-slate-500 shadow-slate-500/20' 
+                           : 'bg-gradient-to-br from-amber-400 to-amber-500 shadow-amber-500/20'
+                       }`}>
+                         {isNoPrize ? '🍀' : '🎁'}
+                       </div>
+                       <h4 className="text-2xl font-black text-slate-900 mb-1">
+                         {isNoPrize ? 'Chúc Bạn May Mắn!' : 'Chúc Mừng Bạn!'}
+                       </h4>
+                       <p className="text-xs font-medium text-slate-500 mb-5">
+                         {isNoPrize ? 'Rất tiếc lượt quay này chưa trúng phần quà nào.' : 'Bạn đã may mắn quay trúng phần quà:'}
+                       </p>
+                       <div className={`text-lg font-bold mb-6 p-4 rounded-2xl border shadow-2xs ${
+                         isNoPrize 
+                           ? 'bg-slate-50 text-slate-700 border-slate-200' 
+                           : 'bg-emerald-50/80 text-emerald-700 border-emerald-200/80'
+                       }`}>
+                         {spinResult.prize?.name || (isNoPrize ? 'Chúc bạn may mắn lần sau' : 'Phần quà bí mật')}
+                       </div>
+                       {!isNoPrize && spinResult.voucher && (
+                         <p className="text-xs text-slate-500 mb-6 font-medium">Mã ưu đãi đã được tự động thêm vào mục <b>Ưu Đãi</b> của bạn!</p>
+                       )}
+                       <button 
+                         onClick={() => setSpinResult(null)}
+                         className={`w-full py-3 text-white font-bold text-sm rounded-xl transition-all shadow-md cursor-pointer ${
+                           isNoPrize 
+                             ? 'bg-slate-800 hover:bg-slate-700 shadow-slate-800/20' 
+                             : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/20'
+                         }`}
+                       >
+                         {isNoPrize ? 'Thử lại' : 'Nhận quà ngay'}
+                       </button>
+                     </div>
+                  </motion.div>
+                );
+              })()}
+            </div>
+
+            {/* ── Shortcut Banner to History ── */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-2xl shrink-0">
+                  🏆
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-slate-900">Xem lại các phần quà đã quay trúng</h4>
+                  <p className="text-xs text-slate-500">Xem danh sách đầy đủ mã voucher và quà tặng từ các lượt quay trước</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab('history')}
+                className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all shrink-0 cursor-pointer shadow-sm"
+              >
+                Lịch sử quay thưởng →
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── TAB 3: LỊCH SỬ QUAY THƯỞNG ── */
+          <div className="bg-white rounded-3xl p-6 md:p-10 border border-slate-200/80 shadow-sm relative z-10">
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-2xl shadow-2xs border border-amber-200/80">
+                  🏆
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-slate-900">Lịch Sử Quay Thưởng Của Bạn</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Tất cả các phần quà và mã ưu đãi bạn đã may mắn quay trúng</p>
+                </div>
+              </div>
+              {spinHistory.length > 0 && (
+                <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Tổng trúng: {spinHistory.length} phần quà
+                </span>
+              )}
+            </div>
+
+            {!user ? (
+              <div className="text-center py-16 bg-slate-50/50 rounded-2xl border border-slate-200">
+                <p className="text-slate-500 text-sm font-medium mb-4">Vui lòng đăng nhập để xem danh sách phần quà đã trúng</p>
+                <button onClick={onOpenAuth} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md">
+                  Đăng Nhập
                 </button>
-             </div>
+              </div>
+            ) : historyLoading ? (
+              <div className="text-center py-16 text-slate-400 text-sm font-medium">Đang tải lịch sử trúng quà...</div>
+            ) : spinHistory.length === 0 ? (
+              <div className="text-center py-16 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center text-3xl mx-auto mb-3">
+                  🎁
+                </div>
+                <h5 className="text-base font-bold text-slate-800">Chưa có phần quà nào</h5>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Bạn chưa trúng phần quà nào từ vòng quay. Hãy sang tab Vòng quay để thử vận may ngay!</p>
+                <button
+                  onClick={() => setActiveTab('wheel')}
+                  className="mt-5 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm cursor-pointer"
+                >
+                  Quay thưởng ngay ⚡
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {spinHistory.map((item, idx) => {
+                  const isUsed = item.status === 'used';
+                  const isExpired = item.status === 'expired';
+                  const statusLabel = isUsed ? 'Đã sử dụng' : isExpired ? 'Đã hết hạn' : 'Còn hiệu lực';
+                  const statusCls = isUsed ? 'bg-slate-100 text-slate-500 border-slate-200' : isExpired ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
 
-             {spinResult && (
-               <motion.div 
-                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                 className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6"
-               >
-                  <div className="bg-white p-8 md:p-12 rounded-3xl shadow-2xl text-center max-w-sm w-full relative">
-                    <button onClick={() => setSpinResult(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <span className="text-4xl">🎁</span>
+                  return (
+                    <div key={item._id || idx} className="p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-300 hover:shadow-md transition-all flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-xs">
+                          🎁
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="text-sm font-bold text-slate-900 truncate">{item.name}</h5>
+                          <div className="text-[12px] font-mono text-slate-500 mt-1 flex items-center gap-2">
+                            <span>Mã: <strong className="text-slate-800">{item.code}</strong></span>
+                            <span>·</span>
+                            <span>{formatDate(item.wonAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold border ${statusCls}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
                     </div>
-                    <h4 className="text-2xl font-black text-slate-800 mb-2">Chúc Mừng!</h4>
-                    <p className="text-slate-500 mb-6">Bạn đã quay trúng:</p>
-                    <div className="text-xl font-bold text-emerald-600 mb-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                      {spinResult.prize?.name || 'Phần quà bí mật'}
-                    </div>
-                    {spinResult.voucher && (
-                      <p className="text-sm text-slate-500 mb-6">Voucher đã được chuyển vào mục <b>Ưu Đãi</b> của bạn!</p>
-                    )}
-                    <button 
-                      onClick={() => setSpinResult(null)}
-                      className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors"
-                    >
-                      Tuyệt Vời
-                    </button>
-                  </div>
-               </motion.div>
-             )}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

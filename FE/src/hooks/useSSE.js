@@ -17,6 +17,7 @@ class SocketManager {
     this.base = API_BASE.replace(/\/api$/, '');
     this.hasInitialSync = false; // chỉ fire SYNC_EVENTS ở lần connect đầu tiên
     this.syncDebounceTimer = null;
+    this.disconnectTimer = null;
   }
 
   connect(token) {
@@ -30,7 +31,7 @@ class SocketManager {
 
     this.socket = io(this.base, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       autoConnect: true
     });
 
@@ -38,7 +39,6 @@ class SocketManager {
       console.log('[Socket] Connected:', this.socket.id);
 
       // Reconnect recovery: trigger sync events để mounted components refresh dữ liệu.
-      //
       // CHANGE: trước đây SYNC_EVENTS được fire MỖI LẦN reconnect (network blip, mobile
       // đổi 4G/wifi, corporate proxy timeout) → mỗi lần đều bắn toàn bộ fetch → user
       // thấy UI "reset" / "nhảy dữ liệu". Giờ chỉ fire 1 LẦN DUY NHẤT ở initial connect
@@ -65,7 +65,6 @@ class SocketManager {
       console.error('[Socket] Connect Error:', err.message);
     });
 
-    // Re-attach all existing event listeners to the new socket
     for (const [eventName, callbacks] of this.listeners.entries()) {
       this.socket.on(eventName, (data) => {
         callbacks.forEach(cb => cb(data));
@@ -94,6 +93,10 @@ class SocketManager {
   }
 
   disconnect() {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -105,6 +108,11 @@ class SocketManager {
   }
 
   subscribe(token, eventName, callback) {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+
     if (!this.socket || this.token !== token) {
       this.connect(token);
     }
@@ -137,7 +145,16 @@ class SocketManager {
         total += set.size;
       }
       if (total === 0) {
-        this.disconnect();
+        if (this.disconnectTimer) clearTimeout(this.disconnectTimer);
+        this.disconnectTimer = setTimeout(() => {
+          let currentTotal = 0;
+          for (const set of this.listeners.values()) {
+            currentTotal += set.size;
+          }
+          if (currentTotal === 0) {
+            this.disconnect();
+          }
+        }, 5000);
       }
     };
   }
