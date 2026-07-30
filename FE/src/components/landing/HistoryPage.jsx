@@ -604,6 +604,28 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
       .finally(() => setLoading(false));
   }, [apiBase, token, limit]);
 
+  // Xử lý VNPay return cho thanh toán phần còn lại
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vnpayResult = params.get('vnpay_result');
+    if (!vnpayResult) return;
+    const url2 = new URL(window.location);
+    url2.searchParams.delete('vnpay_result');
+    window.history.replaceState({}, '', url2);
+    try {
+      const parsed = JSON.parse(decodeURIComponent(vnpayResult));
+      const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
+      if (success) {
+        showToastMsg('Thanh toán VNPay thành công!');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      } else {
+        showToastMsg(parsed?.message || 'Thanh toán VNPay thất bại', 'error');
+      }
+    } catch (e) {
+      console.error('Parse vnpay_result error:', e);
+    }
+  }, []);
+
   const fetchSlotPacks = useCallback(() => {
     if (!token) return;
     setSlotPacksLoading(true);
@@ -626,11 +648,19 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     if (!token) return;
     fetch(`${apiBase || API_BASE}/refund-requests/my`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
-      .then(payload => setRefunds(payload?.data || []))
+      .then(payload => {
+        const list = Array.isArray(payload?.data?.data)
+          ? payload.data.data
+          : (Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []));
+        setRefunds(list);
+      })
       .catch(() => setRefunds([]));
   }, [apiBase, token]);
 
-  const findRefundRequest = (bId) => refunds.find(r => r.bookingId === bId || r.bookingId?._id === bId);
+  const findRefundRequest = (bId) => {
+    const list = Array.isArray(refunds) ? refunds : [];
+    return list.find(r => String(r.bookingId?._id || r.bookingId) === String(bId));
+  };
   const isRefundExpired = (b) => {
     if (b.status !== 'completed') return true;
     const ts = b.updatedAt;

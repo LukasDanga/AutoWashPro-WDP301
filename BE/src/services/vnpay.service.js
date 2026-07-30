@@ -41,13 +41,13 @@ const formatDate = (date) => {
 };
 
 const createPaymentUrl = ({ amount, ipAddr, txnRef, returnUrl: customReturnUrl }) => {
-  const tmnCode = process.env.VNP_TMNCODE;
-  const secretKey = process.env.VNP_HASHSECRET;
-  const vnpUrl = process.env.VNP_URL;
-  const vnpReturnUrl = process.env.VNP_RETURN_URL;
+  const tmnCode = process.env.VNPAY_TMNCODE;
+  const secretKey = process.env.VNPAY_HASH_SECRET;
+  const vnpUrl = process.env.VNPAY_URL;
+  const vnpReturnUrl = process.env.VNPAY_RETURN_URL;
 
   if (!tmnCode || !secretKey || !vnpUrl) {
-    throw new Error('Missing VNPay config: VNP_TMNCODE, VNP_HASHSECRET, VNP_URL');
+    throw new Error('Missing VNPay config: VNPAY_TMNCODE, VNPAY_HASH_SECRET, VNPAY_URL');
   }
 
   const createDate = formatDate();
@@ -86,10 +86,10 @@ const createPaymentUrl = ({ amount, ipAddr, txnRef, returnUrl: customReturnUrl }
 };
 
 const verifyReturnUrl = (queryParams) => {
-  const secretKey = process.env.VNP_HASHSECRET;
+  const secretKey = process.env.VNPAY_HASH_SECRET;
 
   if (!secretKey) {
-    throw new Error('Missing VNPay config: VNP_HASHSECRET');
+    throw new Error('Missing VNPay config: VNPAY_HASH_SECRET');
   }
 
   const vnpParams = {};

@@ -151,8 +151,9 @@ export default function App() {
       sessionStorage.setItem('aw_rebookVnpayResult', vnpayResult);
       navigate('/history?rebook_vnpay=true', { replace: true });
     } else {
-      // Already on /booking — no redirect needed (Handled by BookingWidget)
+      // Already on /booking or /history — no redirect needed
       if (location.pathname.startsWith('/booking')) return;
+      if (location.pathname.startsWith('/history')) return;
       // Regular booking flow → forward to /booking where BookingWidget handles it
       navigate('/booking?vnpay_result=' + encodeURIComponent(vnpayResult), { replace: true });
     }
