@@ -13,7 +13,8 @@ exports.getAllRequests = catchAsync(async (req, res) => {
 });
 
 exports.getMyRequests = catchAsync(async (req, res) => {
-  const requests = await refundRequestService.getAll({}, 'customer', req.userId);
+  const result = await refundRequestService.getAll({ ...req.query, limit: 100 }, 'customer', req.userId);
+  const requests = Array.isArray(result) ? result : (result.data || []);
   success(res, requests, 'Đã lấy danh sách yêu cầu hoàn tiền của tôi');
 });
 

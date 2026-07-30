@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
@@ -15,6 +15,9 @@ import {
   CalendarBlank,
   Trash,
   Spinner,
+  MagnifyingGlass,
+  Funnel,
+  Calendar,
 } from '@phosphor-icons/react';
 
 function api(path, opts = {}) {
@@ -33,29 +36,34 @@ function formatDateTime(d) {
   return new Date(d).toLocaleString('vi-VN');
 }
 
-const STATUS_MAP = {
-  pending:  { label: 'Chờ duyệt',   cls: 'bg-amber-50 text-amber-700', icon: Clock },
-  approved: { label: 'Đã hoàn tiền', cls: 'bg-emerald-50 text-emerald-700', icon: CheckCircle },
-  rejected: { label: 'Đã từ chối',  cls: 'bg-red-50 text-red-600', icon: XCircle },
-};
+function getTodayString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-const STATUS_TABS = [
-  { key: '', label: 'Tất cả' },
-  { key: 'pending', label: 'Chờ duyệt' },
-  { key: 'approved', label: 'Đã hoàn tiền' },
-  { key: 'rejected', label: 'Đã từ chối' },
-];
+const STATUS_MAP = {
+  pending: { label: 'Chờ duyệt', cls: 'bg-amber-50 text-amber-700 border border-amber-200/80', icon: Clock },
+  approved: { label: 'Đã hoàn tiền', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80', icon: CheckCircle },
+  rejected: { label: 'Đã từ chối', cls: 'bg-red-50 text-red-600 border border-red-200/80', icon: XCircle },
+};
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-[15px] font-semibold text-slate-800">{title}</h2>
-          <button onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+          <button
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
@@ -167,19 +175,25 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
               <textarea
                 rows={3}
                 value={reviewNote}
-                onChange={e => setReviewNote(e.target.value)}
+                onChange={(e) => setReviewNote(e.target.value)}
                 placeholder="Ghi chú khi duyệt/từ chối..."
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors resize-none"
               />
             </div>
             <div className="flex gap-2 border-t border-slate-100 pt-4">
-              <button onClick={() => onReview('rejected', reviewNote)} disabled={reviewing}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors cursor-pointer">
+              <button
+                onClick={() => onReview('rejected', reviewNote)}
+                disabled={reviewing}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors cursor-pointer"
+              >
                 <XCircle size={14} />
                 Từ chối
               </button>
-              <button onClick={() => onReview('approved', reviewNote)} disabled={reviewing}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors cursor-pointer">
+              <button
+                onClick={() => onReview('approved', reviewNote)}
+                disabled={reviewing}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors cursor-pointer"
+              >
                 {reviewing ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <CheckCircle size={14} />}
                 {reviewing ? 'Đang xử lý…' : 'Phê duyệt & hoàn tiền'}
               </button>
@@ -188,8 +202,10 @@ function RequestDetail({ request, onClose, onReview, reviewing }) {
         )}
         {request.status !== 'pending' && (
           <div className="border-t border-slate-100 pt-4">
-            <button onClick={onClose}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">
+            <button
+              onClick={onClose}
+              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
               Đóng
             </button>
           </div>
@@ -203,10 +219,19 @@ export default function RefundRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalItems: 0, totalPages: 1 });
+  
   const [detail, setDetail] = useState(null);
   const [reviewing, setReviewing] = useState(false);
-  const [viewMode, setViewMode] = useState('pending'); // pending | history
+  
+  const [viewedRequests, setViewedRequests] = useState(() => {
+    return JSON.parse(localStorage.getItem('viewed_refund_requests') || '[]');
+  });
 
   // Range Delete states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -215,33 +240,100 @@ export default function RefundRequests() {
   const [deleteAll, setDeleteAll] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true); setError('');
-    try {
-      const params = new URLSearchParams();
-      if (viewMode === 'pending') {
-        params.set('status', 'pending');
-      } else if (statusFilter) {
-        params.set('status', statusFilter);
-      }
-      const res = await api(`/refund-requests?${params}`);
-      if (!res.ok) throw new Error('Không thể tải danh sách yêu cầu hoàn tiền');
-      const data = await res.json();
-      setRequests(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [statusFilter, viewMode]);
+  const debounceSearch = useRef(null);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(async (pg = page, q = search, st = statusFilter, sDate = startDate, eDate = endDate) => {
+    // Validate date range
+    if (sDate && eDate && new Date(sDate) > new Date(eDate)) {
+      showToast('Ngày bắt đầu không được lớn hơn ngày kết thúc!', 'error');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ page: pg, limit: 10 });
+      if (q.trim()) params.set('search', q.trim());
+      if (st && st !== 'all') params.set('status', st);
+      if (sDate) params.set('startDate', sDate);
+      if (eDate) params.set('endDate', eDate);
+
+      const res = await api(`/refund-requests?${params}`);
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.message || 'Không thể tải danh sách yêu cầu hoàn tiền');
+
+      const dataList = resData?.data?.data || (Array.isArray(resData?.data) ? resData.data : []);
+      const pageInfo = resData?.data?.pagination || { page: pg, limit: 10, totalItems: dataList.length, totalPages: 1 };
+
+      setRequests(dataList);
+      setPagination(pageInfo);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search, statusFilter, startDate, endDate]);
+
+  useEffect(() => {
+    load(page, search, statusFilter, startDate, endDate);
+  }, [page, statusFilter, startDate, endDate]); // eslint-disable-line
+
+  const handleSearchChange = (val) => {
+    setSearch(val);
+    if (debounceSearch.current) clearTimeout(debounceSearch.current);
+    debounceSearch.current = setTimeout(() => {
+      setPage(1);
+      load(1, val, statusFilter, startDate, endDate);
+    }, 400);
+  };
+
+  const handleStartDateChange = (val) => {
+    if (val && endDate && new Date(val) > new Date(endDate)) {
+      showToast('Ngày bắt đầu không được lớn hơn ngày kết thúc!', 'error');
+      return;
+    }
+    setStartDate(val);
+    setPage(1);
+  };
+
+  const handleEndDateChange = (val) => {
+    if (startDate && val && new Date(startDate) > new Date(val)) {
+      showToast('Ngày bắt đầu không được lớn hơn ngày kết thúc!', 'error');
+      return;
+    }
+    setEndDate(val);
+    setPage(1);
+  };
+
+  const handleTodayClick = () => {
+    const today = getTodayString();
+    setStartDate(today);
+    setEndDate(today);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setStartDate('');
+    setEndDate('');
+    setPage(1);
+  };
+
+  const handleOpenDetail = (r) => {
+    if (r._id && !viewedRequests.includes(r._id)) {
+      const next = [...viewedRequests, r._id];
+      setViewedRequests(next);
+      localStorage.setItem('viewed_refund_requests', JSON.stringify(next));
+      window.dispatchEvent(new Event('refund-request-viewed'));
+    }
+    setDetail(r);
+  };
 
   const token = getStoredToken();
-  useSSE(token, 'refund_request_new', load);
-  useSSE(token, 'refund_request_updated', load);
-  useSSE(token, 'refund_requests_updated', load);
-
-  const pendingCount = requests.filter(r => r.status === 'pending').length;
-  const approvedCount = requests.filter(r => r.status === 'approved').length;
-  const rejectedCount = requests.filter(r => r.status === 'rejected').length;
+  useSSE(token, 'refund_request_new', () => load(page, search, statusFilter, startDate, endDate));
+  useSSE(token, 'refund_request_updated', () => load(page, search, statusFilter, startDate, endDate));
+  useSSE(token, 'refund_requests_updated', () => load(page, search, statusFilter, startDate, endDate));
 
   async function handleReview(decision, reviewNote) {
     if (!detail) return;
@@ -256,6 +348,7 @@ export default function RefundRequests() {
       setRequests(prev => prev.map(r => r._id === detail._id ? { ...r, status: decision, reviewedAt: new Date().toISOString() } : r));
       setDetail(null);
       showToast(decision === 'approved' ? 'Đã phê duyệt và hoàn tiền cho khách hàng!' : 'Đã từ chối yêu cầu hoàn tiền.', 'success');
+      load(page, search, statusFilter, startDate, endDate);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setReviewing(false); }
   }
@@ -269,6 +362,7 @@ export default function RefundRequests() {
       setRequests(prev => prev.filter(item => item._id !== r._id));
       if (detail && detail._id === r._id) setDetail(null);
       showToast('Đã xóa yêu cầu hoàn tiền thành công', 'success');
+      load(page, search, statusFilter, startDate, endDate);
     } catch (e) { showToast(e.message, 'error'); }
   }
 
@@ -290,131 +384,236 @@ export default function RefundRequests() {
       setDeleteDateFrom('');
       setDeleteDateTo('');
       setDeleteAll(false);
-      load();
+      load(1, search, statusFilter, startDate, endDate);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setDeleting(false); }
   }
 
+  const todayStr = new Date().toDateString();
+
   return (
     <div className="space-y-5">
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {[
-          { label: 'Chờ duyệt', value: pendingCount, color: 'text-amber-600', bg: 'bg-amber-50', icon: Clock },
-          { label: 'Đã hoàn tiền', value: approvedCount, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle },
-          { label: 'Đã từ chối', value: rejectedCount, color: 'text-red-500', bg: 'bg-red-50', icon: XCircle },
-        ].map(({ label, value, color, bg, icon: Icon }) => (
-          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
-              <Icon size={18} className={color} />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">{label}</p>
-              <p className="text-lg font-bold text-slate-800">{value}</p>
-            </div>
+      {/* Search, Filter & Action Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Customer Name Search */}
+          <div className="relative min-w-[240px] flex-1">
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Tìm kiếm theo tên khách hàng..."
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2 pl-9 pr-4 text-xs text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+            />
+            {search && (
+              <button
+                onClick={() => handleSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              >
+                ✕
+              </button>
+            )}
           </div>
-        ))}
-      </div>
 
-      {/* View Mode Tabs */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5">
-          {[
-            { key: 'pending', label: 'Chờ duyệt' },
-            { key: 'history', label: 'Lịch sử duyệt' },
-          ].map(t => (
-            <button key={t.key} onClick={() => { setViewMode(t.key); setStatusFilter(''); }}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                viewMode === t.key ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-              }`}>
-              {t.label}
+          {/* Status Filter */}
+          <div className="flex items-center gap-1.5">
+            <Funnel size={14} className="text-slate-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              className="rounded-xl border border-slate-200 bg-slate-50/60 py-2 px-3 text-xs font-semibold text-slate-700 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="approved">Đã hoàn tiền</option>
+              <option value="rejected">Đã từ chối</option>
+            </select>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => load(page, search, statusFilter, startDate, endDate)}
+              disabled={loading}
+              title="Làm mới dữ liệu"
+              className="flex h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              <ArrowClockwise size={13} className={loading ? 'animate-spin' : ''} />
+              <span>Làm mới</span>
             </button>
-          ))}
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex h-8 items-center gap-1.5 rounded-xl bg-red-600 px-3.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors cursor-pointer shadow-2xs"
+            >
+              <Trash size={13} />
+              <span>Xóa dữ liệu</span>
+            </button>
+          </div>
         </div>
 
-        {viewMode === 'history' && (
-          <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5">
-            {STATUS_TABS.filter(t => t.key !== 'pending').map(t => (
-              <button key={t.key} onClick={() => setStatusFilter(t.key)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                  statusFilter === t.key ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                }`}>
-                {t.label}
-              </button>
-            ))}
+        {/* Date Range Bar */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+            <Calendar size={14} className="text-slate-400" />
+            <span>Khoảng ngày:</span>
           </div>
-        )}
 
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">
-          <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
-        </button>
-        <button onClick={() => setShowDeleteModal(true)}
-          className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-red-500 transition-colors ml-auto cursor-pointer shadow-2xs">
-          <Trash size={13} /> Xóa yêu cầu hoàn tiền
-        </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => handleStartDateChange(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <span className="text-xs text-slate-400">đến</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => handleEndDateChange(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          {/* "Hôm nay" Button */}
+          <button
+            onClick={handleTodayClick}
+            className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer"
+          >
+            ⚡ Hôm nay
+          </button>
+
+          {(search || statusFilter !== 'all' || startDate || endDate) && (
+            <button
+              onClick={handleClearFilters}
+              className="text-xs font-medium text-slate-400 hover:text-slate-600 underline ml-auto cursor-pointer"
+            >
+              Xóa bộ lọc
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600">{error}</div>}
 
+      {/* Main Table */}
       {loading ? (
         <div className="flex justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
+        <div className="flex flex-col items-center gap-3 py-16 text-slate-400 rounded-2xl border border-slate-200 bg-white shadow-xs">
           <ArrowUUpLeft size={48} weight="duotone" />
-          <p className="text-sm">Không có yêu cầu hoàn tiền nào.</p>
+          <p className="text-sm font-medium">Không tìm thấy yêu cầu hoàn tiền nào.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full border-collapse text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3">Khách hàng</th>
-                <th className="px-4 py-3">Lý do</th>
-                <th className="px-4 py-3 text-right">Số tiền</th>
-                <th className="px-4 py-3">Trạng thái</th>
-                <th className="px-4 py-3">Ngày gửi</th>
-                <th className="px-4 py-3 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {requests.map((r) => {
-                const st = STATUS_MAP[r.status] || { label: r.status, cls: 'bg-slate-100 text-slate-500' };
-                const booking = r.bookingId || {};
-                const isDepositOnly = booking.paymentStatus === 'deposit_paid' || (booking.depositPaid && booking.paymentStatus !== 'paid');
-                const actualDeposit = booking.depositAmount || booking.deposit;
-                const refundAmount = isDepositOnly && actualDeposit ? actualDeposit : (booking.finalPrice ?? r.amount ?? r.refundAmount);
-                return (
-                  <tr key={r._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-800">{r.userId?.name || '—'}</div>
-                      <div className="text-xs text-slate-400">{r.userId?.email || ''}</div>
-                    </td>
-                    <td className="px-4 py-3 max-w-xs truncate" title={r.reason}>{r.reason}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-emerald-600">{formatCurrency(refundAmount)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(r.createdAt)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setDetail(r)} title="Xem chi tiết"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer">
-                          <Eye size={14} />
-                        </button>
-                        <button onClick={() => handleDeleteSingle(r)} title="Xóa yêu cầu"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer">
-                          <Trash size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3.5">Khách hàng</th>
+                  <th className="px-4 py-3.5">Lý do</th>
+                  <th className="px-4 py-3.5 text-right">Số tiền</th>
+                  <th className="px-4 py-3.5">Trạng thái</th>
+                  <th className="px-4 py-3.5">Ngày gửi</th>
+                  <th className="px-4 py-3.5 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {requests.map((r) => {
+                  const st = STATUS_MAP[r.status] || { label: r.status, cls: 'bg-slate-100 text-slate-500' };
+                  const booking = r.bookingId || {};
+                  const isDepositOnly = booking.paymentStatus === 'deposit_paid' || (booking.depositPaid && booking.paymentStatus !== 'paid');
+                  const actualDeposit = booking.depositAmount || booking.deposit;
+                  const refundAmount = isDepositOnly && actualDeposit ? actualDeposit : (booking.finalPrice ?? r.amount ?? r.refundAmount);
+
+                  // NEW badge logic: created today AND not yet viewed in detail
+                  const isCreatedToday = new Date(r.createdAt).toDateString() === todayStr;
+                  const isNew = isCreatedToday && !viewedRequests.includes(r._id);
+
+                  return (
+                    <tr key={r._id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-800">{r.userId?.name || '—'}</span>
+                          {isNew && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-xs">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400">{r.userId?.email || r.userId?.phone || ''}</div>
+                      </td>
+                      <td className="px-4 py-3.5 max-w-xs truncate" title={r.reason}>{r.reason}</td>
+                      <td className="px-4 py-3.5 text-right font-bold text-emerald-600">{formatCurrency(refundAmount)}</td>
+                      <td className="px-4 py-3.5">
+                        <span className={`text-[11px] font-bold rounded-full px-2.5 py-1 ${st.cls}`}>{st.label}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500">{formatDateTime(r.createdAt)}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenDetail(r)}
+                            title="Xem chi tiết"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSingle(r)}
+                            title="Xóa yêu cầu"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                          >
+                            <Trash size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Bar (10 items / page) */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/40 px-6 py-3.5 text-xs text-slate-500">
+            <div>
+              Hiển thị <span className="font-semibold text-slate-700">{((pagination.page - 1) * pagination.limit) + 1}</span> - <span className="font-semibold text-slate-700">{Math.min(pagination.page * pagination.limit, pagination.totalItems)}</span> trên tổng số <span className="font-semibold text-slate-700">{pagination.totalItems}</span> yêu cầu
+            </div>
+
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                  disabled={pagination.page <= 1 || loading}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  ← Trước
+                </button>
+                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((pNum) => (
+                  <button
+                    key={pNum}
+                    onClick={() => setPage(pNum)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                      pNum === pagination.page
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {pNum}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setPage(prev => Math.min(pagination.totalPages, prev + 1))}
+                  disabled={pagination.page >= pagination.totalPages || loading}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  Sau →
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

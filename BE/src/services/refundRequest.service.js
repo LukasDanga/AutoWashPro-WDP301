@@ -1,4 +1,4 @@
-const { RefundRequest, Booking } = require('../models');
+const { RefundRequest, Booking, User, Branch } = require('../models');
 const paymentService = require('./payment.service');
 const notificationService = require('./notification.service');
 const sseService = require('./sse.service');
@@ -65,16 +65,105 @@ exports.createRequest = async (bookingId, userId, userRole, reason) => {
 
 exports.getAll = async (filters = {}, userRole, userId) => {
   const query = {};
+
   if (userRole === 'customer') {
     query.userId = userId;
-  } else if (filters.status) {
+  } else if (userRole === 'manager') {
+    const branch = await Branch.findOne({ managerId: userId });
+    if (branch) {
+      const branchBookingIds = await Booking.find({ branchId: branch._id }).distinct('_id');
+      query.bookingId = { $in: branchBookingIds };
+    }
+  }
+
+  // Status Filter
+  if (filters.status && filters.status !== 'all') {
     query.status = filters.status;
   }
-  return RefundRequest.find(query)
-    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status paymentStatus finalPrice depositAmount deposit depositPaid branchId' })
+
+  // Customer Name Search Filter
+  if (filters.search && filters.search.trim()) {
+    const searchRegex = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const matchedUsers = await User.find({ name: searchRegex }).select('_id');
+    const userIds = matchedUsers.map(u => u._id);
+    if (query.userId) {
+      // If customer role already set query.userId, combine
+      query.userId = { $in: userIds.filter(id => String(id) === String(query.userId)) };
+    } else {
+      query.userId = { $in: userIds };
+    }
+  }
+
+  // Date Range Filtering & Validation
+  const startDateStr = filters.startDate || filters.dateFrom;
+  const endDateStr = filters.endDate || filters.dateTo;
+
+  if (startDateStr && endDateStr) {
+    const fromDate = new Date(startDateStr);
+    fromDate.setHours(0, 0, 0, 0);
+
+    const toDate = new Date(endDateStr);
+    toDate.setHours(23, 59, 59, 999);
+
+    if (fromDate > toDate) {
+      throw Object.assign(new Error('Ngày bắt đầu không được vượt quá ngày kết thúc'), {
+        statusCode: 400,
+        code: 'INVALID_DATE_RANGE',
+      });
+    }
+
+    query.createdAt = { $gte: fromDate, $lte: toDate };
+  } else if (startDateStr) {
+    const fromDate = new Date(startDateStr);
+    fromDate.setHours(0, 0, 0, 0);
+    query.createdAt = { $gte: fromDate };
+  } else if (endDateStr) {
+    const toDate = new Date(endDateStr);
+    toDate.setHours(23, 59, 59, 999);
+    query.createdAt = { $lte: toDate };
+  }
+
+  // Unviewed Today Count Mode (Fast return for badges)
+  if (filters.unviewedToday === 'true' || filters.unviewedCount === 'true') {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const countQuery = { ...query, createdAt: { $gte: todayStart, $lte: todayEnd } };
+    const count = await RefundRequest.countDocuments(countQuery);
+    return { count };
+  }
+
+  // Pagination
+  const page = Math.max(1, parseInt(filters.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit) || 10));
+  const skip = (page - 1) * limit;
+
+  const totalItems = await RefundRequest.countDocuments(query);
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+
+  const requests = await RefundRequest.find(query)
+    .populate({
+      path: 'bookingId',
+      populate: { path: 'branchId', select: 'name' },
+      select: 'bookingDate startTime status paymentStatus finalPrice depositAmount deposit depositPaid branchId',
+    })
     .populate('userId', 'name email phone')
     .populate('reviewedBy', 'name')
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  return {
+    data: requests,
+    pagination: {
+      page,
+      limit,
+      totalItems,
+      totalPages,
+    },
+  };
 };
 
 exports.getById = async (id, userRole, userId) => {
