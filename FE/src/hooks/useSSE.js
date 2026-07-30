@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const SYNC_EVENTS = ['slots_updated', 'vouchers_updated', 'my_bookings_updated', 'feedback_new', 'booking_new', 'my_vehicles_updated'];
+const SYNC_DEBOUNCE_MS = 800;
 
 class SocketManager {
   constructor() {
@@ -10,6 +11,9 @@ class SocketManager {
     this.token = null;
     this.listeners = new Map(); // eventName -> Set(callback)
     this.base = API_BASE.replace(/\/api$/, '');
+    this.hasInitialSync = false;
+    this.syncDebounceTimer = null;
+    this.disconnectTimer = null;
   }
 
   connect(token) {
@@ -17,35 +21,31 @@ class SocketManager {
     
     this.disconnect();
     this.token = token;
+    this.hasInitialSync = false;
     
     this.socket = io(this.base, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       autoConnect: true
     });
 
     this.socket.on('connect', () => {
       console.log('[Socket] Connected:', this.socket.id);
-      
-      // Reconnect recovery: trigger sync events so mounted components refresh their data
-      // We skip events like 'notification', 'wallet_topup_success', 'spin_added' which show toasts.
-      SYNC_EVENTS.forEach(eventName => {
-        const callbacks = this.listeners.get(eventName);
-        if (callbacks) {
-          callbacks.forEach(cb => cb({ isSync: true }));
-        }
-      });
+      if (!this.hasInitialSync) {
+        this.hasInitialSync = true;
+        this.fireSyncEvents();
+      }
     });
 
     this.socket.on('disconnect', () => {
       console.log('[Socket] Disconnected');
+      this.hasInitialSync = false;
     });
 
     this.socket.on('connect_error', (err) => {
       console.error('[Socket] Connect Error:', err.message);
     });
 
-    // Re-attach all existing event listeners to the new socket
     for (const [eventName, callbacks] of this.listeners.entries()) {
       this.socket.on(eventName, (data) => {
         callbacks.forEach(cb => cb(data));
@@ -53,14 +53,46 @@ class SocketManager {
     }
   }
 
+  fireSyncEvents() {
+    if (this.syncDebounceTimer) clearTimeout(this.syncDebounceTimer);
+    this.syncDebounceTimer = setTimeout(() => {
+      this.syncDebounceTimer = null;
+      SYNC_EVENTS.forEach((eventName) => {
+        const callbacks = this.listeners.get(eventName);
+        if (callbacks) {
+          callbacks.forEach((cb) => {
+            try {
+              cb({ isSync: true });
+            } catch (e) {
+              console.error('[useSSE] sync listener error for', eventName, e);
+            }
+          });
+        }
+      });
+    }, SYNC_DEBOUNCE_MS);
+  }
+
   disconnect() {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+      this.syncDebounceTimer = null;
+    }
   }
 
   subscribe(token, eventName, callback) {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+
     if (!this.socket || this.token !== token) {
       this.connect(token);
     }
@@ -93,7 +125,16 @@ class SocketManager {
         total += set.size;
       }
       if (total === 0) {
-        this.disconnect();
+        if (this.disconnectTimer) clearTimeout(this.disconnectTimer);
+        this.disconnectTimer = setTimeout(() => {
+          let currentTotal = 0;
+          for (const set of this.listeners.values()) {
+            currentTotal += set.size;
+          }
+          if (currentTotal === 0) {
+            this.disconnect();
+          }
+        }, 5000);
       }
     };
   }
