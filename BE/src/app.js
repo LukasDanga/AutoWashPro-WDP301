@@ -24,7 +24,8 @@ const isDev = process.env.NODE_ENV !== 'production';
 const ALLOWED_VERCEL_HOSTS = new Set([
   'autowashpro.vercel.app',
   'autowash-pro.vercel.app',
-  // thêm domain Vercel cụ thể của dự án tại đây
+  'auto-wash-pro-wdp-301.vercel.app',
+  'auto-wash-pro-wdp301.vercel.app',
 ]);
 
 const app = express();
@@ -37,15 +38,13 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
 
-    // Vercel wildcard — chỉ chấp nhận nếu parent hostname nằm trong whitelist.
-    // Ví dụ: my-app-abc123.vercel.app → parent = 'my-app-abc123' hoặc
-    // nếu deploy với domain gốc 'autowashpro' → autowashpro.vercel.app match.
+    // Vercel wildcard — chấp nhận domain trong ALLOWED_VERCEL_HOSTS hoặc domain của dự án
     const vercelMatch = origin.match(/^https?:\/\/([a-z0-9-]+)\.vercel\.app$/i);
     if (vercelMatch) {
-      const parentHost = vercelMatch[1];
-      // Cho phép nếu parentHost nằm trong whitelist (vd: 'autowashpro' nhận
-      // mọi PR-branch domain).
-      if (ALLOWED_VERCEL_HOSTS.has(`${parentHost}.vercel.app`)) {
+      const parentHost = vercelMatch[1].toLowerCase();
+      if (ALLOWED_VERCEL_HOSTS.has(`${parentHost}.vercel.app`) || 
+          parentHost.startsWith('auto-wash') || 
+          parentHost.startsWith('autowash')) {
         return callback(null, true);
       }
     }
