@@ -26,30 +26,67 @@ const CUSTOMER_INSTRUCTION = require('./chatbot/customer.instruction');
 const MANAGER_INSTRUCTION = require('./chatbot/manager.instruction');
 const ADMIN_INSTRUCTION = require('./chatbot/admin.instruction');
 
-// ─── Singleton OpenAI client ────────────────────────────────────────────────────
+// ─── Singleton OpenAI & Groq clients ────────────────────────────────────────────
 let _openai = null;
 let _modelName = null;
+let _groqOpenai = null;
+let _groqModelName = null;
 
-function getOpenAI() {
+function getOpenAIClient() {
   if (!_openai) {
     const apiKey = process.env.OPENROUTER_API_KEY || process.env.GOOGLE_AI_KEY;
-    if (!apiKey) {
-      throw Object.assign(
-        new Error('Chatbot chưa được cấu hình. Vui lòng thêm OPENROUTER_API_KEY vào file .env'),
-        { statusCode: 503 }
-      );
+    if (apiKey) {
+      _openai = new OpenAI({
+        apiKey,
+        baseURL: process.env.CHATBOT_BASE_URL || 'https://openrouter.ai/api/v1',
+        defaultHeaders: {
+          'HTTP-Referer': process.env.APP_URL || 'http://localhost:5000',
+          'X-Title': 'AutoWashPro',
+        },
+      });
+      _modelName = process.env.CHATBOT_MODEL || 'google/gemini-2.5-flash';
     }
-    _openai = new OpenAI({
-      apiKey,
-      baseURL: process.env.CHATBOT_BASE_URL || 'https://openrouter.ai/api/v1',
-      defaultHeaders: {
-        'HTTP-Referer': process.env.APP_URL || 'http://localhost:5000',
-        'X-Title': 'AutoWashPro',
-      },
-    });
-    _modelName = process.env.CHATBOT_MODEL || 'google/gemini-2.5-flash';
   }
   return { openai: _openai, modelName: _modelName };
+}
+
+function getGroqClient() {
+  if (!_groqOpenai) {
+    const apiKey = process.env.GROQ_API_KEY;
+    _groqOpenai = new OpenAI({
+      apiKey: apiKey || 'dummy-groq-key',
+      baseURL: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+    });
+    _groqModelName = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+  }
+  return { openai: _groqOpenai, modelName: _groqModelName };
+}
+
+async function createCompletionWithFallback(params) {
+  const primary = getOpenAIClient();
+  if (primary.openai && primary.modelName) {
+    try {
+      return await primary.openai.chat.completions.create({
+        ...params,
+        model: primary.modelName,
+      });
+    } catch (err) {
+      console.warn(`[CHATBOT FALLBACK] Primary provider (${primary.modelName}) error: ${err.message}. Switching to Groq API...`);
+    }
+  }
+
+  const groq = getGroqClient();
+  console.log(`[CHATBOT] Using Groq AI (${groq.modelName})...`);
+  return await groq.openai.chat.completions.create({
+    ...params,
+    model: groq.modelName,
+  });
+}
+
+function getOpenAI() {
+  const primary = getOpenAIClient();
+  if (primary.openai) return primary;
+  return getGroqClient();
 }
 
 // ─── System prompt composer ──────────────────────────────────────────────────────
@@ -736,8 +773,7 @@ async function resolveToolCalls(openai, modelName, session, userId, role) {
   const tools = getToolsForRole(role);
   for (let i = 0; i < 5; i++) {
     const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
-    const response = await openai.chat.completions.create({
-      model: modelName,
+    const response = await createCompletionWithFallback({
       messages,
       tools,
       tool_choice: 'auto',
@@ -810,8 +846,8 @@ exports.streamChat = async (sessionId, message, userId, role, res) => {
     // Step 1: Resolve all tool calls synchronously (non-streaming)
     for (let i = 0; i < 5; i++) {
       const messages = [{ role: 'system', content: systemPrompt }, ...session.history];
-      const response = await openai.chat.completions.create({
-        model: modelName, messages,
+      const response = await createCompletionWithFallback({
+        messages,
         tools,
         tool_choice: 'auto',
         max_tokens: 1024,
@@ -841,12 +877,29 @@ exports.streamChat = async (sessionId, message, userId, role, res) => {
 
     // Step 2: Stream the final text response
     const finalMessages = [{ role: 'system', content: systemPrompt }, ...session.history];
-    const stream = await openai.chat.completions.create({
-      model: modelName,
-      messages: finalMessages,
-      stream: true,
-      max_tokens: 1024,
-    });
+    let stream;
+    try {
+      const primary = getOpenAIClient();
+      if (primary.openai && primary.modelName) {
+        stream = await primary.openai.chat.completions.create({
+          model: primary.modelName,
+          messages: finalMessages,
+          stream: true,
+          max_tokens: 1024,
+        });
+      } else {
+        throw new Error('Primary AI client not configured');
+      }
+    } catch (streamErr) {
+      console.warn(`[CHATBOT FALLBACK Stream] Primary error (${streamErr.message}). Switching to Groq API...`);
+      const groq = getGroqClient();
+      stream = await groq.openai.chat.completions.create({
+        model: groq.modelName,
+        messages: finalMessages,
+        stream: true,
+        max_tokens: 1024,
+      });
+    }
 
     let fullText = '';
     for await (const chunk of stream) {
