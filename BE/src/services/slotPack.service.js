@@ -351,6 +351,11 @@ exports.requestCancelOtp = async (packId, userId) => {
     throw Object.assign(new Error(`Không thể yêu cầu hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
   }
 
+  const user = await User.findById(userId);
+  if (!user || !user.email) {
+    throw Object.assign(new Error('Tài khoản của bạn chưa có email. Vui lòng cập nhật email để nhận mã OTP!'), { statusCode: 400, code: 'EMAIL_REQUIRED' });
+  }
+
   // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const bcrypt = require('bcryptjs');
@@ -359,10 +364,14 @@ exports.requestCancelOtp = async (packId, userId) => {
   pack.cancelOtpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
   await pack.save();
 
-  const user = await User.findById(userId);
-  if (user && user.email) {
+  console.log(`[CANCEL OTP SLOTPACK] User: ${user.email}, Pack: ${pack.packCode || pack._id}, OTP: ${otp}`);
+
+  try {
     const emailService = require('./email.service');
-    emailService.sendCancellationOtpEmail(user.email, otp).catch(e => console.error('Lỗi gửi OTP hủy gói:', e));
+    await emailService.sendCancellationOtpEmail(user.email, otp);
+  } catch (e) {
+    console.error('Lỗi gửi OTP hủy gói:', e);
+    throw Object.assign(new Error(`Không thể gửi email OTP đến ${user.email}: ${e.message || 'Lỗi hệ thống email'}`), { statusCode: 500, code: 'EMAIL_FAILED' });
   }
   return true;
 };

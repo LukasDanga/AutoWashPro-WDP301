@@ -140,6 +140,13 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
     throw Object.assign(new Error('Không thể yêu cầu OTP hủy lúc này'), { statusCode: 400 });
   }
 
+  // Need user email
+  const User = require('../models/user.schema');
+  const user = await User.findById(req.userId);
+  if (!user || !user.email) {
+    throw Object.assign(new Error('Tài khoản của bạn chưa có email. Vui lòng cập nhật email để nhận mã OTP!'), { statusCode: 400 });
+  }
+
   // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const bcrypt = require('bcryptjs');
@@ -148,14 +155,16 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
   booking.cancelOtpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
   await booking.save();
 
-  // Need user email
-  const User = require('../models/user.schema');
-  const user = await User.findById(req.userId);
-  if (user && user.email) {
-    emailService.sendCancellationOtpEmail(user.email, otp).catch(e => console.error('Lỗi gửi OTP hủy đơn:', e));
+  console.log(`[CANCEL OTP BOOKING] User: ${user.email}, Booking: ${booking.bookingCode || booking._id}, OTP: ${otp}`);
+
+  try {
+    await emailService.sendCancellationOtpEmail(user.email, otp);
+  } catch (e) {
+    console.error('Lỗi gửi OTP hủy đơn:', e);
+    throw Object.assign(new Error(`Không thể gửi email OTP đến ${user.email}: ${e.message || 'Lỗi hệ thống email'}`), { statusCode: 500 });
   }
 
-  success(res, null, 'OTP đã được gửi đến email của bạn');
+  success(res, null, `Mã OTP đã được gửi thành công đến email ${user.email}`);
 });
 
 exports.cancelBooking = catchAsync(async (req, res) => {

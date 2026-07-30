@@ -16,6 +16,7 @@ const transporter = nodemailer.createTransport({
 });
 
 exports.sendPasswordResetEmail = async (email, otp) => {
+  console.log(`[EmailService] Sending Password Reset OTP to ${email}`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
@@ -37,6 +38,7 @@ exports.sendPasswordResetEmail = async (email, otp) => {
 };
 
 exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
+  console.log(`[EmailService] Sending Booking Confirmation Email to ${email} (Code: ${bookingInfo?.bookingCode || 'N/A'})`);
   const isRecurring = bookingInfo.bookingType === 'recurring';
   const isSlotPack = bookingInfo.bookingType === 'slot_pack_usage';
   
@@ -44,23 +46,26 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
   if (isRecurring) typeLabel = 'Lịch định kỳ';
   else if (isSlotPack) typeLabel = 'Gói lượt';
 
+  const packageName = bookingInfo.packageName || (bookingInfo.packageId && bookingInfo.packageId.name) || 'Gói dịch vụ rửa xe';
+
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
-    subject: `Xác nhận đặt lịch thành công - AutoWashPro`,
+    subject: `Xác nhận đặt lịch thành công - AutoWashPro (${bookingInfo.bookingCode || ''})`,
     html: `
       <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
         <h2 style="color: #10b981;">Đặt lịch thành công!</h2>
         <p>Xin chào,</p>
         <p>Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của AutoWashPro. Dưới đây là thông tin lịch hẹn của bạn:</p>
         <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          ${bookingInfo.bookingCode ? `<p><strong>Mã đặt lịch:</strong> <span style="font-size: 16px; font-weight: bold; color: #2563eb;">${bookingInfo.bookingCode}</span></p>` : ''}
           <p><strong>Loại đặt lịch:</strong> ${typeLabel}</p>
           <p><strong>Ngày hẹn:</strong> ${new Date(bookingInfo.bookingDate).toLocaleDateString('vi-VN')}</p>
           <p><strong>Giờ hẹn:</strong> ${bookingInfo.startTime || '—'}</p>
-          ${bookingInfo.packageId ? `<p><strong>Dịch vụ:</strong> ${bookingInfo.packageId.name || 'Gói dịch vụ cơ bản'}</p>` : ''}
+          <p><strong>Dịch vụ:</strong> ${packageName}</p>
           <p><strong>Tổng tiền:</strong> ${Number(bookingInfo.finalPrice || bookingInfo.totalAmount || 0).toLocaleString('vi-VN')}₫</p>
         </div>
-        <p style="color: #64748b; font-size: 14px;">Bạn có thể theo dõi tiến trình hoặc hủy lịch trong mục Quản lý lịch hẹn trên website.</p>
+        <p style="color: #64748b; font-size: 14px;">Bạn có thể theo dõi tiến trình hoặc hủy lịch trong mục Quản lý lịch hẹn trên ứng dụng.</p>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
         <p style="font-size: 12px; color: #94a3b8;">Hệ thống chăm sóc xe AutoWashPro</p>
       </div>
@@ -69,6 +74,7 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
 };
 
 exports.sendCancellationOtpEmail = async (email, otp) => {
+  console.log(`[EmailService] Sending Cancellation OTP (${otp}) to ${email}`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
@@ -90,6 +96,7 @@ exports.sendCancellationOtpEmail = async (email, otp) => {
 };
 
 exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
+  console.log(`[EmailService] Sending SlotPack Confirmation Email to ${email} (Code: ${slotPack?.packCode || 'N/A'})`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
@@ -113,6 +120,7 @@ exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
 };
 
 exports.sendCancellationSuccessEmail = async (email, info, refundAmount) => {
+  console.log(`[EmailService] Sending Cancellation Success Email to ${email} (Code: ${info?.code || 'N/A'})`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
