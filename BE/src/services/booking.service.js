@@ -518,6 +518,22 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   };
 };
 
+exports.getBookingsByUser = async (userId, startDate) => {
+  const query = {
+    userId,
+    paymentStatus: 'paid',
+    isDeleted: { $ne: true },
+  };
+  if (startDate) {
+    query.createdAt = { $gte: new Date(startDate) };
+  }
+  return Booking.find(query)
+    .select('bookingCode status bookingDate startTime finalPrice packageId')
+    .populate('packageId', 'name price duration')
+    .sort({ createdAt: -1 })
+    .limit(50);
+};
+
 exports.getBookingsByVehicle = async (vehicleId, startDate, endDate) => {
   const query = {
     vehicleId,

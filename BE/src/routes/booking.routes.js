@@ -104,6 +104,8 @@ router.get('/vehicle/:vehicleId', authenticate, authorize(ROLES.ADMIN, ROLES.MAN
  */
 router.get('/my', authenticate, bookingController.getMyBookings);
 
+router.get('/user/:userId', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getBookingsByUser);
+
 /**
  * @swagger
  * /api/bookings/slots:
