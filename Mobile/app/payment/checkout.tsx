@@ -391,10 +391,6 @@ export default function PaymentCheckoutScreen() {
           setStep('success');
         }
       } else {
-        const apiBase = (process.env.EXPO_PUBLIC_API_URL || 'https://autowash-be.onrender.com/api').replace(/\/$/, '');
-        const returnUrl = isProvisional
-          ? `${apiBase}/payments/vnpay-return?client=mobile`
-          : `${apiBase}/payments/vnpay-return?client=mobile&bookingId=${encodeURIComponent(bookingId)}`;
         if (isProvisional) {
           const result = await paymentApi.createVnpayProvisional(amount, 'mobile');
           setPayment(result.payment ?? result);
@@ -405,7 +401,6 @@ export default function PaymentCheckoutScreen() {
             bookingId,
             paymentType: payType,
             amount,
-            returnUrl,
             client: 'mobile',
           });
           setPayment(result.payment ?? result);

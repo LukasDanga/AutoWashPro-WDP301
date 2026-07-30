@@ -518,6 +518,7 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
 
 exports.handleVnpayReturn = catchAsync(async (req, res) => {
   console.log('=== VNPay Return Called ===');
+  console.log('VNPay Return query:', JSON.stringify(req.query));
   const result = vnpayService.verifyReturnUrl(req.query);
 
   const feUrl = process.env.FE_URL || 'http://localhost:5173';
@@ -538,6 +539,17 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         isMobile = paymentRecord.client === 'mobile';
         mobileBookingId = paymentRecord.bookingId ? String(paymentRecord.bookingId) : '';
         isTopup = paymentRecord.paymentType === 'topup';
+        console.log('VNPay Return payment lookup:', {
+          txnRef,
+          client: paymentRecord.client,
+          isMobile,
+          mobileBookingId,
+          isTopup,
+          paymentType: paymentRecord.paymentType,
+          status: paymentRecord.status,
+        });
+      } else {
+        console.log('VNPay Return: no payment found for txnRef:', txnRef);
       }
     } catch (e) {
       console.error('Error looking up payment:', e.message);
@@ -547,9 +559,12 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   if (result.success) {
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+      console.log('VNPay Return confirmPaymentCallback result:', { paymentId: payment?._id, status: payment?.status, bookingId: payment?.bookingId });
       if (isMobile) {
         const deepLinkId = mobileBookingId;
-        return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+        const deepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`;
+        console.log('VNPay Return → mobile deep link:', deepLink);
+        return res.redirect(302, deepLink);
       }
       if (isTopup) {
         return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
@@ -563,13 +578,17 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         return res.redirect(302, `${feUrl}/history?vnpay_result=${encoded}`);
       }
     } catch (err) {
-      console.error('Confirm payment error:', err.message);
+      console.error('VNPay Return confirmPayment error:', err.message);
     }
+  } else {
+    console.log('VNPay Return: signature verification failed:', result.message);
   }
 
   if (isMobile) {
     const deepLinkId = mobileBookingId;
-    return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+    const deepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`;
+    console.log('VNPay Return (fallback) → mobile deep link:', deepLink);
+    return res.redirect(302, deepLink);
   }
   if (isTopup) {
     return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
