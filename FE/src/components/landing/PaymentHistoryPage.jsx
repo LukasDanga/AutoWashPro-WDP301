@@ -320,10 +320,6 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                   <span className="text-xs text-slate-500">Loại</span>
                   <span className="text-sm text-slate-700">{detailPayment.paymentType === 'deposit' ? 'Đặt cọc' : detailPayment.paymentType === 'remaining' ? 'Còn lại' : 'Toàn bộ'}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-xs text-slate-500">Ngày tạo</span>
-                  <span className="text-sm text-slate-700">{formatDateTime(detailPayment.createdAt)}</span>
-                </div>
                 {detailPayment.paidAt && (
                   <div className="flex justify-between py-2 border-b border-slate-100">
                     <span className="text-xs text-slate-500">Ngày thanh toán</span>
@@ -347,8 +343,17 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                     <p className="text-xs font-semibold text-slate-500 mb-2">THÔNG TIN ĐẶT LỊCH</p>
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Dịch vụ</span>
-                      <span className="text-sm text-slate-700 text-right">{detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}</span>
+                      <span className="text-sm text-slate-700 text-right">
+                        {detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}
+                        {detailPayment.bookingId.packageId?.price && <span className="text-xs text-slate-400 ml-1">({formatCurrency(detailPayment.bookingId.packageId.price)})</span>}
+                      </span>
                     </div>
+                    {(detailPayment.bookingId.vehicleId?.licensePlate || detailPayment.bookingId.vehicleId?.brand) && (
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-xs text-slate-500">Xe</span>
+                        <span className="text-sm text-slate-700">{detailPayment.bookingId.vehicleId.licensePlate}{detailPayment.bookingId.vehicleId.brand ? ` · ${detailPayment.bookingId.vehicleId.brand}` : ''}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Mã đơn</span>
                       <span className="text-sm font-mono font-bold text-emerald-700">#{detailPayment.bookingId.bookingCode || '—'}</span>
@@ -365,18 +370,6 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                       <span className="text-xs text-slate-500">Chi nhánh</span>
                       <span className="text-sm text-slate-700">{detailPayment.bookingId.branchId?.name || detailPayment.bookingId.branchName || '—'}</span>
                     </div>
-                    {detailPayment.paymentType === 'deposit' && (
-                      <>
-                        <div className="flex justify-between py-1.5">
-                          <span className="text-xs text-amber-600 font-semibold">Đặt cọc</span>
-                          <span className="text-sm font-bold text-amber-600">{formatCurrency(detailPayment.amount)}</span>
-                        </div>
-                        <div className="flex justify-between py-1.5">
-                          <span className="text-xs text-slate-500">Còn lại (thanh toán sau)</span>
-                          <span className="text-sm text-slate-700">{formatCurrency(Math.max(0, (detailPayment.bookingId.finalPrice || 0) - (detailPayment.amount || 0)))}</span>
-                        </div>
-                      </>
-                    )}
                   </div>
                 )}
               </div>
