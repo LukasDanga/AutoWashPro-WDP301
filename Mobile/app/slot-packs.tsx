@@ -169,6 +169,71 @@ export default function SlotPacksScreen() {
   const [qrCountdown, setQrCountdown] = useState<number>(600);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Success Modal State after payment
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successPack, setSuccessPack] = useState<{
+    packCode: string;
+    branchName: string;
+    packageName: string;
+    totalSlots: number;
+    finalPrice: number;
+    paymentStatus: string;
+  } | null>(null);
+
+  // Handle VNPay return deep link (autowashpro://slot-packs?vnpay_result=...)
+  useEffect(() => {
+    const vnpayResultParam = params.vnpay_result;
+    if (!vnpayResultParam) return;
+    WebBrowser.dismissBrowser();
+
+    const handleVnpayReturn = async () => {
+      try {
+        let parsed: any;
+        const rawParam = Array.isArray(vnpayResultParam) ? vnpayResultParam[0] : vnpayResultParam;
+        try {
+          parsed = JSON.parse(rawParam);
+        } catch {
+          parsed = JSON.parse(decodeURIComponent(rawParam));
+        }
+
+        const isSuccess = parsed?.success !== false && parsed?.data?.responseCode === '00';
+        if (isSuccess) {
+          const stored = await AsyncStorage.getItem('aw_last_slot_pack');
+          let packDetails: any = null;
+          if (stored) {
+            packDetails = JSON.parse(stored);
+            await AsyncStorage.removeItem('aw_last_slot_pack');
+          }
+
+          const latestPacks = await slotPackApi.getMySlotPacks();
+          const newestPack = Array.isArray(latestPacks) && latestPacks.length > 0 ? latestPacks[0] : null;
+
+          const bName = packDetails?.branchName || (typeof newestPack?.branchId === 'object' ? (newestPack?.branchId as any)?.name : '') || 'Toàn hệ thống';
+          const pName = packDetails?.packageName || (typeof newestPack?.packageId === 'object' ? (newestPack?.packageId as any)?.name : '') || 'Gói rửa xe';
+
+          setSuccessPack({
+            packCode: packDetails?.packCode || newestPack?.packCode || 'SP-SUCCESS',
+            branchName: bName,
+            packageName: pName,
+            totalSlots: packDetails?.totalSlots || newestPack?.totalSlots || 5,
+            finalPrice: packDetails?.finalPrice || newestPack?.finalPrice || 0,
+            paymentStatus: 'paid',
+          });
+          setShowSuccessModal(true);
+          setIsBuying(false);
+          fetchSlotPacks();
+        } else {
+          toast.error('Thanh toán thất bại', parsed?.message || 'Giao dịch VNPay không thành công');
+        }
+      } catch (e) {
+        console.error('Parse VNPay result error:', e);
+      } finally {
+        router.setParams({ vnpay_result: undefined });
+      }
+    };
+    handleVnpayReturn();
+  }, [params.vnpay_result]);
+
   const fetchSlotPacks = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
@@ -393,6 +458,25 @@ export default function SlotPacksScreen() {
           setPendingPaymentQr(null);
           setIsPollingPayment(false);
           AsyncStorage.removeItem('aw_slot_pending').catch(() => {});
+
+          const stored = await AsyncStorage.getItem('aw_last_slot_pack');
+          let packDetails: any = null;
+          if (stored) {
+            packDetails = JSON.parse(stored);
+            await AsyncStorage.removeItem('aw_last_slot_pack');
+          }
+          const bName = packDetails?.branchName || (typeof updated.branchId === 'object' ? (updated.branchId as any)?.name : '') || 'Toàn hệ thống';
+          const pName = packDetails?.packageName || (typeof updated.packageId === 'object' ? (updated.packageId as any)?.name : '') || 'Gói rửa xe';
+
+          setSuccessPack({
+            packCode: updated.packCode || packDetails?.packCode || 'SP-SUCCESS',
+            branchName: bName,
+            packageName: pName,
+            totalSlots: updated.totalSlots || packDetails?.totalSlots || 5,
+            finalPrice: updated.finalPrice || packDetails?.finalPrice || 0,
+            paymentStatus: 'paid',
+          });
+          setShowSuccessModal(true);
           toast.success('Thanh toán thành công', 'Gói slot đã được kích hoạt.');
           return;
         }
@@ -484,6 +568,18 @@ export default function SlotPacksScreen() {
       }
 
       const payResult = await slotPackApi.paySlotPack(packId, paymentMethod);
+      const selectedBranchObj = branches.find(b => b._id === selectedBranch);
+      const selectedPkgObj = packages.find(p => p._id === selectedPackage);
+      const packDraftInfo = {
+        packCode: (payResult?.payment?.slotPackId as any)?.packCode || 'SP-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+        branchName: selectedBranchObj?.name || 'Toàn hệ thống',
+        packageName: selectedPkgObj?.name || 'Gói dịch vụ',
+        totalSlots: slotCount,
+        finalPrice: payResult?.payment?.amount || 0,
+        paymentStatus: 'paid',
+      };
+      await AsyncStorage.setItem('aw_last_slot_pack', JSON.stringify(packDraftInfo));
+
       if (paymentMethod === 'vnpay') {
         if (payResult.paymentUrl) {
           await WebBrowser.openBrowserAsync(payResult.paymentUrl);
@@ -496,6 +592,8 @@ export default function SlotPacksScreen() {
       } else if (paymentMethod === 'wallet') {
         setIsBuying(false);
         setResumingPackId(null);
+        setSuccessPack(packDraftInfo);
+        setShowSuccessModal(true);
         fetchSlotPacks();
         toast.success('Thanh toán bằng ví thành công!');
         return;
@@ -1268,6 +1366,105 @@ export default function SlotPacksScreen() {
                 />
               </View>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20,
+        }}>
+          <View style={{
+            width: '100%',
+            maxWidth: 340,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 24,
+            padding: 24,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            elevation: 10,
+          }}>
+            <View style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: '#DCFCE7',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+            }}>
+              <Icon name={Icons.checkmark} size={28} color="#16A34A" />
+            </View>
+            <AppText variant="h3" style={{ textAlign: 'center', marginBottom: 4, fontWeight: '700' }}>
+              Mua gói thành công!
+            </AppText>
+            <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center', marginBottom: 20 }}>
+              Mã gói: <AppText variant="caption" style={{ fontWeight: '700', color: colors.primary }}>{successPack?.packCode}</AppText>
+            </AppText>
+
+            <View style={{
+              width: '100%',
+              backgroundColor: '#F8FAFC',
+              borderRadius: 16,
+              padding: 16,
+              gap: 12,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <AppText variant="caption" color="textSecondary">Chi nhánh</AppText>
+                <AppText variant="caption" style={{ fontWeight: '600', color: '#334155' }}>{successPack?.branchName || 'Toàn hệ thống'}</AppText>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <AppText variant="caption" color="textSecondary">Gói dịch vụ</AppText>
+                <AppText variant="caption" style={{ fontWeight: '600', color: '#334155' }}>{successPack?.packageName || '—'}</AppText>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <AppText variant="caption" color="textSecondary">Số lần</AppText>
+                <AppText variant="caption" style={{ fontWeight: '600', color: '#334155' }}>{successPack?.totalSlots} lần</AppText>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                <AppText variant="body" style={{ fontWeight: '700', color: '#15803D' }}>Tổng thanh toán</AppText>
+                <AppText variant="body" style={{ fontWeight: '700', color: '#15803D' }}>{formatCurrency(successPack?.finalPrice || 0)}</AppText>
+              </View>
+            </View>
+
+            <View style={{
+              width: '100%',
+              backgroundColor: '#F0FDF4',
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 20,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#DCFCE7',
+            }}>
+              <AppText variant="caption" style={{ color: '#166534', fontWeight: '600', textAlign: 'center', lineHeight: 18 }}>
+                ✓ Đã thanh toán — mã {successPack?.packCode} đã sẵn sàng sử dụng.
+              </AppText>
+            </View>
+
+            <Button
+              title="Đóng"
+              variant="primary"
+              fullWidth
+              onPress={() => setShowSuccessModal(false)}
+            />
           </View>
         </View>
       </Modal>
