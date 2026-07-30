@@ -700,21 +700,18 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     }
   }
 
-  // Chốt chặn awaiting_payment: trạng thái này chỉ có nghĩa khi booking thực sự
-  // còn DƯ NỢ (depositAmount > 0). Áp dụng cho:
-  //   - single booking đã cọc 30% (depositAmount = 30% × finalPrice).
-  //   - recurring buổi đầu đã cọc gộp cả nhóm (depositAmount = tổng cọc).
-  // Với booking đã thanh toán full ('paid') hoặc không có cọc (slot pack / recurring
-  // buổi sau) thì không có "phần còn lại" — phải chuyển thẳng 'in_progress' → 'completed'.
+  // Chốt chặn awaiting_payment: chỉ cho phép khi booking còn dư nợ thực tế
+  // (outstanding > 0), bao gồm trường hợp slot pack có dịch vụ thêm chưa thanh toán.
   if (status === 'awaiting_payment') {
     const alreadyPaid = currentBooking.paymentStatus === 'paid';
-    const hasDepositBalance = (currentBooking.depositAmount || 0) > 0;
-    if (alreadyPaid || !hasDepositBalance) {
+    const paidAmount = currentBooking.depositPaid ? (currentBooking.depositAmount || 0) : 0;
+    const outstanding = (currentBooking.finalPrice || currentBooking.totalAmount || 0) - paidAmount;
+    if (alreadyPaid || outstanding <= 0) {
       throw Object.assign(
         new Error(
           alreadyPaid
             ? 'Lịch hẹn đã thanh toán đủ — không thể chờ thanh toán phần còn lại'
-            : 'Lịch hẹn không có cọc (đã trả full / slot pack / buổi định kỳ đã gộp cọc) — chuyển thẳng sang "Hoàn thành"',
+            : 'Lịch hẹn không có dư nợ — chuyển thẳng sang "Hoàn thành"',
         ),
         { statusCode: 400, code: 'NO_REMAINING_BALANCE' },
       );
@@ -743,6 +740,13 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     update.checkOutTime = new Date();
   }
   if (status === 'completed') {
+    // Chốt chặn: không cho nhảy từ "Chờ thanh toán" → "Hoàn thành" nếu còn dư nợ
+    if (currentBooking.status === 'awaiting_payment' && currentBooking.paymentStatus !== 'paid') {
+      const outstanding = (currentBooking.finalPrice || currentBooking.totalAmount || 0) - (currentBooking.depositPaid ? (currentBooking.depositAmount || 0) : 0);
+      if (outstanding > 0) {
+        throw Object.assign(new Error('Không thể chuyển sang "Hoàn thành" khi còn dư nợ — vui lòng thu tiền trước'), { statusCode: 400, code: 'OUTSTANDING_BALANCE' });
+      }
+    }
     if (currentBooking.status !== 'awaiting_payment') update.checkOutTime = new Date();
     if (currentBooking.paymentStatus === 'unpaid') {
       update.paymentStatus = 'pending';
@@ -813,10 +817,13 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           { bookingId: id }
         );
         // Award loyalty points when booking is completed (points removed from payment flow)
-        if ((currentBooking.finalPrice || 0) > 0) {
+        const pointsBaseAmount = currentBooking.bookingType === 'slot_pack_usage'
+          ? (booking.packageId?.price || 0) + (currentBooking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+          : currentBooking.finalPrice || 0;
+        if ((pointsBaseAmount || 0) > 0) {
           const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
           if (!alreadyAwarded) {
-            await loyaltyService.addPointsFromPayment(currentBooking.userId, currentBooking.finalPrice, currentBooking._id, null);
+            await loyaltyService.addPointsFromPayment(currentBooking.userId, pointsBaseAmount, currentBooking._id, null);
           }
         }
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)

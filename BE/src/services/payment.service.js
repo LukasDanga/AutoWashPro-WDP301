@@ -201,10 +201,13 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           await markRecurringSiblingsPaid(booking, method, session);
           // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
-            if ((fullPrice || 0) > 0) {
+            const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
+              ? (booking.packageId?.price || 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+              : fullPrice;
+            if ((pointsBaseAmount || 0) > 0) {
               const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: bookingId, type: 'earned' }).session(session);
               if (!alreadyAwarded) {
-                await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+                await loyaltyService.addPointsFromPayment(targetUserId, pointsBaseAmount, bookingId, session);
               }
             }
             // Spin wheel + no-show side effects (missing because this bypasses updateBookingStatus)
@@ -366,7 +369,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       return payment;
     }
 
-    const booking = await Booking.findById(payment.bookingId).session(session);
+    const booking = await Booking.findById(payment.bookingId).populate('packageId').session(session);
     if (!booking) {
       await session.abortTransaction();
       throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
@@ -398,10 +401,13 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       await markRecurringSiblingsPaid(booking, payment.method, session);
       // Award points here when payment completes the booking (bypasses updateBookingStatus)
       if (['awaiting_payment', 'completed'].includes(booking.status)) {
-        if ((payment.amount || 0) > 0) {
+        const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
+          ? (booking.packageId?.price || 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+          : payment.amount;
+        if ((pointsBaseAmount || 0) > 0) {
           const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
           if (!alreadyAwarded) {
-            await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+            await loyaltyService.addPointsFromPayment(payment.userId, pointsBaseAmount, booking._id, session);
           }
         }
         await mongoose.model('User').findOneAndUpdate(
@@ -530,7 +536,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         return;
       }
 
-      const booking = await Booking.findById(payment.bookingId).session(session);
+      const booking = await Booking.findById(payment.bookingId).populate('packageId').session(session);
       if (!booking) {
         throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
       }
@@ -555,10 +561,13 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           await markRecurringSiblingsPaid(booking, payment.method, session);
           // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
-            if ((payment.amount || 0) > 0) {
+            const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
+              ? (booking.packageId?.price || 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+              : payment.amount;
+            if ((pointsBaseAmount || 0) > 0) {
               const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
               if (!alreadyAwarded) {
-                await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+                await loyaltyService.addPointsFromPayment(payment.userId, pointsBaseAmount, booking._id, session);
               }
             }
             await mongoose.model('User').findOneAndUpdate(
