@@ -99,19 +99,20 @@ function ListTrend({ currentRaw, prevRaw, hideTrend }) {
 
 function VehicleDetailModal({ vehicle, onClose }) {
   const user = vehicle?.vehicle?.user;
-  const [tab, setTab] = useState('info');
-  const [allVehicles, setAllVehicles] = useState([]);
-  const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const vehicleId = vehicle?.vehicle?._id;
+  const [tab, setTab] = useState('bookings');
+  const [bookings, setBookings] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
 
   useEffect(() => {
-    if (user?._id) {
-      setLoadingVehicles(true);
-      api(`/vehicles/user/${user._id}`)
+    if (vehicleId) {
+      setLoadingBookings(true);
+      api(`/bookings?vehicleId=${vehicleId}&limit=50&sort=-createdAt`)
         .then(r => r.json())
-        .then(res => setAllVehicles(res?.data || []))
-        .finally(() => setLoadingVehicles(false));
+        .then(res => setBookings(res?.data?.bookings || []))
+        .finally(() => setLoadingBookings(false));
     }
-  }, [user?._id]);
+  }, [vehicleId]);
 
   if (!vehicle) return null;
 
@@ -149,12 +150,12 @@ function VehicleDetailModal({ vehicle, onClose }) {
         {user ? (
           <>
             <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mx-6 mb-5">
-              {['info', 'benefits', 'vehicles', 'wallet'].map(t => (
+              {['info', 'benefits', 'bookings', 'wallet'].map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                     tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}>
-                  {t === 'info' ? 'Thông tin' : t === 'benefits' ? 'Ưu đãi hạng' : t === 'vehicles' ? 'Xe' : 'Ví'}
+                  {t === 'info' ? 'Thông tin' : t === 'benefits' ? 'Ưu đãi hạng' : t === 'bookings' ? 'Lịch sử đặt' : 'Ví'}
                 </button>
               ))}
             </div>
@@ -180,21 +181,36 @@ function VehicleDetailModal({ vehicle, onClose }) {
                   </div>
                 </div>
               )}
-              {tab === 'vehicles' && (
+              {tab === 'bookings' && (
                 <div className="space-y-2">
-                  {loadingVehicles ? (
+                  {loadingBookings ? (
                     <div className="flex justify-center py-6"><Spinner /></div>
-                  ) : allVehicles.length === 0 ? (
-                    <div className="text-center text-sm text-slate-400 py-6">Không có xe nào</div>
+                  ) : bookings.length === 0 ? (
+                    <div className="text-center text-sm text-slate-400 py-6">Chưa có lượt đặt nào</div>
                   ) : (
-                    allVehicles.map((v, i) => (
-                      <div key={v._id || i} className={`p-3 rounded-xl border flex items-center gap-3 ${v._id === vehicle.vehicle?._id ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
-                        <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Car size={18} /></div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-slate-800 uppercase">{v.licensePlate || '—'}</p>
-                          <p className="text-xs text-slate-500 capitalize">{v.vehicleType} · {v.brand} {v.model}</p>
+                    bookings.map((b, i) => (
+                      <div key={b._id || i} className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-800">#{b.bookingCode || '—'}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            b.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                            b.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                            b.status === 'confirmed' ? 'bg-blue-50 text-blue-600' :
+                            'bg-amber-50 text-amber-600'
+                          }`}>
+                            {b.status === 'completed' ? 'Hoàn thành' :
+                             b.status === 'cancelled' ? 'Đã hủy' :
+                             b.status === 'confirmed' ? 'Đã xác nhận' :
+                             b.status === 'checked_in' ? 'Đã check-in' :
+                             b.status === 'in_progress' ? 'Đang thực hiện' : b.status}
+                          </span>
                         </div>
-                        {v.isDefault && <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Mặc định</span>}
+                        <p className="text-xs text-slate-500">
+                          {b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : '—'} · {b.startTime || '—'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {b.packageId?.name || '—'} · <span className="font-medium text-emerald-600">{(b.finalPrice || 0).toLocaleString('vi-VN')}đ</span>
+                        </p>
                       </div>
                     ))
                   )}

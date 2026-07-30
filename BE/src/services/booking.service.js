@@ -372,6 +372,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   if (filters.status) query.status = filters.status;
   if (filters.bookingType) query.bookingType = filters.bookingType;
   if (filters.recurringGroupId) query.recurringGroupId = filters.recurringGroupId;
+  if (filters.vehicleId) query.vehicleId = filters.vehicleId;
 
   // date range (dateFrom/dateTo) or single bookingDate
   if (filters.dateFrom || filters.dateTo) {
