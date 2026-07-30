@@ -76,16 +76,12 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
     setDetailPayment(null);
     setShowDetail(true);
     try {
-      const bId = payment.bookingId?._id || payment.bookingId || payment.bookingData?._id;
       if (payment.bookingData) {
-        // Fallback detail from booking data
-        setDetailPayment({
-          ...payment,
-          bookingId: payment.bookingData,
-        });
+        setDetailPayment({ ...payment, bookingId: payment.bookingData });
         return;
       }
-      const res = await fetch(`${apiBase || API_BASE}/payments/booking/${bId}`, {
+      const pid = payment._id || payment.id;
+      const res = await fetch(`${apiBase || API_BASE}/payments/${pid}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Không thể tải chi tiết');
