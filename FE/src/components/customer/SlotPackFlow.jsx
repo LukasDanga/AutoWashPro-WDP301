@@ -355,8 +355,9 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi tạo gói slot');
-      const pack = data.data || data;
-      setBuyResult({ ...pack, packageName: pkg?.name || '', branchName: branchObj?.name || '' });
+      const selectedPkgName = pkg?.name || pack.packageId?.name || pack.packageName || 'Gói rửa xe';
+      const selectedBranchName = branchObj?.name || pack.branchId?.name || pack.branchName || 'Toàn hệ thống';
+      setBuyResult({ ...pack, packageName: selectedPkgName, branchName: selectedBranchName });
 
       // Tạo thanh toán theo phương thức đã chọn
       const payRes = await fetch(`${apiBase}/slot-packs/${pack._id}/pay`, {
@@ -373,8 +374,9 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
         sessionStorage.setItem('aw_lastSlotPack', JSON.stringify({
           packCode: pack.packCode,
           finalPrice: pack.finalPriceAfterVoucher || pack.finalPrice,
-          packageName: pkg?.name || '',
-          branchName: branchObj?.name || 'Toàn hệ thống',
+          packageName: selectedPkgName,
+          branchName: selectedBranchName,
+          totalSlots: slotCount,
           paymentMethod: 'vnpay',
         }));
         window.location.href = payResult.paymentUrl;
@@ -936,7 +938,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   </div>
                   <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-slate-500">Gói dịch vụ</span>
-                    <span className="font-medium text-slate-800">{buyResult?.packageName || pkg?.name || '—'}</span>
+                    <span className="font-medium text-slate-800">{buyResult?.packageName || buyResult?.packageId?.name || pkg?.name || 'Gói dịch vụ'}</span>
                   </div>
                   <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-slate-500">Số lần</span>

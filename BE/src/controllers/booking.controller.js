@@ -516,6 +516,40 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
   success(res, { paymentUrl: vnpayUrl, transactionId: payment.transactionId, payment }, 'VNPay URL created');
 });
 
+const sendMobileRedirect = (res, deepLink) => {
+  console.log('VNPay Return → Mobile redirect HTML to:', deepLink);
+  return res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Đang chuyển hướng về ứng dụng...</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; color: #1e293b; }
+        .card { text-align: center; background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 90%; width: 360px; }
+        .icon { width: 56px; height: 56px; background: #dcfce7; color: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto; font-size: 28px; font-weight: bold; }
+        .btn { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1.5rem; background-color: #1E88E5; color: white; text-decoration: none; border-radius: 0.5rem; font-weight: 600; width: 100%; box-sizing: border-box; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">✓</div>
+        <h2 style="margin: 0 0 0.5rem 0; font-size: 20px;">Thanh toán hoàn tất</h2>
+        <p style="color: #64748b; font-size: 14px; margin: 0;">Đang mở ứng dụng AutoWash Pro...</p>
+        <a href="${deepLink}" class="btn">Mở lại ứng dụng</a>
+      </div>
+      <script>
+        window.location.href = "${deepLink}";
+        setTimeout(function() {
+          window.location.replace("${deepLink}");
+        }, 300);
+      </script>
+    </body>
+    </html>
+  `);
+};
+
 exports.handleVnpayReturn = catchAsync(async (req, res) => {
   console.log('=== VNPay Return Called ===');
   console.log('VNPay Return query:', JSON.stringify(req.query));
@@ -531,6 +565,8 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   let isMobile = false;
   let mobileBookingId = '';
   let isTopup = false;
+  let isSlotPack = false;
+
   if (txnRef) {
     try {
       const Payment = require('../models/payment.schema');
@@ -539,12 +575,14 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         isMobile = paymentRecord.client === 'mobile';
         mobileBookingId = paymentRecord.bookingId ? String(paymentRecord.bookingId) : '';
         isTopup = paymentRecord.paymentType === 'topup';
+        isSlotPack = !!paymentRecord.slotPackId;
         console.log('VNPay Return payment lookup:', {
           txnRef,
           client: paymentRecord.client,
           isMobile,
           mobileBookingId,
           isTopup,
+          isSlotPack,
           paymentType: paymentRecord.paymentType,
           status: paymentRecord.status,
         });
@@ -556,15 +594,19 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
     }
   }
 
+  let mobileDeepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(mobileBookingId)}&vnpay_result=${encoded}`;
+  if (isSlotPack) {
+    mobileDeepLink = `autowashpro://slot-packs?vnpay_result=${encoded}`;
+  } else if (isTopup) {
+    mobileDeepLink = `autowashpro://wallet?vnpay_result=${encoded}`;
+  }
+
   if (result.success) {
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
       console.log('VNPay Return confirmPaymentCallback result:', { paymentId: payment?._id, status: payment?.status, bookingId: payment?.bookingId });
       if (isMobile) {
-        const deepLinkId = mobileBookingId;
-        const deepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`;
-        console.log('VNPay Return → mobile deep link:', deepLink);
-        return res.redirect(302, deepLink);
+        return sendMobileRedirect(res, mobileDeepLink);
       }
       if (isTopup) {
         return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
@@ -585,10 +627,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   }
 
   if (isMobile) {
-    const deepLinkId = mobileBookingId;
-    const deepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`;
-    console.log('VNPay Return (fallback) → mobile deep link:', deepLink);
-    return res.redirect(302, deepLink);
+    return sendMobileRedirect(res, mobileDeepLink);
   }
   if (isTopup) {
     return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);

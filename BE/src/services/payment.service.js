@@ -241,12 +241,18 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   return payment;
 };
 
-exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
+exports.createSlotPackPayment = async (slotPackId, userId, method, amount, client = 'web') => {
   const slotPack = await mongoose.model('SlotPack').findById(slotPackId);
   if (!slotPack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'NOT_FOUND' });
 
   const existingPending = await Payment.findOne({ slotPackId, status: 'pending' });
-  if (existingPending) return existingPending;
+  if (existingPending) {
+    if (client && existingPending.client !== client) {
+      existingPending.client = client;
+      await existingPending.save();
+    }
+    return existingPending;
+  }
 
   const transactionId = generateTransactionId();
   const payment = new Payment({
@@ -257,6 +263,7 @@ exports.createSlotPackPayment = async (slotPackId, userId, method, amount) => {
     paymentType: 'full',
     status: 'pending',
     transactionId,
+    client,
   });
 
   if (method === 'bank') {
