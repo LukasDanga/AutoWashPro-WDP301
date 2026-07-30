@@ -1891,9 +1891,9 @@ exports.createRecurringBooking = async (data) => {
   }
 
   // --- Đặt cọc cho cả nhóm định kỳ ---
-  // Gộp cọc vào buổi ĐẦU TIÊN; các buổi còn lại = 0. Manager đối soát booking đầu.
-  const groupTotalFinalPrice = computedFinalPrice * targetDates.length;
-  const groupDepositAmount = Math.round((groupTotalFinalPrice * getDepositRate(user)) / 1000) * 1000;
+  // Tính cọc cho TỪNG buổi (chia đều thay vì gộp hết vào buổi đầu)
+  // để khi thanh toán phần còn lại, mỗi buổi được tính riêng rẽ.
+  const depositPerSession = Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
 
   // --- Tạo booking lần lượt, bỏ qua ngày conflict ---
   const created = [];
@@ -1995,7 +1995,7 @@ exports.createRecurringBooking = async (data) => {
         voucherCode: voucherCode ? voucherCode.trim().toUpperCase() : undefined,
         discountAmount: computedDiscountAmount,
         finalPrice: computedFinalPrice,
-        depositAmount: isFirstInGroup ? groupDepositAmount : 0,
+        depositAmount: depositPerSession,
         selectedSubServices: validSubServices,
         packageName: pkg.name,
         packageDuration: pkg.duration,
