@@ -51,8 +51,8 @@ export const cancelSlotPack = async (id: string, otp?: string): Promise<SlotPack
 };
 
 // Create payment for slot pack
-export const paySlotPack = async (id: string, method: string): Promise<any> => {
-  const response = await apiClient.post(`/slot-packs/${id}/pay`, { method });
+export const paySlotPack = async (id: string, method: string, client: string = 'mobile'): Promise<any> => {
+  const response = await apiClient.post(`/slot-packs/${id}/pay`, { method, client });
   return response.data;
 };
 

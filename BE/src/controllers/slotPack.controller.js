@@ -116,14 +116,14 @@ exports.previewDiscount = catchAsync(async (req, res) => {
 
 /** POST /api/slot-packs/:id/pay — Tạo thanh toán cho gói slot */
 exports.paySlotPack = catchAsync(async (req, res) => {
-  const { method } = req.body;
+  const { method, client } = req.body;
   const slotPackId = req.params.id;
 
   if (!['bank', 'vnpay', 'wallet'].includes(method)) {
     return res.status(400).json({ success: false, message: 'Phương thức thanh toán không hợp lệ' });
   }
 
-  const payment = await paymentService.createSlotPackPayment(slotPackId, req.userId, method);
+  const payment = await paymentService.createSlotPackPayment(slotPackId, req.userId, method, undefined, client || 'web');
 
   if (method === 'wallet') {
     // Auto-confirm wallet payment immediately
