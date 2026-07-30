@@ -732,27 +732,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
 
       {step === 4 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-6">Voucher & Thanh toán</h3>
-          <div className="mb-6">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">Ưu đãi</span>
-            <button type="button" onClick={() => setVoucherModalOpen(true)}
-              className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50 transition-all">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
-                </div>
-                <div className="text-left">
-                  <div className="text-sm font-bold text-slate-700">Voucher & Ưu đãi</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    {appliedVoucher ? `Đã chọn: ${appliedVoucher.code}` : 'Chọn mã giảm giá'}
-                  </div>
-                </div>
-              </div>
-              <span className="text-emerald-600 font-semibold text-sm">
-                {appliedVoucher ? 'Thay đổi' : 'Chọn >'}
-              </span>
-            </button>
-          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-6">Thanh toán</h3>
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Tóm tắt đơn hàng</div>
             {[
