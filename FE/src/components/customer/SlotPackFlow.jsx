@@ -234,7 +234,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   const [branches, setBranches] = useState([]);
   const [packages, setPackages] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState('');
-  const [selectedVehicle, setSelectedVehicle] = useState('');
+  const [selectedVehicle, setSelectedVehicle] = useState('ALL');
   const [selectedPackage, setSelectedPackage] = useState('');
   const [slotCount, setSlotCount] = useState(5);
   const [appliedVoucher, setAppliedVoucher] = useState(null);
@@ -281,10 +281,6 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
     }
     loadPackages();
   }, [selectedBranch, apiBase, token]);
-
-  useEffect(() => {
-    if (!selectedVehicle && userVehicles[0]) setSelectedVehicle(userVehicles[0]._id || userVehicles[0].id || '');
-  }, [userVehicles, selectedVehicle]);
 
   const loadMyPacks = useCallback(async () => {
     setPacksLoading(true);
