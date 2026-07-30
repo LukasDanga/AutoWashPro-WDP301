@@ -10,26 +10,13 @@ const loyaltyService = require('./loyalty.service');
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo', 'wallet'];
 
-/**
- * Khi thanh toán TOÀN BỘ (full) cho 1 booking thuộc nhóm ĐỊNH KỲ, tiền đã bao gồm
- * giá của tất cả các buổi trong nhóm (xem cách tính fullPrice ở createPayment).
- * Vì vậy phải đánh dấu luôn các buổi còn lại là 'paid' — nếu không, khách đã trả
- * đủ tiền online vẫn bị hệ thống coi là chưa thanh toán ở các buổi sau.
- */
+// Hàm này không còn tác dụng (Khách yêu cầu thanh toán lẻ từng đơn)
 const markRecurringSiblingsPaid = async (booking, paymentMethod, session) => {
-  if (booking.bookingType !== 'recurring' || !booking.recurringGroupId) return;
-  const q = Booking.updateMany(
-    {
-      recurringGroupId: booking.recurringGroupId,
-      _id: { $ne: booking._id },
-      status: { $ne: 'cancelled' },
-    },
-    { paymentStatus: 'paid', paidAt: new Date(), paymentMethod, depositPaid: true }
-  );
-  if (session) q.session(session);
-  await q;
+  return;
 };
 
+// Khi đóng cọc, hệ thống thu cọc gộp trên booking đầu tiên
+// vì vậy vẫn cần đánh dấu các booking còn lại là đã đóng cọc.
 const markRecurringSiblingsDepositPaid = async (booking, paymentMethod, session) => {
   if (booking.bookingType !== 'recurring' || !booking.recurringGroupId) return;
   const q = Booking.updateMany(
@@ -107,25 +94,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     throw Object.assign(new Error('Lịch hẹn đã được thanh toán'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
-  // Với booking ĐỊNH KỲ (recurring): tiền cọc được gộp toàn nhóm vào buổi đầu
-  // (isRecurringFirst) còn `finalPrice` của MỖI booking chỉ là giá 1 buổi. Vì vậy
-  // khi tính "tổng tiền phải trả" (full) ta phải CỘNG finalPrice của TẤT CẢ buổi
-  // trong nhóm — nếu chỉ lấy booking.finalPrice sẽ thu nhầm tiền của 1 buổi.
+  // Trươc đây thu cả nhóm, nay khách yêu cầu thanh toán ĐƠN NÀO THU ĐƠN ĐÓ
+  // nên chỉ lấy đúng finalPrice của đơn hiện tại.
   let fullPrice = booking.finalPrice ?? booking.packageId.price;
-  if (booking.bookingType === 'recurring' && booking.recurringGroupId) {
-    const groupBookings = await Booking.find({
-      recurringGroupId: booking.recurringGroupId,
-      status: { $ne: 'cancelled' },
-    })
-      .select('finalPrice packageId')
-      .populate('packageId', 'price');
-    if (groupBookings.length > 0) {
-      fullPrice = groupBookings.reduce(
-        (sum, b) => sum + (b.finalPrice ?? b.packageId?.price ?? 0),
-        0
-      );
-    }
-  }
 
   const deposit = booking.depositAmount || 0;
 

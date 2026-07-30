@@ -875,6 +875,20 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         setQrPaymentStatus('pending');
         setQrPollCount(0);
         setShowPaymentQR(true);
+      } else if (managerPayMethod === 'vnpay') {
+        const payload = {
+          bookingId: booking._id,
+          paymentType: booking.depositPaid ? 'remaining' : 'full',
+          returnUrl: window.location.href
+        };
+        const res = await api('/payments/vnpay-create', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await readErr(res));
+        const data = await res.json();
+        const paymentUrl = data?.data?.paymentUrl || data?.paymentUrl;
+        if (paymentUrl) window.location.href = paymentUrl;
       }
     } catch (err) {
       notify(err.message || 'Lỗi tạo thanh toán', 'error');
@@ -1355,8 +1369,8 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
+                    <div className="grid grid-cols-4 gap-2">
+                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'vnpay',icon:<CreditCard size={16}/>,label:'VNPAY'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
                         <button key={m.id} type="button"
                           onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
                           className={`flex flex-col items-center justify-center text-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
@@ -1371,12 +1385,11 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   </div>
                 )}
 
-                {/* Payment confirm button */}
                 {booking.paymentStatus !== 'paid' && (
                   <button disabled={busy} onClick={handlePaymentClick}
                     className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                     <CurrencyCircleDollar size={15} weight="fill" />
-                    {managerPayMethod === 'bank' ? 'Tạo mã QR ngân hàng (SePay)' : (booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền')}
+                    {managerPayMethod === 'bank' ? 'Tạo mã QR ngân hàng (SePay)' : managerPayMethod === 'vnpay' ? 'Thanh toán qua VNPAY' : (booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền')}
                   </button>
                 )}
 
@@ -2168,8 +2181,19 @@ export default function ManagerBookings() {
                             <p className="text-[11px] text-slate-400">{child.startTime}</p>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${child.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
-                              {child.paymentStatus === 'paid' ? 'Đã thanh toán' : child.paymentStatus ?? 'Chưa TT'}
+                            <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              child.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                              child.paymentStatus === 'deposit_paid' ? 'bg-teal-50 text-teal-700' :
+                              child.paymentStatus === 'refunded' ? 'bg-slate-100 text-slate-500' :
+                              'bg-amber-50 text-amber-700'
+                            }`}>
+                              {
+                                child.paymentStatus === 'paid' ? 'Đã thanh toán' :
+                                child.paymentStatus === 'deposit_paid' ? 'Đã cọc' :
+                                child.paymentStatus === 'refunded' ? 'Đã hoàn tiền' :
+                                child.paymentStatus === 'failed' ? 'Thất bại' :
+                                'Chưa thanh toán'
+                              }
                             </span>
                           </td>
                           <td className="px-4 py-3">

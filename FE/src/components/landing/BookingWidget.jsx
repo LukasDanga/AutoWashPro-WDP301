@@ -456,7 +456,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     };
 
     if (isRecurring) {
-      body.selectedDays = selectedDays;
+      body.weekdays = selectedDays;
       body.weeks = weeks;
     }
 
@@ -581,7 +581,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         if (!r.ok) { const e = await r.json().catch(() => null); throw new Error(e?.message || 'Không thể tạo lịch hẹn'); }
         const p2 = await r.json();
         const bk = p2?.data || p2;
-        const code = bk?.bookingCode || bk?.code || '';
+        const code = isRec ? (bk?.recurringGroupId || '') : (bk?.bookingCode || bk?.code || '');
         setBookingCode(code);
         setLastBooking({
           branch: selectedBranch || { name: '' },
@@ -863,7 +863,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           branch: selectedBranch, vehicle, pkg, currentDate, selectedTime,
           total: pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0,
           discount: 0, points: 0, isPayingWithPack: false,
-          bookingCode: bk?.bookingCode || bk?.code || '',
+          bookingCode: (pendingDeposit.tab === 'recurring' ? bk?.recurringGroupId : (bk?.bookingCode || bk?.code)) || '',
           subServices: (currentSubServices || []).map(n => {
             const s = pkg?.subServices?.find(x => x.name === n);
             return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
@@ -2822,7 +2822,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 <div className="text-center bg-gradient-to-br from-emerald-50 to-emerald-100/60 border-2 border-emerald-200/70 p-5 rounded-2xl shadow-sm">
                   <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wider block">Mã đặt lịch của bạn</span>
                   <span className="block mt-2 text-2xl font-black text-emerald-700 tracking-[0.15em] font-mono">
-                    {lastBooking.bookingCode}
+                    {lastBooking.bookingCode?.length === 36 ? `#${lastBooking.bookingCode.slice(-6).toUpperCase()}` : lastBooking.bookingCode}
                   </span>
                 </div>
 
