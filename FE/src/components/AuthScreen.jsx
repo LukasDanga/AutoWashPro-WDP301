@@ -549,17 +549,18 @@ export default function AuthScreen({ authLoading, onLogin, onRegister, onBack, o
                   <div className="h-px bg-slate-200 flex-1"></div>
                 </div>
 
-                <div className="mt-5 flex justify-center">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => {
-                      setAuthError('Đăng nhập Google không thành công');
-                    }}
-                    theme="outline"
-                    size="large"
-                    shape="rectangular"
-                    width="100%"
-                  />
+                <div className="mt-5 flex justify-center" style={{ width: '100%' }}>
+                  <div style={{ width: '100%' }}>
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => {
+                        setAuthError('Đăng nhập Google không thành công');
+                      }}
+                      theme="outline"
+                      size="large"
+                      shape="rectangular"
+                    />
+                  </div>
                 </div>
               </>
             )}

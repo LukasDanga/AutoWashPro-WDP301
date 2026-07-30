@@ -57,6 +57,22 @@ export default function AdminBookings() {
   const [deleteAll, setDeleteAll] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const token = getStoredToken();
+  const [viewedBookings, setViewedBookings] = useState([]);
+
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('viewed_bookings') || '[]');
+    setViewedBookings(stored);
+  }, []);
+
+  function handleOpenDetail(booking) {
+    if (booking._id && !viewedBookings.includes(booking._id)) {
+      const next = [...viewedBookings, booking._id];
+      setViewedBookings(next);
+      localStorage.setItem('viewed_bookings', JSON.stringify(next));
+      window.dispatchEvent(new Event('booking-viewed'));
+    }
+    setSelected(booking);
+  }
 
   const load = useCallback(async (pg = page) => {
     setLoading(true); setError('');
@@ -128,6 +144,8 @@ export default function AdminBookings() {
     finally { setDeleting(false); }
   }
 
+  const todayStr = new Date().toDateString();
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -198,45 +216,50 @@ export default function AdminBookings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {bookings.map((b) => (
-                <tr key={b._id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <p className="font-medium text-slate-800 flex items-center gap-1.5">
-                          {b.userId?.name || '—'}
-                          {b.status === 'pending' && b.createdAt && (Date.now() - new Date(b.createdAt).getTime() < 24 * 60 * 60 * 1000) && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-slate-400">{b.vehicleId?.licensePlate || '—'}</p>
+              {bookings.map((b) => {
+                const isCreatedToday = b.createdAt && new Date(b.createdAt).toDateString() === todayStr;
+                const isNew = b.status === 'pending' && isCreatedToday && !viewedBookings.includes(b._id);
+
+                return (
+                  <tr key={b._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-medium text-slate-800 flex items-center gap-1.5">
+                            {b.userId?.name || '—'}
+                            {isNew && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-slate-400">{b.vehicleId?.licensePlate || '—'}</p>
+                        </div>
+                        {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
                       </div>
-                      {b.userId?.tier && <TierBadge tier={b.userId.tier} />}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-slate-600 flex items-center gap-1">
-                      <Buildings size={11} className="text-slate-400" />
-                      {b.branchId?.name || '—'}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 max-w-[160px]">
-                    <p className="truncate text-slate-700">{b.packageId?.name || '—'}</p>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{fmtDate(b.bookingDate)}</td>
-                  <td className="px-4 py-3 text-slate-600">{b.startTime}–{b.endTime}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{fmtMoney(b.finalPrice)}</td>
-                  <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => setSelected(b)}
-                      className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600 hover:bg-slate-100 transition-colors">
-                      Chi tiết
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-slate-600 flex items-center gap-1">
+                        <Buildings size={11} className="text-slate-400" />
+                        {b.branchId?.name || '—'}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 max-w-[160px]">
+                      <p className="truncate text-slate-700">{b.packageId?.name || '—'}</p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{fmtDate(b.bookingDate)}</td>
+                    <td className="px-4 py-3 text-slate-600">{b.startTime}–{b.endTime}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">{fmtMoney(b.finalPrice)}</td>
+                    <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => handleOpenDetail(b)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600 hover:bg-slate-100 transition-colors">
+                        Chi tiết
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 

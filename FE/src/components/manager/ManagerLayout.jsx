@@ -103,10 +103,12 @@ export default function ManagerLayout({ user, onLogout }) {
     window.addEventListener('payment-viewed', loadCounts);
     window.addEventListener('refund-request-viewed', loadCounts);
     window.addEventListener('manager-customer-viewed', loadCounts);
+    window.addEventListener('admin-slot-pack-viewed', loadCounts);
     return () => {
       window.removeEventListener('payment-viewed', loadCounts);
       window.removeEventListener('refund-request-viewed', loadCounts);
       window.removeEventListener('manager-customer-viewed', loadCounts);
+      window.removeEventListener('admin-slot-pack-viewed', loadCounts);
     };
   }, [loadCounts]);
 

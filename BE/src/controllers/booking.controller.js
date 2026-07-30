@@ -358,6 +358,19 @@ exports.replyToFeedback = catchAsync(async (req, res) => {
   success(res, booking, 'Gửi phản hồi thành công');
 });
 
+exports.deleteSingleFeedback = catchAsync(async (req, res) => {
+  const result = await bookingService.deleteSingleFeedback(req.params.id);
+  sseService.broadcastToAll('feedback_new');
+  success(res, result, 'Đã xóa đánh giá thành công');
+});
+
+exports.deleteFeedbacksByDateRange = catchAsync(async (req, res) => {
+  const { dateFrom, dateTo, all } = req.query;
+  const result = await bookingService.deleteFeedbacksByDateRange(dateFrom, dateTo, all === 'true');
+  sseService.broadcastToAll('feedback_new');
+  success(res, result, `Đã xóa ${result.deletedCount} đánh giá`);
+});
+
 exports.rebookBooking = catchAsync(async (req, res) => {
   const { bookingDate, startTime, selectedSubServices, voucherCode } = req.body;
   const booking = await bookingService.rebookBooking(req.params.id, req.userId, req.user.role, { bookingDate, startTime, selectedSubServices, voucherCode });

@@ -88,6 +88,8 @@ router.post('/confirm', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
 ], validate, bookingController.confirmBookings);
 
 router.get('/feedbacks', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getFeedbacks);
+router.delete('/feedbacks/range', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.deleteFeedbacksByDateRange);
+router.delete('/:id/feedback', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [param('id').isMongoId()], validate, bookingController.deleteSingleFeedback);
 
 router.get('/customers', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getCustomers);
 

@@ -17,7 +17,7 @@ class SocketManager {
   }
 
   connect(token) {
-    if (this.socket && this.token === token) return;
+    if (this.socket && this.socket.connected && this.token === token) return;
 
     this.disconnect();
     this.token = token;

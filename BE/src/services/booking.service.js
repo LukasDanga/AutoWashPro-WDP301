@@ -2316,12 +2316,50 @@ exports.getFeedbacks = async (user, filters = {}) => {
     endOfPrev = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
   }
 
+  // Date Range Filtering & Validation
+  const startDateStr = filters.startDate || filters.dateFrom;
+  const endDateStr = filters.endDate || filters.dateTo;
+
+  if (startDateStr && endDateStr) {
+    const fromDate = new Date(startDateStr);
+    fromDate.setHours(0, 0, 0, 0);
+
+    const toDate = new Date(endDateStr);
+    toDate.setHours(23, 59, 59, 999);
+
+    if (fromDate > toDate) {
+      throw Object.assign(new Error('Ngày bắt đầu không được vượt quá ngày kết thúc'), {
+        statusCode: 400,
+        code: 'INVALID_DATE_RANGE',
+      });
+    }
+
+    startOfPeriod = fromDate;
+    endOfPeriod = toDate;
+  }
+
   const listQuery = { ...query };
   const prevQuery = { ...query };
 
+  // Customer Name Search Filter
+  if (filters.search && filters.search.trim()) {
+    const searchRegex = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const matchedUsers = await User.find({ name: searchRegex }).select('_id');
+    const userIds = matchedUsers.map(u => u._id);
+    listQuery.userId = { $in: userIds };
+  }
+
   if (startOfPeriod && endOfPeriod) {
-    listQuery.feedbackAt = { $gte: startOfPeriod, $lte: endOfPeriod };
-    prevQuery.feedbackAt = { $gte: startOfPrev, $lte: endOfPrev };
+    listQuery.$or = [
+      { feedbackAt: { $gte: startOfPeriod, $lte: endOfPeriod } },
+      { createdAt: { $gte: startOfPeriod, $lte: endOfPeriod } },
+    ];
+    if (startOfPrev && endOfPrev) {
+      prevQuery.$or = [
+        { feedbackAt: { $gte: startOfPrev, $lte: endOfPrev } },
+        { createdAt: { $gte: startOfPrev, $lte: endOfPrev } },
+      ];
+    }
   }
 
   if (filters.rating) {
@@ -2644,4 +2682,44 @@ exports.getPublicTestimonials = async () => {
     rating: t.rating || 5,
     location: t.branchId?.name || '',
   }));
+};
+
+exports.deleteSingleFeedback = async (bookingId) => {
+  const booking = await Booking.findById(bookingId);
+  if (!booking) throw Object.assign(new Error('Booking không tồn tại'), { statusCode: 404 });
+  
+  await Booking.findByIdAndUpdate(bookingId, {
+    $unset: { rating: "", feedback: "", feedbackAt: "", managerReply: "", managerReplyAt: "" }
+  });
+  return { success: true, message: 'Đã xóa đánh giá thành công' };
+};
+
+exports.deleteFeedbacksByDateRange = async (dateFrom, dateTo, all = false) => {
+  let filter = { rating: { $exists: true } };
+
+  if (!all) {
+    if (!dateFrom || !dateTo) {
+      throw Object.assign(new Error('Vui lòng chọn đầy đủ từ ngày và đến ngày'), { statusCode: 400 });
+    }
+    const fromDate = new Date(dateFrom);
+    fromDate.setHours(0, 0, 0, 0);
+
+    const toDate = new Date(dateTo);
+    toDate.setHours(23, 59, 59, 999);
+
+    if (fromDate > toDate) {
+      throw Object.assign(new Error('Ngày bắt đầu không được vượt quá ngày kết thúc'), { statusCode: 400 });
+    }
+
+    filter.$or = [
+      { feedbackAt: { $gte: fromDate, $lte: toDate } },
+      { createdAt: { $gte: fromDate, $lte: toDate } }
+    ];
+  }
+
+  const result = await Booking.updateMany(filter, {
+    $unset: { rating: "", feedback: "", feedbackAt: "", managerReply: "", managerReplyAt: "" }
+  });
+
+  return { deletedCount: result.modifiedCount || 0 };
 };

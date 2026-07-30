@@ -359,6 +359,12 @@ function PackListTab() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const debounceRef = useRef(null);
+  const [viewedAdminSlotPacks, setViewedAdminSlotPacks] = useState([]);
+
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('viewed_admin_slot_packs') || '[]');
+    setViewedAdminSlotPacks(stored);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -395,6 +401,17 @@ function PackListTab() {
     debounceRef.current = setTimeout(() => {}, 300);
   }
 
+  const handleOpenDetail = (pack) => {
+    if (pack._id && !viewedAdminSlotPacks.includes(pack._id)) {
+      const next = [...viewedAdminSlotPacks, pack._id];
+      setViewedAdminSlotPacks(next);
+      localStorage.setItem('viewed_admin_slot_packs', JSON.stringify(next));
+      window.dispatchEvent(new Event('admin-slot-pack-viewed'));
+    }
+    setDetail(pack);
+  };
+
+  const todayStr = new Date().toDateString();
   const activePacks = packs.filter(p => p.status === 'active').length;
   const exhaustedPacks = packs.filter(p => p.status === 'exhausted').length;
   const totalRevenue = packs.reduce((s, p) => s + (p.finalPriceAfterVoucher ?? p.finalPrice ?? 0), 0);
@@ -462,11 +479,20 @@ function PackListTab() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {packs.map(pack => {
               const st = STATUS_MAP[pack.status] || { label: pack.status, cls: 'bg-slate-100 text-slate-500' };
+              const isCreatedToday = pack.createdAt && new Date(pack.createdAt).toDateString() === todayStr;
+              const isNew = isCreatedToday && !viewedAdminSlotPacks.includes(pack._id);
               return (
                 <div key={pack._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-mono font-bold text-slate-800 text-sm">{pack.packCode}</div>
+                      <div className="font-mono font-bold text-slate-800 text-sm flex items-center gap-1.5 flex-wrap">
+                        <span>{pack.packCode}</span>
+                        {isNew && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-xs">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">{pack.userId?.name || 'Khách hàng'}</div>
                       {pack.userId?.phone && (
                         <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
@@ -486,8 +512,8 @@ function PackListTab() {
                     <div>Giá: <span className="font-medium text-emerald-600">{formatCurrency(pack.finalPriceAfterVoucher ?? pack.finalPrice)}</span></div>
                   </div>
                   <SlotBar total={pack.totalSlots} remaining={pack.remainingSlots} />
-                  <button onClick={() => setDetail(pack)}
-                    className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                  <button onClick={() => handleOpenDetail(pack)}
+                    className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer">
                     Xem chi tiết
                   </button>
                 </div>
