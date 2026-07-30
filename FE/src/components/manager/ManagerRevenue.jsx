@@ -97,7 +97,7 @@ function ListTrend({ currentRaw, prevRaw, hideTrend }) {
   return <div className="mt-1 flex justify-end">{content}</div>;
 }
 
-function VehicleDetailModal({ vehicle, onClose }) {
+function VehicleDetailModal({ vehicle, onClose, filter }) {
   const user = vehicle?.vehicle?.user;
   const vehicleId = vehicle?.vehicle?._id;
   const [tab, setTab] = useState('bookings');
@@ -107,12 +107,13 @@ function VehicleDetailModal({ vehicle, onClose }) {
   useEffect(() => {
     if (vehicleId) {
       setLoadingBookings(true);
-      api(`/bookings/vehicle/${vehicleId}`)
+      const periodQ = filter !== 'all' ? `?period=${filter}` : '';
+      api(`/bookings/vehicle/${vehicleId}${periodQ}`)
         .then(r => r.json())
         .then(res => setBookings(res?.data || []))
         .finally(() => setLoadingBookings(false));
     }
-  }, [vehicleId]);
+  }, [vehicleId, filter]);
 
   if (!vehicle) return null;
 
@@ -717,7 +718,7 @@ export default function ManagerRevenue() {
           <p>Không thể tải dữ liệu báo cáo</p>
         </div>
       )}
-      {vehicleDetail && <VehicleDetailModal vehicle={vehicleDetail} onClose={() => setVehicleDetail(null)} />}
+      {vehicleDetail && <VehicleDetailModal vehicle={vehicleDetail} onClose={() => setVehicleDetail(null)} filter={filter} />}
       {customerDetail && <CustomerDetailModal customer={customerDetail} onClose={() => setCustomerDetail(null)} />}
     </div>
   );

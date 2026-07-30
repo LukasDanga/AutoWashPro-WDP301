@@ -60,7 +60,18 @@ exports.getMyBookings = catchAsync(async (req, res) => {
 });
 
 exports.getBookingsByVehicle = catchAsync(async (req, res) => {
-  const bookings = await bookingService.getBookingsByVehicle(req.params.vehicleId);
+  const { period } = req.query;
+  let startDate, endDate;
+  if (period === 'today') {
+    const now = new Date();
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    endDate = new Date(startDate.getTime() + 86400000);
+  } else if (period === 'month') {
+    const now = new Date();
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  }
+  const bookings = await bookingService.getBookingsByVehicle(req.params.vehicleId, startDate, endDate);
   success(res, bookings, 'Đã lấy danh sách đặt lịch của xe');
 });
 
