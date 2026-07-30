@@ -3,7 +3,7 @@ const { catchAsync, success } = require('../utils/helpers');
 
 exports.getMyWalletTransactions = catchAsync(async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 20;
+  const limit = parseInt(req.query.limit, 10) || 10;
   const skip = (page - 1) * limit;
 
   const query = { userId: req.userId };
