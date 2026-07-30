@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, TrendUp, TrendDown, Minus } from '@phosphor-icons/react';
+import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, TrendUp, TrendDown, Minus, MagnifyingGlass } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import useSSE from '@/hooks/useSSE';
 
@@ -140,13 +140,13 @@ function ReplyModal({ booking, onClose, onReplied }) {
 
 const STAR_FILTERS = [
   { value: '', label: 'Tất cả' },
-  { value: '5', label: '⭐⭐⭐⭐⭐' },
-  { value: '4', label: '⭐⭐⭐⭐' },
-  { value: '3', label: '⭐⭐⭐' },
+  { value: '5', label: '⭐⭐⭐⭐⭐ 5 sao' },
+  { value: '4', label: '⭐⭐⭐⭐ 4 sao' },
+  { value: '3', label: '⭐⭐⭐ 3 sao' },
   { value: '1', label: '1-2 sao' },
 ];
 
-const PAGE_SIZE = 18;
+const PAGE_SIZE = 9;
 
 export default function ManagerFeedbacks() {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -157,6 +157,7 @@ export default function ManagerFeedbacks() {
   const [previousStats, setPreviousStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
   const [starFilter, setStarFilter] = useState('');
   const [period, setPeriod] = useState('all');
   const [replyTarget, setReplyTarget] = useState(null);
@@ -199,7 +200,25 @@ export default function ManagerFeedbacks() {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
   }
 
-  const displayed = feedbacks;
+  // Filter displayed items locally by search query and star filter
+  const searchLower = search.trim().toLowerCase();
+  const displayed = feedbacks.filter((fb) => {
+    // Star filter client check
+    if (starFilter === '5' && fb.rating !== 5) return false;
+    if (starFilter === '4' && fb.rating !== 4) return false;
+    if (starFilter === '3' && fb.rating !== 3) return false;
+    if (starFilter === '1' && fb.rating > 2) return false;
+
+    // Search query check (name, phone, feedback text, package name)
+    if (!searchLower) return true;
+    const name = (fb.userId?.name || '').toLowerCase();
+    const phone = (fb.userId?.phone || '');
+    const comment = (fb.feedback || '').toLowerCase();
+    const pkgName = (fb.packageId?.name || '').toLowerCase();
+    return name.includes(searchLower) || phone.includes(searchLower) || comment.includes(searchLower) || pkgName.includes(searchLower);
+  });
+
+  const todayStr = new Date().toDateString();
 
   return (
     <div className="space-y-6">
@@ -238,24 +257,46 @@ export default function ManagerFeedbacks() {
         ))}
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {STAR_FILTERS.map((f) => (
-          <button key={f.value} onClick={() => handleStarFilter(f.value)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
-              starFilter === f.value
-                ? 'bg-amber-500 text-white'
-                : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
-            }`}>
-            {f.label}
-          </button>
-        ))}
-        {total > 0 && (
-          <span className="ml-2 text-xs text-slate-400">{total} đánh giá</span>
+      {/* Search & Star Filter Bar */}
+      <div className="flex items-center gap-3 flex-wrap bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+        {/* Customer Name Search Input */}
+        <div className="relative max-w-md w-full sm:w-80">
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm theo tên khách hàng, SĐT, nội dung..."
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2 pl-9 pr-4 text-xs text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Star Rating Pills */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {STAR_FILTERS.map((f) => (
+            <button key={f.value} onClick={() => handleStarFilter(f.value)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                starFilter === f.value
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {displayed.length > 0 && (
+          <span className="text-xs font-medium text-slate-400">{displayed.length} / {total} đánh giá</span>
         )}
-        <button onClick={() => { setStarFilter(''); load('', 1); }} disabled={loading}
-          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
-          <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} />
+
+        <button onClick={() => { setSearch(''); setStarFilter(''); load('', 1); }} disabled={loading}
+          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer">
+          <ArrowClockwise size={13} className={loading ? 'animate-spin' : ''} />
           Làm mới
         </button>
       </div>
@@ -269,94 +310,101 @@ export default function ManagerFeedbacks() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
         </div>
       ) : displayed.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 py-20 text-slate-400">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20 text-slate-400 shadow-xs">
           <ChatText size={48} weight="duotone" />
-          <p className="text-sm">Chưa có đánh giá nào.</p>
+          <p className="text-sm font-medium">Không tìm thấy đánh giá nào.</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {displayed.map((fb) => (
-            <div key={fb._id} className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              {/* Header */}
-              <div className="px-5 pt-5 pb-4 border-b border-slate-50">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <UserCircle size={36} className="text-slate-300 shrink-0" weight="fill" />
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold text-slate-800 text-sm">{fb.userId?.name || 'Khách hàng'}</span>
-                        {fb.userId?.tier && <TierBadge tier={fb.userId.tier} />}
-                        {!fb.managerReply && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
-                          </span>
-                        )}
+          {displayed.map((fb) => {
+            // MỚI badge logic: Unreplied AND created TODAY (automatically disappears on a new day)
+            const fbDate = fb.feedbackAt || fb.updatedAt || fb.createdAt;
+            const isCreatedToday = fbDate && new Date(fbDate).toDateString() === todayStr;
+            const isNew = !fb.managerReply && isCreatedToday;
+
+            return (
+              <div key={fb._id} className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                {/* Header */}
+                <div className="px-5 pt-5 pb-4 border-b border-slate-50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <UserCircle size={36} className="text-slate-300 shrink-0" weight="fill" />
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-slate-800 text-sm">{fb.userId?.name || 'Khách hàng'}</span>
+                          {fb.userId?.tier && <TierBadge tier={fb.userId.tier} />}
+                          {isNew && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-xs">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {new Date(fbDate).toLocaleDateString('vi-VN')}
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {new Date(fb.feedbackAt || fb.updatedAt || fb.createdAt).toLocaleDateString('vi-VN')}
-                      </p>
                     </div>
+                    <Stars rating={fb.rating} size={13} />
                   </div>
-                  <Stars rating={fb.rating} size={13} />
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 px-5 py-4 space-y-3">
-                <p className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-md w-fit">
-                  {fb.packageId?.name || '—'}
-                </p>
-
-                {/* Customer review */}
-                <div className="text-sm text-slate-700 italic bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 min-h-[52px]">
-                  {fb.feedback
-                    ? `"${fb.feedback}"`
-                    : <span className="text-slate-400 not-italic">Không có bình luận</span>}
                 </div>
 
-                {/* Manager reply */}
-                {fb.managerReply && (
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
-                    <div className="flex items-center gap-1 mb-1">
-                      <CheckCircle size={11} className="text-emerald-600" weight="fill" />
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Phản hồi từ chi nhánh</span>
-                    </div>
-                    <p className="text-xs text-emerald-800 italic">{fb.managerReply}</p>
-                    {fb.managerReplyAt && (
-                      <p className="text-[10px] text-emerald-500 mt-1">
-                        {new Date(fb.managerReplyAt).toLocaleDateString('vi-VN')}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+                {/* Body */}
+                <div className="flex-1 px-5 py-4 space-y-3">
+                  <p className="text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md w-fit">
+                    {fb.packageId?.name || '—'}
+                  </p>
 
-              {/* Footer */}
-              <div className="px-5 pb-4">
-                <button onClick={() => setReplyTarget(fb)}
-                  className="w-full rounded-xl border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5">
-                  <PaperPlaneTilt size={12} />
-                  {fb.managerReply ? 'Sửa phản hồi' : 'Phản hồi khách hàng'}
-                </button>
+                  {/* Customer review */}
+                  <div className="text-sm text-slate-700 italic bg-slate-50/80 rounded-xl px-3.5 py-2.5 border border-slate-100 min-h-[52px]">
+                    {fb.feedback
+                      ? `"${fb.feedback}"`
+                      : <span className="text-slate-400 not-italic">Không có bình luận</span>}
+                  </div>
+
+                  {/* Manager reply */}
+                  {fb.managerReply && (
+                    <div className="bg-emerald-50/80 border border-emerald-100 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center gap-1 mb-1">
+                        <CheckCircle size={11} className="text-emerald-600" weight="fill" />
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Phản hồi từ chi nhánh</span>
+                      </div>
+                      <p className="text-xs text-emerald-800 italic">{fb.managerReply}</p>
+                      {fb.managerReplyAt && (
+                        <p className="text-[10px] text-emerald-500 mt-1">
+                          {new Date(fb.managerReplyAt).toLocaleDateString('vi-VN')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 pb-4">
+                  <button onClick={() => setReplyTarget(fb)}
+                    className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+                    <PaperPlaneTilt size={13} />
+                    {fb.managerReply ? 'Sửa phản hồi' : 'Phản hồi khách hàng'}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col items-center gap-2 pt-2">
           <div className="flex items-center gap-1">
             <button onClick={() => handlePage(page - 1)} disabled={page <= 1 || loading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer">
               ← Trước
             </button>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               const pg = Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
               return (
                 <button key={pg} onClick={() => handlePage(pg)} disabled={loading}
-                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
                     pg === page ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}>
                   {pg}
@@ -364,11 +412,11 @@ export default function ManagerFeedbacks() {
               );
             })}
             <button onClick={() => handlePage(page + 1)} disabled={page >= totalPages || loading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer">
               Sau →
             </button>
           </div>
-          <p className="text-xs text-slate-400">Trang {page}/{totalPages} · {total} đánh giá</p>
+          <p className="text-xs text-slate-400 font-medium">Trang {page}/{totalPages} · {total} đánh giá</p>
         </div>
       )}
 

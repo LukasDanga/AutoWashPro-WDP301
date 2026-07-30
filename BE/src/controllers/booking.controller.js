@@ -540,6 +540,10 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
       if (payment && (!payment.bookingId || payment.slotPackId)) {
         return res.redirect(302, `${feUrl}/?vnpay_result=${encoded}`);
       }
+      // Pay remaining cho booking đã tồn tại → redirect về history
+      if (payment && payment.bookingId) {
+        return res.redirect(302, `${feUrl}/history?vnpay_result=${encoded}`);
+      }
     } catch (err) {
       console.error('Confirm payment error:', err.message);
     }
@@ -552,7 +556,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   if (isTopup) {
     return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
   }
-  return res.redirect(302, `${feUrl}/booking?vnpay_result=${encoded}`);
+  return res.redirect(302, `${feUrl}/history?vnpay_result=${encoded}`);
 });
 
 exports.handleVnpayIPN = catchAsync(async (req, res) => {

@@ -2332,7 +2332,7 @@ exports.getFeedbacks = async (user, filters = {}) => {
   if (filters.replied === 'false') listQuery.$and = [...(listQuery.$and || []), { $or: [{ managerReply: { $exists: false } }, { managerReply: '' }] }];
 
   const page  = Math.max(1, parseInt(filters.page)  || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(filters.limit) || 20));
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit) || 9));
   const skip  = (page - 1) * limit;
 
   const buildStatsPipeline = (matchStage) => [
