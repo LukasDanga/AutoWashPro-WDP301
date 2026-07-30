@@ -56,6 +56,21 @@ export default function ManagerCustomers() {
   const handleTier = (v) => { setTierFilter(v); setPage(1); fetchCustomers(search, v, 1); };
   const handlePage = (pg) => { setPage(pg); fetchCustomers(search, tierFilter, pg); };
 
+  const [viewedCustomers, setViewedCustomers] = useState(() => {
+    return JSON.parse(localStorage.getItem('viewed_manager_customers') || '[]');
+  });
+
+  const handleViewDetail = (c) => {
+    const custId = c._id || c.user?._id;
+    if (custId && !viewedCustomers.includes(custId)) {
+      const next = [...viewedCustomers, custId];
+      setViewedCustomers(next);
+      localStorage.setItem('viewed_manager_customers', JSON.stringify(next));
+      window.dispatchEvent(new Event('manager-customer-viewed'));
+    }
+    setCustomerDetail(c);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -123,50 +138,57 @@ export default function ManagerCustomers() {
                       </td>
                     </tr>
                   ) : (
-                    customers.map((c, i) => (
-                      <tr key={c._id || i} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">{c.user?.name || 'Khách vãng lai'}</span>
-                            {c.user?.tier && <TierBadge tier={c.user.tier} />}
-                            {c.user?.createdAt && (Date.now() - new Date(c.user.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000) && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-slate-700">{c.user?.phone || '—'}</div>
-                          <div className="text-xs text-muted-foreground">{c.user?.email || '—'}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {c.vehicles && c.vehicles.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {c.vehicles.map((v) => (
-                                <span key={v._id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                  {v.licensePlate}
+                    customers.map((c, i) => {
+                      const custId = c._id || c.user?._id;
+                      const dateToCheck = c.lastBookingDate || c.user?.createdAt;
+                      const isToday = dateToCheck && new Date(dateToCheck).toDateString() === new Date().toDateString();
+                      const isFirstTime = (c.totalBookings <= 1 || !c.totalBookings);
+                      const isNew = isFirstTime && isToday && !viewedCustomers.includes(custId);
+                      return (
+                        <tr key={c._id || i} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-foreground">{c.user?.name || 'Khách vãng lai'}</span>
+                              {c.user?.tier && <TierBadge tier={c.user.tier} />}
+                              {isNew && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-xs">
+                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
                                 </span>
-                              ))}
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-blue-600">{c.totalBookings}</td>
-                        <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(c.totalSpent || 0)}
-                        </td>
-                        <td className="px-6 py-4 text-right text-muted-foreground">
-                          {c.lastBookingDate ? new Date(c.lastBookingDate).toLocaleDateString('vi-VN') : '—'}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button onClick={() => setCustomerDetail(c)} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold transition-colors whitespace-nowrap">
-                            Xem chi tiết
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-slate-700">{c.user?.phone || '—'}</div>
+                            <div className="text-xs text-muted-foreground">{c.user?.email || '—'}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {c.vehicles && c.vehicles.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {c.vehicles.map((v) => (
+                                  <span key={v._id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                    {v.licensePlate}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center font-bold text-blue-600">{c.totalBookings || 0}</td>
+                          <td className="px-6 py-4 text-right font-medium text-emerald-600">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(c.totalSpent || 0)}
+                          </td>
+                          <td className="px-6 py-4 text-right text-muted-foreground">
+                            {c.lastBookingDate ? new Date(c.lastBookingDate).toLocaleDateString('vi-VN') : '—'}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button onClick={() => handleViewDetail(c)} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer">
+                              Xem chi tiết
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
