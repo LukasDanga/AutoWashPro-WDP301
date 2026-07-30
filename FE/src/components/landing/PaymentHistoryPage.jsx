@@ -38,34 +38,39 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
   const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState(null);
 
-  useEffect(() => {
+  const loadPayments = async () => {
     if (!token) return;
     setLoading(true);
     let url = `${apiBase || API_BASE}/payments/my?withStats=true&page=${page}&limit=10`;
     if (filterStatus !== 'all') url += `&status=${filterStatus}`;
     if (filterMonth) url += `&month=${filterMonth}`;
 
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(payload => {
-        const responseData = payload?.data || payload;
-        let paymentsList = [];
-        if (responseData && responseData.payments) {
-           paymentsList = responseData.payments;
-           if (responseData.stats) setStats(responseData.stats);
-        } else if (Array.isArray(responseData)) {
-           paymentsList = responseData;
-        }
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const payload = await r.json();
+      const responseData = payload?.data || payload;
+      let paymentsList = [];
+      if (responseData && responseData.payments) {
+         paymentsList = responseData.payments;
+         if (responseData.stats) setStats(responseData.stats);
+      } else if (Array.isArray(responseData)) {
+         paymentsList = responseData;
+      }
 
-        if (payload?.pagination) {
-          setTotalPages(payload.pagination.totalPages || 1);
-        }
+      if (payload?.pagination) {
+        setTotalPages(payload.pagination.totalPages || 1);
+      }
 
-        setPayments(paymentsList);
-      })
-      .catch(() => { showToast('Không thể tải lịch sử thanh toán', 'error'); setPayments([]); })
-      .finally(() => setLoading(false));
-  }, [apiBase, token, filterStatus, filterMonth, page]);
+      setPayments(paymentsList);
+    } catch {
+      showToast('Không thể tải lịch sử thanh toán', 'error');
+      setPayments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadPayments(); }, [apiBase, token, filterStatus, filterMonth, page]);
 
   async function openDetail(payment) {
     setDetailPayment(null);
@@ -86,6 +91,7 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
       if (!res.ok) throw new Error('Không thể tải chi tiết');
       const payload = await res.json();
       setDetailPayment(payload?.data || payload);
+      loadPayments();
     } catch (e) {
       showToast(e.message, 'error');
       setShowDetail(false);
