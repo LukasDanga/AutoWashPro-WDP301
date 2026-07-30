@@ -1369,8 +1369,8 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'vnpay',icon:<CreditCard size={16}/>,label:'VNPAY'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
                         <button key={m.id} type="button"
                           onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
                           className={`flex flex-col items-center justify-center text-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${

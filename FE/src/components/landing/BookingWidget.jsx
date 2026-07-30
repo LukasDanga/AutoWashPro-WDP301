@@ -2133,15 +2133,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     type="button"
                                     disabled={isDisabled}
                                     onClick={() => setSelectedTime(timeLabel)}
-                                    className={`relative px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                    className={`relative flex flex-col items-center justify-center min-w-[76px] h-[54px] rounded-xl border font-semibold transition-all duration-200 ${
                                       isSelected
                                         ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
                                         : isDisabled
-                                          ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
+                                          ? 'border-slate-50 bg-slate-50 text-slate-400 cursor-not-allowed'
                                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                                     }`}
                                   >
-                                    {timeLabel}
+                                    <span className={isDisabled ? 'line-through text-slate-300 text-sm' : 'text-sm'}>{timeLabel}</span>
+                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">Đã kín</span>}
                                     {isVipBooked && (
                                       <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
                                         <Sparkles className="w-3 h-3" />
@@ -2173,15 +2174,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     type="button"
                                     disabled={isDisabled}
                                     onClick={() => setSelectedTime(timeLabel)}
-                                    className={`relative px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                                    className={`relative flex flex-col items-center justify-center min-w-[76px] h-[54px] rounded-xl border font-semibold transition-all duration-200 ${
                                       isSelected
                                         ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/10 scale-105'
                                         : isDisabled
-                                          ? 'border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
+                                          ? 'border-slate-50 bg-slate-50 text-slate-400 cursor-not-allowed'
                                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                                     }`}
                                   >
-                                    {timeLabel}
+                                    <span className={isDisabled ? 'line-through text-slate-300 text-sm' : 'text-sm'}>{timeLabel}</span>
+                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">Đã kín</span>}
                                     {isVipBooked && (
                                       <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
                                         <Sparkles className="w-3 h-3" />
