@@ -191,6 +191,7 @@ function buildRevenueFacet() {
             _id: 1,
             totalRevenue: 1,
             bookingsCount: 1,
+            'vehicle._id': 1,
             'vehicle.licensePlate': 1,
             'vehicle.brand': 1,
             'vehicle.model': 1,
