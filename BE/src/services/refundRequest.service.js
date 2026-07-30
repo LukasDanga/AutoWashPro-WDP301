@@ -1,5 +1,6 @@
 const { RefundRequest, Booking, User, Branch } = require('../models');
 const paymentService = require('./payment.service');
+const loyaltyService = require('./loyalty.service');
 const notificationService = require('./notification.service');
 const sseService = require('./sse.service');
 
@@ -195,6 +196,7 @@ exports.reviewRequest = async (id, reviewerId, decision, reviewNote) => {
 
   if (decision === 'approved') {
     await paymentService.refundPayment(bookingId);
+    await loyaltyService.deductPointsForCancelledBooking(bookingId, request.reason || 'Hoàn tiền qua yêu cầu');
   } else {
     notificationService.send(
       request.userId,

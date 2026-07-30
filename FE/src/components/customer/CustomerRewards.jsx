@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import TierBadge from '@/components/ui/TierBadge';
 import { confirmDialog } from '@/lib/confirm';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import useSSE from '@/hooks/useSSE';
 
 const apiBase = getApiBaseUrl();
 const token = getStoredToken();
@@ -152,6 +153,8 @@ export default function CustomerRewards({ user, refreshUser }) {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
+  useSSE(token, 'points_updated', () => { fetchHistory(); refreshUser?.(); });
+
   const fetchVouchers = async () => {
     try {
       const resTpl = await api('/vouchers/available');
@@ -239,7 +242,7 @@ export default function CustomerRewards({ user, refreshUser }) {
             </div>
             <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 flex-1">
               <p className="text-xs text-slate-500">Tổng đã đổi</p>
-              <p className="text-lg font-extrabold text-amber-700">-{formatCurrency(summary.totalRedeemed)}</p>
+              <p className="text-lg font-extrabold text-amber-700">{summary.totalRedeemed > 0 ? '-' : ''}{formatCurrency(summary.totalRedeemed)}</p>
             </div>
           </div>
           <PointHistoryTable items={history} loading={loading} page={page} pagination={pagination} setPage={setPage} navigate={navigate} emptyMsg="Chưa có lịch sử điểm thưởng" activeTab={activeTab} />

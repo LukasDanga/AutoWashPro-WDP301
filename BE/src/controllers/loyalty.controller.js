@@ -42,8 +42,24 @@ exports.getMyPointHistory = catchAsync(async (req, res, next) => {
     {
       $group: {
         _id: null,
-        totalEarned: { $sum: { $cond: [{ $eq: ['$type', 'earned'] }, '$points', 0] } },
-        totalRedeemed: { $sum: { $cond: [{ $in: ['$type', ['redeemed', 'expired']] }, { $abs: '$points' }, 0] } },
+        totalEarned: {
+          $sum: {
+            $cond: [
+              { $in: ['$type', ['earned', 'adjustment']] },
+              { $cond: [{ $gt: ['$points', 0] }, '$points', 0] },
+              0,
+            ],
+          },
+        },
+        totalRedeemed: {
+          $sum: {
+            $cond: [
+              { $in: ['$type', ['redeemed', 'expired', 'adjustment']] },
+              { $cond: [{ $lt: ['$points', 0] }, { $abs: '$points' }, 0] },
+              0,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -196,12 +212,20 @@ exports.getPointHistoryAdmin = catchAsync(async (req, res, next) => {
         _id: null,
         totalEarned: {
           $sum: {
-            $cond: [{ $eq: ['$type', 'earned'] }, '$points', 0],
+            $cond: [
+              { $in: ['$type', ['earned', 'adjustment']] },
+              { $cond: [{ $gt: ['$points', 0] }, '$points', 0] },
+              0,
+            ],
           },
         },
         totalRedeemed: {
           $sum: {
-            $cond: [{ $in: ['$type', ['redeemed', 'expired']] }, { $abs: '$points' }, 0],
+            $cond: [
+              { $in: ['$type', ['redeemed', 'expired', 'adjustment']] },
+              { $cond: [{ $lt: ['$points', 0] }, { $abs: '$points' }, 0] },
+              0,
+            ],
           },
         },
       },
