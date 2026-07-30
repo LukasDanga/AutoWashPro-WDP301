@@ -13,15 +13,16 @@ function startReminderJob() {
       const soon = new Date(now.getTime() + 60 * 60 * 1000);   // +60 min
       const soonEnd = new Date(now.getTime() + 65 * 60 * 1000); // +65 min
 
-      // Get today date string for matching bookingDate
-      const todayStr = now.toISOString().split('T')[0];
+      // Lấy ngày hiện tại theo giờ Việt Nam
+      const vnTime = new Date(now.getTime() + 7 * 3600 * 1000);
+      const todayStr = vnTime.toISOString().split('T')[0];
+      
+      const gte = new Date(`${todayStr}T00:00:00.000+07:00`);
+      const lte = new Date(`${todayStr}T23:59:59.999+07:00`);
 
       const bookings = await Booking.find({
         status: { $in: ['pending', 'checked_in'] },
-        bookingDate: {
-          $gte: new Date(todayStr),
-          $lt: new Date(todayStr + 'T23:59:59Z'),
-        },
+        bookingDate: { $gte: gte, $lte: lte },
       }).populate('branchId', 'name').populate('vehicleId', 'licensePlate');
 
       for (const b of bookings) {
@@ -29,8 +30,11 @@ function startReminderJob() {
         const [hh, mm] = (b.startTime || '').split(':').map(Number);
         if (isNaN(hh) || isNaN(mm)) continue;
 
-        const bookingStart = new Date(b.bookingDate);
-        bookingStart.setHours(hh, mm, 0, 0);
+        // Do bookingDate có thể lưu dưới dạng UTC hoặc VN time, ta lấy phần ngày VN:
+        const bTimeVN = new Date(b.bookingDate.getTime() + 7 * 3600 * 1000);
+        const bDateStr = bTimeVN.toISOString().split('T')[0];
+        
+        const bookingStart = new Date(`${bDateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+07:00`);
 
         if (bookingStart >= soon && bookingStart < soonEnd) {
           const plate = b.vehicleId?.licensePlate || '';

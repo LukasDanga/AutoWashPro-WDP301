@@ -221,7 +221,7 @@ export default function SettingsScreen() {
               title="Xuất dữ liệu"
               subtitle="Tải về dữ liệu của bạn"
               showDivider={false}
-              onPress={() => {}}
+              onPress={() => { }}
             />
           </View>
         </View>
@@ -265,13 +265,13 @@ export default function SettingsScreen() {
               trailingText={version}
               showChevron={false}
               showDivider
-              onPress={() => {}}
+              onPress={() => { }}
             />
             <ListItem
               leadingIcon="star-outline"
               title="Đánh giá ứng dụng"
               showDivider
-              onPress={() => {}}
+              onPress={() => { }}
             />
             <ListItem
               leadingIcon="chatbubble-outline"

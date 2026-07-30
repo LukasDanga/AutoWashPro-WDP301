@@ -76,18 +76,36 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [spCanAdvance, setSpCanAdvance] = useState(false);
 
   const defaultGuestVehicle = { licensePlate: '', brand: '', model: '', type: 'sedan' };
-  // Selections (initialized from sessionStorage to avoid timing race with auto-select effects)
-  const [selectedBranch, setSelectedBranch] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedBranch) return p.selectedBranch; } } catch {} return null; });
-  const [selectedVehicle, setSelectedVehicle] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedVehicle) return p.selectedVehicle; } } catch {} return ''; });
-  const [selectedPackage, setSelectedPackage] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedPackage) return p.selectedPackage; } } catch {} return null; });
-  const [selectedSubServices, setSelectedSubServices] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedSubServices && Object.keys(p.selectedSubServices).length) return p.selectedSubServices; } } catch {} return {}; });
-  const [selectedDate, setSelectedDate] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedDate) return p.selectedDate; } } catch {} return bookingDates[1]?.id || bookingDates[0]?.id; });
-  const [selectedTime, setSelectedTime] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedTime) return p.selectedTime; } } catch {} return ''; });
-  const [selectedDays, setSelectedDays] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedDays && p.selectedDays.length) return p.selectedDays; } } catch {} return []; });
-  const [weeks, setWeeks] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.weeks) return p.weeks; } } catch {} return 4; });
-  const [appliedVoucher, setAppliedVoucher] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.appliedVoucher) return p.appliedVoucher; } } catch {} return null; });
-  const [selectedSlotPack, setSelectedSlotPack] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.selectedSlotPack) return p.selectedSlotPack; } } catch {} return null; });
-  const [guestVehicle, setGuestVehicle] = useState(() => { try { const s = sessionStorage.getItem('aw_booking_state'); if (s) { const p = JSON.parse(s); if (p.guestVehicle?.licensePlate) return p.guestVehicle; } } catch {} return defaultGuestVehicle; });
+
+  const getSavedBookingState = () => {
+    try {
+      const s = sessionStorage.getItem('aw_booking_state');
+      if (!s) return null;
+      const p = JSON.parse(s);
+      if (!p.savedAt || (Date.now() - p.savedAt > 3 * 60 * 1000)) {
+        sessionStorage.removeItem('aw_booking_state');
+        sessionStorage.removeItem('aw_bookingDraft');
+        return null;
+      }
+      return p;
+    } catch {
+      return null;
+    }
+  };
+
+  const initialBookingState = getSavedBookingState();
+  // Selections (initialized from sessionStorage with 3 min expiration check)
+  const [selectedBranch, setSelectedBranch] = useState(() => initialBookingState?.selectedBranch || null);
+  const [selectedVehicle, setSelectedVehicle] = useState(() => initialBookingState?.selectedVehicle || '');
+  const [selectedPackage, setSelectedPackage] = useState(() => initialBookingState?.selectedPackage || null);
+  const [selectedSubServices, setSelectedSubServices] = useState(() => (initialBookingState?.selectedSubServices && Object.keys(initialBookingState.selectedSubServices).length) ? initialBookingState.selectedSubServices : {});
+  const [selectedDate, setSelectedDate] = useState(() => initialBookingState?.selectedDate || bookingDates[1]?.id || bookingDates[0]?.id);
+  const [selectedTime, setSelectedTime] = useState(() => initialBookingState?.selectedTime || '');
+  const [selectedDays, setSelectedDays] = useState(() => initialBookingState?.selectedDays || []);
+  const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 4);
+  const [appliedVoucher, setAppliedVoucher] = useState(() => initialBookingState?.appliedVoucher || null);
+  const [selectedSlotPack, setSelectedSlotPack] = useState(() => initialBookingState?.selectedSlotPack || null);
+  const [guestVehicle, setGuestVehicle] = useState(() => initialBookingState?.guestVehicle?.licensePlate ? initialBookingState.guestVehicle : defaultGuestVehicle);
 
   // Guest vehicle form
   const [vehicleError, setVehicleError] = useState('');
@@ -95,10 +113,28 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   useEffect(() => { syncUrlParam('step', step > 1 ? String(step) : ''); }, [step]);
   useEffect(() => { syncUrlParam('tab', tab !== 'regular' ? tab : ''); }, [tab]);
 
-  // Persist to sessionStorage on every meaningful change (step >= 2)
+  // Auto-expire saved booking state after 3 minutes of inactivity
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const s = sessionStorage.getItem('aw_booking_state');
+      if (s) {
+        try {
+          const p = JSON.parse(s);
+          if (!p.savedAt || (Date.now() - p.savedAt > 3 * 60 * 1000)) {
+            sessionStorage.removeItem('aw_booking_state');
+            sessionStorage.removeItem('aw_bookingDraft');
+            setStep(1);
+          }
+        } catch {}
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Persist to sessionStorage on every meaningful change (step >= 2) with timestamp
   useEffect(() => {
     if (step < 2) return;
-    const toSave = { selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle };
+    const toSave = { selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle, savedAt: Date.now() };
     try { sessionStorage.setItem('aw_booking_state', JSON.stringify(toSave)); } catch {}
   }, [step, selectedBranch, selectedVehicle, selectedPackage, selectedSubServices, selectedDate, selectedTime, selectedDays, weeks, appliedVoucher, selectedSlotPack, guestVehicle]);
 
@@ -2835,15 +2871,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </p>
 
                 {/* Lucky Spin Notification */}
-                <div className="mt-5 p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 flex items-start sm:items-center gap-3 text-left shadow-inner shadow-white">
-                  <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center text-orange-600 shadow-sm border border-amber-200/50">
-                    <Sparkles className="w-5 h-5" />
+                {(lastBooking.paymentMode === 'full' || lastBooking.isPayingWithPack) && (
+                  <div className="mt-5 p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 flex items-start sm:items-center gap-3 text-left shadow-inner shadow-white">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center text-orange-600 shadow-sm border border-amber-200/50">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="p-6 space-y-4 overflow-y-auto flex-1">

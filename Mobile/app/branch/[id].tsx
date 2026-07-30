@@ -40,12 +40,15 @@ import { formatCurrency } from '../../src/utils';
 import { InAppDirectionsModal } from '../../src/components/common/InAppDirectionsModal';
 import { DirectionsOptionModal } from '../../src/components/common/DirectionsOptionModal';
 import type { Branch, Package } from '../../src/types';
+import { useTranslation } from 'react-i18next';
+import { translateDynamicText } from '../../src/utils';
 
 export default function BranchDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const styles = createStyles(colors);
+  const { i18n } = useTranslation();
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [packages, setPackages] = useState<Package[]>([]);
@@ -147,7 +150,7 @@ export default function BranchDetailScreen() {
 
   return (
     <ScreenContainer edges={['top']} background="subtle">
-      <Header title={branch.name} showBack />
+      <Header title={translateDynamicText(branch.name, i18n.language)} showBack />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -170,7 +173,7 @@ export default function BranchDetailScreen() {
             Chi nhánh
           </AppText>
           <AppText variant="h2" style={styles.heroName} numberOfLines={2}>
-            {branch.name}
+            {translateDynamicText(branch.name, i18n.language)}
           </AppText>
           {branch.status === 'active' ? (
             <View
@@ -230,10 +233,11 @@ export default function BranchDetailScreen() {
         <Card style={styles.infoCard}>
           <InfoRow
             icon={Icons.locationOutline}
-            label="Địa chỉ"
-            value={branch.address}
+            label="Address"
+            value={translateDynamicText(branch.address, i18n.language)}
             onPress={handleDirections}
             valueColor={colors.primary}
+            styles={styles}
           />
           {branch.phone ? (
             <InfoRow
@@ -242,6 +246,7 @@ export default function BranchDetailScreen() {
               value={branch.phone}
               onPress={handleCall}
               valueColor={colors.primary}
+              styles={styles}
             />
           ) : null}
           <InfoRow
@@ -249,15 +254,17 @@ export default function BranchDetailScreen() {
             label="Giờ hoạt động"
             value={`${branch.openingTime || '06:00'} - ${branch.closingTime || '22:00'}`}
             last
+            styles={styles}
           />
           {branch.description ? (
             <>
               <View style={[styles.divider, { backgroundColor: colors.divider }]} />
               <InfoRow
                 icon={Icons.documentOutline}
-                label="Mô tả"
-                value={branch.description}
+                label="Description"
+                value={translateDynamicText(branch.description || '', i18n.language)}
                 last
+                styles={styles}
               />
             </>
           ) : null}
@@ -286,7 +293,7 @@ export default function BranchDetailScreen() {
                     </View>
                     <View style={styles.packageInfo}>
                       <AppText variant="body" style={styles.packageName} numberOfLines={1}>
-                        {pkg.name}
+                        {translateDynamicText(pkg.name, i18n.language)}
                       </AppText>
                       <View style={styles.packageMeta}>
                         <View style={styles.metaItem}>
@@ -416,7 +423,7 @@ interface InfoRowProps {
   last?: boolean;
 }
 
-const InfoRow: React.FC<InfoRowProps> = ({ icon, label, value, onPress, valueColor, last }) => {
+const InfoRow: React.FC<InfoRowProps & { styles: any }> = ({ icon, label, value, onPress, valueColor, last, styles }) => {
   const colors = useColors();
   return (
     <View>

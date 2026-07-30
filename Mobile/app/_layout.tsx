@@ -21,6 +21,7 @@ import { View, ActivityIndicator } from 'react-native';
 GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'YOUR_WEB_CLIENT_ID',
 });
+import '../src/i18n';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { NotificationProvider } from '../src/contexts/NotificationContext';
 import { BookingProvider } from '../src/contexts/BookingContext';

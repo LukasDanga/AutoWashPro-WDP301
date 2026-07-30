@@ -3,7 +3,7 @@
  * Global notification state management
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { notificationApi } from '../api';
 import { sseService } from '../services/sse';
 import { useAuth } from './AuthContext';
@@ -33,6 +33,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Keep latest userId accessible without making it a state/effect dep
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?._id || null;
+
   // Fetch initial notifications
   const refreshNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -43,9 +47,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         notificationApi.getNotifications({ limit: 50 }),
         notificationApi.getUnreadCount(),
       ]);
-      const list = listRes.notifications || [];
+      const list = listRes?.notifications || (Array.isArray(listRes) ? listRes : []);
       setNotifications(list);
-      setUnreadCount(unreadRes.unread ?? list.filter(n => !n.isRead).length);
+      const computedUnread = typeof unreadRes?.unread === 'number'
+        ? unreadRes.unread
+        : list.filter((n: any) => !n.isRead).length;
+      setUnreadCount(computedUnread);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -53,9 +60,25 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, [isAuthenticated]);
 
-  // Connect to SSE when authenticated
+  // Keep latest refreshNotifications ref so SSE subscriptions always call the latest version
+  // without needing to re-subscribe (which would cause re-render loops)
+  const refreshRef = useRef(refreshNotifications);
+  refreshRef.current = refreshNotifications;
+
+  // Cooldown flag to prevent cascading refreshes from SSE reconnect storms
+  const lastRefreshAtRef = useRef<number>(0);
+  const REFRESH_COOLDOWN_MS = 2000;
+
+  const throttledRefresh = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_COOLDOWN_MS) return;
+    lastRefreshAtRef.current = now;
+    refreshRef.current();
+  }, []);
+
+  // Connect to SSE/Socket when authenticated
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user?._id) {
       setNotifications([]);
       setUnreadCount(0);
       sseService.disconnect();
@@ -63,27 +86,30 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       return;
     }
 
-    refreshNotifications();
+    const userId = user._id;
 
-    // Open the SSE stream for this user.
-    sseService.connect(user._id).then(() => {
-      setIsConnected(sseService.isConnectedFn());
-    });
+    // Only connect if not already connected for this user
+    if (!sseService.isConnectedFn() || sseService.getCurrentUserId() !== userId) {
+      sseService.connect(userId).then(() => {
+        setIsConnected(sseService.isConnectedFn());
+      });
+    } else {
+      setIsConnected(true);
+    }
 
-    // The server-side SSE payload only contains { title, message, type } —
-    // no _id/isRead/createdAt. To avoid duplicate notifications in the list,
-    // we re-fetch the page whenever a new event arrives. The list itself
-    // stays in sync via refreshNotifications(); UI badges update instantly.
-    const unsubscribe = sseService.subscribe('notification', () => {
-      refreshNotifications();
-    });
+    // Subscribe ONLY to 'all' — internal emit() already forwards to both 'type' and 'all',
+    // so subscribing to a specific type plus 'all' would double-fire every event.
+    // sync_request events are skipped via cooldown above.
+    const unsubscribeAll = sseService.subscribe('all', throttledRefresh);
 
     return () => {
-      unsubscribe();
-      sseService.disconnect();
+      unsubscribeAll();
+      // Do NOT disconnect here — multiple providers may be listening.
+      // Set isConnected state to false but leave the socket alive.
       setIsConnected(false);
     };
-  }, [isAuthenticated, user, refreshNotifications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?._id]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {

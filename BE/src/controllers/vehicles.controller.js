@@ -15,27 +15,33 @@ exports.addVehicle = catchAsync(async (req, res) => {
     'vehicle_added',
     { vehicleId: vehicle._id }
   ).catch(err => console.error('Error sending vehicle notification:', err));
-  success(res, vehicle, 'Vehicle added', 201);
+  success(res, vehicle, 'Thêm xe thành công', 201);
 });
 
 exports.getMyVehicles = catchAsync(async (req, res) => {
   const vehicles = await vehicleService.getMyVehicles(req.userId);
-  success(res, vehicles, 'Vehicles retrieved');
+  success(res, vehicles, 'Đã lấy danh sách xe');
+});
+
+exports.getVehiclesByUserId = catchAsync(async (req, res) => {
+  const { userId } = req.params;
+  const vehicles = await vehicleService.getVehiclesByUserId(userId);
+  success(res, vehicles, 'Đã lấy danh sách xe');
 });
 
 exports.getVehicleById = catchAsync(async (req, res) => {
   const vehicle = await vehicleService.getVehicleById(req.params.id, req.userId);
-  success(res, vehicle, 'Vehicle retrieved');
+  success(res, vehicle, 'Đã lấy thông tin xe');
 });
 
 exports.updateVehicle = catchAsync(async (req, res) => {
   const vehicle = await vehicleService.updateVehicle(req.params.id, req.userId, req.body);
   sseService.sendToUser(req.userId, SOCKET_EVENTS.MY_VEHICLES_UPDATED, {});
-  success(res, vehicle, 'Vehicle updated');
+  success(res, vehicle, 'Cập nhật xe thành công');
 });
 
 exports.deleteVehicle = catchAsync(async (req, res) => {
   await vehicleService.deleteVehicle(req.params.id, req.userId);
   sseService.sendToUser(req.userId, SOCKET_EVENTS.MY_VEHICLES_UPDATED, {});
-  success(res, null, 'Vehicle deleted');
+  success(res, null, 'Đã xóa xe');
 });

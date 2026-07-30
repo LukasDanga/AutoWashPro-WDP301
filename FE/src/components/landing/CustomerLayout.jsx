@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Calendar, CreditCard, Bell, Gift, LogOut, ChevronDown, Award, Wallet } from 'lucide-react';
+import { User, Calendar, CreditCard, Bell, Gift, LogOut, ChevronDown, Award, Wallet, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import Navbar from './Navbar';
+import useSSE from '../../hooks/useSSE';
 
 const TIER_BADGES = {
   diamond: { label: 'Kim cương', bg: 'bg-blue-50 text-blue-600 border-blue-200' },
@@ -20,6 +21,8 @@ const HISTORY_SUB_TABS = [
 export default function CustomerLayout({
   children,
   user,
+  apiBase,
+  token,
   onLogout,
   onOpenAuth,
   onGoToProfile,
@@ -30,6 +33,27 @@ export default function CustomerLayout({
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [latestTx, setLatestTx] = useState(null);
+
+  const fetchLatestTx = useCallback(async () => {
+    if (!token || !apiBase) return;
+    try {
+      const res = await fetch(`${apiBase}/wallet-transactions/my?limit=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const payload = await res.json();
+      const txList = payload?.data || [];
+      if (txList.length > 0) setLatestTx(txList[0]);
+    } catch {}
+  }, [apiBase, token]);
+
+  useEffect(() => {
+    fetchLatestTx();
+  }, [fetchLatestTx, user?.walletBalance]);
+
+  useSSE(token, 'wallet_topup_success', fetchLatestTx);
+  useSSE(token, 'wallet_updated', fetchLatestTx);
 
   const currentPath = location.pathname;
   const isHistoryPage = currentPath === '/history';
@@ -126,6 +150,18 @@ export default function CustomerLayout({
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold bg-blue-50 text-blue-700 border-blue-200">
                     <Wallet size={11} />
                     Ví: {(user?.walletBalance || 0).toLocaleString('vi-VN')}đ
+                    {latestTx && (
+                      <span className={`inline-flex items-center gap-0.5 ml-0.5 text-[10px] font-extrabold ${
+                        latestTx.type === 'credit' ? 'text-emerald-600' : 'text-red-500'
+                      }`}>
+                        {latestTx.type === 'credit' ? (
+                          <ArrowUpCircle size={10} className="stroke-[3]" />
+                        ) : (
+                          <ArrowDownCircle size={10} className="stroke-[3]" />
+                        )}
+                        {latestTx.type === 'credit' ? '+' : '-'}{latestTx.amount.toLocaleString('vi-VN')}đ
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

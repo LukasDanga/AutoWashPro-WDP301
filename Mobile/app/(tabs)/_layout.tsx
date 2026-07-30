@@ -19,10 +19,12 @@ import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius } from '../../src/theme/spacing';
 import { Icon, Icons } from '../../src/components/common/Icon';
+import { useTranslation } from 'react-i18next';
 
 export default function TabLayout() {
   const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   // Fire haptic on every tab press
   const handleTabPress = () => {
@@ -58,7 +60,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Trang chủ',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.home : Icons.homeOutline}
@@ -66,14 +68,14 @@ export default function TabLayout() {
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'Trang chủ',
-          tabBarLabel: 'Trang chủ',
+          tabBarAccessibilityLabel: t('tabs.home'),
+          tabBarLabel: t('tabs.home'),
         }}
       />
       <Tabs.Screen
         name="booking"
         options={{
-          title: 'Đặt lịch',
+          title: t('tabs.calendar'),
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.calendar : Icons.calendarOutline}
@@ -81,8 +83,8 @@ export default function TabLayout() {
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'Đặt lịch rửa xe',
-          tabBarLabel: 'Đặt lịch',
+          tabBarAccessibilityLabel: t('tabs.calendar'),
+          tabBarLabel: t('tabs.calendar'),
         }}
       />
       <Tabs.Screen
@@ -96,14 +98,14 @@ export default function TabLayout() {
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'QR Check-in',
-          tabBarLabel: 'Check-in',
+          tabBarAccessibilityLabel: t('tabs.checkin_accessibility'),
+          tabBarLabel: t('tabs.checkin'),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
-          title: 'Lịch sử',
+          title: t('tabs.history'),
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.list : Icons.listOutline}
@@ -111,14 +113,14 @@ export default function TabLayout() {
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'Lịch sử đặt lịch',
-          tabBarLabel: 'Lịch sử',
+          tabBarAccessibilityLabel: t('tabs.history'),
+          tabBarLabel: t('tabs.history'),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Tài khoản',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, focused }) => (
             <Icon
               name={focused ? Icons.person : Icons.personOutline}
@@ -126,8 +128,8 @@ export default function TabLayout() {
               color={color as string}
             />
           ),
-          tabBarAccessibilityLabel: 'Tài khoản cá nhân',
-          tabBarLabel: 'Tài khoản',
+          tabBarAccessibilityLabel: t('tabs.profile'),
+          tabBarLabel: t('tabs.profile'),
         }}
       />
       {/* Rewards screen kept accessible via deep-link but hidden from tab bar */}

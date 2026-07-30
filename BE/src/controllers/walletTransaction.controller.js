@@ -16,11 +16,12 @@ exports.getMyWalletTransactions = catchAsync(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
+      .populate('bookingId', 'bookingCode')
       .lean(),
     WalletTransaction.countDocuments(query),
   ]);
 
-  success(res, transactions, 'Wallet transactions retrieved successfully', 200, {
+  success(res, transactions, 'Đã lấy lịch sử giao dịch ví', 200, {
     page,
     limit,
     total,

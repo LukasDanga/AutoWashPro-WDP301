@@ -3,5 +3,5 @@ const { catchAsync, success } = require('../utils/helpers');
 
 exports.getPublicStats = catchAsync(async (req, res) => {
   const stats = await statsService.getPublicStats();
-  success(res, stats, 'Stats retrieved');
+  success(res, stats, 'Đã lấy số liệu thống kê');
 });

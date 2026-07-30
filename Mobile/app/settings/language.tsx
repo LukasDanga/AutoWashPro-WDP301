@@ -15,11 +15,11 @@ import {
   ListItem,
   Icon,
   Icons,
-  AlertDialog,
   useToast,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing } from '../../src/theme/spacing';
+import { useTranslation } from 'react-i18next';
 
 interface Language {
   code: string;
@@ -31,37 +31,25 @@ interface Language {
 const LANGUAGES: Language[] = [
   { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt', flag: 'VN' },
   { code: 'en', name: 'English', nativeName: 'English', flag: 'EN' },
-  { code: 'zh', name: 'Chinese', nativeName: '中文', flag: 'CN' },
 ];
 
 export default function LanguageScreen() {
   const colors = useColors();
   const toast = useToast();
-  const [selectedLanguage, setSelectedLanguage] = useState('vi');
+  const { t, i18n } = useTranslation();
+  
+  const selectedLanguage = i18n.language || 'vi';
 
   const handleSelect = (code: string) => {
     if (code === selectedLanguage) return;
 
-    setSelectedLanguage(code);
-
-    if (code === 'en') {
-      AlertDialog.info(
-        'Ngôn ngữ',
-        'English language support is coming soon!',
-      );
-    } else if (code === 'zh') {
-      AlertDialog.info(
-        'Ngôn ngữ',
-        'Hỗ trợ tiếng Trung sắp ra mắt!',
-      );
-    } else {
-      toast.success('Đã đổi ngôn ngữ', 'Ngôn ngữ hiển thị đã được cập nhật sang Tiếng Việt');
-    }
+    i18n.changeLanguage(code);
+    toast.success(t('language.changed_success_title'), t('language.changed_success_desc'));
   };
 
   return (
     <ScreenContainer scroll>
-      <Header showBack title="Ngôn ngữ" />
+      <Header showBack title={t('language.title')} />
 
       {/* Info Card */}
       <View style={styles.infoWrapper}>
@@ -69,10 +57,10 @@ export default function LanguageScreen() {
           <Icon name={Icons.globeOutline} size={32} color={colors.primary} />
           <View style={styles.infoContent}>
             <AppText variant="body" style={styles.infoTitle}>
-              Chọn ngôn ngữ
+              {t('language.choose_language')}
             </AppText>
             <AppText variant="bodySmall" color="textSecondary">
-              Thay đổi ngôn ngữ hiển thị trong ứng dụng
+              {t('language.change_language_desc')}
             </AppText>
           </View>
         </Card>
@@ -81,7 +69,7 @@ export default function LanguageScreen() {
       {/* Language List */}
       <View style={styles.section}>
         <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
-          Ngôn ngữ có sẵn
+          {t('language.available_languages')}
         </AppText>
         <Card padding={0}>
           {LANGUAGES.map((lang, index) => (
@@ -114,10 +102,10 @@ export default function LanguageScreen() {
           <Icon name={Icons.bulbOutline} size={24} color={colors.warning} />
           <View style={styles.noteContent}>
             <AppText variant="bodySmall" style={[styles.noteTitle, { color: colors.warning }]}>
-              Lưu ý
+              {t('language.note')}
             </AppText>
             <AppText variant="caption" color="textSecondary">
-              Hiện tại ứng dụng chỉ hỗ trợ Tiếng Việt. Các ngôn ngữ khác đang được phát triển và sẽ sớm có sẵn.
+              {t('language.note_desc')}
             </AppText>
           </View>
         </Card>

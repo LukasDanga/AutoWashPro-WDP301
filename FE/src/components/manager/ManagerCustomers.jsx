@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Users, MagnifyingGlass, ArrowClockwise } from '@phosphor-icons/react';
+import { Users, MagnifyingGlass, ArrowClockwise, Car, CurrencyCircleDollar } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
 function api(path) {
@@ -20,6 +20,7 @@ export default function ManagerCustomers() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
+  const [customerDetail, setCustomerDetail] = useState(null);
   const debounce = useRef(null);
 
   const fetchCustomers = useCallback(async (q = search, tier = tierFilter, pg = 1) => {
@@ -110,12 +111,13 @@ export default function ManagerCustomers() {
                     <th className="px-6 py-4 font-semibold text-center">Số lần đặt</th>
                     <th className="px-6 py-4 font-semibold text-right">Tổng chi tiêu</th>
                     <th className="px-6 py-4 font-semibold text-right">Ngày đặt gần nhất</th>
+                    <th className="px-6 py-4 font-semibold text-center">Chi tiết</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {customers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                      <td colSpan={7} className="py-12 text-center text-muted-foreground">
                         <Users size={36} weight="thin" className="mx-auto mb-2 text-slate-300" />
                         Không tìm thấy khách hàng nào.
                       </td>
@@ -158,6 +160,11 @@ export default function ManagerCustomers() {
                         <td className="px-6 py-4 text-right text-muted-foreground">
                           {c.lastBookingDate ? new Date(c.lastBookingDate).toLocaleDateString('vi-VN') : '—'}
                         </td>
+                        <td className="px-6 py-4 text-center">
+                          <button onClick={() => setCustomerDetail(c)} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold transition-colors whitespace-nowrap">
+                            Xem chi tiết
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -195,6 +202,115 @@ export default function ManagerCustomers() {
           )}
         </>
       )}
+
+      {customerDetail && <CustomerDetailModal customer={customerDetail} onClose={() => setCustomerDetail(null)} />}
+    </div>
+  );
+}
+
+function CustomerDetailModal({ customer, onClose }) {
+  const user = customer?.user;
+  const [tab, setTab] = useState('info');
+
+  if (!customer) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="p-6 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
+                {(user?.name || '?').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-900">{user?.name || 'Khách vãng lai'}</p>
+                <p className="text-sm text-slate-500">{user?.phone || '—'} {user?.tier && <TierBadge tier={user.tier} />}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200 mb-5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Tổng chi tiêu</p>
+              <p className="text-xl font-bold text-emerald-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(customer.totalSpent || 0)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Đã đặt</p>
+              <p className="text-xl font-bold text-slate-700">{customer.totalBookings} lượt</p>
+            </div>
+          </div>
+        </div>
+
+        {user ? (
+          <>
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mx-6 mb-5">
+              {['info', 'benefits', 'vehicles', 'wallet'].map(t => (
+                <button key={t} onClick={() => setTab(t)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}>
+                  {t === 'info' ? 'Thông tin' : t === 'benefits' ? 'Ưu đãi hạng' : t === 'vehicles' ? 'Xe' : 'Ví'}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-6 pb-6 space-y-4">
+              {tab === 'info' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Tên</p><p className="text-sm font-medium text-slate-800 mt-1">{user.name || '—'}</p></div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Email</p><p className="text-sm font-medium text-slate-800 mt-1">{user.email || '—'}</p></div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Số điện thoại</p><p className="text-sm font-medium text-slate-800 mt-1">{user.phone || '—'}</p></div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200"><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Ngày tham gia</p><p className="text-sm font-medium text-slate-800 mt-1">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '—'}</p></div>
+                </div>
+              )}
+              {tab === 'benefits' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Hạng thành viên</p><p className="text-sm font-bold text-slate-800 mt-1 capitalize">{user.tier || 'Standard'}</p></div>
+                    {user.tier && <TierBadge tier={user.tier} />}
+                  </div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Điểm tích lũy</p><p className="text-sm font-bold text-slate-800 mt-1">{user.loyaltyPoints || 0}</p></div>
+                    <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 font-bold">{user.loyaltyPoints || 0}</div>
+                  </div>
+                </div>
+              )}
+              {tab === 'vehicles' && (
+                <div className="space-y-2">
+                  {customer.vehicles && customer.vehicles.length > 0 ? (
+                    customer.vehicles.map((v, i) => (
+                      <div key={v._id || i} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Car size={18} /></div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-800 uppercase">{v.licensePlate || '—'}</p>
+                          <p className="text-xs text-slate-500 capitalize">{v.vehicleType} · {v.brand} {v.model}</p>
+                        </div>
+                        {v.isDefault && <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Mặc định</span>}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-sm text-slate-400 py-6">Không có xe nào</div>
+                  )}
+                </div>
+              )}
+              {tab === 'wallet' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Số dư ví</p><p className="text-sm font-bold text-slate-800 mt-1">{(user.walletBalance || 0).toLocaleString('vi-VN')}đ</p></div>
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500"><CurrencyCircleDollar size={20} weight="duotone" /></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="px-6 pb-6 text-center text-sm text-slate-400 py-8">Không có thông tin người dùng</div>
+        )}
+      </div>
     </div>
   );
 }

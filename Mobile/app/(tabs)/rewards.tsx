@@ -16,6 +16,7 @@ import {
   LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { voucherApi, giftApi } from '../../src/api';
@@ -35,15 +36,15 @@ import {
 import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius, shadows, layout } from '../../src/theme/spacing';
-import { formatCurrency } from '../../src/utils';
+import { formatCurrency, translateDynamicText } from '../../src/utils';
 import type { Voucher, UserVoucher, UserTier, Gift } from '../../src/types';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 type TabKey = 'available' | 'my';
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'available', label: 'Mã giảm giá', icon: Icons.giftOutline },
-  { key: 'my',        label: 'Của tôi',      icon: Icons.bookmarkOutline },
+const TABS: { key: TabKey; translationKey: string; icon: string }[] = [
+  { key: 'available', translationKey: 'rewards.tab_available', icon: Icons.giftOutline },
+  { key: 'my',        translationKey: 'rewards.tab_my',      icon: Icons.bookmarkOutline },
 ];
 
 const TIERS: UserTier[] = ['bronze', 'silver', 'gold', 'diamond'];
@@ -89,6 +90,7 @@ function formatDate(dateStr?: string) {
 
 // ─── CouponTab Segmented Control ───────────────────────────────────────────────
 const CouponTabs: React.FC<{ value: TabKey; onChange: (v: TabKey) => void }> = ({ value, onChange }) => {
+  const { t } = useTranslation();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [tabWidth, setTabWidth] = useState(0);
   const activeIndex = TABS.findIndex((t) => t.key === value);
@@ -121,7 +123,7 @@ const CouponTabs: React.FC<{ value: TabKey; onChange: (v: TabKey) => void }> = (
             accessibilityState={{ selected: isActive }}
           >
             <Icon name={tab.icon} size={18} color={isActive ? '#10B981' : '#94A3B8'} />
-            <Text style={[ctab.label, isActive && ctab.labelActive]}>{tab.label}</Text>
+            <Text style={[ctab.label, isActive && ctab.labelActive]}>{t(tab.translationKey as any)}</Text>
           </Pressable>
         );
       })}
@@ -267,6 +269,7 @@ const RewardHeroCard: React.FC<{
   onRedeem: () => void;
   onSpin: () => void;
 }> = ({ tier, points, pointsToNext, onRedeem, onSpin }) => {
+  const { t } = useTranslation();
   const colors = useColors();
   return (
     <LinearGradient
@@ -281,7 +284,7 @@ const RewardHeroCard: React.FC<{
 
       {/* Top row: label + badge */}
       <View style={hero.topRow}>
-        <Text style={hero.cardLabel}>Điểm tích lũy</Text>
+        <Text style={hero.cardLabel}>{t('rewards.loyalty_points')}</Text>
         <TierBadge tier={tier} />
       </View>
 
@@ -289,7 +292,7 @@ const RewardHeroCard: React.FC<{
       <View style={hero.pointsRow}>
         <Icon name={Icons.star} size={28} color="#FFFFFF" style={{ marginTop: 2 }} />
         <Text style={hero.pointsValue}>{points.toLocaleString('vi-VN')}</Text>
-        <Text style={hero.pointsUnit}>điểm</Text>
+        <Text style={hero.pointsUnit}>{t('rewards.points')}</Text>
       </View>
 
       {/* Progress */}
@@ -297,22 +300,22 @@ const RewardHeroCard: React.FC<{
         <>
           <ProgressBar progress={pointsToNext.progress} />
           <Text style={hero.hint}>
-            Còn {pointsToNext.remaining.toLocaleString('vi-VN')} điểm để lên hạng {nextTier(tier)}
+            {t('rewards.points_to_next', { points: pointsToNext.remaining.toLocaleString('vi-VN'), tier: nextTier(tier) })}
           </Text>
         </>
       )}
       {!pointsToNext && (
-        <Text style={hero.hint}>Bạn đang ở hạng cao nhất — tận hưởng đặc quyền Diamond ✦</Text>
+        <Text style={hero.hint}>{t('rewards.max_tier_msg')}</Text>
       )}
 
       {/* Redeem CTA */}
       <PressableScale
         style={hero.redeemBtn}
         onPress={onRedeem}
-        accessibilityLabel="Đổi điểm lấy voucher"
+        accessibilityLabel={t('rewards.redeem_points')}
       >
         <Icon name={Icons.refreshOutline} size={18} color={colors.primary} />
-        <Text style={[hero.redeemText, { color: colors.primary }]}>Đổi điểm lấy voucher</Text>
+        <Text style={[hero.redeemText, { color: colors.primary }]}>{t('rewards.redeem_points')}</Text>
         <Icon name={Icons.forward} size={16} color={colors.primary} />
       </PressableScale>
 
@@ -320,10 +323,10 @@ const RewardHeroCard: React.FC<{
       <PressableScale
         style={[hero.redeemBtn, hero.spinBtn]}
         onPress={onSpin}
-        accessibilityLabel="Vòng quay may mắn"
+        accessibilityLabel={t('rewards.lucky_spin')}
       >
         <Icon name={Icons.sparkle} size={18} color="#FFFFFF" />
-        <Text style={[hero.redeemText, hero.spinBtnText]}>Vòng quay may mắn</Text>
+        <Text style={[hero.redeemText, hero.spinBtnText]}>{t('rewards.lucky_spin')}</Text>
         <Icon name={Icons.forward} size={16} color="#FFFFFF" />
       </PressableScale>
     </LinearGradient>
@@ -468,7 +471,13 @@ const VoucherCard: React.FC<{
   isRedeemable?: boolean;
   onPress: () => void;
 }> = ({ voucher, tier, isRedeemable, onPress }) => {
+  const { t, i18n } = useTranslation();
   const colors = useColors();
+
+  const code = voucher.code || '';
+  const name = translateDynamicText(voucher.name || code || 'Voucher', i18n.language);
+  const description = translateDynamicText(voucher.description || '', i18n.language);
+  
   return (
     <PressableScale
       onPress={onPress}
@@ -492,7 +501,7 @@ const VoucherCard: React.FC<{
           >
             {formatDiscountBadge(voucher.type, voucher.value)}
           </Text>
-          <Text style={vc.discountLabel}>GIẢM</Text>
+          <Text style={vc.discountLabel}>{t('rewards.discount')}</Text>
           {/* Perforation notches */}
           <View style={[vc.notchTop, { backgroundColor: colors.background }]} />
           <View style={[vc.notchBottom, { backgroundColor: colors.background }]} />
@@ -504,10 +513,10 @@ const VoucherCard: React.FC<{
         {/* Right: details */}
         <View style={vc.infoSection}>
           <Text style={vc.voucherName} numberOfLines={1}>
-            {voucher.name || voucher.code}
+            {name}
           </Text>
           <Text style={vc.description} numberOfLines={2}>
-            {voucher.description || `Mã: ${voucher.code}`}
+            {description || `Mã: ${voucher.code}`}
           </Text>
 
           {/* Meta row */}
@@ -516,13 +525,13 @@ const VoucherCard: React.FC<{
               {voucher.minOrder && voucher.minOrder > 0 ? (
                 <View style={vc.metaItem}>
                   <Icon name={Icons.cartOutline} size={12} color="#94A3B8" />
-                  <Text style={vc.metaText}>Tối thiểu {formatCurrency(voucher.minOrder)}</Text>
+                  <Text style={vc.metaText}>{t('rewards.min_order')} {formatCurrency(voucher.minOrder)}</Text>
                 </View>
               ) : null}
               {voucher.maxDiscount ? (
                 <View style={vc.metaItem}>
                   <Icon name={Icons.arrowUp} size={12} color="#94A3B8" />
-                  <Text style={vc.metaText}>Tối đa {formatCurrency(voucher.maxDiscount)}</Text>
+                  <Text style={vc.metaText}>{t('rewards.max_discount')} {formatCurrency(voucher.maxDiscount)}</Text>
                 </View>
               ) : null}
             </View>
@@ -532,10 +541,10 @@ const VoucherCard: React.FC<{
           <View style={vc.footer}>
             <View style={vc.expiryRow}>
               <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
-              <Text style={vc.expiry}>HSD: {formatDate(voucher.endDate)}</Text>
+              <Text style={vc.expiry}>{t('rewards.expires')} {formatDate(voucher.endDate)}</Text>
             </View>
             {isRedeemable && voucher.requiredPoints ? (
-              <Badge label={`${voucher.requiredPoints} điểm`} variant="warning" size="small" />
+              <Badge label={`${voucher.requiredPoints} ${t('rewards.points')}`} variant="warning" size="small" />
             ) : null}
           </View>
         </View>
@@ -548,14 +557,15 @@ const MyVoucherCard: React.FC<{
   voucher: UserVoucher;
   onPress: () => void;
 }> = ({ voucher, onPress }) => {
+  const rawV = voucher.voucherId || voucher;
+  const vObj = (typeof rawV === 'string' ? voucher : rawV) as any;
+
+  const { t, i18n } = useTranslation();
   const colors = useColors();
-  
-  const rawV = voucher as any;
-  const vObj = (rawV.voucherId && typeof rawV.voucherId === 'object') ? rawV.voucherId : rawV;
 
   const isUsed = !!(rawV.usedAt || rawV.isUsed || rawV.used || rawV.status === 'used');
   const code = vObj.code || rawV.code || '';
-  const name = vObj.name || code || 'Voucher';
+  const name = translateDynamicText(vObj.name || code || 'Voucher', i18n.language);
   const type = vObj.type || rawV.type || 'fixed';
   const value = vObj.value ?? rawV.discountAmount ?? rawV.value ?? 0;
   const endDate = vObj.endDate || rawV.endDate;
@@ -589,11 +599,11 @@ const MyVoucherCard: React.FC<{
         <View style={vc.infoSection}>
           <View style={vc.myVoucherHeader}>
             <Text style={vc.voucherName} numberOfLines={1}>{name}</Text>
-            <Badge label={isUsed ? 'Đã dùng' : 'Còn hạn'} variant={isUsed ? 'default' : 'success'} size="small" />
+            <Badge label={isUsed ? t('rewards.status_used') : t('rewards.status_valid')} variant={isUsed ? 'default' : 'success'} size="small" />
           </View>
           <Text style={vc.description} numberOfLines={1}>Mã: {code}</Text>
           {rawV.usedAt ? (
-            <Text style={vc.usedAt}>Đã dùng: {formatDate(rawV.usedAt)}</Text>
+            <Text style={vc.usedAt}>{t('rewards.used_at')} {formatDate(rawV.usedAt)}</Text>
           ) : null}
           <View style={vc.expiryRow}>
             <Icon name={Icons.timeOutline} size={13} color="#F59E0B" />
@@ -735,6 +745,7 @@ const vc = StyleSheet.create({
 export default function RewardsScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const { t, i18n } = useTranslation();
   const colors = useColors();
 
   const [activeTab, setActiveTab] = useState<TabKey>('available');
@@ -826,8 +837,8 @@ export default function RewardsScreen() {
       {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: colors.background }]}>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Ưu đãi</Text>
-          <Text style={styles.headerSubtitle}>Tích điểm, đổi quà và nhiều ưu đãi hấp dẫn</Text>
+          <Text style={styles.headerTitle}>{t('rewards.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('rewards.header_subtitle', 'Tích điểm, đổi quà và nhiều ưu đãi hấp dẫn')}</Text>
         </View>
         <PressableScale
           onPress={() => router.push({ pathname: '/voucher', params: { tab: 'my' } })}
@@ -860,7 +871,7 @@ export default function RewardsScreen() {
         />
 
         {/* ── Tier Selector ── */}
-        <SectionHeader title="Hạng thành viên" subtitle="Tích điểm để nâng hạng đặc quyền" />
+        <SectionHeader title={t('rewards.membership_tier')} subtitle={t('rewards.membership_desc')} />
         <TierSelector currentTier={tier} />
 
         {/* ── Prize Preview — shows the gifts the user can win on the wheel.
@@ -871,15 +882,15 @@ export default function RewardsScreen() {
         {gifts.length > 0 && (
           <>
             <SectionHeader
-              title="Phần thưởng vòng quay"
-              subtitle={`${gifts.length} giải đang chờ bạn`}
+              title={t('rewards.spin_rewards')}
+              subtitle={t('rewards.spin_desc', '{{count}} giải đang chờ bạn', { count: gifts.length })}
               action={
                 <PressableScale
                   onPress={() => router.push('/gifts/spin' as any)}
                   style={styles.viewAllBtn}
-                  accessibilityLabel="Mở vòng quay may mắn"
+                  accessibilityLabel={t('rewards.spin_now')}
                 >
-                  <Text style={[styles.viewAllText, { color: colors.primary }]}>Quay ngay</Text>
+                  <Text style={[styles.viewAllText, { color: colors.primary }]}>{t('rewards.spin_now')}</Text>
                   <Icon name={Icons.forward} size={14} color={colors.primary} />
                 </PressableScale>
               }
@@ -892,14 +903,16 @@ export default function RewardsScreen() {
               {gifts.map((g) => {
                 const isFixed = g.type === 'fixed';
                 const isPercent = g.type === 'percentage';
+                const translatedName = translateDynamicText(g.name || '', i18n.language);
+                const translatedDesc = translateDynamicText(g.description || '', i18n.language);
                 const labelText =
                   g.type === 'none'
-                    ? (g.name || 'May mắn')
+                    ? (translatedName || t('rewards.prize_lucky', 'May mắn'))
                     : isPercent
-                      ? `Giảm ${g.value}%`
+                      ? `${t('rewards.discount_prefix', 'Giảm')} ${g.value}%`
                       : isFixed
-                        ? `Giảm ${formatCurrency(g.value ?? 0).replace(/\s+/g, '')}`
-                        : (g.name || 'Phần thưởng');
+                        ? `${t('rewards.discount_prefix', 'Giảm')} ${formatCurrency(g.value ?? 0).replace(/\s+/g, '')}`
+                        : (translatedName || t('rewards.prize_label', 'Phần thưởng'));
                 const probability = typeof g.probability === 'number' ? g.probability : null;
                 const accent = g.color || colors.primary;
                 return (
@@ -910,19 +923,19 @@ export default function RewardsScreen() {
                     <View style={[styles.prizeAccent, { backgroundColor: accent }]} />
                     <View style={styles.prizeBody}>
                       <AppText variant="label" color="textTertiary" style={styles.prizeLabel}>
-                        Phần thưởng
+                        {t('rewards.prize_label')}
                       </AppText>
                       <AppText variant="h4" color="textPrimary" numberOfLines={1} style={styles.prizeTitle}>
                         {labelText}
                       </AppText>
                       {g.description ? (
                         <AppText variant="caption" color="textSecondary" numberOfLines={2} style={styles.prizeDesc}>
-                          {g.description}
+                          {translatedDesc}
                         </AppText>
                       ) : null}
                       {probability !== null ? (
                         <View style={[styles.probPill, { backgroundColor: `${accent}22` }]}>
-                          <Text style={[styles.probText, { color: accent }]}>Tỉ lệ {probability}%</Text>
+                          <Text style={[styles.probText, { color: accent }]}>{t('rewards.probability', { prob: probability })}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -935,14 +948,14 @@ export default function RewardsScreen() {
 
         {/* ── Coupon Section ── */}
         <SectionHeader
-          title="Voucher & Ưu đãi"
-          subtitle={activeTab === 'available' ? `${allAvailable.length} voucher khả dụng` : `${myVouchers.length} voucher của bạn`}
+          title={t('rewards.voucher_section_title')}
+          subtitle={activeTab === 'available' ? t('rewards.vouchers_available', { count: allAvailable.length }) : t('rewards.vouchers_my', { count: myVouchers.length })}
           action={
             <PressableScale
               onPress={() => router.push({ pathname: '/voucher', params: { tab: 'my' } })}
               style={styles.viewAllBtn}
             >
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>Xem tất cả</Text>
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>{t('rewards.view_all')}</Text>
               <Icon name={Icons.forward} size={14} color={colors.primary} />
             </PressableScale>
           }
@@ -968,8 +981,8 @@ export default function RewardsScreen() {
               <View style={styles.emptyWrapper}>
                 <EmptyState
                   iconName={Icons.voucherOutline}
-                  title="Không có voucher"
-                  message="Hiện tại không có voucher nào khả dụng"
+                  title={t('rewards.empty_available_title')}
+                  message={t('rewards.empty_available_msg')}
                 />
               </View>
             )
@@ -985,9 +998,9 @@ export default function RewardsScreen() {
             <View style={styles.emptyWrapper}>
               <EmptyState
                 iconName={Icons.voucherOutline}
-                title="Chưa có voucher"
-                message="Bạn chưa có voucher nào. Hãy đổi điểm để nhận voucher!"
-                actionLabel="Khám phá ưu đãi"
+                title={t('rewards.empty_my_title')}
+                message={t('rewards.empty_my_msg')}
+                actionLabel={t('rewards.explore_promos')}
                 onAction={() => setActiveTab('available')}
               />
             </View>

@@ -123,6 +123,12 @@ export const updateBooking = async (id: string, data: { startTime?: string; book
   return response.data;
 };
 
+// Update sub-services for an existing booking
+export const updateSubServices = async (id: string, subServices: string[]) => {
+  const response = await apiClient.patch(`/bookings/${id}/sub-services`, { subServices });
+  return response.data;
+};
+
 // Get booking QR code
 // BE returns { qrDataUrl, bookingId } — base64 PNG of the QR.
 // (Previously typed as `qrCode` which is undefined → QR rendering broken.)
@@ -146,6 +152,7 @@ export const bookingApi = {
   submitFeedback,
   rebookBooking,
   updateBooking,
+  updateSubServices,
   getBookingQR,
 };
 

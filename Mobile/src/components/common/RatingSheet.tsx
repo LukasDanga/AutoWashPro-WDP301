@@ -28,6 +28,7 @@ import { borderRadius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { Button } from './Button';
 import { Icon, Icons } from './Icon';
+import { sseService } from '../../services/sse';
 
 export interface RatingSheetProps {
   visible: boolean;
@@ -97,6 +98,7 @@ export const RatingSheet: React.FC<RatingSheetProps> = ({
     setError('');
     try {
       await onSubmit(rating, comment.trim());
+      sseService.emitBookingUpdate({ isRating: true });
     } catch (e: any) {
       setError(e?.message || 'Gửi đánh giá thất bại');
     } finally {
