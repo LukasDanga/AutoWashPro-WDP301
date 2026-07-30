@@ -9,6 +9,13 @@ const FALLBACK_REVIEWS = [
   { id: 't3', name: 'Nguyễn Văn An', location: 'AutoWash Pro Quận 7', content: 'Công nghệ rửa xe tiên tiến với bọt tuyết chuẩn quốc tế, bảo vệ nước sơn bóng của xe hiệu quả. Đặt lịch rất mượt mà.', rating: 5, color: 'violet' },
   { id: 't4', name: 'Trần Minh Tuấn', location: 'AutoWash Pro Cầu Giấy', content: 'Ceramic coating dọn xe cực kỳ bóng bẩy, nhân viên chu đáo hướng dẫn kỹ các lưu ý bảo vệ sơn xe rất tận tâm.', rating: 5, color: 'amber' },
   { id: 't5', name: 'Hoàng Thị Mai', location: 'AutoWash Pro Tân Bình', content: 'Giao diện Web trực quan. Giá cả minh bạch, chất lượng dọn dẹp xe tuyệt vời đến từng chi tiết nhỏ nhất. Sẽ quay lại.', rating: 5, color: 'rose' },
+  { id: 't6', name: 'Đặng Văn Hải', location: 'AutoWash Pro Bình Thạnh', content: 'Lần đầu tiên rửa xe ở AutoWash Pro, chất lượng làm sạch nội thất rất kỹ. Xe mình đi cả tuần bụi bẩn bám đầy, sau khi rửa xong sạch bong như mới.', rating: 5, color: 'emerald' },
+  { id: 't7', name: 'Vũ Thị Thanh', location: 'AutoWash Pro Đà Nẵng', content: 'Gói rửa cao cấp rất đáng tiền! Xe được chăm sóc từng chi tiết từ mâm, lốp cho đến nội thất bên trong. Nhân viên tư vấn nhiệt tình, thái độ chuyên nghiệp.', rating: 5, color: 'blue' },
+  { id: 't8', name: 'Bùi Quốc Bảo', location: 'AutoWash Pro Quận 2', content: 'Đặt lịch online nhanh gọn, tới là có chỗ ngay. Nhân viên kỹ thuật làm việc rất bài bản, có check list trước sau rõ ràng. Mình rất yên tâm.', rating: 5, color: 'violet' },
+  { id: 't9', name: 'Đỗ Thị Hồng', location: 'AutoWash Pro Tân Phú', content: 'Đội ngũ nhân viên thân thiện, không khí phòng chờ thoải mái. Chất lượng đánh bóng sơn vượt ngoài mong đợi, giá cả hợp lý. Cả nhà ai cũng khen.', rating: 5, color: 'amber' },
+  { id: 't10', name: 'Ngô Văn Phúc', location: 'AutoWash Pro Gò Vấp', content: 'Mua gói giặt nội thất cho xe 7 chỗ, kết quả rất ưng ý. Xe hết sạch mùi ẩm mốc, ghế da được dưỡng bóng đẹp. Chắc chắn sẽ quay lại thường xuyên.', rating: 5, color: 'rose' },
+  { id: 't11', name: 'Trương Thị Thu', location: 'AutoWash Pro Hà Nội', content: 'Web đặt lịch dễ dùng, chọn được khung giờ phù hợp. Nhân viên hỗ trợ tận nơi hướng dẫn tận tình. Dịch vụ rửa xe tại chỗ chu đáo, nhanh chóng.', rating: 5, color: 'emerald' },
+  { id: 't12', name: 'Phan Đức Duy', location: 'AutoWash Pro Hải Phòng', content: 'Chăm sóc khách hàng rất tốt, có nhắn tin nhắc lịch trước khi đến. Xe rửa xong sạch sẽ, thơm tho. Mình đã giới thiệu cho bạn bè và ai cũng hài lòng.', rating: 5, color: 'blue' },
 ];
 
 const MARQUEE_KEYFRAMES = `
