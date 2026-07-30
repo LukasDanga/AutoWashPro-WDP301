@@ -25,7 +25,7 @@ export default function DashboardShell({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         {header ? (
-          <header className="border-b border-border bg-card/80 px-6 py-4 backdrop-blur-sm">
+          <header className="border-b border-border bg-card/80 px-6 py-4 backdrop-blur-sm relative z-40">
             {header}
           </header>
         ) : null}
