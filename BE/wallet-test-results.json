@@ -6,9 +6,6 @@
     "success": true
   },
   {
-    "success": true
-  },
-  {
     "success": false,
     "error": "Số dư ví không đủ để thanh toán"
   },
@@ -24,14 +21,17 @@
     "success": true
   },
   {
+    "success": false,
+    "error": "Số dư ví không đủ để thanh toán"
+  },
+  {
+    "success": false,
+    "error": "Số dư ví không đủ để thanh toán"
+  },
+  {
     "success": true
   },
   {
-    "success": false,
-    "error": "Số dư ví không đủ để thanh toán"
-  },
-  {
-    "success": false,
-    "error": "Số dư ví không đủ để thanh toán"
+    "success": true
   }
 ]
