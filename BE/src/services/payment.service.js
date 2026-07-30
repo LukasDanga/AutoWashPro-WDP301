@@ -758,11 +758,15 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
     query.paymentType = filters.paymentType;
   }
   
-  if (filters.month) { // e.g. "2026-07"
-    const start = new Date(`${filters.month}-01T00:00:00.000Z`);
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + 1);
-    query.createdAt = { $gte: start, $lt: end };
+  if (filters.dateFrom || filters.dateTo) {
+    const dateFilter = {};
+    if (filters.dateFrom) dateFilter.$gte = new Date(filters.dateFrom);
+    if (filters.dateTo) {
+      const end = new Date(filters.dateTo);
+      end.setDate(end.getDate() + 1);
+      dateFilter.$lt = end;
+    }
+    query.createdAt = { ...query.createdAt, ...dateFilter };
   }
 
   const page = Math.max(1, parseInt(filters.page, 10) || 1);

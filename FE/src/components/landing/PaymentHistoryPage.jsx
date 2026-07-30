@@ -32,8 +32,8 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
   const [detailPayment, setDetailPayment] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterMonth, setFilterMonth] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState(null);
@@ -42,8 +42,8 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
     if (!token) return;
     setLoading(true);
     let url = `${apiBase || API_BASE}/payments/my?withStats=true&page=${page}&limit=10`;
-    if (filterStatus !== 'all') url += `&status=${filterStatus}`;
-    if (filterMonth) url += `&month=${filterMonth}`;
+    if (filterDateFrom) url += `&dateFrom=${filterDateFrom}`;
+    if (filterDateTo) url += `&dateTo=${filterDateTo}`;
 
     try {
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -70,7 +70,7 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
     }
   };
 
-  useEffect(() => { loadPayments(); }, [apiBase, token, filterStatus, filterMonth, page]);
+  useEffect(() => { loadPayments(); }, [apiBase, token, filterDateFrom, filterDateTo, page]);
 
   async function openDetail(payment) {
     setDetailPayment(null);
@@ -187,23 +187,22 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
           </div>
         </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
             <div className="flex-1">
-              <select
-                value={filterStatus}
-                onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+              <label className="block text-xs text-slate-500 mb-1">Từ ngày</label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }}
                 className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="paid">Thành công</option>
-                <option value="pending">Chờ thanh toán</option>
-              </select>
+              />
             </div>
             <div className="flex-1">
+              <label className="block text-xs text-slate-500 mb-1">Đến ngày</label>
               <input
-                type="month"
-                value={filterMonth}
-                onChange={(e) => { setFilterMonth(e.target.value); setPage(1); }}
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }}
                 className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
