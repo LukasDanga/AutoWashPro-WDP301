@@ -589,6 +589,10 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         if (['awaiting_payment', 'completed'].includes(bookingResult.status)) {
           sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
         }
+        const user = await mongoose.model('User').findById(payment.userId);
+        if (user && user.email) {
+          emailService.sendBookingConfirmationEmail(user.email, bookingResult).catch(e => console.error('Lỗi gửi email xác nhận đặt lịch:', e));
+        }
       }
     }
 

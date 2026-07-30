@@ -1,18 +1,23 @@
 const nodemailer = require('nodemailer');
 
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587;
+const SMTP_USER = process.env.SMTP_USER || 'dinhanh200304@gmail.com';
+const SMTP_PASS = process.env.SMTP_PASS || 'meblixxhmxoxpuou';
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465, // true for 465, false for other ports
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: SMTP_USER,
+    pass: SMTP_PASS,
   },
 });
 
 exports.sendPasswordResetEmail = async (email, otp) => {
   return transporter.sendMail({
-    from: `"AutoWashPro" <${process.env.SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
     subject: 'Mã xác nhận khôi phục mật khẩu - AutoWashPro',
     html: `
@@ -40,7 +45,7 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
   else if (isSlotPack) typeLabel = 'Gói lượt';
 
   return transporter.sendMail({
-    from: `"AutoWashPro" <${process.env.SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
     subject: `Xác nhận đặt lịch thành công - AutoWashPro`,
     html: `
@@ -65,7 +70,7 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
 
 exports.sendCancellationOtpEmail = async (email, otp) => {
   return transporter.sendMail({
-    from: `"AutoWashPro" <${process.env.SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
     subject: `Mã OTP xác nhận hủy lịch - AutoWashPro`,
     html: `
@@ -86,7 +91,7 @@ exports.sendCancellationOtpEmail = async (email, otp) => {
 
 exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
   return transporter.sendMail({
-    from: `"AutoWashPro" <${process.env.SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
     subject: `Xác nhận mua gói lượt thành công - AutoWashPro`,
     html: `
@@ -109,7 +114,7 @@ exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
 
 exports.sendCancellationSuccessEmail = async (email, info, refundAmount) => {
   return transporter.sendMail({
-    from: `"AutoWashPro" <${process.env.SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER}>`,
     to: email,
     subject: `Thông báo hủy đơn thành công - AutoWashPro`,
     html: `
