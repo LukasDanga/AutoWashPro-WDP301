@@ -1156,6 +1156,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return dates;
   }, [selectedDays, weeks, tab]);
 
+  const actualRecurringSessions = useMemo(() => {
+    if (tab !== 'recurring') return 0;
+    if (conflictCheck.status === 'done' && conflictCheck.results.length > 0) {
+      return conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length;
+    }
+    return previewDates.length;
+  }, [tab, conflictCheck, previewDates]);
+
   const toggleDay = (value) => {
     setSelectedDays(prev => prev.includes(value) ? prev.filter(d => d !== value) : [...prev, value]);
     setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
@@ -2124,7 +2132,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 <span className="text-xs text-slate-400 py-2">Không có lịch trống buổi sáng</span>
                               ) : groupedSlots.morning.map(s => {
                                 const timeLabel = s.startTime;
-                                const isDisabled = !s.available;
+                                const isDisabled = tab === 'recurring' ? false : !s.available;
                                 const isSelected = selectedTime === timeLabel;
                                 const isVipBooked = s.vipBooked;
                                 return (
@@ -2165,7 +2173,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 <span className="text-xs text-slate-400 py-2">Không có lịch trống buổi chiều</span>
                               ) : groupedSlots.afternoon.map(s => {
                                 const timeLabel = s.startTime;
-                                const isDisabled = !s.available;
+                                const isDisabled = tab === 'recurring' ? false : !s.available;
                                 const isSelected = selectedTime === timeLabel;
                                 const isVipBooked = s.vipBooked;
                                 return (
@@ -2368,7 +2376,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                       : '';
                                     return `${currentDate?.label || ''}${dateFormatted ? ` (${dateFormatted})` : ''} · ${selectedTime}`;
                                   })()
-                                : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần (${previewDates.length} buổi)`
+                                : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần (${actualRecurringSessions} buổi)`
                               }
                             </span>
                           </div>
@@ -2558,10 +2566,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           </div>
                         )}
 
-                        {tab === 'recurring' && pkg && previewDates.length > 0 && (
+                        {tab === 'recurring' && pkg && actualRecurringSessions > 0 && (
                           <div className="flex justify-between text-xs text-slate-400 border-t border-slate-100 pt-2.5">
                             <span>Tổng số buổi định kỳ</span>
-                            <span>{previewDates.length} buổi</span>
+                            <span>{actualRecurringSessions} buổi</span>
                           </div>
                         )}
                         
@@ -2571,7 +2579,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           </span>
                           <span className="text-2xl font-extrabold text-emerald-600">
                             {tab === 'recurring' 
-                              ? formatCurrency((totalBase - discount) * previewDates.length) 
+                              ? formatCurrency((totalBase - discount) * actualRecurringSessions) 
                               : formatCurrency(total)
                             }
                           </span>
@@ -2744,7 +2752,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 <button 
                   type="button"
                   onClick={confirmRecurringBooking} 
-                  disabled={bookingLoading || previewDates.length === 0}
+                  disabled={bookingLoading || actualRecurringSessions === 0}
                   className="w-full sm:w-auto px-8 py-3.5 rounded-[1.5rem] sm:rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
                   {bookingLoading ? (
@@ -2753,7 +2761,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <span>Đang xử lý...</span>
                     </>
                   ) : isLoggedIn ? (
-                    `Xác nhận ${previewDates.length} buổi`
+                    `Xác nhận ${actualRecurringSessions} buổi`
                   ) : (
                     'Đăng nhập để đặt lịch'
                   )}
