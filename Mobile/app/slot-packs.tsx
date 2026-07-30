@@ -854,15 +854,6 @@ export default function SlotPacksScreen() {
                 subtitle="Chọn chi nhánh bạn muốn sử dụng gói"
                 icon={Icons.locationOutline}
               >
-                <SelectableCard
-                  selected={selectedBranch === 'ALL'}
-                  onPress={() => setSelectedBranch('ALL')}
-                  icon={Icons.globeOutline}
-                  title="Toàn hệ thống"
-                  subtitle={
-                    <AppText variant="caption" color="textSecondary">Dùng ở bất kỳ chi nhánh nào</AppText>
-                  }
-                />
                 {branches.map(b => {
                   const pkgCount = branchPackageCounts[b._id] || 0;
                   const disabled = pkgCount === 0;

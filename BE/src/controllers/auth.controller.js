@@ -19,7 +19,7 @@ exports.loginWithGoogle = catchAsync(async (req, res) => {
 
 exports.refreshToken = catchAsync(async (req, res) => {
   const token = req.body.refreshToken || req.cookies?.refreshToken;
-  if (!token) return res.status(401).json({ success: false, message: 'Refresh token required' });
+  if (!token) return res.status(401).json({ success: false, message: 'Vui lòng cung cấp Refresh token' });
   const tokens = await authService.refreshToken(token);
   success(res, tokens, 'Đã làm mới token');
 });

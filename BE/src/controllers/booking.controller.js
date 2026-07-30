@@ -390,21 +390,21 @@ exports.sepayWebhook = catchAsync(async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, '').trim();
   if (process.env.SEPAY_API_KEY && token !== process.env.SEPAY_API_KEY) {
-    return res.status(401).json({ success: false, message: 'Invalid API Key' });
+    return res.status(401).json({ success: false, message: 'Mã API Key không hợp lệ' });
   }
 
   const { content, referenceCode, transferType } = req.body;
   
   // Chỉ xử lý giao dịch nhận tiền
   if (transferType !== 'in') {
-    return res.json({ success: true, message: 'Ignored outbound transaction' });
+    return res.json({ success: true, message: 'Đã bỏ qua giao dịch tiền ra' });
   }
 
   // Tìm mã giao dịch trong nội dung (ví dụ: TXN123456ABC)
   // content có thể là "WASHPRO TXN123456ABC"
   const match = content ? content.match(/TXN\d+[A-Z0-9]+/) : null;
   if (!match) {
-    return res.json({ success: true, message: 'No transaction ID found in content' });
+    return res.json({ success: true, message: 'Không tìm thấy mã giao dịch trong nội dung chuyển khoản' });
   }
 
   const transactionId = match[0];
@@ -428,7 +428,7 @@ exports.simulatePayment = catchAsync(async (req, res) => {
 exports.createVnpayProvisional = catchAsync(async (req, res) => {
   const { amount, paymentType } = req.body;
   if (!amount || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'Invalid amount' });
+    return res.status(400).json({ success: false, message: 'Số tiền thanh toán không hợp lệ' });
   }
   const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
 
@@ -458,13 +458,13 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
     returnUrl: targetReturnUrl,
   });
 
-  success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'VNPay provisional URL created');
+  success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'Đã tạo URL thanh toán VNPay tạm tính');
 });
 
 exports.createBankProvisional = catchAsync(async (req, res) => {
   const { amount, paymentType } = req.body;
   if (!amount || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'Invalid amount' });
+    return res.status(400).json({ success: false, message: 'Số tiền thanh toán không hợp lệ' });
   }
   const paymentService = require('../services/payment.service');
   const payment = await paymentService.createProvisionalBankPayment(req.userId, amount, paymentType || 'deposit');
@@ -484,11 +484,11 @@ exports.createBankProvisional = catchAsync(async (req, res) => {
 exports.vnpayCallback = catchAsync(async (req, res) => {
   const { transactionId, gatewayTransactionId, status: paymentStatus } = req.body;
   if (!transactionId) {
-    return res.status(400).json({ success: false, message: 'Missing transactionId' });
+    return res.status(400).json({ success: false, message: 'Thiếu thông tin mã giao dịch' });
   }
   const isSuccess = paymentStatus !== 'failed';
   const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId || 'VNPAY', isSuccess);
-  success(res, payment, isSuccess ? 'VNPay payment confirmed' : 'VNPay payment failed');
+  success(res, payment, isSuccess ? 'Thanh toán VNPay đã được xác nhận' : 'Thanh toán VNPay thất bại');
 });
 
 exports.createVnpayPayment = catchAsync(async (req, res) => {

@@ -108,7 +108,7 @@ exports.previewDiscount = catchAsync(async (req, res) => {
   const slots = parseInt(totalSlots, 10);
   const price = parseFloat(unitPrice);
   if (!slots || !price) {
-    return res.status(400).json({ message: 'totalSlots and unitPrice are required' });
+    return res.status(400).json({ success: false, message: 'Thiếu số lượng slot và đơn giá dịch vụ' });
   }
   const preview = slotPackService.previewDiscount(slots, price);
   success(res, preview, 'Tính toán xem trước thành công');

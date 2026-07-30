@@ -1,15 +1,15 @@
 const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;
   const code = err.code || 'INTERNAL_ERROR';
-  const message = err.message || 'Internal server error';
+  const message = err.message || 'Lỗi máy chủ nội bộ';
 
   if (err.name === 'CastError') {
-    return res.status(400).json({ success: false, message: `Invalid ${err.path}: ${err.value}`, code: 'CAST_ERROR' });
+    return res.status(400).json({ success: false, message: `Dữ liệu ${err.path} không hợp lệ: ${err.value}`, code: 'CAST_ERROR' });
   }
 
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
-    return res.status(409).json({ success: false, message: `${field} already exists`, code: 'DUPLICATE_KEY' });
+    return res.status(409).json({ success: false, message: `${field} đã tồn tại trong hệ thống`, code: 'DUPLICATE_KEY' });
   }
 
   if (err.name === 'ValidationError') {
@@ -24,7 +24,7 @@ const errorHandler = (err, req, res, next) => {
 };
 
 const notFoundHandler = (req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found`, code: 'NOT_FOUND' });
+  res.status(404).json({ success: false, message: `Đường dẫn ${req.originalUrl} không tồn tại`, code: 'NOT_FOUND' });
 };
 
 module.exports = { errorHandler, notFoundHandler };

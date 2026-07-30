@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     role: { type: String, enum: Object.values(ROLES), default: ROLES.CUSTOMER },
     status: { type: String, enum: Object.values(USER_STATUS), default: USER_STATUS.ACTIVE },
-    avatar: { type: String },
+    avatar: { type: String, default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
     dateOfBirth: { type: Date },
     refreshToken: { type: String, select: false },
     lastLogin: { type: Date },

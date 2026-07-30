@@ -27,9 +27,9 @@ const extractUserInfo = async (req) => {
 exports.chat = catchAsync(async (req, res) => {
   const { message, sessionId } = req.body;
   if (!message || !message.trim())
-    return res.status(400).json({ success: false, message: 'Message is required' });
+    return res.status(400).json({ success: false, message: 'Nội dung tin nhắn là bắt buộc' });
   if (!sessionId)
-    return res.status(400).json({ success: false, message: 'sessionId is required' });
+    return res.status(400).json({ success: false, message: 'Bắt buộc phải có sessionId' });
 
   const userInfo = await extractUserInfo(req);
   const result = await chatbotService.chat(sessionId, message.trim(), userInfo.userId, userInfo.role);
@@ -40,9 +40,9 @@ exports.chat = catchAsync(async (req, res) => {
 exports.streamChat = async (req, res) => {
   const { message, sessionId } = req.body;
   if (!message || !message.trim())
-    return res.status(400).json({ success: false, message: 'Message is required' });
+    return res.status(400).json({ success: false, message: 'Nội dung tin nhắn là bắt buộc' });
   if (!sessionId)
-    return res.status(400).json({ success: false, message: 'sessionId is required' });
+    return res.status(400).json({ success: false, message: 'Bắt buộc phải có sessionId' });
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
