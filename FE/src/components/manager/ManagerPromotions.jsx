@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import { confirmDialog } from '@/lib/confirm';
 import {
@@ -20,6 +21,7 @@ import {
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { PointHistoryTab } from '@/components/admin/AdminRewards';
 
 // --- Helper Component ---
 function ListTrend({ current, previous }) {
@@ -442,7 +444,7 @@ function VoucherUsageReportTab() {
 }
 
 /* ═══ Main ═══ */
-export default function ManagerVouchers({ user }) {
+export default function ManagerPromotions({ user }) {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -451,8 +453,15 @@ export default function ManagerVouchers({ user }) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('list');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'list');
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && tab !== activeTab) setActiveTab(tab);
+    if (!tab && activeTab !== 'list') setActiveTab('list');
+  }, [searchParams]);
 
   const managerBranchId = user?.branchId || '';
 
@@ -505,26 +514,34 @@ export default function ManagerVouchers({ user }) {
       {/* tabs */}
       <div className="flex gap-1 border-b border-slate-200">
         <button 
-          onClick={() => setActiveTab('list')}
+          onClick={() => { setActiveTab('list'); setSearchParams({}); }}
           className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           Danh sách Voucher
         </button>
         <button 
-          onClick={() => setActiveTab('report')}
+          onClick={() => { setActiveTab('history'); setSearchParams({ tab: 'history' }); }}
+          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history' ? 'border-amber-600 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          Lịch sử điểm thưởng
+        </button>
+        <button 
+          onClick={() => { setActiveTab('report'); setSearchParams({ tab: 'report' }); }}
           className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'report' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           Báo cáo sử dụng
         </button>
         <button 
-          onClick={() => setActiveTab('wheel')}
+          onClick={() => { setActiveTab('wheel'); setSearchParams({ tab: 'wheel' }); }}
           className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'wheel' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           Quản lý Vòng Quay
         </button>
       </div>
 
-      {activeTab === 'report' ? (
+      {activeTab === 'history' ? (
+        <PointHistoryTab isManager={true} />
+      ) : activeTab === 'report' ? (
         <VoucherUsageReportTab />
       ) : activeTab === 'wheel' ? (
         <WheelManagementTab />

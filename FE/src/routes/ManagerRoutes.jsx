@@ -4,7 +4,7 @@ import ManagerLayout from '@/components/manager/ManagerLayout';
 import ManagerOverview from '@/components/manager/ManagerOverview';
 import ManagerBookings from '@/components/manager/ManagerBookings';
 import ManagerBranch from '@/components/manager/ManagerBranch';
-import ManagerVouchers from '@/components/manager/ManagerVouchers';
+import ManagerPromotions from '@/components/manager/ManagerPromotions';
 import ManagerRevenue from '@/components/manager/ManagerRevenue';
 import ManagerProfile from '@/components/manager/ManagerProfile';
 import ManagerCustomers from '@/components/manager/ManagerCustomers';
@@ -13,6 +13,7 @@ import ManagerPackages from '@/components/manager/ManagerPackages';
 import ManagerSlotPacks from '@/components/manager/ManagerSlotPacks';
 import ManagerSchedule from '@/components/manager/ManagerSchedule';
 import RefundRequests from '@/components/shared/RefundRequests';
+import AdminPointHistoryDetail from '@/components/admin/AdminPointHistoryDetail';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
 export default function ManagerRoutes() {
@@ -83,7 +84,8 @@ export default function ManagerRoutes() {
         <Route path="bookings" element={<ManagerBookings user={user} />} />
         <Route path="schedule" element={<ManagerSchedule user={user} />} />
         <Route path="branch" element={<ManagerBranch user={user} />} />
-        <Route path="vouchers" element={<ManagerVouchers user={user} />} />
+        <Route path="vouchers" element={<ManagerPromotions user={user} />} />
+        <Route path="rewards/history/:id" element={<AdminPointHistoryDetail />} />
         <Route path="refund-requests" element={<RefundRequests />} />
         <Route path="revenue" element={<ManagerRevenue user={user} />} />
         <Route path="customers" element={<ManagerCustomers user={user} />} />

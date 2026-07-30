@@ -17,6 +17,7 @@ function resolvePageMeta(pathname) {
   if (pathname.startsWith('/manager/schedule')) return MANAGER_PAGE_META.schedule;
   if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
   if (pathname.startsWith('/manager/vouchers')) return MANAGER_PAGE_META.vouchers;
+  if (pathname.startsWith('/manager/rewards/history/')) return { title: 'Chi tiết Giao dịch Điểm thưởng', description: 'Xem chi tiết lý do, công thức và đơn hàng tích điểm của khách hàng.' };
   if (pathname.startsWith('/manager/refund-requests')) return MANAGER_PAGE_META['refund-requests'];
   if (pathname.startsWith('/manager/customers')) return MANAGER_PAGE_META.customers;
   if (pathname.startsWith('/manager/feedbacks')) return MANAGER_PAGE_META.feedbacks;
