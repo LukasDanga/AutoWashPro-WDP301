@@ -144,7 +144,7 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
         const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ amount, paymentType: 'topup' }),
+          body: JSON.stringify({ amount, paymentType: 'topup', origin: window.location.origin }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');

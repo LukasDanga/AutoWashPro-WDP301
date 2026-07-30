@@ -920,7 +920,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         const res = await fetch(`${apiBase || API_BASE}/payments/vnpay-create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ bookingId: bId, paymentType: 'remaining' }),
+          body: JSON.stringify({ bookingId: bId, paymentType: 'remaining', origin: window.location.origin }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Khởi tạo thanh toán thất bại');

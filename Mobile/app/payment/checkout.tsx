@@ -391,10 +391,6 @@ export default function PaymentCheckoutScreen() {
           setStep('success');
         }
       } else {
-        const apiBase = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.102:5000/api').replace(/\/$/, '');
-        const returnUrl = isProvisional
-          ? `${apiBase}/payments/vnpay-return?client=mobile`
-          : `${apiBase}/payments/vnpay-return?client=mobile&bookingId=${encodeURIComponent(bookingId)}`;
         if (isProvisional) {
           const result = await paymentApi.createVnpayProvisional(amount, 'mobile');
           setPayment(result.payment ?? result);
@@ -405,7 +401,6 @@ export default function PaymentCheckoutScreen() {
             bookingId,
             paymentType: payType,
             amount,
-            returnUrl,
             client: 'mobile',
           });
           setPayment(result.payment ?? result);
@@ -937,7 +932,7 @@ export default function PaymentCheckoutScreen() {
           <View style={[styles.doubleBezelOuter, { backgroundColor: colors.warningLight, borderColor: colors.warning, padding: 6, borderRadius: 24 }]}>
             <View style={styles.doubleBezelInner}>
               <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center', lineHeight: 16 }}>
-                Nếu sau khi OTP xong trình duyệt báo lỗi (ngrok offline), hãy quay lại app.
+                Nếu sau khi OTP xong trình duyệt báo lỗi, hãy quay lại app.
                 Thanh toán vẫn có thể được xác nhận khi BE nhận IPN/return. Bấm "Kiểm tra lại" bên dưới.
               </AppText>
             </View>

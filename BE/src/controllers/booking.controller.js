@@ -436,6 +436,7 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
   const Payment = require('../models/payment.schema');
 
   const transactionId = `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+  const client = req.body.client || 'web';
   const payment = new Payment({
     userId: req.userId,
     amount,
@@ -443,12 +444,12 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
     paymentType: paymentType || 'full',
     status: 'pending',
     transactionId,
+    client,
   });
   await payment.save();
 
-  const client = req.body.client || 'web';
-  const baseReturnUrl = process.env.VNP_RETURN_URL;
-  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=${client}` : undefined;
+  const baseReturnUrl = process.env.VNPAY_RETURN_URL;
+  const targetReturnUrl = baseReturnUrl || undefined;
 
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount,
@@ -497,10 +498,13 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
   // Tạo payment record trước
   const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, 'vnpay', paymentType || 'deposit', amount);
   const client = req.body.client || 'web';
-  const baseReturnUrl = process.env.VNP_RETURN_URL;
-  const targetReturnUrl = baseReturnUrl 
-    ? `${baseReturnUrl}?client=${client}&bookingId=${encodeURIComponent(bookingId)}`
-    : (returnUrl || undefined);
+
+  // Lưu client type vào payment record
+  const Payment = require('../models/payment.schema');
+  await Payment.findByIdAndUpdate(payment._id, { client });
+
+  const baseReturnUrl = process.env.VNPAY_RETURN_URL;
+  const targetReturnUrl = baseReturnUrl || undefined;
 
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount: payment.amount,
@@ -514,37 +518,53 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
 
 exports.handleVnpayReturn = catchAsync(async (req, res) => {
   console.log('=== VNPay Return Called ===');
+  console.log('VNPay Return query:', JSON.stringify(req.query));
   const result = vnpayService.verifyReturnUrl(req.query);
 
   const feUrl = process.env.FE_URL || 'http://localhost:5173';
   const resultJson = JSON.stringify(result);
   const encoded = encodeURIComponent(resultJson);
 
-  // Mobile deep link support: if client=mobile was passed in returnUrl,
-  // redirect to the app scheme so Expo Router picks it up.
-  const isMobile = req.query.client === 'mobile';
-  const mobileBookingId = req.query.bookingId || '';
-
-  let isTopup = false;
   const txnRef = result.data?.txnRef || req.query.vnp_TxnRef;
+
+  // Lookup payment record → determine client type & bookingId
+  let isMobile = false;
+  let mobileBookingId = '';
+  let isTopup = false;
   if (txnRef) {
     try {
       const Payment = require('../models/payment.schema');
-      const payment = await Payment.findOne({ transactionId: txnRef });
-      if (payment && payment.paymentType === 'topup') {
-        isTopup = true;
+      const paymentRecord = await Payment.findOne({ transactionId: txnRef });
+      if (paymentRecord) {
+        isMobile = paymentRecord.client === 'mobile';
+        mobileBookingId = paymentRecord.bookingId ? String(paymentRecord.bookingId) : '';
+        isTopup = paymentRecord.paymentType === 'topup';
+        console.log('VNPay Return payment lookup:', {
+          txnRef,
+          client: paymentRecord.client,
+          isMobile,
+          mobileBookingId,
+          isTopup,
+          paymentType: paymentRecord.paymentType,
+          status: paymentRecord.status,
+        });
+      } else {
+        console.log('VNPay Return: no payment found for txnRef:', txnRef);
       }
     } catch (e) {
-      console.error('Error checking topup payment:', e);
+      console.error('Error looking up payment:', e.message);
     }
   }
 
   if (result.success) {
     try {
       const payment = await paymentService.confirmPaymentCallback(txnRef, result.data.transactionNo || 'VNPAY', true);
+      console.log('VNPay Return confirmPaymentCallback result:', { paymentId: payment?._id, status: payment?.status, bookingId: payment?.bookingId });
       if (isMobile) {
         const deepLinkId = mobileBookingId;
-        return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+        const deepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`;
+        console.log('VNPay Return → mobile deep link:', deepLink);
+        return res.redirect(302, deepLink);
       }
       if (isTopup) {
         return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);
@@ -558,13 +578,17 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
         return res.redirect(302, `${feUrl}/history?vnpay_result=${encoded}`);
       }
     } catch (err) {
-      console.error('Confirm payment error:', err.message);
+      console.error('VNPay Return confirmPayment error:', err.message);
     }
+  } else {
+    console.log('VNPay Return: signature verification failed:', result.message);
   }
 
   if (isMobile) {
     const deepLinkId = mobileBookingId;
-    return res.redirect(302, `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`);
+    const deepLink = `autowashpro://payment/checkout?bookingId=${encodeURIComponent(deepLinkId)}&vnpay_result=${encoded}`;
+    console.log('VNPay Return (fallback) → mobile deep link:', deepLink);
+    return res.redirect(302, deepLink);
   }
   if (isTopup) {
     return res.redirect(302, `${feUrl}/profile?tab=wallet&vnpay_result=${encoded}`);

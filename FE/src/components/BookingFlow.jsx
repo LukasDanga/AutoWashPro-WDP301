@@ -288,7 +288,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
       const res = await fetch(`${apiBase}/payments/vnpay-create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: 'deposit', amount: pendingDeposit.depositAmount }),
+        body: JSON.stringify({ bookingId: pendingDeposit._id, paymentType: 'deposit', amount: pendingDeposit.depositAmount, origin: window.location.origin }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
