@@ -108,9 +108,14 @@ function VehicleDetailModal({ vehicle, onClose, filter }) {
     if (vehicleId) {
       setLoadingBookings(true);
       const periodQ = filter !== 'all' ? `?period=${filter}` : '';
+      console.log('[VehicleDetail] fetching bookings', { vehicleId, filter, url: `/bookings/vehicle/${vehicleId}${periodQ}` });
       api(`/bookings/vehicle/${vehicleId}${periodQ}`)
         .then(r => r.json())
-        .then(res => setBookings(res?.data || []))
+        .then(res => {
+          console.log('[VehicleDetail] bookings response', { count: res?.data?.length, data: res?.data });
+          setBookings(res?.data || []);
+        })
+        .catch(e => console.error('[VehicleDetail] bookings error', e))
         .finally(() => setLoadingBookings(false));
     }
   }, [vehicleId, filter]);

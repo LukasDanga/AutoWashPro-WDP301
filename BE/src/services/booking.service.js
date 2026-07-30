@@ -519,14 +519,18 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
 };
 
 exports.getBookingsByVehicle = async (vehicleId, startDate, endDate) => {
-  const query = { vehicleId, isDeleted: { $ne: true } };
-  if (startDate && endDate) {
-    query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+  const query = {
+    vehicleId,
+    paymentStatus: 'paid',
+    isDeleted: { $ne: true },
+  };
+  if (startDate) {
+    query.createdAt = { $gte: new Date(startDate) };
   }
+  console.log(`[getBookingsByVehicle] vehicleId=${vehicleId} startDate=${startDate} query=`, JSON.stringify(query));
   return Booking.find(query)
-    .populate('userId', 'name email phone')
+    .select('bookingCode status bookingDate startTime finalPrice packageId')
     .populate('packageId', 'name price duration')
-    .populate('branchId', 'name')
     .sort({ createdAt: -1 })
     .limit(50);
 };
