@@ -37,32 +37,53 @@ export default function ManagerLayout({ user, onLogout }) {
   const loadCounts = useCallback(async () => {
     try {
       const bId = user?.branchId;
-      const [bRes, fRes, cRes, spRes] = await Promise.all([
+      const [bRes, fRes, cRes, spRes, rRes] = await Promise.all([
         api('/bookings?status=pending&limit=1&groupByRecurring=true'),
         api('/bookings/feedbacks?replied=false&limit=1'),
         api('/bookings/customers?limit=100'),
         bId ? api(`/slot-packs?branchId=${bId}&limit=100`) : Promise.resolve(null),
+        api('/refund-requests?limit=100'),
       ]);
       const bData = await bRes.json().catch(() => ({}));
       const fData = await fRes.json().catch(() => ({}));
       const cData = await cRes.json().catch(() => ({}));
       const spData = spRes ? await spRes.json().catch(() => ({})) : {};
+      const rData = await rRes.json().catch(() => ({}));
+
       const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
       const unrepliedFeedbacks = fData?.data?.total ?? 0;
       const customerList = cData?.data?.customers ?? cData?.data ?? [];
-      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      
+      // First-time customers at this branch today that have not been viewed yet
+      const todayStr = new Date().toDateString();
+      const viewedCustomerIds = JSON.parse(localStorage.getItem('viewed_manager_customers') || '[]');
       const newCustomers = (Array.isArray(customerList) ? customerList : [])
-        .filter((c) => c.user?.createdAt && new Date(c.user.createdAt).getTime() > weekAgo).length;
+        .filter((c) => {
+          const custId = c._id || c.user?._id;
+          const dateToCheck = c.lastBookingDate || c.user?.createdAt;
+          const isToday = dateToCheck && new Date(dateToCheck).toDateString() === todayStr;
+          const isFirstTime = (c.totalBookings <= 1 || !c.totalBookings);
+          return isFirstTime && isToday && !viewedCustomerIds.includes(custId);
+        }).length;
+
       const slotPackList = Array.isArray(spData?.data) ? spData.data : [];
       const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
       const newSlotPacks = slotPackList
         .filter((p) => p.createdAt && new Date(p.createdAt).getTime() > dayAgo).length;
+
+      const refundList = Array.isArray(rData?.data?.data) ? rData.data.data : (Array.isArray(rData?.data) ? rData.data : []);
+      const viewedRefundIds = JSON.parse(localStorage.getItem('viewed_refund_requests') || '[]');
+      const unviewedRefunds = refundList.filter(
+        r => !viewedRefundIds.includes(r._id) && new Date(r.createdAt).toDateString() === new Date().toDateString()
+      ).length;
+
       setBadges({
         bookings: pendingBookings,
         schedule: pendingBookings,
         feedbacks: unrepliedFeedbacks,
         customers: newCustomers,
         'slot-packs': newSlotPacks,
+        'refund-requests': unviewedRefunds,
       });
     } catch { /* silent */ }
   }, [user?.branchId]);
@@ -75,6 +96,19 @@ export default function ManagerLayout({ user, onLogout }) {
   useSSE(token, 'payment_new', loadCounts);
   useSSE(token, 'feedback_new', loadCounts);
   useSSE(token, 'vouchers_updated', loadCounts);
+  useSSE(token, 'refund_request_new', loadCounts);
+  useSSE(token, 'refund_requests_updated', loadCounts);
+
+  useEffect(() => {
+    window.addEventListener('payment-viewed', loadCounts);
+    window.addEventListener('refund-request-viewed', loadCounts);
+    window.addEventListener('manager-customer-viewed', loadCounts);
+    return () => {
+      window.removeEventListener('payment-viewed', loadCounts);
+      window.removeEventListener('refund-request-viewed', loadCounts);
+      window.removeEventListener('manager-customer-viewed', loadCounts);
+    };
+  }, [loadCounts]);
 
 
   async function handleLogout() {

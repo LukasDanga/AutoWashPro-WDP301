@@ -84,7 +84,7 @@ export default function DashboardSidebar({ brand, menuItems, user, onLogout, cla
               {!collapsed && count > 0 && (
                 <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-bold text-white"
                   title={`${count} mục mới`}>
-                  {count > 50 ? '50+' : count}
+                  {count > 99 ? '99+' : count}
                 </span>
               )}
             </NavLink>
