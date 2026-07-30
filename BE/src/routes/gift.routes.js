@@ -4,6 +4,7 @@ const giftController = require('../controllers/gift.controller');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 
 router.get('/public', giftController.getPublicGifts);
+router.get('/my-history', authenticate, giftController.getMySpinHistory);
 router.post('/spin', authenticate, giftController.spinWheel);
 
 router.use(authenticate);

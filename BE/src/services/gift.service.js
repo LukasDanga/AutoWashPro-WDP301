@@ -1,5 +1,6 @@
 const { Gift, User, Voucher } = require('../models');
 const mongoose = require('mongoose');
+const Notification = require('../models/notification.schema');
 const notificationService = require('./notification.service');
 
 exports.getPublicGifts = async () => {
@@ -62,8 +63,10 @@ exports.spinWheel = async (userId) => {
     }
 
     let createdVoucher = null;
-    if (selectedGift && selectedGift.type !== 'none') {
-      // Create a unique voucher for the user
+    const isRealPrize = selectedGift && !/may\s*mắn|không\s*trúng/i.test(selectedGift.name || '');
+
+    if (isRealPrize) {
+      // Create a unique voucher / prize item for the user
       const code = `WHEEL${Date.now().toString().slice(-6)}${Math.floor(Math.random()*1000)}`;
       const now = new Date();
       const endDate = new Date();
@@ -72,9 +75,9 @@ exports.spinWheel = async (userId) => {
       const vData = {
         code,
         name: `Quà từ vòng quay: ${selectedGift.name}`,
-        description: `Chúc mừng bạn đã trúng thưởng từ vòng quay may mắn!`,
-        type: selectedGift.type,
-        value: selectedGift.value,
+        description: `Chúc mừng bạn đã trúng quà "${selectedGift.name}" từ vòng quay may mắn!`,
+        type: selectedGift.type === 'none' ? 'fixed' : selectedGift.type,
+        value: selectedGift.value || 0,
         quantity: 1,
         remaining: 1,
         startDate: now,
@@ -117,4 +120,62 @@ exports.spinWheel = async (userId) => {
   } finally {
     session.endSession();
   }
+};
+
+exports.getMySpinHistory = async (userId) => {
+  const wonVouchers = await Voucher.find({
+    assignedTo: userId,
+    $or: [
+      { name: { $regex: /^Quà từ vòng quay/i } },
+      { code: { $regex: /^WHEEL/i } }
+    ]
+  }).sort({ createdAt: -1 });
+
+  const historyMap = new Map();
+
+  wonVouchers.forEach(v => {
+    historyMap.set(v.code, {
+      _id: v._id,
+      name: v.name.replace(/^Quà từ vòng quay:\s*/i, ''),
+      code: v.code,
+      type: v.type,
+      value: v.value,
+      wonAt: v.createdAt || v.startDate,
+      endDate: v.endDate,
+      status: v.remaining <= 0 ? 'used' : (new Date(v.endDate) < new Date() ? 'expired' : 'active')
+    });
+  });
+
+  try {
+    const spinNotifs = await Notification.find({
+      userId,
+      type: 'spin_won'
+    }).sort({ createdAt: -1 });
+
+    spinNotifs.forEach(n => {
+      const code = n.data?.voucherCode || `NOTIF_${n._id}`;
+      if (!historyMap.has(code)) {
+        let prizeName = 'Quà tặng vòng quay';
+        const match = n.message?.match(/trúng\s+([^.]+)\./i);
+        if (match && match[1]) {
+          prizeName = match[1].trim();
+        }
+
+        historyMap.set(code, {
+          _id: n._id,
+          name: prizeName,
+          code: code.startsWith('NOTIF_') ? 'WHEEL_BONUS' : code,
+          type: 'fixed',
+          value: 0,
+          wonAt: n.createdAt,
+          endDate: null,
+          status: 'active'
+        });
+      }
+    });
+  } catch (e) {
+    console.error('Error loading spin notifications fallback:', e);
+  }
+
+  return Array.from(historyMap.values()).sort((a, b) => new Date(b.wonAt) - new Date(a.wonAt));
 };
