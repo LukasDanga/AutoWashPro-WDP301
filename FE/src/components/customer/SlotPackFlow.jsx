@@ -356,7 +356,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi tạo gói slot');
       const pack = data.data || data;
-      setBuyResult(pack);
+      setBuyResult({ ...pack, packageName: pkg?.name || '', branchName: branchObj?.name || '' });
 
       // Tạo thanh toán theo phương thức đã chọn
       const payRes = await fetch(`${apiBase}/slot-packs/${pack._id}/pay`, {
@@ -932,11 +932,11 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-slate-500">Chi nhánh</span>
-                    <span className="font-medium text-slate-800">{branchObj?.name || 'Toàn hệ thống'}</span>
+                    <span className="font-medium text-slate-800">{buyResult?.branchName || branchObj?.name || 'Toàn hệ thống'}</span>
                   </div>
                   <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-slate-500">Gói dịch vụ</span>
-                    <span className="font-medium text-slate-800">{pkg?.name || '—'}</span>
+                    <span className="font-medium text-slate-800">{buyResult?.packageName || pkg?.name || '—'}</span>
                   </div>
                   <div className="flex justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-slate-500">Số lần</span>
@@ -1061,11 +1061,11 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">CHI TIẾT GÓI LƯỢT</div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Chi nhánh</span>
-                    <span className="font-bold text-slate-700">{branchObj?.name || 'Toàn hệ thống'}</span>
+                    <span className="font-bold text-slate-700">{buyResult?.branchName || branchObj?.name || 'Toàn hệ thống'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Gói dịch vụ</span>
-                    <span className="font-bold text-slate-700">{pkg?.name || '—'}</span>
+                    <span className="font-bold text-slate-700">{buyResult?.packageName || pkg?.name || '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Số lượt rửa</span>
