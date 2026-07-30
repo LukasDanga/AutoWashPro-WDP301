@@ -43,7 +43,19 @@ export default function ManagerPackages({ user }) {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [confirmToggleId, setConfirmToggleId] = useState(null);
+  const [templates, setTemplates] = useState({});
   const debounce = useRef(null);
+
+  useEffect(() => {
+    async function loadTemplates() {
+      try {
+        const res = await api('/packages/templates/sub-services');
+        const d = await res.json();
+        if (d?.data) setTemplates(d.data);
+      } catch (e) { /* silent */ }
+    }
+    loadTemplates();
+  }, []);
 
   const loadPackages = useCallback(async (bId, q, pg) => {
     setLoading(true);
@@ -106,7 +118,10 @@ export default function ManagerPackages({ user }) {
 
   function openCreate() {
     setEditPkg(null);
-    setForm(EMPTY_FORM);
+    setForm({
+      ...EMPTY_FORM,
+      subServices: templates['external'] ? JSON.parse(JSON.stringify(templates['external'])) : []
+    });
     setError('');
     setShowModal(true);
   }
@@ -424,7 +439,17 @@ export default function ManagerPackages({ user }) {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-500 block mb-1">Danh mục</label>
-                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                  <select value={form.category} onChange={e => {
+                    const newCat = e.target.value;
+                    setForm(f => {
+                      if (!editPkg) {
+                        const optionalSubs = f.subServices.filter(s => s.isOptional);
+                        const defaultSubs = templates[newCat] ? JSON.parse(JSON.stringify(templates[newCat])) : [];
+                        return { ...f, category: newCat, subServices: [...defaultSubs, ...optionalSubs] };
+                      }
+                      return { ...f, category: newCat };
+                    });
+                  }}
                     className={inp}>
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
@@ -448,7 +473,7 @@ export default function ManagerPackages({ user }) {
 
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dịch vụ chọn thêm</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Chi tiết dịch vụ nhỏ (Bao gồm & Tùy chọn)</label>
                   <button type="button" onClick={addSubService}
                     className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
                     + Thêm
@@ -457,7 +482,7 @@ export default function ManagerPackages({ user }) {
 
                 {form.subServices.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400">
-                    Chưa có dịch vụ chọn thêm.
+                    Chưa có dịch vụ nhỏ nào.
                     <button type="button" onClick={addSubService} className="ml-1 text-emerald-500 underline">Thêm ngay</button>
                   </div>
                 ) : (

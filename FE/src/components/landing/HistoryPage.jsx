@@ -2925,6 +2925,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
               {detailBooking.feedback && (
                 <div className="mt-2 text-[13px] text-slate-600 italic">"{detailBooking.feedback}"</div>
               )}
+              {detailBooking.managerNote && (
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="text-[12px] font-semibold text-amber-800 mb-1">Ghi chú từ quản lý:</div>
+                  <div className="text-[13px] text-amber-900">{detailBooking.managerNote}</div>
+                </div>
+              )}
 
             </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
+import { confirmDialog } from '@/lib/confirm';
 import {
   MagnifyingGlass,
   ArrowClockwise,
@@ -218,7 +219,7 @@ export default function ManagerSlotPacks({ user }) {
   }
 
   async function handleCompleteRefund(packId) {
-    if (!confirm('Xác nhận đã hoàn tiền cho khách hàng?')) return;
+    if (!(await confirmDialog({ title: 'Xác nhận hoàn tiền', message: 'Xác nhận đã hoàn tiền cho khách hàng?' }))) return;
     try {
       const res = await api(`/slot-packs/${packId}/refund-complete`, { method: 'POST' });
       if (!res.ok) {

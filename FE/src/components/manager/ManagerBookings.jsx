@@ -1771,6 +1771,33 @@ function getTodayStr() {
 const PAGE_SIZE = 15;
 
 export default function ManagerBookings() {
+  const [bookings, setBookings] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [todayOnly, setTodayOnly] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showCheckin, setShowCheckin] = useState(false);
+  const [confirmCancelId, setConfirmCancelId] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const [qrBooking, setQrBooking] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const debounce = useRef(null);
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
   const [viewedBookings, setViewedBookings] = useState(() => {
     return JSON.parse(localStorage.getItem('viewed_bookings') || '[]');
   });

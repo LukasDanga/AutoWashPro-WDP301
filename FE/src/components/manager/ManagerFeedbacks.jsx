@@ -198,6 +198,7 @@ export default function ManagerFeedbacks() {
 
   function handleReplied(updated) {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
+    window.dispatchEvent(new Event('feedback-replied'));
   }
 
   // Filter displayed items locally by search query and star filter
@@ -317,10 +318,8 @@ export default function ManagerFeedbacks() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {displayed.map((fb) => {
-            // MỚI badge logic: Unreplied AND created TODAY (automatically disappears on a new day)
             const fbDate = fb.feedbackAt || fb.updatedAt || fb.createdAt;
-            const isCreatedToday = fbDate && new Date(fbDate).toDateString() === todayStr;
-            const isNew = !fb.managerReply && isCreatedToday;
+            const isUnreplied = !fb.managerReply;
 
             return (
               <div key={fb._id} className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
@@ -333,9 +332,9 @@ export default function ManagerFeedbacks() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold text-slate-800 text-sm">{fb.userId?.name || 'Khách hàng'}</span>
                           {fb.userId?.tier && <TierBadge tier={fb.userId.tier} />}
-                          {isNew && (
+                          {isUnreplied && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-xs">
-                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Chưa phản hồi
                             </span>
                           )}
                         </div>

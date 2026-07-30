@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
+import { confirmDialog } from '@/lib/confirm';
 import {
   ArrowUUpLeft,
   ArrowClockwise,
@@ -354,7 +355,7 @@ export default function RefundRequests() {
   }
 
   async function handleDeleteSingle(r) {
-    if (!confirm('Bạn có chắc chắn muốn xóa yêu cầu hoàn tiền này? Hành động này không thể hoàn tác!')) return;
+    if (!(await confirmDialog({ title: 'Xác nhận xóa', message: 'Bạn có chắc chắn muốn xóa yêu cầu hoàn tiền này? Hành động này không thể hoàn tác!', danger: true }))) return;
     try {
       const res = await api(`/refund-requests/${r._id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
@@ -368,10 +369,10 @@ export default function RefundRequests() {
 
   async function deleteRequestsByRange() {
     if (deleteAll) {
-      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ dữ liệu yêu cầu hoàn tiền? Hành động này không thể hoàn tác!')) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa tất cả', message: 'Bạn có chắc muốn xóa TOÀN BỘ dữ liệu yêu cầu hoàn tiền? Hành động này không thể hoàn tác!', danger: true }))) return;
     } else {
       if (!deleteDateFrom || !deleteDateTo) return showToast('Vui lòng chọn khoảng ngày', 'error');
-      if (!confirm(`Bạn có chắc muốn xóa yêu cầu hoàn tiền từ ${deleteDateFrom} đến ${deleteDateTo}? Hành động này không thể hoàn tác!`)) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa', message: `Bạn có chắc muốn xóa yêu cầu hoàn tiền từ ${deleteDateFrom} đến ${deleteDateTo}? Hành động này không thể hoàn tác!`, danger: true }))) return;
     }
     setDeleting(true);
     try {

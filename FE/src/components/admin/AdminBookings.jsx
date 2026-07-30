@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { confirmDialog } from '@/lib/confirm';
 import {
   MagnifyingGlass, ArrowClockwise, X, Buildings, CalendarBlank,
   CheckCircle, XCircle, Clock, Spinner, Trash,
@@ -123,10 +124,10 @@ export default function AdminBookings() {
 
   async function deleteBookingsByRange() {
     if (deleteAll) {
-      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ dữ liệu đặt lịch? Hành động này không thể hoàn tác!')) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa tất cả', message: 'Bạn có chắc muốn xóa TOÀN BỘ dữ liệu đặt lịch? Hành động này không thể hoàn tác!', danger: true }))) return;
     } else {
       if (!deleteDateFrom || !deleteDateTo) return alert('Vui lòng chọn khoảng ngày');
-      if (!confirm(`Bạn có chắc muốn xóa đặt lịch từ ${deleteDateFrom} đến ${deleteDateTo}? Hành động này không thể hoàn tác!`)) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa', message: `Bạn có chắc muốn xóa đặt lịch từ ${deleteDateFrom} đến ${deleteDateTo}? Hành động này không thể hoàn tác!`, danger: true }))) return;
     }
     setDeleting(true);
     try {

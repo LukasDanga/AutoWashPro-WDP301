@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import useSSE from '@/hooks/useSSE';
 import { showToast } from '@/lib/toast';
+import { confirmDialog } from '@/lib/confirm';
 import {
   CurrencyDollar,
   CheckCircle,
@@ -430,10 +431,10 @@ export default function AdminPayments() {
 
   async function deletePaymentsByRange() {
     if (deleteAll) {
-      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ dữ liệu thanh toán? Hành động này không thể hoàn tác!')) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa tất cả', message: 'Bạn có chắc muốn xóa TOÀN BỘ dữ liệu thanh toán? Hành động này không thể hoàn tác!', danger: true }))) return;
     } else {
       if (!deleteDateFrom || !deleteDateTo) return alert('Vui lòng chọn khoảng ngày');
-      if (!confirm(`Bạn có chắc muốn xóa giao dịch từ ${deleteDateFrom} đến ${deleteDateTo}?`)) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa', message: `Bạn có chắc muốn xóa giao dịch từ ${deleteDateFrom} đến ${deleteDateTo}?`, danger: true }))) return;
     }
     setDeleting(true);
     try {

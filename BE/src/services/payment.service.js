@@ -230,6 +230,16 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           await markRecurringSiblingsPaid(booking, method, session);
           await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
+            // Spin wheel logic has been moved to booking.service.js to avoid double-awarding
+            // But we still need to trigger it if this payment completes the booking.
+            // Since this bypasses updateBookingStatus, we add the missing side effects:
+            await mongoose.model('User').findOneAndUpdate(
+              { _id: targetUserId, noShowCount: { $gt: 0 } },
+              { $inc: { noShowCount: -1 } },
+              { session }
+            ).catch(() => {});
+            
+            // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
             await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
             sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
           }
@@ -398,10 +408,21 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
       await markRecurringSiblingsDepositPaid(booking, payment.method, session);
     } else {
-      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice }).session(session);
+      const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice };
+      if (booking.status === 'awaiting_payment') {
+        updateData.status = 'completed';
+        updateData.checkOutTime = new Date();
+      }
+      await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
       await markRecurringSiblingsPaid(booking, payment.method, session);
       await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
       if (['awaiting_payment', 'completed'].includes(booking.status)) {
+        await mongoose.model('User').findOneAndUpdate(
+          { _id: payment.userId, noShowCount: { $gt: 0 } },
+          { $inc: { noShowCount: -1 } },
+          { session }
+        ).catch(() => {});
+        // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
       }
@@ -482,7 +503,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
           
           await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, payment.slotPackId, session);
-          await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+          // Removed spin wheel logic for slot pack purchase, user will earn it when they actually use the slot pack.
         } else {
           payment.status = 'failed';
           await payment.save({ session });
@@ -548,6 +569,12 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           await markRecurringSiblingsPaid(booking, payment.method, session);
           await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
+            await mongoose.model('User').findOneAndUpdate(
+              { _id: payment.userId, noShowCount: { $gt: 0 } },
+              { $inc: { noShowCount: -1 } },
+              { session }
+            ).catch(() => {});
+            // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
             await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
           }
         }
@@ -568,7 +595,6 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     // --- Side Effects outside of transaction ---
     if (success && (payment.status === 'paid' || payment.status === 'failed')) {
       if (payment.slotPackId && slotPackResult) {
-        sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
         sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
         const user = await mongoose.model('User').findById(payment.userId);
         notificationService.send(payment.userId, 'Thanh toán gói lượt thành công', `Gói lượt ${slotPackResult.packCode} đã được kích hoạt.`, 'slot_pack_paid', { slotPackId: payment.slotPackId }).catch(() => {});
