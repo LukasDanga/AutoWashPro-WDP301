@@ -1,66 +1,167 @@
-const { User, PointHistory } = require('../models');
+const { User, PointHistory, LoyaltyConfig } = require('../models');
 const notificationService = require('./notification.service');
 const sseService = require('./sse.service');
 
-// Tính điểm dựa trên số tiền (5%) kèm hệ số nhân theo hạng
-const calculatePoints = (amount, tier = 'bronze') => {
-  let multiplier = 1;
-  if (tier === 'diamond') multiplier = 2.0;
-  else if (tier === 'gold') multiplier = 1.5;
-  else if (tier === 'silver') multiplier = 1.2;
-  return Math.floor(amount * 0.05 * multiplier);
-};
-
-// Cấu hình các mốc điểm và ưu đãi của hạng thành viên
-const TIER_CONFIG = {
-  bronze: {
+const DEFAULT_TIERS = [
+  {
     id: 'bronze',
     name: 'Đồng',
     minPoints: 0,
     multiplier: 1.0,
     color: 'text-orange-600',
     bg: 'bg-orange-50 border-orange-200',
-    benefits: ['Tích lũy 5% điểm thưởng từ mỗi hóa đơn', 'Nhận thông báo ưu đãi sớm nhất']
+    icon: 'Circle',
+    benefits: ['Tích lũy điểm thưởng từ mỗi hóa đơn', 'Nhận thông báo ưu đãi sớm nhất'],
   },
-  silver: {
+  {
     id: 'silver',
     name: 'Bạc',
     minPoints: 100000,
     multiplier: 1.2,
     color: 'text-slate-600',
     bg: 'bg-slate-100 border-slate-300',
-    benefits: ['Tất cả ưu đãi của hạng Đồng', 'Hệ số nhân điểm x1.2', 'Ưu tiên rửa xe không cần chờ lâu']
+    icon: 'Medal',
+    benefits: ['Tất cả ưu đãi của hạng Đồng', 'Hệ số nhân điểm x1.2', 'Ưu tiên rửa xe không cần chờ lâu'],
   },
-  gold: {
+  {
     id: 'gold',
     name: 'Vàng',
     minPoints: 500000,
     multiplier: 1.5,
     color: 'text-yellow-600',
     bg: 'bg-yellow-50 border-yellow-200',
-    benefits: ['Tất cả ưu đãi của hạng Bạc', 'Hệ số nhân điểm x1.5', 'Giảm 5% khi mua gói dịch vụ', 'Tặng 1 lần xịt gầm miễn phí mỗi tháng']
+    icon: 'Crown',
+    benefits: ['Tất cả ưu đãi của hạng Bạc', 'Hệ số nhân điểm x1.5', 'Giảm 5% khi mua gói dịch vụ', 'Tặng 1 lần xịt gầm miễn phí mỗi tháng'],
   },
-  diamond: {
+  {
     id: 'diamond',
     name: 'Kim cương',
     minPoints: 1000000,
     multiplier: 2.0,
     color: 'text-blue-600',
     bg: 'bg-blue-50 border-blue-200',
-    benefits: ['Tất cả ưu đãi của hạng Vàng', 'Hệ số nhân điểm siêu tốc x2.0', 'Giảm 10% khi mua gói dịch vụ', 'Phục vụ phòng chờ VIP', 'Tặng 1 lượt rửa xe tiêu chuẩn miễn phí mỗi tháng']
+    icon: 'Diamond',
+    benefits: ['Tất cả ưu đãi của hạng Vàng', 'Hệ số nhân điểm siêu tốc x2.0', 'Giảm 10% khi mua gói dịch vụ', 'Phục vụ phòng chờ VIP', 'Tặng 1 lượt rửa xe tiêu chuẩn miễn phí mỗi tháng'],
   },
+];
+
+const DEFAULT_CONFIG = {
+  baseEarningRate: 5,
+  pointExpirationMonths: 6,
+  tiers: DEFAULT_TIERS,
 };
 
-// Xác định hạng dựa trên tổng điểm đời người (lifetimePoints)
-const determineTier = (lifetimePoints) => {
-  if (lifetimePoints >= TIER_CONFIG.diamond.minPoints) return 'diamond';
-  if (lifetimePoints >= TIER_CONFIG.gold.minPoints) return 'gold';
-  if (lifetimePoints >= TIER_CONFIG.silver.minPoints) return 'silver';
-  return 'bronze';
+let cachedConfig = null;
+
+/**
+ * Clear cached config (helpful for testing)
+ */
+exports.clearCache = () => {
+  cachedConfig = null;
 };
 
-exports.getTierConfig = () => Object.values(TIER_CONFIG);
+const PRESET_TIER_ICONS = {
+  bronze: 'Circle',
+  silver: 'Medal',
+  gold: 'Crown',
+  diamond: 'Diamond',
+};
 
+function normalizeTiers(tiers = []) {
+  return tiers.map((t) => {
+    const tierObj = typeof t.toObject === 'function' ? t.toObject() : { ...t };
+    const idLower = (tierObj.id || '').toLowerCase();
+    if (!tierObj.icon || (tierObj.icon === 'Circle' && idLower !== 'bronze')) {
+      tierObj.icon = PRESET_TIER_ICONS[idLower] || 'Star';
+    }
+    return tierObj;
+  });
+}
+
+/**
+ * Lấy cấu hình điểm thưởng hiện tại từ DB (nếu chưa có sẽ tạo mặc định)
+ */
+exports.getLoyaltyConfig = async () => {
+  if (cachedConfig) return cachedConfig;
+  try {
+    let doc = await LoyaltyConfig.findOne();
+    if (!doc) {
+      doc = await LoyaltyConfig.create(DEFAULT_CONFIG);
+    }
+    const obj = doc.toObject();
+    obj.tiers = normalizeTiers(obj.tiers);
+    cachedConfig = obj;
+    return cachedConfig;
+  } catch (err) {
+    return DEFAULT_CONFIG;
+  }
+};
+
+/**
+ * Cập nhật cấu hình điểm thưởng (Admin)
+ */
+exports.updateLoyaltyConfig = async (data) => {
+  let doc = await LoyaltyConfig.findOne();
+  if (!doc) {
+    doc = new LoyaltyConfig(DEFAULT_CONFIG);
+  }
+  if (data.baseEarningRate !== undefined) {
+    doc.baseEarningRate = Number(data.baseEarningRate);
+  }
+  if (data.pointExpirationMonths !== undefined) {
+    doc.pointExpirationMonths = Number(data.pointExpirationMonths);
+  }
+  if (Array.isArray(data.tiers)) {
+    doc.tiers = data.tiers.map((t) => ({
+      id: String(t.id || '').trim(),
+      name: String(t.name || '').trim(),
+      minPoints: Number(t.minPoints || 0),
+      multiplier: Number(t.multiplier || 1.0),
+      color: t.color || '',
+      bg: t.bg || '',
+      border: t.border || '',
+      colorTheme: t.colorTheme || t.id || 'bronze',
+      icon: t.icon || 'Circle',
+      benefits: Array.isArray(t.benefits) ? t.benefits.map((b) => String(b).trim()) : [],
+    }));
+  }
+  doc.isDefault = false;
+  await doc.save();
+  cachedConfig = doc.toObject();
+  cachedConfig.tiers = normalizeTiers(cachedConfig.tiers);
+  return cachedConfig;
+};
+
+/**
+ * Tính điểm dựa trên số tiền và hạng thành viên theo config động
+ */
+exports.calculatePoints = (amount, tier = 'bronze', config = cachedConfig || DEFAULT_CONFIG) => {
+  const rate = (config.baseEarningRate ?? 5) / 100;
+  const tierObj = (config.tiers || DEFAULT_TIERS).find((t) => t.id === tier);
+  const multiplier = tierObj ? tierObj.multiplier : 1.0;
+  return Math.floor(amount * rate * multiplier);
+};
+
+/**
+ * Xác định hạng dựa trên tổng điểm lifetimePoints và config động
+ */
+exports.determineTier = (lifetimePoints, config = cachedConfig || DEFAULT_CONFIG) => {
+  const tiers = [...(config.tiers || DEFAULT_TIERS)].sort((a, b) => b.minPoints - a.minPoints);
+  for (const t of tiers) {
+    if (lifetimePoints >= t.minPoints) {
+      return t.id;
+    }
+  }
+  return tiers[tiers.length - 1]?.id || 'bronze';
+};
+
+/**
+ * Trả về danh sách hạng cấu hình cho client
+ */
+exports.getTierConfig = async () => {
+  const config = await exports.getLoyaltyConfig();
+  return config.tiers || DEFAULT_TIERS;
+};
 
 /**
  * Xử lý khi thanh toán thành công: cộng điểm, ghi log, thăng hạng
@@ -69,46 +170,123 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
   const user = await User.findById(userId).session(session);
   if (!user) return null;
 
-  const pointsEarned = calculatePoints(amount, user.tier);
+  const config = await exports.getLoyaltyConfig();
+  const pointsEarned = exports.calculatePoints(amount, user.tier, config);
   if (pointsEarned <= 0) return null;
 
   user.loyaltyPoints += pointsEarned;
   user.lifetimePoints += pointsEarned;
 
-  // Gia hạn điểm 6 tháng
-  const sixMonthsLater = new Date();
-  sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
-  user.pointsExpiresAt = sixMonthsLater;
+  // Gia hạn điểm theo config (mặc định 6 tháng)
+  const expMonths = config.pointExpirationMonths || 6;
+  const expDate = new Date();
+  expDate.setMonth(expDate.getMonth() + expMonths);
+  user.pointsExpiresAt = expDate;
 
   // Kiểm tra thăng hạng
-  const newTier = determineTier(user.lifetimePoints);
+  const newTier = exports.determineTier(user.lifetimePoints, config);
   const tierChanged = user.tier !== newTier;
   if (tierChanged) {
     user.tier = newTier;
-    
-    // Only notify if upgrading (not downgrading, though determineTier only upgrades)
-    const tierName = TIER_CONFIG[newTier]?.name || newTier;
+
+    const tierObj = (config.tiers || DEFAULT_TIERS).find((t) => t.id === newTier);
+    const tierName = tierObj?.name || newTier;
     notificationService.send(
-      userId, 
-      'Chúc mừng thăng hạng', 
-      `Bạn đã được thăng lên hạng ${tierName}. Khám phá ngay các ưu đãi mới!`, 
-      'tier_upgraded', 
+      userId,
+      'Chúc mừng thăng hạng',
+      `Bạn đã được thăng lên hạng ${tierName}. Khám phá ngay các ưu đãi mới!`,
+      'tier_upgraded',
       { newTier }
     ).catch(() => {});
   }
 
   await user.save({ session });
 
-  // Ghi log
+  // Lấy thông tin booking & chi nhánh (nếu có)
+  const { Booking } = require('../models');
+  let bookingCode = '';
+  let bookingType = 'single';
+  let packageName = '';
+  let packagePrice = 0;
+  let subServices = [];
+  let paymentMethod = '';
+  let paymentStatus = 'paid';
+  let branchId = null;
+  let branchName = '';
+  let branchAddress = '';
+
+  if (bookingId) {
+    try {
+      const booking = await Booking.findById(bookingId)
+        .populate('branchId', 'name address')
+        .populate('packageId', 'name price')
+        .session(session);
+
+      if (booking) {
+        bookingCode = booking.bookingCode || '';
+        bookingType = booking.bookingType || 'single';
+        paymentMethod = booking.paymentMethod || '';
+        paymentStatus = booking.paymentStatus || 'paid';
+
+        if (booking.packageId) {
+          packageName = booking.packageId.name || '';
+          packagePrice = booking.packageId.price || 0;
+        }
+
+        if (Array.isArray(booking.subServices)) {
+          subServices = booking.subServices.map((s) => ({
+            name: typeof s === 'string' ? s : s?.name || '',
+            price: typeof s === 'object' ? s?.price || 0 : 0,
+          }));
+        }
+
+        if (booking.branchId) {
+          branchId = booking.branchId._id || booking.branchId;
+          branchName = booking.branchId.name || '';
+          branchAddress = booking.branchId.address || '';
+        }
+      }
+    } catch {}
+  }
+
+  const baseRate = config.baseEarningRate ?? 5;
+  const tierObj = (config.tiers || DEFAULT_TIERS).find((t) => t.id === user.tier);
+  const multiplier = tierObj ? tierObj.multiplier : 1.0;
+  const tierName = tierObj ? tierObj.name : user.tier;
+  const effectiveRate = Number((baseRate * multiplier).toFixed(2));
+
+  const detailedDesc = bookingCode
+    ? `Tích lũy +${pointsEarned.toLocaleString('vi-VN')} điểm từ thanh toán đơn hàng ${bookingCode}`
+    : `Tích lũy +${pointsEarned.toLocaleString('vi-VN')} điểm từ thanh toán hóa đơn`;
+
+  // Ghi log kèm snapshot bất biến
   await PointHistory.create([{
     userId,
     points: pointsEarned,
     type: 'earned',
-    description: `Tích lũy ${pointsEarned} điểm từ thanh toán hóa đơn.`,
+    description: detailedDesc,
     referenceId: bookingId,
+    snapshot: {
+      orderAmount: amount,
+      baseRate,
+      tier: user.tier,
+      tierName,
+      multiplier,
+      effectiveRate,
+      bookingCode,
+      bookingType,
+      packageName,
+      packagePrice,
+      subServices,
+      paymentMethod,
+      paymentStatus,
+      branchId,
+      branchName,
+      branchAddress,
+    },
   }], { session });
 
-  // Real-time broadcasts for points & booking history
+  // Real-time broadcasts
   notificationService.send(
     userId,
     'Tích điểm thành công',
@@ -131,7 +309,7 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
 };
 
 /**
- * Kiểm tra điểm hết hạn (thường gọi khi user đăng nhập hoặc getProfile)
+ * Kiểm tra điểm hết hạn
  */
 exports.checkAndExpirePoints = async (userId) => {
   const user = await User.findById(userId);
@@ -148,5 +326,106 @@ exports.checkAndExpirePoints = async (userId) => {
       type: 'expired',
       description: `Điểm tích lũy đã hết hạn.`,
     });
+  }
+};
+
+/**
+ * Thu hồi điểm thưởng khi đơn hàng bị hủy
+ * @param {string} bookingId - ID của booking bị hủy
+ * @param {string} cancellationReason - Lý do hủy
+ * @param {object} parentSession - Mongoose session để chạy trong transaction (optional)
+ */
+exports.deductPointsForCancelledBooking = async (bookingId, cancellationReason = '', parentSession = null) => {
+  const exec = parentSession
+    ? { query: (model, filter, opts) => model.findOne(filter, null, { ...opts, session: parentSession }), save: (doc) => doc.save({ session: parentSession }), create: (model, data) => model.create([data], { session: parentSession }) }
+    : { query: (model, filter, opts) => model.findOne(filter, opts), save: (doc) => doc.save(), create: (model, data) => model.create([data]) };
+
+  try {
+    const PointHistoryModel = PointHistory;
+    const earnedHistory = await exec.query(PointHistoryModel, {
+      referenceId: bookingId,
+      type: 'earned',
+      isDeleted: { $ne: true },
+    });
+
+    if (!earnedHistory || earnedHistory.points <= 0) return null;
+
+    const targetUser = await exec.query(User, { _id: earnedHistory.userId });
+    if (!targetUser) return null;
+
+    // Idempotency
+    const alreadyDeducted = await exec.query(PointHistoryModel, {
+      referenceId: bookingId,
+      type: 'adjustment',
+      points: { $lt: 0 },
+      isDeleted: { $ne: true },
+    });
+    if (alreadyDeducted) return null;
+
+    const pointsDeducted = earnedHistory.points;
+    const newLoyaltyPoints = Math.max(0, (targetUser.loyaltyPoints || 0) - pointsDeducted);
+    const newLifetimePoints = Math.max(0, (targetUser.lifetimePoints || 0) - pointsDeducted);
+
+    targetUser.loyaltyPoints = newLoyaltyPoints;
+    targetUser.lifetimePoints = newLifetimePoints;
+
+    // Tính lại tier dựa trên lifetimePoints mới
+    const config = await exports.getLoyaltyConfig();
+    const newTier = exports.determineTier(newLifetimePoints, config);
+    const tierChanged = targetUser.tier !== newTier;
+    targetUser.tier = newTier;
+
+    await exec.save(targetUser);
+
+    const bookingCode = earnedHistory.snapshot?.bookingCode || '';
+    const desc = bookingCode
+      ? `Truy thu -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng do đơn hàng ${bookingCode} bị hủy`
+      : `Truy thu -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng do đơn hàng bị hủy`;
+
+    await exec.create(PointHistoryModel, {
+      userId: targetUser._id,
+      points: -pointsDeducted,
+      type: 'adjustment',
+      description: desc,
+      referenceId: bookingId,
+      snapshot: {
+        ...earnedHistory.snapshot,
+        cancellationReason,
+      },
+    });
+
+    if (tierChanged) {
+      const tierObj = (config.tiers || []).find((t) => t.id === newTier);
+      const tierName = tierObj?.name || newTier;
+      notificationService.send(
+        targetUser._id,
+        'Cập nhật hạng thành viên',
+        `Do thu hồi điểm, hạng của bạn đã được điều chỉnh xuống ${tierName}.`,
+        'tier_downgraded',
+        { newTier }
+      ).catch(() => {});
+    }
+
+    // Thông báo
+    notificationService.send(
+      targetUser._id,
+      'Trừ điểm thưởng do hủy đơn',
+      `Đơn hàng ${bookingCode || ''} đã bị hủy. Hệ thống đã thu hồi -${pointsDeducted.toLocaleString('vi-VN')} điểm thưởng tương ứng.`,
+      'points_deducted',
+      { pointsDeducted, bookingId, loyaltyPoints: targetUser.loyaltyPoints }
+    ).catch(() => {});
+
+    const userIdStr = String(targetUser._id);
+    sseService.sendToUser(userIdStr, 'points_updated', {
+      pointsDeducted,
+      loyaltyPoints: targetUser.loyaltyPoints,
+      bookingId: String(bookingId),
+    });
+
+    return true;
+  } catch (err) {
+    console.error('Lỗi khi thu hồi điểm thưởng do hủy đơn:', err);
+    if (!parentSession) return null;
+    throw err;
   }
 };

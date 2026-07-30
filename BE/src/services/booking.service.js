@@ -1466,6 +1466,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       emailService.sendCancellationSuccessEmail(user.email, { type: booking.bookingType, code: booking.bookingCode || booking.recurringGroupId || '' }, refundAmount).catch(e => console.error('Lỗi gửi email hủy đơn:', e));
     }
 
+    // Thu hồi điểm thưởng đã tích nếu đơn hàng bị hủy (trong cùng transaction)
+    await loyaltyService.deductPointsForCancelledBooking(id, cancellationReason, session);
+
     await session.commitTransaction();
 
     notificationService.send(
