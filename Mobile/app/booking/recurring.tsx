@@ -1396,7 +1396,7 @@ export default function RecurringBookingScreen() {
       />
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xs }}
         showsVerticalScrollIndicator={false}
       >
         {step === 'branch' && renderBranchStep()}
@@ -1404,7 +1404,6 @@ export default function RecurringBookingScreen() {
         {step === 'vehicle' && renderVehicleStep()}
         {step === 'recurrence' && renderRecurrenceStep()}
         {step === 'confirm' && renderConfirmStep()}
-        <View style={styles.bottomPadding} />
       </ScrollView>
 
       <View style={[styles.bottomAction, { backgroundColor: 'transparent' }]}>
@@ -1482,7 +1481,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   progressLabel: {
-    ...typography.caption,
+    fontSize: 10,
     color: colors.textTertiary,
     textAlign: 'center',
   },
@@ -1972,7 +1971,7 @@ interface StepLayoutProps {
 const StepLayout: React.FC<StepLayoutProps> = ({ title, subtitle, icon, children }) => {
   const colors = useColors();
   return (
-    <View style={{ paddingTop: spacing.xl, paddingBottom: spacing.xxl }}>
+    <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
       <View style={styles.stepHeader}>
         <View style={[styles.stepHeaderIcon, { backgroundColor: colors.primarySubtle }]}>
           <Icon name={icon} size={24} color={colors.primary} />

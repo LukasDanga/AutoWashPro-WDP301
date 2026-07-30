@@ -1,6 +1,7 @@
 const { RefundRequest, Booking } = require('../models');
 const paymentService = require('./payment.service');
 const notificationService = require('./notification.service');
+const sseService = require('./sse.service');
 
 exports.createRequest = async (bookingId, userId, userRole, reason) => {
   const booking = await Booking.findById(bookingId);
@@ -33,6 +34,31 @@ exports.createRequest = async (bookingId, userId, userRole, reason) => {
     'refund_request',
     { bookingId, refundRequestId: request._id, branchId: booking.branchId }
   ).catch(() => {});
+
+  // Real-time broadcasts
+  const customerId = String(booking.userId);
+  const bId = String(booking._id);
+  const rId = String(request._id);
+
+  sseService.sendToUser(customerId, 'refund_request_updated', {
+    bookingId: bId,
+    refundRequestId: rId,
+    status: 'pending',
+    reason,
+  });
+  if (booking.branchId) {
+    sseService.broadcastToManagers(String(booking.branchId), 'refund_request_new', {
+      bookingId: bId,
+      refundRequestId: rId,
+      branchId: String(booking.branchId),
+      status: 'pending',
+    });
+  }
+  sseService.broadcastToAll('refund_requests_updated', {
+    bookingId: bId,
+    refundRequestId: rId,
+    status: 'pending',
+  });
 
   return request;
 };
@@ -68,21 +94,25 @@ exports.reviewRequest = async (id, reviewerId, decision, reviewNote) => {
     throw Object.assign(new Error('Invalid decision'), { statusCode: 400, code: 'INVALID_DECISION' });
   }
 
-  const request = await RefundRequest.findById(id);
+  const request = await RefundRequest.findById(id).populate('bookingId');
   if (!request) throw Object.assign(new Error('Refund request not found'), { statusCode: 404, code: 'NOT_FOUND' });
   if (request.status !== 'pending') {
     throw Object.assign(new Error('Yêu cầu này đã được xử lý'), { statusCode: 409, code: 'ALREADY_REVIEWED' });
   }
 
+  const booking = request.bookingId;
+  const bookingId = booking?._id || request.bookingId;
+  const branchId = booking?.branchId;
+
   if (decision === 'approved') {
-    await paymentService.refundPayment(request.bookingId);
+    await paymentService.refundPayment(bookingId);
   } else {
     notificationService.send(
       request.userId,
       'Yêu cầu hoàn tiền bị từ chối',
       reviewNote || 'Yêu cầu hoàn tiền của bạn đã bị từ chối.',
       'refund_request_rejected',
-      { bookingId: request.bookingId, refundRequestId: request._id }
+      { bookingId, refundRequestId: request._id }
     ).catch(() => {});
   }
 
@@ -92,6 +122,36 @@ exports.reviewRequest = async (id, reviewerId, decision, reviewNote) => {
   request.reviewedAt = new Date();
   await request.save();
 
+  // Real-time broadcasts
+  const userIdStr = String(request.userId?._id || request.userId);
+  const bookingIdStr = String(bookingId);
+  const requestIdStr = String(request._id);
+
+  sseService.sendToUser(userIdStr, 'refund_request_updated', {
+    bookingId: bookingIdStr,
+    refundRequestId: requestIdStr,
+    status: decision,
+    reviewNote,
+  });
+  sseService.sendToUser(userIdStr, 'my_bookings_updated', { bookingId: bookingIdStr });
+
+  if (decision === 'approved') {
+    sseService.sendToUser(userIdStr, 'wallet_topup_success', { bookingId: bookingIdStr });
+  }
+
+  if (branchId) {
+    sseService.broadcastToManagers(String(branchId), 'refund_request_updated', {
+      bookingId: bookingIdStr,
+      refundRequestId: requestIdStr,
+      status: decision,
+    });
+  }
+  sseService.broadcastToAll('refund_requests_updated', {
+    bookingId: bookingIdStr,
+    refundRequestId: requestIdStr,
+    status: decision,
+  });
+
   return request;
 };
 
@@ -99,13 +159,20 @@ exports.deleteRequest = async (id, userRole) => {
   const request = await RefundRequest.findById(id);
   if (!request) throw Object.assign(new Error('Refund request not found'), { statusCode: 404, code: 'NOT_FOUND' });
   await RefundRequest.findByIdAndDelete(id);
-  return { message: 'Refund request deleted successfully' };
+  return { message: 'Xóa yêu cầu hoàn tiền thành công' };
 };
 
 exports.deleteRequestsByDateRange = async (dateFrom, dateTo, deleteAll = false) => {
   if (deleteAll) {
-    const result = await RefundRequest.deleteMany({});
-    return { message: `Đã xóa tất cả ${result.deletedCount} yêu cầu hoàn tiền` };
+    // H-5 SAFETY: log + warn. RefundRequest là audit trail quan trọng cho CSKH.
+    // Hard delete ALL là thao tác cần manager+ approval, không cho phép qua API.
+    console.error(
+      `[deleteRequestsByDateRange] BLOCKED: attempted to hard-delete ALL refund requests. Process: ${process.pid}.`,
+    );
+    throw Object.assign(
+      new Error('Không thể xóa tất cả refund requests qua API. Sử dụng script migration riêng nếu cần.'),
+      { statusCode: 403, code: 'FORBIDDEN_BULK_OP' },
+    );
   }
 
   if (!dateFrom || !dateTo) {
@@ -118,9 +185,13 @@ exports.deleteRequestsByDateRange = async (dateFrom, dateTo, deleteAll = false) 
   const toDate = new Date(dateTo);
   toDate.setHours(23, 59, 59, 999);
 
+  // H-5 SAFETY: log + warn. Hard delete refund request cần approval.
   const result = await RefundRequest.deleteMany({
     createdAt: { $gte: fromDate, $lte: toDate },
   });
+  console.warn(
+    `[deleteRequestsByDateRange] HARD-DELETED ${result.deletedCount} refund requests from ${fromDate.toISOString()} to ${toDate.toISOString()}. Process: ${process.pid}.`,
+  );
 
   return { message: `Đã xóa ${result.deletedCount} yêu cầu hoàn tiền trong khoảng từ ${dateFrom} đến ${dateTo}` };
 };

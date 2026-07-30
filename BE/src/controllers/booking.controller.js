@@ -17,12 +17,12 @@ exports.createBooking = catchAsync(async (req, res) => {
     emailService.sendBookingConfirmationEmail(user.email, booking).catch(e => console.error('Lỗi gửi email xác nhận đặt lịch:', e));
   }
 
-  success(res, booking, 'Booking created', 201);
+  success(res, booking, 'Đặt lịch thành công', 201);
 });
 
 exports.checkRecurringConflicts = catchAsync(async (req, res) => {
   const result = await bookingService.checkRecurringConflicts({ ...req.body, userId: req.userId });
-  success(res, result, 'Conflict check completed');
+  success(res, result, 'Kiểm tra trùng lịch hoàn tất');
 });
 
 exports.createRecurringBooking = catchAsync(async (req, res) => {
@@ -51,24 +51,24 @@ exports.cancelRecurringGroup = catchAsync(async (req, res) => {
 
 exports.getAllBookings = catchAsync(async (req, res) => {
   const bookings = await bookingService.getAllBookings(req.query, req.user.role, req.userId);
-  success(res, bookings, 'Bookings retrieved');
+  success(res, bookings, 'Đã lấy danh sách đặt lịch');
 });
 
 exports.getMyBookings = catchAsync(async (req, res) => {
   const result = await bookingService.getAllBookings(req.query, 'customer', req.userId);
-  success(res, result, 'My bookings retrieved');
+  success(res, result, 'Đã lấy danh sách đặt lịch của tôi');
 });
 
 exports.getBookingById = catchAsync(async (req, res) => {
   const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId, req.user.branchId);
-  success(res, booking, 'Booking retrieved');
+  success(res, booking, 'Đã lấy thông tin đặt lịch');
 });
 
 exports.updateBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
-  success(res, booking, 'Booking updated');
+  success(res, booking, 'Cập nhật đặt lịch thành công');
 });
 
 exports.updateBookingStatus = catchAsync(async (req, res) => {
@@ -79,14 +79,14 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
-  success(res, booking, 'Booking status updated');
+  success(res, booking, 'Cập nhật trạng thái đặt lịch thành công');
 });
 
 exports.updateSubServices = catchAsync(async (req, res) => {
   const booking = await bookingService.updateSubServices(req.params.id, req.body.subServices, req.user.role, req.user.branchId, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
-  success(res, booking, 'Updated sub-services successfully');
+  success(res, booking, 'Cập nhật dịch vụ phụ thành công');
 });
 
 exports.extendGracePeriod = catchAsync(async (req, res) => {
@@ -96,7 +96,7 @@ exports.extendGracePeriod = catchAsync(async (req, res) => {
 
 exports.getCancelPreview = catchAsync(async (req, res) => {
   const preview = await bookingService.getCancelPreview(req.params.id, req.userId);
-  success(res, preview, 'Cancel preview');
+  success(res, preview, 'Xem trước hủy lịch');
 });
 
 exports.requestCancelOtp = catchAsync(async (req, res) => {
@@ -162,12 +162,12 @@ exports.cancelBooking = catchAsync(async (req, res) => {
 
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
-  success(res, booking, 'Booking cancelled');
+  success(res, booking, 'Hủy lịch thành công');
 });
 exports.deleteBooking = catchAsync(async (req, res) => {
   await bookingService.deleteBooking(req.params.id, req.user.role);
   sseService.broadcastToAll('slots_updated');
-  success(res, null, 'Booking deleted');
+  success(res, null, 'Đã xóa đặt lịch');
 });
 
 exports.refundComplete = catchAsync(async (req, res) => {
@@ -207,7 +207,7 @@ exports.getAvailableSlots = catchAsync(async (req, res) => {
   console.log('--- GET SLOTS CALLED ---', req.query);
   const slots = await bookingService.getAvailableSlots(branchId, date, packageId);
   console.log('--- SLOTS RETURNED ---', slots.length);
-  success(res, slots, 'Available slots retrieved');
+  success(res, slots, 'Đã lấy danh sách khung giờ trống');
 });
 
 exports.createPayment = catchAsync(async (req, res) => {
@@ -226,7 +226,7 @@ exports.createPayment = catchAsync(async (req, res) => {
     };
   }
   
-  success(res, result, 'Payment created', 201);
+  success(res, result, 'Tạo thanh toán thành công', 201);
 });
 
 exports.confirmBookings = catchAsync(async (req, res) => {
@@ -242,12 +242,12 @@ exports.confirmBookings = catchAsync(async (req, res) => {
 exports.confirmPayment = catchAsync(async (req, res) => {
   const { transactionId, method, gatewayTransactionId } = req.body;
   const payment = await paymentService.confirmPayment(transactionId, method, gatewayTransactionId);
-  success(res, payment, 'Payment confirmed');
+  success(res, payment, 'Xác nhận thanh toán thành công');
 });
 
 exports.getPaymentByBooking = catchAsync(async (req, res) => {
   const payment = await paymentService.getPaymentByBooking(req.params.bookingId, req.userId, req.user.role);
-  success(res, payment, 'Payment retrieved');
+  success(res, payment, 'Đã lấy thông tin thanh toán');
 });
 
 exports.getPaymentById = catchAsync(async (req, res) => {
@@ -265,33 +265,33 @@ exports.getPaymentById = catchAsync(async (req, res) => {
     };
   }
   
-  success(res, result, 'Payment retrieved');
+  success(res, result, 'Đã lấy thông tin thanh toán');
 });
 
 exports.getAllPayments = catchAsync(async (req, res) => {
   const result = await paymentService.getAllPayments(req.query, req.user.role, req.userId);
-  success(res, result.data, 'Payments retrieved', 200, result.pagination);
+  success(res, result.data, 'Đã lấy danh sách thanh toán', 200, result.pagination);
 });
 
 exports.getMyPayments = catchAsync(async (req, res) => {
   const result = await paymentService.getMyPaymentHistory(req.userId, req.query);
-  success(res, result.data, 'My payments retrieved', 200, result.pagination);
+  success(res, result.data, 'Đã lấy danh sách thanh toán của tôi', 200, result.pagination);
 });
 
 exports.markPaymentViewed = catchAsync(async (req, res) => {
   const payment = await paymentService.markPaymentViewed(req.params.id, req.user.role);
-  success(res, payment, 'Payment marked as viewed');
+  success(res, payment, 'Đánh dấu thanh toán đã xem');
 });
 
 exports.countUnviewedPayments = catchAsync(async (req, res) => {
   const count = await paymentService.countUnviewedPayments();
-  success(res, { count }, 'Unviewed payments count');
+  success(res, { count }, 'Số lượng thanh toán chưa xem');
 });
 
 exports.refundPayment = catchAsync(async (req, res) => {
   const { bookingId } = req.body;
   const payment = await paymentService.refundPayment(bookingId);
-  success(res, payment, 'Payment refunded');
+  success(res, payment, 'Đã hoàn tiền');
 });
 
 exports.deletePaymentsByDateRange = catchAsync(async (req, res) => {
@@ -311,29 +311,29 @@ exports.deletePaymentsByDateRange = catchAsync(async (req, res) => {
 
 exports.getFeedbacks = catchAsync(async (req, res) => {
   const feedbacks = await bookingService.getFeedbacks(req.user, req.query);
-  success(res, feedbacks, 'Feedbacks retrieved');
+  success(res, feedbacks, 'Đã lấy danh sách đánh giá');
 });
 
 exports.getCustomers = catchAsync(async (req, res) => {
   const customers = await bookingService.getCustomers(req.user, req.query);
-  success(res, customers, 'Customers retrieved');
+  success(res, customers, 'Đã lấy danh sách khách hàng');
 });
 
 exports.submitFeedback = catchAsync(async (req, res) => {
   const { rating, feedback } = req.body;
   const booking = await bookingService.submitFeedback(req.params.id, req.userId, { rating, feedback });
-  success(res, booking, 'Feedback submitted');
+  success(res, booking, 'Gửi đánh giá thành công');
 });
 
 exports.replyToFeedback = catchAsync(async (req, res) => {
   const booking = await bookingService.replyToFeedback(req.params.id, req.userId, req.body.reply);
-  success(res, booking, 'Reply submitted');
+  success(res, booking, 'Gửi phản hồi thành công');
 });
 
 exports.rebookBooking = catchAsync(async (req, res) => {
   const { bookingDate, startTime, selectedSubServices, voucherCode } = req.body;
   const booking = await bookingService.rebookBooking(req.params.id, req.userId, req.user.role, { bookingDate, startTime, selectedSubServices, voucherCode });
-  success(res, booking, 'Booking rebooked', 201);
+  success(res, booking, 'Đặt lại lịch thành công', 201);
 });
 
 exports.getBookingQR = catchAsync(async (req, res) => {
@@ -370,7 +370,7 @@ exports.sepayWebhook = catchAsync(async (req, res) => {
   
   try {
     const payment = await paymentService.confirmPaymentCallback(transactionId, referenceCode || 'SEPAY', true);
-    success(res, payment, 'SePay webhook processed successfully');
+    success(res, payment, 'Xử lý webhook SePay thành công');
   } catch (err) {
     // Trả về 200 để SePay không gửi lại webhook nếu giao dịch đã được xử lý hoặc không hợp lệ
     console.error('SePay Webhook error:', err.message);
@@ -381,7 +381,7 @@ exports.sepayWebhook = catchAsync(async (req, res) => {
 exports.simulatePayment = catchAsync(async (req, res) => {
   const { transactionId, gatewayTransactionId } = req.body;
   const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId || 'SIMULATED', true);
-  success(res, payment, 'Payment simulated successfully');
+  success(res, payment, 'Mô phỏng thanh toán thành công');
 });
 
 exports.createVnpayProvisional = catchAsync(async (req, res) => {
@@ -433,10 +433,10 @@ exports.createBankProvisional = catchAsync(async (req, res) => {
     bankId: process.env.SEPAY_BANK_ID || 'MB',
     accountNumber: process.env.SEPAY_BANK_ACCOUNT || '',
     accountHolder: process.env.SEPAY_ACCOUNT_NAME || 'CONG TY CO PHAN AUTO WASH PRO',
-    transferContent: `${paymentType === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId}`,
+    transferContent: `${paymentType === 'topup' ? 'NAP VI' : paymentType === 'full' ? 'THANH TOAN' : 'DAT COC'} ${payment.transactionId}`,
   };
   
-  success(res, result, 'Bank provisional payment created');
+  success(res, result, 'Tạo thanh toán tạm tính ngân hàng thành công');
 });
 
 exports.vnpayCallback = catchAsync(async (req, res) => {

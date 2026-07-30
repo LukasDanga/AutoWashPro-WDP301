@@ -36,6 +36,7 @@ import { useTheme, useColors } from '../../src/theme/ThemeContext';
 import { toGradientColors, getGradients } from '../../src/theme/gradients';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius, shadows, layout } from '../../src/theme/spacing';
+import { useTranslation } from 'react-i18next';
 
 interface MenuItemProps {
   icon: string;
@@ -156,6 +157,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const styles = createStyles(colors);
   const gradients = getGradients(isDark);
+  const { t } = useTranslation();
 
   const [bookingCount, setBookingCount] = useState<number | null>(null);
 
@@ -201,12 +203,12 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     AlertDialog.confirm(
-      'Đăng xuất',
-      'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?',
+      t('profile.logout'),
+      t('profile.logout_confirm'),
       () => logout(),
       undefined,
-      'Đăng xuất',
-      'Hủy',
+      t('profile.logout'),
+      t('profile.cancel'),
     );
   };
 
@@ -224,21 +226,21 @@ export default function ProfileScreen() {
           <View style={styles.guestIconWrap}>
             <Icon name={Icons.personOutline} size={48} color={colors.textInverse} />
           </View>
-          <AppText variant="h2" style={styles.guestTitle}>Chào khách!</AppText>
+          <AppText variant="h2" style={styles.guestTitle}>{t('profile.guest_greeting')}</AppText>
           <AppText variant="body" style={styles.guestSubtitle}>
-            Đăng nhập để trải nghiệm đầy đủ dịch vụ
+            {t('profile.login_prompt')}
           </AppText>
         </LinearGradient>
 
         <View style={styles.guestCTAs}>
           <Button
-            title="Đăng nhập"
+            title={t('profile.login')}
             onPress={() => router.push('/(auth)/login' as any)}
             fullWidth
             style={styles.guestLoginButton}
           />
           <Button
-            title="Tạo tài khoản"
+            title={t('profile.register')}
             variant="outline"
             onPress={() => router.push('/(auth)/register' as any)}
             fullWidth
@@ -279,10 +281,10 @@ onPress={() => router.push('/profile/edit' as any)}
 
         <View style={styles.progressContainer}>
           {isMax ? (
-            <AppText variant="label" style={styles.progressText}>Bạn đang ở hạng cao nhất</AppText>
+            <AppText variant="label" style={styles.progressText}>{t('profile.tier_max')}</AppText>
           ) : (
             <AppText variant="label" style={styles.progressText}>
-              Lên hạng {nextTierLabel}: {lifetime.toLocaleString('vi-VN')} / {threshold.toLocaleString('vi-VN')} điểm
+              {t('profile.tier_next', { tier: nextTierLabel, current: lifetime.toLocaleString('vi-VN'), total: threshold.toLocaleString('vi-VN') })}
             </AppText>
           )}
           <View style={styles.progressBarBg}>
@@ -302,21 +304,21 @@ onPress={() => router.push('/profile/edit' as any)}
             >
               <AppText variant="h3" style={styles.statValue}>{bookingCount ?? '—'}</AppText>
               <AppText variant="caption" color="textSecondary">
-                Đơn đặt
+                {t('profile.stats_orders')}
               </AppText>
             </TouchableOpacity>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <AppText variant="h3" style={styles.statValue}>{user?.loyaltyPoints || 0}</AppText>
               <AppText variant="caption" color="textSecondary">
-                Điểm
+                {t('profile.stats_points')}
               </AppText>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <AppText variant="h3" style={styles.statValue}>{user?.lifetimePoints || 0}</AppText>
               <AppText variant="caption" color="textSecondary">
-                Tổng điểm
+                {t('profile.stats_total_points')}
               </AppText>
             </View>
           </View>
@@ -325,113 +327,113 @@ onPress={() => router.push('/profile/edit' as any)}
 
       {/* Account section */}
       <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
-        Tài khoản
+        {t('profile.title')}
       </AppText>
       <View style={styles.menuSection}>
         <MenuItem
           icon={Icons.personOutline}
-          title="Chỉnh sửa thông tin"
-          subtitle="Cập nhật họ tên, số điện thoại"
+          title={t('profile.edit_info')}
+          subtitle={t('profile.edit_info_desc')}
           onPress={() => router.push('/profile/edit' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.wallet}
-          title="Ví AutoWash"
-          subtitle="Quản lý số dư và nạp tiền"
+          title={t('profile.wallet')}
+          subtitle={t('profile.wallet_desc')}
           onPress={() => router.push('/wallet' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.carOutline}
-          title="Quản lý xe"
-          subtitle="Thêm, sửa, xóa phương tiện"
+          title={t('profile.manage_vehicles')}
+          subtitle={t('profile.manage_vehicles_desc')}
           onPress={() => router.push('/vehicle' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.lockOutline}
-          title="Đổi mật khẩu"
+          title={t('profile.change_password')}
           onPress={() => router.push('/profile/change-password' as any)}
         />
       </View>
 
       {/* Bookings section */}
       <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
-        Đặt lịch
+        {t('profile.bookings')}
       </AppText>
       <View style={styles.menuSection}>
         <MenuItem
           icon={Icons.listOutline}
-          title="Lịch sử đặt lịch"
+          title={t('profile.booking_history')}
           onPress={() => router.push('/(tabs)/history' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.cardOutline}
-          title="Lịch sử thanh toán"
+          title={t('profile.payment_history')}
           onPress={() => router.push('/payment/history' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.voucherOutline}
-          title="Voucher của tôi"
+          title={t('profile.my_vouchers')}
           onPress={() => router.push('/(tabs)/rewards' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.cartOutline}
-          title="Gói slot đã mua"
+          title={t('profile.slot_packs')}
           onPress={() => router.push('/slot-packs' as any)}
         />
       </View>
 
       {/* Settings */}
       <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
-        Cài đặt
+        {t('profile.settings')}
       </AppText>
       <View style={styles.menuSection}>
         <MenuItem
           icon={Icons.notificationsOutline}
-          title="Thông báo"
-          subtitle="Cài đặt thông báo"
+          title={t('profile.notifications')}
+          subtitle={t('profile.notifications_desc')}
           onPress={() => router.push('/settings/notifications' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.chatOutline}
-          title="Ngôn ngữ"
-          subtitle="Tiếng Việt"
+          title={t('profile.language')}
+          subtitle={t('profile.language_desc')}
           onPress={() => router.push('/settings/language' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.info}
-          title="Trợ giúp & Hỗ trợ"
+          title={t('profile.support')}
           onPress={() => router.push('/help' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.documentOutline}
-          title="Điều khoản sử dụng"
+          title={t('profile.terms')}
           onPress={() => router.push('/terms' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
           icon={Icons.shield}
-          title="Chính sách bảo mật"
+          title={t('profile.privacy')}
           onPress={() => router.push('/privacy' as any)}
         />
       </View>
 
       {/* App Info */}
       <AppText variant="overline" color="textSecondary" style={styles.sectionTitle}>
-        Về ứng dụng
+        {t('profile.about_app')}
       </AppText>
       <View style={styles.menuSection}>
         <MenuItem
           icon={Icons.info}
-          title="Về AutoWashPro"
+          title={t('profile.about')}
           subtitle="Phiên bản 1.0.0"
           onPress={() => router.push('/about' as any)}
           showArrow={false}
@@ -442,12 +444,12 @@ onPress={() => router.push('/profile/edit' as any)}
       <PressableScale
         style={styles.logoutButton}
         onPress={handleLogout}
-        accessibilityLabel="Đăng xuất"
+        accessibilityLabel={t('profile.logout')}
         accessibilityRole="button"
       >
         <Icon name={Icons.logOutOutline} size={18} color={colors.error} style={styles.logoutIcon} />
         <AppText variant="body" color="error" style={styles.logoutText}>
-          Đăng xuất
+          {t('profile.logout')}
         </AppText>
       </PressableScale>
     </ScreenContainer>

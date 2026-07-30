@@ -7,6 +7,7 @@ export interface WalletTransaction {
   type: 'deposit' | 'deduction' | 'refund' | 'bonus' | 'credit' | 'debit' | string;
   description?: string;
   reason?: string;
+  bookingId?: string | any;
   referenceId?: string;
   createdAt: string;
 }

@@ -19,8 +19,8 @@ const authenticate = async (req, res, next) => {
     req.userId = user._id;
     next();
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Invalid token', code: 'INVALID_TOKEN' });
-    if (error.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token expired', code: 'TOKEN_EXPIRED' });
+    if (error.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Token không hợp lệ', code: 'INVALID_TOKEN' });
+    if (error.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token đã hết hạn', code: 'TOKEN_EXPIRED' });
     next(error);
   }
 };

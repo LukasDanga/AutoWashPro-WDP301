@@ -184,56 +184,57 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
   // Cash or Wallet: auto-confirm ngay lập tức
   if (method === 'cash' || method === 'wallet') {
     const session = await mongoose.startSession();
-    session.startTransaction();
     try {
-      if (method === 'wallet') {
-        const user = await mongoose.model('User').findById(targetUserId).session(session);
-        if (!user || user.walletBalance < amount) {
-          throw Object.assign(new Error('Số dư ví không đủ để thanh toán'), { statusCode: 400, code: 'INSUFFICIENT_BALANCE' });
+      await session.withTransaction(async () => {
+        if (method === 'wallet') {
+          const user = await mongoose.model('User').findOneAndUpdate(
+            { _id: targetUserId, walletBalance: { $gte: amount } },
+            { $inc: { walletBalance: -amount } },
+            { new: true, session }
+          );
+          if (!user) {
+            throw Object.assign(new Error('Số dư ví không đủ để thanh toán'), { statusCode: 400, code: 'INSUFFICIENT_BALANCE' });
+          }
+          
+          await mongoose.model('WalletTransaction').create([{
+            userId: targetUserId,
+            amount,
+            type: 'debit',
+            reason: `Thanh toán ${isDeposit ? 'tiền cọc' : 'đơn'} cho lịch hẹn`,
+            bookingId: booking._id
+          }], { session });
         }
-        user.walletBalance -= amount;
-        await user.save({ session });
-        
-        await mongoose.model('WalletTransaction').create([{
-          userId: targetUserId,
-          amount,
-          type: 'debit',
-          reason: `Thanh toán ${isDeposit ? 'tiền cọc' : 'đơn'} cho lịch hẹn`,
-          bookingId: booking._id
-        }], { session });
-      }
 
-      payment.status = 'paid';
-      payment.paidAt = new Date();
-      await payment.save({ session });
+        payment.status = 'paid';
+        payment.paidAt = new Date();
+        await payment.save({ session });
 
-      if (isDeposit) {
-        await Booking.findByIdAndUpdate(
-          booking._id,
-          { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: method },
-          { session }
-        );
-        await markRecurringSiblingsDepositPaid(booking, method, session);
-      } else {
-        const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method, depositPaid: true, depositAmount: booking.finalPrice };
-        if (booking.status === 'awaiting_payment') {
-          updateData.status = 'completed';
-          updateData.checkOutTime = new Date();
+        if (isDeposit) {
+          await Booking.findByIdAndUpdate(
+            booking._id,
+            { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: method },
+            { session }
+          );
+          await markRecurringSiblingsDepositPaid(booking, method, session);
+        } else {
+          const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: method, depositPaid: true, depositAmount: booking.finalPrice };
+          if (booking.status === 'awaiting_payment') {
+            updateData.status = 'completed';
+            updateData.checkOutTime = new Date();
+          }
+          await Booking.findByIdAndUpdate(
+            booking._id,
+            updateData,
+            { session }
+          );
+          await markRecurringSiblingsPaid(booking, method, session);
+          await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+          if (['awaiting_payment', 'completed'].includes(booking.status)) {
+            await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
+            sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
+          }
         }
-        await Booking.findByIdAndUpdate(
-          booking._id,
-          updateData,
-          { session }
-        );
-        await markRecurringSiblingsPaid(booking, method, session);
-        await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
-        if (['awaiting_payment', 'completed'].includes(booking.status)) {
-          await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
-          sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
-        }
-      }
-
-      await session.commitTransaction();
+      });
     } catch (err) {
       if (session.inTransaction()) { await session.abortTransaction(); }
       if (booking.voucherCode) { await voucherService.rollbackVoucher(booking.voucherCode, targetUserId, bookingId).catch(() => {}); }
@@ -430,147 +431,165 @@ exports.countUnviewedPayments = async () => {
 };
 exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, success) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
+  let paymentResult = null;
+  let bookingResult = null;
+  let slotPackResult = null;
 
   try {
-    const payment = await Payment.findOne({ transactionId }).session(session);
-    if (!payment) {
-      await session.abortTransaction();
-      throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
-    }
-
-    if (payment.slotPackId) {
-      // Xử lý thanh toán cho SlotPack
-      const slotPack = await mongoose.model('SlotPack').findById(payment.slotPackId).session(session);
-      if (!slotPack) {
-        await session.abortTransaction();
-        throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'NOT_FOUND' });
+    await session.withTransaction(async () => {
+      const payment = await Payment.findOne({ transactionId }).session(session);
+      if (!payment) {
+        throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
       }
 
-      if (success) {
-        payment.status = 'paid';
-        payment.paidAt = new Date();
-        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
-        await payment.save({ session });
+      // Idempotency check: if already processed, return immediately
+      if (payment.status === 'paid' || payment.status === 'failed') {
+        paymentResult = payment;
+        return; // Break out of withTransaction safely
+      }
 
-        if (payment.method === 'wallet') {
-          const user = await mongoose.model('User').findById(payment.userId).session(session);
-          if (!user || user.walletBalance < payment.amount) {
-            throw Object.assign(new Error('Số dư ví không đủ để thanh toán'), { statusCode: 400, code: 'INSUFFICIENT_BALANCE' });
-          }
-          user.walletBalance -= payment.amount;
-          await user.save({ session });
-          await mongoose.model('WalletTransaction').create([{
-            userId: payment.userId,
-            amount: payment.amount,
-            type: 'debit',
-            reason: 'Thanh toán gói lượt rửa xe',
-          }], { session });
+      if (payment.slotPackId) {
+        // Xử lý thanh toán cho SlotPack
+        const slotPack = await mongoose.model('SlotPack').findById(payment.slotPackId).session(session);
+        if (!slotPack) {
+          throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'NOT_FOUND' });
         }
+        slotPackResult = slotPack;
 
-        await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
-        
-        await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, payment.slotPackId, session);
-        await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
-        sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
-      } else {
-        payment.status = 'failed';
-        await payment.save({ session });
-      }
+        if (success) {
+          payment.status = 'paid';
+          payment.paidAt = new Date();
+          payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+          await payment.save({ session });
 
-      await session.commitTransaction();
-      if (success) {
-        const sPack = await mongoose.model('SlotPack').findById(payment.slotPackId);
-        sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
-        const user = await mongoose.model('User').findById(payment.userId);
-        notificationService.send(payment.userId, 'Thanh toán gói lượt thành công', `Gói lượt ${sPack.packCode} đã được kích hoạt.`, 'slot_pack_paid', { slotPackId: payment.slotPackId }).catch(() => {});
-        if (user && user.email) {
-          emailService.sendSlotPackConfirmationEmail(user.email, sPack).catch(e => console.error('Lỗi gửi email gói lượt:', e));
-        }
-      }
-      return payment;
-    }
-
-    // Provisional payment (no bookingId, no slotPackId) — just mark as paid
-    if (!payment.bookingId && !payment.slotPackId) {
-      if (success) {
-        payment.status = 'paid';
-        payment.paidAt = new Date();
-        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
-        await payment.save({ session });
-
-        if (payment.paymentType === 'topup') {
-          const user = await mongoose.model('User').findById(payment.userId).session(session);
-          if (user) {
-            user.walletBalance = (user.walletBalance || 0) + payment.amount;
-            await user.save({ session });
+          if (payment.method === 'wallet') {
+            const user = await mongoose.model('User').findOneAndUpdate(
+              { _id: payment.userId, walletBalance: { $gte: payment.amount } },
+              { $inc: { walletBalance: -payment.amount } },
+              { new: true, session }
+            );
+            if (!user) {
+              throw Object.assign(new Error('Số dư ví không đủ để thanh toán'), { statusCode: 400, code: 'INSUFFICIENT_BALANCE' });
+            }
             await mongoose.model('WalletTransaction').create([{
               userId: payment.userId,
               amount: payment.amount,
-              type: 'credit',
-              reason: 'Nạp tiền vào ví',
+              type: 'debit',
+              reason: 'Thanh toán gói lượt rửa xe',
             }], { session });
-            sseService.sendToUser(payment.userId, 'wallet_topup_success', { amount: payment.amount });
-            notificationService.send(payment.userId, 'Nạp tiền thành công', `Đã nạp ${payment.amount.toLocaleString('vi-VN')}đ vào ví AutoWash.`, 'wallet_topup_success', {}).catch(() => {});
+          }
+
+          await mongoose.model('SlotPack').findByIdAndUpdate(slotPack._id, { paymentStatus: 'paid', paidAt: new Date() }).session(session);
+          
+          await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, payment.slotPackId, session);
+          await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+        } else {
+          payment.status = 'failed';
+          await payment.save({ session });
+        }
+
+        paymentResult = payment;
+        return;
+      }
+
+      // Provisional payment (no bookingId, no slotPackId) — just mark as paid
+      if (!payment.bookingId && !payment.slotPackId) {
+        if (success) {
+          payment.status = 'paid';
+          payment.paidAt = new Date();
+          payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+          await payment.save({ session });
+
+          if (payment.paymentType === 'topup') {
+            const user = await mongoose.model('User').findOneAndUpdate(
+              { _id: payment.userId },
+              { $inc: { walletBalance: payment.amount } },
+              { new: true, session }
+            );
+            if (user) {
+              await mongoose.model('WalletTransaction').create([{
+                userId: payment.userId,
+                amount: payment.amount,
+                type: 'credit',
+                reason: 'Nạp tiền vào ví',
+              }], { session });
+            }
+          }
+        } else {
+          payment.status = 'failed';
+          await payment.save({ session });
+        }
+        paymentResult = payment;
+        return;
+      }
+
+      const booking = await Booking.findById(payment.bookingId).session(session);
+      if (!booking) {
+        throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+      }
+      bookingResult = booking;
+
+      if (success) {
+        payment.status = 'paid';
+        payment.paidAt = new Date();
+        payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
+        await payment.save({ session });
+
+        if (payment.paymentType === 'deposit') {
+          await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
+          await markRecurringSiblingsDepositPaid(booking, payment.method, session);
+        } else {
+          const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice };
+          if (booking.status === 'awaiting_payment') {
+            updateData.status = 'completed';
+            updateData.checkOutTime = new Date();
+          }
+          await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
+          await markRecurringSiblingsPaid(booking, payment.method, session);
+          await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+          if (['awaiting_payment', 'completed'].includes(booking.status)) {
+            await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
           }
         }
       } else {
         payment.status = 'failed';
         await payment.save({ session });
-      }
-      await session.commitTransaction();
-      return payment;
-    }
 
-    const booking = await Booking.findById(payment.bookingId).session(session);
-    if (!booking) {
-      await session.abortTransaction();
-      throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
-    }
-
-    if (success) {
-      payment.status = 'paid';
-      payment.paidAt = new Date();
-      payment.gatewayTransactionId = gatewayTransactionId || payment.gatewayTransactionId;
-      await payment.save({ session });
-
-      if (payment.paymentType === 'deposit') {
-        await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method }).session(session);
-        await markRecurringSiblingsDepositPaid(booking, payment.method, session);
-      } else {
-        const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice };
-        if (booking.status === 'awaiting_payment') {
-          updateData.status = 'completed';
-          updateData.checkOutTime = new Date();
+        if (booking.voucherCode) {
+          await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, booking._id, session);
         }
-        await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
-        await markRecurringSiblingsPaid(booking, payment.method, session);
-        await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
-        if (['awaiting_payment', 'completed'].includes(booking.status)) {
-          await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+      }
+
+      paymentResult = payment;
+    });
+
+    const payment = paymentResult;
+    
+    // --- Side Effects outside of transaction ---
+    if (success && (payment.status === 'paid' || payment.status === 'failed')) {
+      if (payment.slotPackId && slotPackResult) {
+        sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
+        sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
+        const user = await mongoose.model('User').findById(payment.userId);
+        notificationService.send(payment.userId, 'Thanh toán gói lượt thành công', `Gói lượt ${slotPackResult.packCode} đã được kích hoạt.`, 'slot_pack_paid', { slotPackId: payment.slotPackId }).catch(() => {});
+        if (user && user.email) {
+          emailService.sendSlotPackConfirmationEmail(user.email, slotPackResult).catch(e => console.error('Lỗi gửi email gói lượt:', e));
+        }
+      } else if (!payment.bookingId && !payment.slotPackId) {
+        if (payment.paymentType === 'topup') {
+          sseService.sendToUser(payment.userId, 'wallet_topup_success', { amount: payment.amount });
+          notificationService.send(payment.userId, 'Nạp tiền thành công', `Đã nạp ${payment.amount.toLocaleString('vi-VN')}đ vào ví AutoWash.`, 'wallet_topup_success', {}).catch(() => {});
+        }
+      } else if (payment.bookingId && bookingResult) {
+        sseService.broadcastToManagers(bookingResult.branchId, 'payment_new', { paymentId: payment._id, bookingId: payment.bookingId });
+        if (['awaiting_payment', 'completed'].includes(bookingResult.status)) {
           sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
         }
       }
-    } else {
-      payment.status = 'failed';
-      await payment.save({ session });
-
-      if (booking.voucherCode) {
-        await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, booking._id, session);
-      }
-    }
-
-    await session.commitTransaction();
-
-    if (success) {
-      sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: payment.bookingId });
     }
 
     return payment;
   } catch (err) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
     throw err;
   } finally {
     session.endSession();
@@ -905,11 +924,12 @@ exports.refundPayment = async (bookingId) => {
       user.walletBalance = (user.walletBalance || 0) + payment.amount;
       await user.save({ session });
       
+      const shortBookingCode = String(bookingId).slice(-6).toUpperCase();
       await mongoose.model('WalletTransaction').create([{
         userId: user._id,
         amount: payment.amount,
         type: 'credit',
-        reason: `Hoàn tiền cho đơn đặt lịch #${bookingId}`,
+        reason: `Hoàn tiền cho đơn đặt lịch #${shortBookingCode}`,
         bookingId: booking._id
       }], { session });
     }

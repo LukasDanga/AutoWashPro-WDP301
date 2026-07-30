@@ -1,3 +1,8 @@
+/**
+ * M-4 MARKED ORPHAN: QuickBookModal không còn được import ở đâu (grep 2026-07-30).
+ * Có thể xóa an toàn sau 1 sprint nếu không cần. KHÔNG sửa để tránh phá vỡ
+ * git history / IDE cache / các bundler dynamic import.
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -3,7 +3,7 @@
  * Authentication state management
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { authApi } from '../api/auth';
@@ -46,26 +46,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const fetchUser = useCallback(async () => {
     try {
       const user = await authApi.getProfile();
-      setState((prev) => ({ ...prev, user }));
+      setState((prev) => {
+        // Skip if user object is identical to avoid unnecessary re-renders
+        if (prev.user && prev.user._id === user._id && JSON.stringify(prev.user) === JSON.stringify(user)) {
+          return prev;
+        }
+        return { ...prev, user };
+      });
     } catch (error) {
       console.warn('Failed to fetch user:', error);
     }
   }, []);
 
-  // Listen to SSE events for real-time profile updates
+  // Keep latest fetchUser reference accessible from SSE subscriptions
+  const fetchUserRef = useRef(fetchUser);
+  fetchUserRef.current = fetchUser;
+
+  // Cooldown to throttle SSE-triggered refetches
+  const lastFetchAtRef = useRef<number>(0);
+  const FETCH_COOLDOWN_MS = 2000;
+
+  // Listen to SSE events for real-time profile updates.
+  // We subscribe ONLY to 'all' to avoid double-firing (sse.emit forwards to both
+  // the specific type and 'all' listeners).
   useEffect(() => {
-    if (state.isAuthenticated && state.user) {
-      const unsubTopup = sseService.subscribe('wallet_topup_success', fetchUser);
-      const unsubSpin = sseService.subscribe('spin_added', fetchUser);
-      const unsubSlot = sseService.subscribe('slot_pack_paid', fetchUser);
+    if (state.isAuthenticated && state.user?._id) {
+      const throttledFetch = () => {
+        const now = Date.now();
+        if (now - lastFetchAtRef.current < FETCH_COOLDOWN_MS) return;
+        lastFetchAtRef.current = now;
+        fetchUserRef.current();
+      };
+
+      const unsubAll = sseService.subscribe('all', throttledFetch);
 
       return () => {
-        unsubTopup();
-        unsubSpin();
-        unsubSlot();
+        unsubAll();
       };
     }
-  }, [state.isAuthenticated, state.user, fetchUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.isAuthenticated, state.user?._id]);
 
   // Initialize auth state from storage
   useEffect(() => {

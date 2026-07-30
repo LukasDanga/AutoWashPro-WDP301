@@ -32,6 +32,7 @@ import { vi } from 'date-fns/locale';
 import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { sseService } from '../../src/services/sse';
 import { bookingApi, refundApi } from '../../src/api';
 import {
   Text as AppText,
@@ -52,11 +53,14 @@ import {
   EmptyState,
   RefundStatusCard,
 } from '../../src/components/common';
+import { EditSubServicesModal } from '../../src/components/booking/EditSubServicesModal';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency, formatDate } from '../../src/utils';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Booking, BookingStatus } from '../../src/types';
+import { useTranslation } from 'react-i18next';
+import { translateDynamicText } from '../../src/utils';
 
 // Local type — captures whatever shape BE returns from POST /refund-requests.
 // BE doesn't always return the same field set, so we keep all fields optional.
@@ -76,6 +80,7 @@ interface RefundRequest {
 export default function BookingDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { i18n } = useTranslation();
   const { isAuthenticated } = useAuth();
   const colors = useColors();
   const toast = useToast();
@@ -102,10 +107,31 @@ export default function BookingDetailScreen() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelStep, setCancelStep] = useState(1);
   const [cancelOtp, setCancelOtp] = useState('');
+
+  // Edit sub-services state
+  const [showEditServicesModal, setShowEditServicesModal] = useState(false);
+  const [isUpdatingServices, setIsUpdatingServices] = useState(false);
   const [cancelPreview, setCancelPreview] = useState<any>(null);
 
   useEffect(() => {
-    if (id) fetchBooking();
+    if (!id) return;
+    fetchBooking();
+
+    const unsub1 = sseService.subscribe('booking_update', () => fetchBooking());
+    const unsub2 = sseService.subscribe('my_bookings_updated', () => fetchBooking());
+    const unsub3 = sseService.subscribe('notification', () => fetchBooking());
+    const unsub4 = sseService.subscribe('refund_request_updated', () => fetchBooking());
+    const unsub5 = sseService.subscribe('refund_requests_updated', () => fetchBooking());
+    const unsub6 = sseService.subscribe('all', () => fetchBooking());
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+      unsub5();
+      unsub6();
+    };
   }, [id]);
 
   const fetchBooking = async () => {
@@ -278,6 +304,33 @@ export default function BookingDetailScreen() {
     }
   };
 
+  const handleUpdateServices = async (selectedNames: string[]) => {
+    if (!id) return;
+    setIsUpdatingServices(true);
+    try {
+      const updated = await bookingApi.updateSubServices(id, selectedNames);
+      
+      // Calculate diff for toast message
+      const refundAmount = updated.refundAmount || 0;
+      
+      let msg = 'Đã cập nhật dịch vụ thành công.';
+      if (refundAmount > 0) {
+        msg += ` Hoàn ${formatCurrency(refundAmount)} vào Ví AutoWash.`;
+      }
+      
+      toast.success('Thành công', msg);
+      setShowEditServicesModal(false);
+      setBooking(updated);
+    } catch (error: any) {
+      AlertDialog.error(
+        'Lỗi',
+        error.response?.data?.message || 'Không thể cập nhật dịch vụ'
+      );
+    } finally {
+      setIsUpdatingServices(false);
+    }
+  };
+
   if (isLoading) return <Loading fullScreen message="Đang tải..." />;
 
   if (!booking) {
@@ -295,32 +348,48 @@ export default function BookingDetailScreen() {
     );
   }
 
-  const branchName = typeof booking.branchId === 'object' ? booking.branchId.name : '';
-  const branchAddress =
-    typeof booking.branchId === 'object' ? booking.branchId.address : '';
-  const packageName =
-    typeof booking.packageId === 'object' ? booking.packageId.name : '';
+  const branchName = translateDynamicText(
+    typeof booking.branchId === 'object' ? booking.branchId.name : '',
+    i18n.language,
+  );
+  const branchAddress = translateDynamicText(
+    typeof booking.branchId === 'object' ? booking.branchId.address : '',
+    i18n.language,
+  );
+  const packageName = translateDynamicText(
+    typeof booking.packageId === 'object' ? booking.packageId.name : '',
+    i18n.language,
+  );
   const packageDuration =
     typeof booking.packageId === 'object' ? booking.packageId.duration : undefined;
   const vehicleInfo =
     typeof booking.vehicleId === 'object' ? booking.vehicleId : null;
 
-  const canCancel = ['pending', 'confirmed'].includes(booking.status);
+  const canCancel = ['pending', 'confirmed', 'awaiting_payment'].includes(booking.status);
   const canRebook = booking.status === 'completed';
   const canFeedback = booking.status === 'completed' && !booking.rating;
   const canShowQR = ['confirmed', 'checked_in'].includes(booking.status);
+  const canEditServices = ['pending', 'confirmed', 'checked_in', 'in_progress'].includes(booking.status);
 
   // Logic payment actions — match BE booking.service.js.
-  // Thanh toán phần còn lại: đã cọc, dịch vụ đã hoàn thành (completed) hoặc
-  // đang thực hiện. Manager thường đòi khách trả nốt sau khi xe sẵn sàng.
+  // Thanh toán phần còn lại: chỉ áp dụng cho booking CÒN DƯ NỢ.
+  //   - depositPaid=true: đã đặt cọc.
+  //   - depositAmount > 0: booking có cọc riêng (loại trừ slot pack + recurring
+  //     buổi sau, vì cọc đã gộp ở buổi đầu).
+  //   - paymentStatus !== 'paid': chưa thanh toán đủ.
+  //   - status là 'awaiting_payment' (chuẩn) hoặc 'completed' (edge case BE giữ depositPaid=true).
+  // Lưu ý: 'in_progress' và 'checked_in' đã được bỏ vì trong luồng chuẩn,
+  // xe đang rửa thì chưa tới lúc thanh toán phần còn lại — chờ manager đẩy sang awaiting_payment.
   const canPayRemaining =
     booking.depositPaid === true &&
+    (booking.depositAmount || 0) > 0 &&
     booking.paymentStatus !== 'paid' &&
-    ['checked_in', 'in_progress', 'completed'].includes(booking.status);
+    (booking.status === 'awaiting_payment' || booking.status === 'completed');
 
-  // Refund condition: booking cancelled, customer paid something, and no refund request exists yet
+  // Refund condition: booking cancelled OR (completed within 24h), customer paid something, and no refund request exists yet
+  const hoursSinceCompletion = booking.updatedAt ? (Date.now() - new Date(booking.updatedAt).getTime()) / (1000 * 60 * 60) : 0;
   const canRequestRefund =
-    booking.status === 'cancelled' &&
+    (booking.status === 'cancelled' || (booking.status === 'completed' && hoursSinceCompletion <= 24)) &&
     (booking.depositPaid || booking.paymentStatus === 'paid') &&
     !refundRequest;
 
@@ -334,11 +403,11 @@ export default function BookingDetailScreen() {
         showBack
         rightAction={
           <PressableScale
-            onPress={() => router.push('/chat' as any)}
-            accessibilityLabel="Chat với AI"
+            onPress={() => router.replace('/(tabs)')}
+            accessibilityLabel="Trang chủ"
             style={styles.chatIconBtn}
           >
-            <Icon name={Icons.chatOutline} size={20} color={colors.primary} />
+            <Icon name={Icons.homeOutline} size={22} color={colors.primary} />
           </PressableScale>
         }
       />
@@ -383,6 +452,28 @@ export default function BookingDetailScreen() {
             ) : null}
           </View>
         </LinearGradient>
+
+        {/* Awaiting payment banner — xe đã rửa xong, đang chờ khách thanh toán phần còn lại.
+            Áp dụng cho booking đã cọc 30% (depositPaid=true && depositAmount>0) khi BE
+            chuyển sang status awaiting_payment. Tự động ẩn với slot pack và recurring
+            buổi sau (depositAmount=0 → BE không cho vào awaiting_payment theo guard). */}
+        {booking.status === 'awaiting_payment' && booking.depositPaid && (booking.depositAmount || 0) > 0 ? (
+          <Card style={[
+            { backgroundColor: colors.infoLight, marginBottom: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: `${colors.info}40` },
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Icon name={Icons.walletOutline} size={22} color={colors.info} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodySmall" style={{ fontWeight: '700', color: colors.info }}>
+                  Xe đã rửa xong — chờ thanh toán phần còn lại
+                </AppText>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+                  Vui lòng hoàn tất phần còn lại để hoàn thành đơn.
+                </AppText>
+              </View>
+            </View>
+          </Card>
+        ) : null}
 
         {/* At-risk / late warning banner — web parity (BookingsHistory.jsx AtRiskBanner) */}
         {(booking.status === 'pending' || booking.status === 'confirmed') &&
@@ -494,7 +585,7 @@ export default function BookingDetailScreen() {
           const subServicesList = booking.selectedSubServices || booking.subServices;
           const hasSubServices = subServicesList && subServicesList.length > 0;
           const packageDesc = typeof booking.packageId === 'object' ? (booking.packageId as any)?.description : undefined;
-          const hasExpandableContent = hasSubServices || !!packageDesc;
+          const hasExpandableContent = hasSubServices || !!packageDesc || canEditServices;
 
           return (
             <InfoCard
@@ -536,13 +627,30 @@ export default function BookingDetailScreen() {
                     </AppText>
                   ) : null}
 
-                  {hasSubServices ? (
-                    <View>
-                      <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
-                        Dịch vụ đính kèm ({subServicesList.length}):
+                  {canEditServices && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, marginTop: packageDesc ? 4 : 0 }}>
+                      <AppText variant="caption" color="primary" style={{ fontWeight: '700' }}>
+                        Dịch vụ đính kèm {subServicesList?.length ? `(${subServicesList.length})` : ''}:
                       </AppText>
+                      <TouchableOpacity onPress={() => setShowEditServicesModal(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <AppText variant="caption" color="primary" style={{ textDecorationLine: 'underline' }}>
+                          Chỉnh sửa
+                        </AppText>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {!canEditServices && hasSubServices && (
+                    <AppText variant="caption" color="primary" style={{ fontWeight: '700', marginBottom: 4 }}>
+                      Dịch vụ đính kèm ({subServicesList.length}):
+                    </AppText>
+                  )}
+
+                  {hasSubServices && (
+                    <View>
                       {subServicesList.map((sub: any, idx: number) => {
-                        const subName = typeof sub === 'object' ? sub.name : sub;
+                        const subName = typeof sub === 'object'
+                          ? translateDynamicText(sub.name, i18n.language)
+                          : translateDynamicText(sub, i18n.language);
                         const subPrice = typeof sub === 'object' ? sub.price : undefined;
                         return (
                           <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
@@ -558,7 +666,7 @@ export default function BookingDetailScreen() {
                         );
                       })}
                     </View>
-                  ) : null}
+                  )}
                 </View>
               ) : null}
             </InfoCard>
@@ -672,24 +780,39 @@ export default function BookingDetailScreen() {
 
         {/* Feedback */}
         {canFeedback ? (
-          <Card style={[styles.feedbackCard, { backgroundColor: colors.warningLight }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-              <Icon name={Icons.starOutline} size={22} color={colors.warning} />
+          <Card style={[styles.feedbackCard, { backgroundColor: colors.warningLight, borderColor: 'rgba(245, 158, 11, 0.25)' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+              <View style={[styles.infoIconWrap, { backgroundColor: '#FDE68A', elevation: 0, shadowOpacity: 0, marginRight: spacing.md }]}>
+                <Icon name={Icons.starOutline} size={22} color={colors.warning} />
+              </View>
               <View style={{ flex: 1 }}>
-                <AppText variant="body" style={{ fontWeight: '600' }}>
+                <AppText variant="body" style={{ fontWeight: '700' }}>
                   Bạn đã sử dụng dịch vụ
                 </AppText>
-                <AppText variant="caption" color="textSecondary" style={{ marginBottom: spacing.sm }}>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
                   Hãy đánh giá để giúp chúng tôi cải thiện dịch vụ tốt hơn
                 </AppText>
-                <Button
-                  title="Đánh giá ngay"
-                  variant="outline"
-                  icon={<Icon name={Icons.star} size={18} color={colors.warning} />}
-                  onPress={() => router.push(`/booking/${id}/feedback` as any)}
-                />
               </View>
             </View>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.warning,
+                paddingVertical: spacing.sm + 2,
+                borderRadius: borderRadius.lg,
+                gap: spacing.xs + 2,
+              }}
+              onPress={() => router.push(`/booking/${id}/feedback` as any)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <Icon name={Icons.star} size={18} color="#FFFFFF" />
+              <AppText variant="body" style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                Đánh giá ngay
+              </AppText>
+            </TouchableOpacity>
           </Card>
         ) : null}
 
@@ -736,121 +859,135 @@ export default function BookingDetailScreen() {
 
         </ScrollView>
 
-      {/* Bottom actions — nằm phía trên thanh điều hướng dưới cùng */}
+      {/* Bottom actions — nằm phía trên thanh điều hướng dưới cùng.
+          Khi có nhiều action, primary action chiếm full-width hàng trên,
+          các action còn lại xếp hàng ngang phía dưới với padding gọn để
+          text không bị cắt. */}
       {hasBottomActions ? (
-        <View style={{ backgroundColor: colors.background, marginBottom: 68 + insets.bottom }}>
-          <View
-            style={[
-              styles.bottomAction,
-              { borderTopColor: colors.border },
-            ]}
-          >
+        <View style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: colors.background,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+        }}>
           {(() => {
-            // Nút thanh toán: chỉ còn "Thanh toán phần còn lại".
-            // Nút "Đặt cọc" đã được gỡ bỏ theo yêu cầu (thanh toán cọc xử lý ở luồng đặt lịch).
-            const primaryPaymentAction = canPayRemaining ? (
-              <Button
-                title="Thanh toán phần còn lại"
-                size="medium"
-                icon={<Icon name={Icons.walletOutline} size={18} color={colors.textInverse} />}
-                onPress={handlePayRemaining}
-                style={styles.actionFlex}
-              />
-            ) : null;
+            // Định nghĩa từng action một cách thống nhất để tránh render trùng lặp
+            // và dễ tính toán layout (primary / secondary).
+            type BottomAction = {
+              key: string;
+              render: () => React.ReactElement;
+            };
 
-            if (canRebook && canCancel) {
-              return (
-                <>
+            const actions: BottomAction[] = [];
+
+            // 1) Thanh toán phần còn lại — primary (ưu tiên cao nhất: tiền còn nợ).
+            if (canPayRemaining) {
+              actions.push({
+                key: 'payRemaining',
+                render: () => (
+                  <Button
+                    title="Thanh toán phần còn lại"
+                    size="medium"
+                    icon={<Icon name={Icons.walletOutline} size={18} color={colors.textInverse} />}
+                    onPress={handlePayRemaining}
+                    fullWidth
+                  />
+                ),
+              });
+            }
+
+            // 2) Đặt lại — secondary tích cực.
+            if (canRebook) {
+              actions.push({
+                key: 'rebook',
+                render: () => (
                   <Button
                     title="Đặt lại"
                     variant="outline"
                     size="medium"
-                    icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
+                    icon={<Icon name={Icons.refreshOutline} size={16} color={colors.primary} />}
                     onPress={handleRebook}
                     loading={isRebooking}
                     style={styles.actionFlex}
+                    textStyle={styles.actionText}
                   />
-                  {primaryPaymentAction}
+                ),
+              });
+            }
+
+            // 3) Hủy đặt lịch — danger. Đặt outline (chỉ viền đỏ) cho đỡ nặng nề
+            //    khi nó nằm trong row cùng action khác; chỉ dùng filled danger
+            //    khi nó là action duy nhất.
+            if (canCancel) {
+              actions.push({
+                key: 'cancel',
+                render: () => (
                   <Button
                     title="Hủy đặt lịch"
-                    variant="danger"
+                    variant={actions.length === 0 ? 'danger' : 'outline'}
                     size="medium"
+                    icon={
+                      actions.length === 0 ? undefined : (
+                        <Icon name={Icons.close} size={16} color={colors.error} />
+                      )
+                    }
                     onPress={handleCancel}
                     loading={isCancelling}
-                    style={styles.actionFlex}
+                    style={actions.length === 0 ? undefined : styles.actionFlex}
+                    textStyle={actions.length === 0 ? undefined : styles.actionText}
                   />
-                </>
-              );
+                ),
+              });
             }
-            if (canCancel) {
-              return (
-                <>
-                  {primaryPaymentAction ? (
-                    <View style={{ flexDirection: 'row', gap: spacing.sm, flex: 1 }}>
-                      {primaryPaymentAction}
-                      <Button
-                        title="Hủy đặt lịch"
-                        variant="danger"
-                        size="medium"
-                        onPress={handleCancel}
-                        loading={isCancelling}
-                        style={styles.actionFlex}
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.singleActionWrap}>
-                      <Button
-                        title="Hủy đặt lịch"
-                        variant="danger"
-                        size="medium"
-                        onPress={handleCancel}
-                        loading={isCancelling}
-                        fullWidth
-                      />
-                    </View>
-                  )}
-                </>
-              );
-            }
-            if (canRebook) {
-              return (
-                <>
-                  {primaryPaymentAction}
-                  <Button
-                    title="Đặt lại"
-                    variant="outline"
-                    size="medium"
-                    icon={<Icon name={Icons.refreshOutline} size={18} color={colors.primary} />}
-                    onPress={handleRebook}
-                    loading={isRebooking}
-                    style={styles.actionFlex}
-                  />
-                </>
-              );
-            }
+
+            // 4) Yêu cầu hoàn tiền — secondary.
             if (canRequestRefund && !refundRequest) {
-              return (
-                <View style={styles.singleActionWrap}>
+              actions.push({
+                key: 'refund',
+                render: () => (
                   <Button
                     title="Yêu cầu hoàn tiền"
                     size="medium"
-                    icon={<Icon name={Icons.cashOutline} size={18} color={colors.textInverse} />}
+                    icon={<Icon name={Icons.cashOutline} size={16} color={colors.textInverse} />}
                     onPress={() => setShowRefundModal(true)}
-                    fullWidth
+                    style={styles.actionFlex}
+                    textStyle={styles.actionText}
                   />
-                </View>
-              );
+                ),
+              });
             }
-            if (primaryPaymentAction) {
-              return <View style={styles.singleActionWrap}>{primaryPaymentAction}</View>;
-            }
-            return null;
+
+            if (actions.length === 0) return null;
+
+            const primary = actions[0];
+            const secondary = actions.slice(1);
+
+            return (
+              <View style={[styles.bottomAction, { borderTopWidth: 0 }]}>
+                {/* Primary action — luôn full-width để rõ ràng */}
+                <View style={styles.actionRow}>{primary.render()}</View>
+
+                {/* Secondary actions — hàng ngang phía dưới, tối đa 2 nút.
+                    Padding gọn + font 13px để text dài ("Yêu cầu hoàn tiền")
+                    không bị truncate như trước. */}
+                {secondary.length > 0 ? (
+                  <View style={styles.actionRow}>
+                    {secondary.map((a) => (
+                      <View key={a.key} style={styles.actionFlex}>
+                        {a.render()}
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            );
           })()}
-          </View>
         </View>
       ) : null}
-
-      <BottomNavBar />
 
       {/* Cancel Confirmation Modal — nhập lý do hủy (BE yêu cầu cancellationReason) */}
       <Modal
@@ -869,7 +1006,7 @@ export default function BookingDetailScreen() {
           accessibilityLabel="Đóng hộp thoại"
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
             style={styles.modalKavWrapper}
             pointerEvents="box-none"
           >
@@ -914,7 +1051,11 @@ export default function BookingDetailScreen() {
                       <AppText variant="bodySmall" style={{ fontWeight: '600', color: '#9A3412', marginBottom: 4 }}>
                         Cảnh báo chính sách hủy
                       </AppText>
-                      {cancelPreview.refundAmount > 0 ? (
+                      {cancelPreview.policy ? (
+                        <AppText variant="caption" style={{ color: '#C2410C' }}>
+                          {cancelPreview.policy}
+                        </AppText>
+                      ) : cancelPreview.refundAmount > 0 ? (
                         <AppText variant="caption" style={{ color: '#C2410C' }}>
                           Phí phạt: -{formatCurrency(cancelPreview.penaltyAmount)} ({cancelPreview.penaltyPercent}%).{'\n'}
                           Hoàn lại: +{formatCurrency(cancelPreview.refundAmount)} vào ví.
@@ -1028,7 +1169,7 @@ export default function BookingDetailScreen() {
           accessibilityLabel="Đóng hộp thoại"
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
             style={styles.modalKavWrapper}
             pointerEvents="box-none"
           >
@@ -1164,6 +1305,14 @@ export default function BookingDetailScreen() {
           </SafeAreaView>
         </View>
       </Modal>
+      <EditSubServicesModal
+        visible={showEditServicesModal}
+        onClose={() => setShowEditServicesModal(false)}
+        onSave={handleUpdateServices}
+        availableSubServices={((booking.packageId as any)?.subServices || []).filter((s: any) => s.isOptional !== false)}
+        initialSelected={(booking.selectedSubServices || booking.subServices || []).map((s: any) => typeof s === 'object' ? s.name : s)}
+        loading={isUpdatingServices}
+      />
     </ScreenContainer>
   );
 }
@@ -1263,6 +1412,8 @@ function getStatusColor(
       return colors.statusCheckedIn;
     case 'in_progress':
       return colors.statusInProgress;
+    case 'awaiting_payment':
+      return colors.statusAwaitingPayment;
     case 'completed':
       return colors.success;
     case 'cancelled':
@@ -1285,9 +1436,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    // Big bottom padding so the last card (Chi tiết thanh toán) doesn't kiss the
-    // sticky bottom actions bar (~80-100px) + bottom nav (~68px + insets).
-    paddingBottom: spacing.xxl + 120,
+    paddingBottom: 140,
   },
   statusHero: {
     borderRadius: borderRadius.xl,
@@ -1428,21 +1577,27 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
   },
   bottomAction: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: spacing.md,
+    flexDirection: 'column',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm + 2,
     paddingBottom: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: spacing.sm,
+  },
+  actionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    width: '100%',
   },
   actionFlex: {
     flex: 1,
   },
-  singleActionWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Khi nằm trong bottom bar, nút cần padding gọn hơn để chữ dài
+  // ("Yêu cầu hoàn tiền") không bị truncate khi share row với nút khác.
+  actionText: {
+    fontSize: 13,
+    letterSpacing: -0.1,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -1473,6 +1628,8 @@ const styles = StyleSheet.create({
     padding: 0, // body+hero handle their own padding
     width: '100%',
     maxWidth: 460,
+    maxHeight: '85%',
+    flexShrink: 1,
     alignSelf: 'center',
     backgroundColor: '#FFFFFF', // explicit opaque background — prevents modal from showing page content through
     shadowColor: '#0F172A',
@@ -1558,6 +1715,7 @@ const styles = StyleSheet.create({
   cancelBody: {
     // ScrollView outer — no flex grow so modal stays compact when no scroll needed
     flexGrow: 0,
+    flexShrink: 1,
   },
   cancelBodyContent: {
     padding: spacing.lg,
@@ -1698,6 +1856,7 @@ const styles = StyleSheet.create({
   },
   refundBody: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   refundBodyContent: {
     padding: spacing.lg,

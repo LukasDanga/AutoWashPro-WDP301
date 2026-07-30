@@ -142,6 +142,8 @@ export const Icons = {
   lockOpen: 'lock-open',
   lockOpenOutline: 'lock-open-outline',
   shield: 'shield-checkmark',
+  shieldCheck: 'shield-checkmark',
+  shieldCheckmark: 'shield-checkmark',
   shieldOutline: 'shield-checkmark-outline',
 
   // User

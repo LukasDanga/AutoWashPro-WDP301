@@ -35,7 +35,12 @@ export default function App() {
   const [pendingBooking, setPendingBooking] = useState(null);
 
   function handleUserUpdate(updated) {
-    setUser(prev => ({ ...prev, ...updated }));
+    if (!updated) return;
+    setUser((prev) => {
+      // Guard: prev có thể null nếu user vừa logout mà component con chưa unmount.
+      if (!prev) return prev;
+      return { ...prev, ...updated };
+    });
   }
 
   function handleVehicleCreated(newVehicle) {
@@ -154,7 +159,8 @@ export default function App() {
   }, [location]);
 
   async function loginWithCredentials(identifier, password, expectedRole) {
-    console.log('Sending login payload:', { identifier, password });
+    // SECURITY: do NOT log credentials — keeps plaintext password out of browser console,
+    // DevTools, and any extension that scrapes logs (Sentry, etc.).
     const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

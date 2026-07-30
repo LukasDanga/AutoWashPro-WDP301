@@ -10,7 +10,7 @@
  *   - interruptible, accessibility
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import {
   Pressable,
   Text,
@@ -79,6 +79,41 @@ export const Button: React.FC<ButtonProps> = ({
   const colors = useColors();
   const isDisabled = disabled || loading;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Helper function to safely start scale animation
+  const animateScale = useCallback((toValue: number, animDuration: number, easing: any = Easing.out(Easing.quad)) => {
+    // Stop any in-flight animation to prevent conflicts
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+    animationRef.current = Animated.timing(scaleAnim, {
+      toValue,
+      duration: animDuration,
+      easing,
+      useNativeDriver: true,
+    });
+    animationRef.current.start(({ finished }) => {
+      if (finished) animationRef.current = null;
+    });
+  }, [scaleAnim]);
+
+  // Reset animation when transitioning to disabled/loading state
+  useEffect(() => {
+    if (isDisabled) {
+      animateScale(1, duration.fast);
+    }
+  }, [isDisabled, animateScale]);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        animationRef.current.stop();
+        animationRef.current = null;
+      }
+    };
+  }, []);
 
   const triggerHaptic = useCallback(() => {
     if (!hapticFeedback || isDisabled) return;
@@ -104,22 +139,14 @@ export const Button: React.FC<ButtonProps> = ({
   }, [hapticFeedback, hapticStyle, isDisabled]);
 
   const handlePressIn = (e: any) => {
-    Animated.timing(scaleAnim, {
-      toValue: scale.pressedLarge,
-      duration: duration.fast,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
+    if (!isDisabled) {
+      animateScale(scale.pressedLarge, duration.fast);
+    }
     onPressIn?.(e);
   };
 
   const handlePressOut = (e: any) => {
-    Animated.timing(scaleAnim, {
-      toValue: 1,
-      duration: duration.normal,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+    animateScale(1, duration.normal, Easing.out(Easing.cubic));
     onPressOut?.(e);
   };
 
@@ -230,11 +257,19 @@ export const Button: React.FC<ButtonProps> = ({
     innerStyle as ViewStyle,
   ];
 
+  const disabledTextColor = (() => {
+    if (!isDisabled) return false;
+    if (variant === 'outline' || variant === 'ghost') {
+      return { color: colors.textTertiary };
+    }
+    return { color: colors.textInverse || '#FFFFFF' };
+  })();
+
   const textStyles: (TextStyle | false)[] = [
     styles.text as TextStyle,
     sizeText as TextStyle,
     variantStyles.text as TextStyle,
-    isDisabled ? ({ color: colors.textTertiary } as TextStyle) : false,
+    disabledTextColor as TextStyle,
     textStyle as TextStyle,
   ];
 
@@ -314,7 +349,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: layout.buttonRadius,
-    gap: spacing.sm,
+    gap: 6,
     overflow: 'hidden',
   },
   containerSmall: {
@@ -338,7 +373,7 @@ const styles = StyleSheet.create({
     minWidth: 48,
   },
   containerDisabled: {
-    opacity: 0.5,
+    opacity: 0.65,
   },
   fullWidth: {
     width: '100%',
@@ -346,6 +381,7 @@ const styles = StyleSheet.create({
   text: {
     ...typography.button,
     textAlign: 'center',
+    includeFontPadding: false,
   },
   textSmall: {
     ...typography.buttonSmall,
@@ -358,10 +394,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   iconWrapper: {
-    marginRight: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconWrapperRight: {
-    marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaBlob: {
     position: 'absolute',

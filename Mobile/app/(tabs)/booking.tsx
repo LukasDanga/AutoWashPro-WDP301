@@ -147,7 +147,7 @@ export default function BookingTabScreen() {
             <View style={{ position: 'relative' }}>
               <View style={styles.badgeContainer}>
                 <View style={[styles.badge, { backgroundColor: colors.infoLight }]}>
-                  <AppText variant="labelSmall" style={{ color: colors.info }}>Best Value</AppText>
+                  <AppText variant="labelSmall" style={{ color: colors.info }}>Tiết kiệm nhất</AppText>
                 </View>
               </View>
               <LinearGradient
