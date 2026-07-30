@@ -75,7 +75,7 @@ export const simulatePayment = async (data: {
 };
 
 // Create VNPay payment URL for a booking
-// Optional returnUrl overrides BE VNP_RETURN_URL (useful when ngrok is down
+// Optional returnUrl overrides BE VNP_RETURN_URL (useful when
 // and mobile should deep-link back into the app after OTP).
 export const createVnpayPayment = async (data: {
   bookingId: string;

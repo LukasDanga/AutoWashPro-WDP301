@@ -436,6 +436,7 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
   const Payment = require('../models/payment.schema');
 
   const transactionId = `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+  const client = req.body.client || 'web';
   const payment = new Payment({
     userId: req.userId,
     amount,
@@ -443,12 +444,12 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
     paymentType: paymentType || 'full',
     status: 'pending',
     transactionId,
+    client,
   });
   await payment.save();
 
-  const client = req.body.client || 'web';
-  const baseReturnUrl = process.env.VNP_RETURN_URL;
-  const targetReturnUrl = baseReturnUrl ? `${baseReturnUrl}?client=${client}` : undefined;
+  const baseReturnUrl = process.env.VNPAY_RETURN_URL;
+  const targetReturnUrl = baseReturnUrl || undefined;
 
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount,
@@ -497,10 +498,13 @@ exports.createVnpayPayment = catchAsync(async (req, res) => {
   // Tạo payment record trước
   const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, 'vnpay', paymentType || 'deposit', amount);
   const client = req.body.client || 'web';
-  const baseReturnUrl = process.env.VNP_RETURN_URL;
-  const targetReturnUrl = baseReturnUrl 
-    ? `${baseReturnUrl}?client=${client}&bookingId=${encodeURIComponent(bookingId)}`
-    : (returnUrl || undefined);
+
+  // Lưu client type vào payment record
+  const Payment = require('../models/payment.schema');
+  await Payment.findByIdAndUpdate(payment._id, { client });
+
+  const baseReturnUrl = process.env.VNPAY_RETURN_URL;
+  const targetReturnUrl = baseReturnUrl || undefined;
 
   const vnpayUrl = vnpayService.createPaymentUrl({
     amount: payment.amount,
@@ -520,22 +524,23 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   const resultJson = JSON.stringify(result);
   const encoded = encodeURIComponent(resultJson);
 
-  // Mobile deep link support: if client=mobile was passed in returnUrl,
-  // redirect to the app scheme so Expo Router picks it up.
-  const isMobile = req.query.client === 'mobile';
-  const mobileBookingId = req.query.bookingId || '';
-
-  let isTopup = false;
   const txnRef = result.data?.txnRef || req.query.vnp_TxnRef;
+
+  // Lookup payment record → determine client type & bookingId
+  let isMobile = false;
+  let mobileBookingId = '';
+  let isTopup = false;
   if (txnRef) {
     try {
       const Payment = require('../models/payment.schema');
-      const payment = await Payment.findOne({ transactionId: txnRef });
-      if (payment && payment.paymentType === 'topup') {
-        isTopup = true;
+      const paymentRecord = await Payment.findOne({ transactionId: txnRef });
+      if (paymentRecord) {
+        isMobile = paymentRecord.client === 'mobile';
+        mobileBookingId = paymentRecord.bookingId ? String(paymentRecord.bookingId) : '';
+        isTopup = paymentRecord.paymentType === 'topup';
       }
     } catch (e) {
-      console.error('Error checking topup payment:', e);
+      console.error('Error looking up payment:', e.message);
     }
   }
 

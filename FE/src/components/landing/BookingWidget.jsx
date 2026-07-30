@@ -760,7 +760,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
-          body: JSON.stringify({ amount: actualAmount }),
+          body: JSON.stringify({ amount: actualAmount, origin: window.location.origin }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
@@ -798,7 +798,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const res = await fetch(`${apiBase}/payments/vnpay-create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
-          body: JSON.stringify({ bookingId: bkId, paymentType: paymentMode, amount: actualAmount }),
+          body: JSON.stringify({ bookingId: bkId, paymentType: paymentMode, amount: actualAmount, origin: window.location.origin }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');

@@ -18,6 +18,7 @@ const paymentSchema = new mongoose.Schema(
     gatewayTransactionId: { type: String },
     failureReason: { type: String },
     retryCount: { type: Number, default: 0 },
+    client: { type: String, enum: ['web', 'mobile'], default: 'web' },
     viewedAt: { type: Date, default: null },
   },
   { timestamps: true }
