@@ -372,6 +372,7 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   if (filters.status) query.status = filters.status;
   if (filters.bookingType) query.bookingType = filters.bookingType;
   if (filters.recurringGroupId) query.recurringGroupId = filters.recurringGroupId;
+  if (filters.vehicleId) query.vehicleId = filters.vehicleId;
 
   // date range (dateFrom/dateTo) or single bookingDate
   if (filters.dateFrom || filters.dateTo) {
@@ -515,6 +516,39 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
       hasPrevPage: page > 1,
     },
   };
+};
+
+exports.getBookingsByUser = async (userId, startDate) => {
+  const query = {
+    userId,
+    paymentStatus: 'paid',
+    isDeleted: { $ne: true },
+  };
+  if (startDate) {
+    query.createdAt = { $gte: new Date(startDate) };
+  }
+  return Booking.find(query)
+    .select('bookingCode status bookingDate startTime finalPrice packageId')
+    .populate('packageId', 'name price duration')
+    .sort({ createdAt: -1 })
+    .limit(50);
+};
+
+exports.getBookingsByVehicle = async (vehicleId, startDate, endDate) => {
+  const query = {
+    vehicleId,
+    paymentStatus: 'paid',
+    isDeleted: { $ne: true },
+  };
+  if (startDate) {
+    query.createdAt = { $gte: new Date(startDate) };
+  }
+  console.log(`[getBookingsByVehicle] vehicleId=${vehicleId} startDate=${startDate} query=`, JSON.stringify(query));
+  return Booking.find(query)
+    .select('bookingCode status bookingDate startTime finalPrice packageId')
+    .populate('packageId', 'name price duration')
+    .sort({ createdAt: -1 })
+    .limit(50);
 };
 
 exports.getBookingById = async (id, userRole, userId, userBranchId) => {

@@ -7,6 +7,7 @@
 require('dotenv').config();
 require('../src/config/dns');
 const mongoose = require('mongoose');
+const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
 const User     = require('../src/models/user.schema');
 const Branch   = require('../src/models/branch.schema');
@@ -28,6 +29,11 @@ function daysFromNow(n, h = 0) {
 }
 function todayAt(h, m = 0) {
   const d = new Date(); d.setHours(h, m, 0, 0); return d;
+}
+function genBookingCode(bDate) {
+  const ds = bDate.toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+  return `AW-${ds}-${rand}`;
 }
 
 // ─── 4 Package Templates ───────────────────────────────────────────────────────
@@ -399,6 +405,7 @@ async function main() {
       packageId: pkg._id,
       vehicleId: vehicle._id,
       bookingDate,
+      bookingCode: genBookingCode(bookingDate),
       startTime: b.start,
       endTime: b.end,
       status: b.status,

@@ -206,6 +206,7 @@ export default function RefundRequests() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [detail, setDetail] = useState(null);
   const [reviewing, setReviewing] = useState(false);
+  const [viewMode, setViewMode] = useState('pending'); // pending | history
 
   // Range Delete states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -218,14 +219,18 @@ export default function RefundRequests() {
     setLoading(true); setError('');
     try {
       const params = new URLSearchParams();
-      if (statusFilter) params.set('status', statusFilter);
+      if (viewMode === 'pending') {
+        params.set('status', 'pending');
+      } else if (statusFilter) {
+        params.set('status', statusFilter);
+      }
       const res = await api(`/refund-requests?${params}`);
       if (!res.ok) throw new Error('Không thể tải danh sách yêu cầu hoàn tiền');
       const data = await res.json();
       setRequests(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [statusFilter]);
+  }, [statusFilter, viewMode]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -248,7 +253,7 @@ export default function RefundRequests() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Không thể xử lý yêu cầu');
-      setRequests(prev => prev.filter(r => r._id !== detail._id));
+      setRequests(prev => prev.map(r => r._id === detail._id ? { ...r, status: decision, reviewedAt: new Date().toISOString() } : r));
       setDetail(null);
       showToast(decision === 'approved' ? 'Đã phê duyệt và hoàn tiền cho khách hàng!' : 'Đã từ chối yêu cầu hoàn tiền.', 'success');
     } catch (e) { showToast(e.message, 'error'); }
@@ -311,12 +316,35 @@ export default function RefundRequests() {
         ))}
       </div>
 
-      {/* Filter bar */}
+      {/* View Mode Tabs */}
       <div className="flex flex-wrap items-center gap-2">
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-          {STATUS_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-        </select>
+        <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5">
+          {[
+            { key: 'pending', label: 'Chờ duyệt' },
+            { key: 'history', label: 'Lịch sử duyệt' },
+          ].map(t => (
+            <button key={t.key} onClick={() => { setViewMode(t.key); setStatusFilter(''); }}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                viewMode === t.key ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {viewMode === 'history' && (
+          <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5">
+            {STATUS_TABS.filter(t => t.key !== 'pending').map(t => (
+              <button key={t.key} onClick={() => setStatusFilter(t.key)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  statusFilter === t.key ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                }`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <button onClick={load} disabled={loading}
           className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới

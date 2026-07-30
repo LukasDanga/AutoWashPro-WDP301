@@ -2328,8 +2328,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     else past.push(b);
                   });
                   
-                  upcoming.sort((a, b) => new Date(a.bookingDate) - new Date(b.bookingDate));
-                  past.sort((a, b) => new Date(b.bookingDate) - new Date(a.bookingDate));
+                  upcoming.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id));
+                  past.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id));
                   
                   const renderBookingCard = (b) => {
                     const bId = b._id || b.id;
@@ -2852,6 +2852,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     <tr className="border-b border-black">
                       <th className="py-2 text-left font-normal text-black">Phương thức</th>
                       <th className="py-2 text-left font-normal text-black">Ngày</th>
+                      <th className="py-2 text-left font-normal text-black">Mã đơn</th>
                       <th className="py-2 text-right font-normal text-black">Số tiền</th>
                       <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
                     </tr>
@@ -2862,6 +2863,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                         {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
                       </td>
                       <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
+                      <td className="py-3 text-left font-mono font-bold text-emerald-700">#{detailBooking.bookingCode || ''}</td>
                       <td className="py-3 text-right text-black">
                         {detailBooking.paymentStatus === 'paid' 
                           ? formatCurrency(displayTotal) 
@@ -3304,7 +3306,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                                 Đang lưu...
                               </>
                             ) : (
-                              '💾 Lưu thay đổi dịch vụ'
+                              'Lưu thay đổi dịch vụ'
                             )}
                           </button>
                           <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}

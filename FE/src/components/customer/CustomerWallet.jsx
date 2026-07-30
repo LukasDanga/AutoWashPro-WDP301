@@ -237,7 +237,10 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
                       <h4 className="font-bold text-slate-800 text-sm md:text-base">{tx.reason}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {new Date(tx.createdAt).toLocaleString('vi-VN')}
-                        {tx.bookingId && ` • Mã đơn: ${tx.bookingId.bookingCode || 'N/A'}`}
+                        {tx.bookingId && (() => {
+                          const bc = typeof tx.bookingId === 'object' ? tx.bookingId.bookingCode : null;
+                          return bc ? ` • Mã đơn: ${bc}` : '';
+                        })()}
                       </p>
                     </div>
                   </div>

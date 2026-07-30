@@ -16,6 +16,7 @@ exports.getMyWalletTransactions = catchAsync(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
+      .populate('bookingId', 'bookingCode')
       .lean(),
     WalletTransaction.countDocuments(query),
   ]);

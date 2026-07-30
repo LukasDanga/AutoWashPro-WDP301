@@ -32,60 +32,62 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
   const [detailPayment, setDetailPayment] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterMonth, setFilterMonth] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState(null);
 
-  useEffect(() => {
+  const loadPayments = async () => {
     if (!token) return;
     setLoading(true);
     let url = `${apiBase || API_BASE}/payments/my?withStats=true&page=${page}&limit=10`;
-    if (filterStatus !== 'all') url += `&status=${filterStatus}`;
-    if (filterMonth) url += `&month=${filterMonth}`;
+    if (filterDateFrom) url += `&dateFrom=${filterDateFrom}`;
+    if (filterDateTo) url += `&dateTo=${filterDateTo}`;
 
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(payload => {
-        const responseData = payload?.data || payload;
-        let paymentsList = [];
-        if (responseData && responseData.payments) {
-           paymentsList = responseData.payments;
-           if (responseData.stats) setStats(responseData.stats);
-        } else if (Array.isArray(responseData)) {
-           paymentsList = responseData;
-        }
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const payload = await r.json();
+      const responseData = payload?.data || payload;
+      let paymentsList = [];
+      if (responseData && responseData.payments) {
+         paymentsList = responseData.payments;
+         if (responseData.stats) setStats(responseData.stats);
+      } else if (Array.isArray(responseData)) {
+         paymentsList = responseData;
+      }
 
-        if (payload?.pagination) {
-          setTotalPages(payload.pagination.totalPages || 1);
-        }
+      if (payload?.pagination) {
+        setTotalPages(payload.pagination.totalPages || 1);
+      }
 
-        setPayments(paymentsList);
-      })
-      .catch(() => { showToast('Không thể tải lịch sử thanh toán', 'error'); setPayments([]); })
-      .finally(() => setLoading(false));
-  }, [apiBase, token, filterStatus, filterMonth, page]);
+      setPayments(paymentsList);
+    } catch {
+      showToast('Không thể tải lịch sử thanh toán', 'error');
+      setPayments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadPayments(); }, [apiBase, token, filterDateFrom, filterDateTo, page]);
 
   async function openDetail(payment) {
     setDetailPayment(null);
     setShowDetail(true);
     try {
-      const bId = payment.bookingId?._id || payment.bookingId || payment.bookingData?._id;
       if (payment.bookingData) {
-        // Fallback detail from booking data
-        setDetailPayment({
-          ...payment,
-          bookingId: payment.bookingData,
-        });
+        setDetailPayment({ ...payment, bookingId: payment.bookingData });
         return;
       }
-      const res = await fetch(`${apiBase || API_BASE}/payments/booking/${bId}`, {
+      const pid = payment._id || payment.id;
+      const res = await fetch(`${apiBase || API_BASE}/payments/${pid}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Không thể tải chi tiết');
       const payload = await res.json();
       setDetailPayment(payload?.data || payload);
+      loadPayments();
     } catch (e) {
       showToast(e.message, 'error');
       setShowDetail(false);
@@ -185,23 +187,22 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
           </div>
         </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
             <div className="flex-1">
-              <select
-                value={filterStatus}
-                onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+              <label className="block text-xs text-slate-500 mb-1">Từ ngày</label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }}
                 className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="paid">Thành công</option>
-                <option value="pending">Chờ thanh toán</option>
-              </select>
+              />
             </div>
             <div className="flex-1">
+              <label className="block text-xs text-slate-500 mb-1">Đến ngày</label>
               <input
-                type="month"
-                value={filterMonth}
-                onChange={(e) => { setFilterMonth(e.target.value); setPage(1); }}
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }}
                 className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
@@ -239,6 +240,7 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                         {booking?.bookingDate ? formatDate(booking.bookingDate) : ''}
                         {booking?.startTime ? ` ${booking.startTime}` : ''}
                         {p.method && ` · ${METHOD_MAP[p.method] || p.method}`}
+                        {booking?.bookingCode && <span className="font-mono font-bold text-emerald-600"> · #{booking.bookingCode}</span>}
                       </p>
                       {p.paymentType === 'deposit' && booking?.finalPrice && (
                         <p className="text-xs text-amber-600 font-semibold mt-1.5">
@@ -319,10 +321,6 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                   <span className="text-xs text-slate-500">Loại</span>
                   <span className="text-sm text-slate-700">{detailPayment.paymentType === 'deposit' ? 'Đặt cọc' : detailPayment.paymentType === 'remaining' ? 'Còn lại' : 'Toàn bộ'}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-xs text-slate-500">Ngày tạo</span>
-                  <span className="text-sm text-slate-700">{formatDateTime(detailPayment.createdAt)}</span>
-                </div>
                 {detailPayment.paidAt && (
                   <div className="flex justify-between py-2 border-b border-slate-100">
                     <span className="text-xs text-slate-500">Ngày thanh toán</span>
@@ -346,7 +344,20 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                     <p className="text-xs font-semibold text-slate-500 mb-2">THÔNG TIN ĐẶT LỊCH</p>
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Dịch vụ</span>
-                      <span className="text-sm text-slate-700 text-right">{detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}</span>
+                      <span className="text-sm text-slate-700 text-right">
+                        {detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}
+                        {detailPayment.bookingId.packageId?.price && <span className="text-xs text-slate-400 ml-1">({formatCurrency(detailPayment.bookingId.packageId.price)})</span>}
+                      </span>
+                    </div>
+                    {(detailPayment.bookingId.vehicleId?.licensePlate || detailPayment.bookingId.vehicleId?.brand) && (
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-xs text-slate-500">Xe</span>
+                        <span className="text-sm text-slate-700">{detailPayment.bookingId.vehicleId.licensePlate}{detailPayment.bookingId.vehicleId.brand ? ` · ${detailPayment.bookingId.vehicleId.brand}` : ''}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1.5">
+                      <span className="text-xs text-slate-500">Mã đơn</span>
+                      <span className="text-sm font-mono font-bold text-emerald-700">#{detailPayment.bookingId.bookingCode || '—'}</span>
                     </div>
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Ngày</span>
@@ -360,18 +371,6 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                       <span className="text-xs text-slate-500">Chi nhánh</span>
                       <span className="text-sm text-slate-700">{detailPayment.bookingId.branchId?.name || detailPayment.bookingId.branchName || '—'}</span>
                     </div>
-                    {detailPayment.paymentType === 'deposit' && (
-                      <>
-                        <div className="flex justify-between py-1.5">
-                          <span className="text-xs text-amber-600 font-semibold">Đặt cọc</span>
-                          <span className="text-sm font-bold text-amber-600">{formatCurrency(detailPayment.amount)}</span>
-                        </div>
-                        <div className="flex justify-between py-1.5">
-                          <span className="text-xs text-slate-500">Còn lại (thanh toán sau)</span>
-                          <span className="text-sm text-slate-700">{formatCurrency(Math.max(0, (detailPayment.bookingId.finalPrice || 0) - (detailPayment.amount || 0)))}</span>
-                        </div>
-                      </>
-                    )}
                   </div>
                 )}
               </div>

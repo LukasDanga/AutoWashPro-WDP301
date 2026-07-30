@@ -20,6 +20,8 @@ const HISTORY_SUB_TABS = [
 export default function CustomerLayout({
   children,
   user,
+  apiBase,
+  token,
   onLogout,
   onOpenAuth,
   onGoToProfile,

@@ -598,7 +598,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
 
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   let payment = await Payment.findOne({ bookingId })
-    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
+    .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status userId branchId packageId finalPrice vehicleId bookingCode' })
     .populate('userId', 'name email phone');
   if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   if (userRole === 'customer' && String(payment.userId?._id || payment.userId) !== String(userId)) {
@@ -612,7 +612,7 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
       await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
       // Load lại payment sau khi update
       payment = await Payment.findOne({ bookingId })
-        .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' }, select: 'bookingDate startTime status userId branchId' })
+        .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status userId branchId packageId finalPrice vehicleId bookingCode' })
         .populate('userId', 'name email phone');
     }
   }
@@ -622,7 +622,7 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
 
 exports.getPaymentById = async (id) => {
   let payment = await Payment.findById(id)
-    .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
+    .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId bookingCode' })
     .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
     .populate('userId', 'name email phone tier');
   if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
@@ -633,7 +633,7 @@ exports.getPaymentById = async (id) => {
     if (isPaid) {
       await exports.confirmPaymentCallback(payment.transactionId, 'SEPAY_POLLED', true);
       payment = await Payment.findById(id)
-        .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'bookingDate startTime status branchId packageId' })
+        .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId bookingCode' })
         .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
         .populate('userId', 'name email phone tier');
     }
@@ -758,11 +758,15 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
     query.paymentType = filters.paymentType;
   }
   
-  if (filters.month) { // e.g. "2026-07"
-    const start = new Date(`${filters.month}-01T00:00:00.000Z`);
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + 1);
-    query.createdAt = { $gte: start, $lt: end };
+  if (filters.dateFrom || filters.dateTo) {
+    const dateFilter = {};
+    if (filters.dateFrom) dateFilter.$gte = new Date(filters.dateFrom);
+    if (filters.dateTo) {
+      const end = new Date(filters.dateTo);
+      end.setDate(end.getDate() + 1);
+      dateFilter.$lt = end;
+    }
+    query.createdAt = { ...query.createdAt, ...dateFilter };
   }
 
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
@@ -771,7 +775,7 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
 
   const [data, total] = await Promise.all([
     Payment.find(query)
-      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId' })
+      .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId bookingCode' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),

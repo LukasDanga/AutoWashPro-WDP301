@@ -59,6 +59,34 @@ exports.getMyBookings = catchAsync(async (req, res) => {
   success(res, result, 'Đã lấy danh sách đặt lịch của tôi');
 });
 
+exports.getBookingsByUser = catchAsync(async (req, res) => {
+  const { period } = req.query;
+  let startDate;
+  if (period === 'today') {
+    const now = new Date();
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (period === 'month') {
+    const now = new Date();
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const bookings = await bookingService.getBookingsByUser(req.params.userId, startDate);
+  success(res, bookings, 'Đã lấy danh sách đặt lịch của khách hàng');
+});
+
+exports.getBookingsByVehicle = catchAsync(async (req, res) => {
+  const { period } = req.query;
+  let startDate;
+  if (period === 'today') {
+    const now = new Date();
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (period === 'month') {
+    const now = new Date();
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const bookings = await bookingService.getBookingsByVehicle(req.params.vehicleId, startDate);
+  success(res, bookings, 'Đã lấy danh sách đặt lịch của xe');
+});
+
 exports.getBookingById = catchAsync(async (req, res) => {
   const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId, req.user.branchId);
   success(res, booking, 'Đã lấy thông tin đặt lịch');
