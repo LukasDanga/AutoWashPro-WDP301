@@ -812,13 +812,11 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           'booking_completed',
           { bookingId: id }
         );
-        // Award loyalty points for slot_pack bookings (cash/online already handled in payment service)
-        if (currentBooking.bookingType === 'slot_pack_usage' || currentBooking.paymentStatus === 'paid') {
-          if ((currentBooking.finalPrice || 0) > 0) {
-            const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
-            if (!alreadyAwarded) {
-              await loyaltyService.addPointsFromPayment(currentBooking.userId, currentBooking.finalPrice, currentBooking._id, null);
-            }
+        // Award loyalty points when booking is completed (points removed from payment flow)
+        if ((currentBooking.finalPrice || 0) > 0) {
+          const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
+          if (!alreadyAwarded) {
+            await loyaltyService.addPointsFromPayment(currentBooking.userId, currentBooking.finalPrice, currentBooking._id, null);
           }
         }
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)

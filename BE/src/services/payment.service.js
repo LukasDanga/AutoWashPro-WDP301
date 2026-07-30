@@ -199,18 +199,21 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
             { session }
           );
           await markRecurringSiblingsPaid(booking, method, session);
-          await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+          // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
-            // Spin wheel logic has been moved to booking.service.js to avoid double-awarding
-            // But we still need to trigger it if this payment completes the booking.
-            // Since this bypasses updateBookingStatus, we add the missing side effects:
+            if ((fullPrice || 0) > 0) {
+              const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: bookingId, type: 'earned' }).session(session);
+              if (!alreadyAwarded) {
+                await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+              }
+            }
+            // Spin wheel + no-show side effects (missing because this bypasses updateBookingStatus)
             await mongoose.model('User').findOneAndUpdate(
               { _id: targetUserId, noShowCount: { $gt: 0 } },
               { $inc: { noShowCount: -1 } },
               { session }
             ).catch(() => {});
             
-            // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
             await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
             sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
           }
@@ -393,14 +396,19 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       }
       await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
       await markRecurringSiblingsPaid(booking, payment.method, session);
-      await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+      // Award points here when payment completes the booking (bypasses updateBookingStatus)
       if (['awaiting_payment', 'completed'].includes(booking.status)) {
+        if ((payment.amount || 0) > 0) {
+          const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
+          if (!alreadyAwarded) {
+            await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+          }
+        }
         await mongoose.model('User').findOneAndUpdate(
           { _id: payment.userId, noShowCount: { $gt: 0 } },
           { $inc: { noShowCount: -1 } },
           { session }
         ).catch(() => {});
-        // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
       }
@@ -545,8 +553,14 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           }
           await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
           await markRecurringSiblingsPaid(booking, payment.method, session);
-          await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+          // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
+            if ((payment.amount || 0) > 0) {
+              const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
+              if (!alreadyAwarded) {
+                await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+              }
+            }
             await mongoose.model('User').findOneAndUpdate(
               { _id: payment.userId, noShowCount: { $gt: 0 } },
               { $inc: { noShowCount: -1 } },
