@@ -4,11 +4,6 @@ import { io } from 'socket.io-client';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const SYNC_EVENTS = ['slots_updated', 'vouchers_updated', 'my_bookings_updated', 'feedback_new', 'booking_new', 'my_vehicles_updated'];
 
-// Khoảng thời gian chống "burst refetch": khi nhiều SYNC_EVENTS đến dồn dập trong thời
-// gian ngắn (vd: tạo booking → bắn 'booking_new' + 'my_bookings_updated' + 'slots_updated'),
-// chỉ fire 1 lần để tránh spam fetch.
-const SYNC_DEBOUNCE_MS = 800;
-
 class SocketManager {
   constructor() {
     this.socket = null;
@@ -17,6 +12,8 @@ class SocketManager {
     this.base = API_BASE.replace(/\/api$/, '');
     this.hasInitialSync = false; // chỉ fire SYNC_EVENTS ở lần connect đầu tiên
     this.syncDebounceTimer = null;
+    this.syncDebounceMs = 800; // Tránh burst refetch dồn dập
+    this.disconnectTimer = null;
   }
 
   connect(token) {
@@ -30,7 +27,7 @@ class SocketManager {
 
     this.socket = io(this.base, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       autoConnect: true
     });
 
@@ -38,16 +35,7 @@ class SocketManager {
       console.log('[Socket] Connected:', this.socket.id);
 
       // Reconnect recovery: trigger sync events để mounted components refresh dữ liệu.
-      //
-      // CHANGE: trước đây SYNC_EVENTS được fire MỖI LẦN reconnect (network blip, mobile
-      // đổi 4G/wifi, corporate proxy timeout) → mỗi lần đều bắn toàn bộ fetch → user
-      // thấy UI "reset" / "nhảy dữ liệu". Giờ chỉ fire 1 LẦN DUY NHẤT ở initial connect
-      // của phiên. Các reconnect tiếp theo sẽ tin tưởng rằng server vẫn giữ state và
-      // client sẽ refetch qua:
-      //   - explicit re-login
-      //   - tab focus event (handled in components)
-      //   - explicit pull-to-refresh
-      //   - real-time events khác (notification, wallet_topup_success, …)
+      // Chỉ fire 1 LẦN DUY NHẤT ở initial connect của phiên để tránh nhảy UI.
       if (!this.hasInitialSync) {
         this.hasInitialSync = true;
         this.fireSyncEvents();
@@ -57,7 +45,6 @@ class SocketManager {
     this.socket.on('disconnect', () => {
       console.log('[Socket] Disconnected');
       // Reset để lần reconnect đầu tiên (sau khi mất mạng lâu) sẽ sync lại.
-      // Đây là hành vi mong muốn: reconnect = recovery = re-sync.
       this.hasInitialSync = false;
     });
 
@@ -74,7 +61,7 @@ class SocketManager {
   }
 
   fireSyncEvents() {
-    // Debounce: gom nhiều gọi trong SYNC_DEBOUNCE_MS thành 1 lần gọi listener cuối cùng.
+    // Debounce: gom nhiều gọi trong syncDebounceMs thành 1 lần gọi listener cuối cùng.
     if (this.syncDebounceTimer) clearTimeout(this.syncDebounceTimer);
     this.syncDebounceTimer = setTimeout(() => {
       this.syncDebounceTimer = null;
@@ -90,10 +77,14 @@ class SocketManager {
           });
         }
       });
-    }, SYNC_DEBOUNCE_MS);
+    }, this.syncDebounceMs);
   }
 
   disconnect() {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -105,6 +96,11 @@ class SocketManager {
   }
 
   subscribe(token, eventName, callback) {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+
     if (!this.socket || this.token !== token) {
       this.connect(token);
     }
@@ -137,7 +133,16 @@ class SocketManager {
         total += set.size;
       }
       if (total === 0) {
-        this.disconnect();
+        if (this.disconnectTimer) clearTimeout(this.disconnectTimer);
+        this.disconnectTimer = setTimeout(() => {
+          let currentTotal = 0;
+          for (const set of this.listeners.values()) {
+            currentTotal += set.size;
+          }
+          if (currentTotal === 0) {
+            this.disconnect();
+          }
+        }, 5000);
       }
     };
   }
