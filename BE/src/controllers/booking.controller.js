@@ -59,6 +59,11 @@ exports.getMyBookings = catchAsync(async (req, res) => {
   success(res, result, 'Đã lấy danh sách đặt lịch của tôi');
 });
 
+exports.getBookingsByVehicle = catchAsync(async (req, res) => {
+  const bookings = await bookingService.getBookingsByVehicle(req.params.vehicleId);
+  success(res, bookings, 'Đã lấy danh sách đặt lịch của xe');
+});
+
 exports.getBookingById = catchAsync(async (req, res) => {
   const booking = await bookingService.getBookingById(req.params.id, req.user.role, req.userId, req.user.branchId);
   success(res, booking, 'Đã lấy thông tin đặt lịch');

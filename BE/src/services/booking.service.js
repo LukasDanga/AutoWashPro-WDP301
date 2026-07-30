@@ -518,6 +518,15 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   };
 };
 
+exports.getBookingsByVehicle = async (vehicleId) => {
+  return Booking.find({ vehicleId, isDeleted: { $ne: true } })
+    .populate('userId', 'name email phone')
+    .populate('packageId', 'name price duration')
+    .populate('branchId', 'name')
+    .sort({ createdAt: -1 })
+    .limit(50);
+};
+
 exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   const booking = await Booking.findById(id)
     .populate('userId', 'name email phone tier walletBalance')

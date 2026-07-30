@@ -91,6 +91,8 @@ router.get('/feedbacks', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bo
 
 router.get('/customers', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getCustomers);
 
+router.get('/vehicle/:vehicleId', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.getBookingsByVehicle);
+
 /**
  * @swagger
  * /api/bookings/my:

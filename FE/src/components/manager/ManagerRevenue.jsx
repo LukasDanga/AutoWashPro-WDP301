@@ -107,9 +107,9 @@ function VehicleDetailModal({ vehicle, onClose }) {
   useEffect(() => {
     if (vehicleId) {
       setLoadingBookings(true);
-      api(`/bookings?vehicleId=${vehicleId}&limit=50&sort=-createdAt`)
+      api(`/bookings/vehicle/${vehicleId}`)
         .then(r => r.json())
-        .then(res => setBookings(res?.data?.bookings || []))
+        .then(res => setBookings(res?.data || []))
         .finally(() => setLoadingBookings(false));
     }
   }, [vehicleId]);
