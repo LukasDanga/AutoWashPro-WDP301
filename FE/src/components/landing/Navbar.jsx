@@ -31,6 +31,9 @@ const NOTIF_ICONS = {
   payment_confirmed: '💳',
   refund: '🔙',
   voucher: '🎫',
+  points_earned: '⭐',
+  points_deducted: '📉',
+  tier_downgraded: '⬇️',
   system: '🔔',
 };
 
