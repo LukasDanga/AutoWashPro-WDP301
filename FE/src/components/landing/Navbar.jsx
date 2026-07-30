@@ -57,26 +57,28 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
 
   // Fetch unread count
   const fetchUnreadCount = useCallback(() => {
-    if (!token) return;
+    const activeToken = token || getStoredToken();
+    if (!activeToken) return;
     fetch(`${API_BASE}/notifications/unread-count`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${activeToken}` },
     })
       .then(r => r.json())
       .then(data => {
-        const count = data?.data?.count ?? data?.count ?? 0;
-        setUnreadCount(count);
+        const count = data?.data?.unread ?? data?.data?.count ?? data?.unread ?? data?.count ?? 0;
+        setUnreadCount(Number(count) || 0);
       })
       .catch(() => {});
   }, [token]);
 
   // Fetch recent notifications for dropdown
   const fetchNotifications = useCallback(() => {
-    if (!token) return;
+    const activeToken = token || getStoredToken();
+    if (!activeToken) return;
     setNotifLoading(true);
     const params = new URLSearchParams({ page: '1', limit: '10' });
     if (notifFilter === 'unread') params.set('isRead', 'false');
     fetch(`${API_BASE}/notifications?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${activeToken}` },
     })
       .then(r => r.json())
       .then(data => {
@@ -87,11 +89,21 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
       .finally(() => setNotifLoading(false));
   }, [token, notifFilter]);
 
-  // Poll unread count every 30s
+  // Poll unread count every 30s + sync with user & events
   useEffect(() => {
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (user) fetchUnreadCount();
+  }, [user, fetchUnreadCount]);
+
+  useEffect(() => {
+    const handleSync = () => fetchUnreadCount();
+    window.addEventListener('unread_notifications_updated', handleSync);
+    return () => window.removeEventListener('unread_notifications_updated', handleSync);
   }, [fetchUnreadCount]);
 
   useSSE(token, 'notification', useCallback((data) => {
@@ -119,27 +131,31 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
 
   // Mark single notification as read
   const markAsRead = async (id) => {
-    if (!token) return;
+    const activeToken = token || getStoredToken();
+    if (!activeToken) return;
     try {
       await fetch(`${API_BASE}/notifications/${id}/read`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${activeToken}` },
       });
       setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
+      window.dispatchEvent(new CustomEvent('unread_notifications_updated'));
     } catch {}
   };
 
   // Mark all as read
   const markAllAsRead = async () => {
-    if (!token) return;
+    const activeToken = token || getStoredToken();
+    if (!activeToken) return;
     try {
       await fetch(`${API_BASE}/notifications/read-all`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${activeToken}` },
       });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
+      window.dispatchEvent(new CustomEvent('unread_notifications_updated'));
     } catch {}
   };
 
