@@ -95,10 +95,12 @@ export default function AdminLayout({ user, onLogout }) {
     window.addEventListener('payment-viewed', loadCounts);
     window.addEventListener('refund-request-viewed', loadCounts);
     window.addEventListener('admin-slot-pack-viewed', loadCounts);
+    window.addEventListener('feedback-replied', loadCounts);
     return () => {
       window.removeEventListener('payment-viewed', loadCounts);
       window.removeEventListener('refund-request-viewed', loadCounts);
       window.removeEventListener('admin-slot-pack-viewed', loadCounts);
+      window.removeEventListener('feedback-replied', loadCounts);
     };
   }, [loadCounts]);
 

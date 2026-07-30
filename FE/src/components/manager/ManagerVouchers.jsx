@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { showToast } from '@/lib/toast';
+import { confirmDialog } from '@/lib/confirm';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -689,8 +690,7 @@ function WheelManagementTab() {
   useEffect(() => { fetchGifts(); }, [fetchGifts]);
 
   const handleDelete = async (id) => {
-    // skip confirm dialog here to avoid importing it, use standard confirm
-    if (!window.confirm('Bạn có chắc chắn muốn xóa?')) return;
+    if (!(await confirmDialog({ title: 'Xác nhận xóa', message: 'Bạn có chắc chắn muốn xóa?', danger: true }))) return;
     try {
       const res = await api(`/gifts/${id}`, { method: 'DELETE' });
       if (res.ok) {

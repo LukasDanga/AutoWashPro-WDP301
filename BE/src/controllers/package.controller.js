@@ -1,6 +1,28 @@
 const packageService = require('../services/package.service');
 const { catchAsync, success } = require('../utils/helpers');
 
+exports.getTemplateSubServices = catchAsync(async (req, res) => {
+  const templates = {
+    external: [
+      { name: 'Phun bọt tuyết tự động', price: 0, duration: 5, isOptional: false },
+      { name: 'Rửa vỏ xe chổi xoay', price: 0, duration: 10, isOptional: false },
+      { name: 'Xịt rửa gầm áp lực cao', price: 0, duration: 5, isOptional: false },
+      { name: 'Sấy khô & dưỡng lốp', price: 0, duration: 10, isOptional: false }
+    ],
+    internal: [
+      { name: 'Hút bụi nội thất nhanh', price: 0, duration: 15, isOptional: false },
+      { name: 'Lau chùi taplo & cửa', price: 0, duration: 10, isOptional: false },
+      { name: 'Xịt khử mùi sinh học', price: 0, duration: 5, isOptional: false }
+    ],
+    full: [
+      { name: 'Rửa ngoại thất tiêu chuẩn', price: 0, duration: 25, isOptional: false },
+      { name: 'Vệ sinh nội thất tiêu chuẩn', price: 0, duration: 25, isOptional: false },
+      { name: 'Khử mùi ozon', price: 0, duration: 10, isOptional: false }
+    ]
+  };
+  success(res, templates, 'Lấy danh sách dịch vụ mặc định thành công', 200);
+});
+
 exports.createPackage = catchAsync(async (req, res) => {
   const data = { ...req.body };
   if (req.user.role === 'manager') {

@@ -37,6 +37,18 @@ router.get('/', packageController.getAllPackages);
 
 /**
  * @swagger
+ * /api/packages/templates/sub-services:
+ *   get:
+ *     summary: Get template sub-services
+ *     tags: [Packages]
+ *     responses:
+ *       200:
+ *         description: Sub-services templates
+ */
+router.get('/templates/sub-services', packageController.getTemplateSubServices);
+
+/**
+ * @swagger
  * /api/packages/{id}:
  *   get:
  *     summary: Get package by ID

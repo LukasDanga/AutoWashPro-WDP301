@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
+import { confirmDialog } from '@/lib/confirm';
 import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, Buildings, Trash, MagnifyingGlass, Calendar, Spinner } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import useSSE from '@/hooks/useSSE';
@@ -176,10 +177,11 @@ export default function AdminReviews() {
 
   function handleReplied(updated) {
     setFeedbacks((prev) => prev.map((f) => f._id === updated._id ? updated : f));
+    window.dispatchEvent(new Event('feedback-replied'));
   }
 
   async function handleDeleteSingle(fb) {
-    if (!confirm('Bạn có chắc chắn muốn xóa đánh giá này?')) return;
+    if (!(await confirmDialog({ title: 'Xác nhận xóa', message: 'Bạn có chắc chắn muốn xóa đánh giá này?', danger: true }))) return;
     try {
       const res = await api(`/bookings/${fb._id}/feedback`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
@@ -191,13 +193,13 @@ export default function AdminReviews() {
 
   async function handleDeleteRange() {
     if (deleteAll) {
-      if (!confirm('Bạn có chắc muốn xóa TOÀN BỘ tất cả các đánh giá? Hành động này không thể hoàn tác!')) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa tất cả', message: 'Bạn có chắc muốn xóa TOÀN BỘ tất cả các đánh giá? Hành động này không thể hoàn tác!', danger: true }))) return;
     } else {
       if (!deleteDateFrom || !deleteDateTo) return showToast('Vui lòng chọn khoảng ngày', 'error');
       if (new Date(deleteDateFrom) > new Date(deleteDateTo)) {
         return showToast('Ngày bắt đầu không được lớn hơn ngày kết thúc!', 'error');
       }
-      if (!confirm(`Xóa tất cả đánh giá từ ${deleteDateFrom} đến ${deleteDateTo}?`)) return;
+      if (!(await confirmDialog({ title: 'Xác nhận xóa', message: `Xóa tất cả đánh giá từ ${deleteDateFrom} đến ${deleteDateTo}?`, danger: true }))) return;
     }
 
     setDeleting(true);
@@ -351,8 +353,7 @@ export default function AdminReviews() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {paginated.map((fb) => {
             const fbDate = fb.feedbackAt || fb.updatedAt || fb.createdAt;
-            const isCreatedToday = fbDate && new Date(fbDate).toDateString() === todayStr;
-            const isNew = !fb.managerReply && isCreatedToday;
+            const isUnreplied = !fb.managerReply;
 
             return (
               <div key={fb._id} className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
@@ -364,9 +365,9 @@ export default function AdminReviews() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold text-slate-800 text-sm">{fb.userId?.name || 'Khách hàng'}</span>
                           {fb.userId?.tier && <TierBadge tier={fb.userId.tier} />}
-                          {isNew && (
+                          {isUnreplied && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-xs">
-                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Mới
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Chưa phản hồi
                             </span>
                           )}
                         </div>
