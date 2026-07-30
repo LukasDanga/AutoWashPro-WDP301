@@ -57,7 +57,7 @@ export default function CustomerLayout({
     { label: 'Lịch sử đặt xe', to: '/history', icon: Calendar, badge: null, hasSubMenu: true },
     { label: 'Lịch sử thanh toán', to: '/payments', icon: CreditCard, badge: null },
     { label: 'Thông báo', to: '/notifications', icon: Bell, badge: null },
-    { label: 'Kho quà & Tích điểm', to: '/gifts', icon: Gift, badge: 'Đổi quà' },
+    { label: 'Kho quà & Tích điểm', to: '/rewards', icon: Award, badge: null },
   ];
 
   const tierInfo = TIER_BADGES[user?.tier] || TIER_BADGES.bronze;

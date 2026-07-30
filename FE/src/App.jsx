@@ -13,6 +13,8 @@ import HistoryPage from './components/landing/HistoryPage.jsx';
 import PaymentHistoryPage from './components/landing/PaymentHistoryPage.jsx';
 import NotificationsPage from './components/landing/NotificationsPage.jsx';
 import CustomerLayout from './components/landing/CustomerLayout.jsx';
+import CustomerRewards from './components/customer/CustomerRewards.jsx';
+import CustomerPointHistoryDetail from './components/customer/CustomerPointHistoryDetail.jsx';
 import PolicyPage from './components/landing/PolicyPage.jsx';
 import {
   clearSession as clearStoredSession,
@@ -268,6 +270,7 @@ export default function App() {
     onGoToHistory: () => navigate('/history'),
     onGoToPayments: () => navigate('/payments'),
     onGoToNotifications: () => navigate('/notifications'),
+    onGoToRewards: () => navigate('/rewards'),
   };
 
   if (path === '/profile' && token && user) {
@@ -310,6 +313,25 @@ export default function App() {
     return (
       <CustomerLayout {...customerNavProps}>
         <NotificationsPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
+      </CustomerLayout>
+    );
+  }
+
+  if (path === '/rewards' && token && user) {
+    return (
+      <CustomerLayout {...customerNavProps}>
+        <CustomerRewards user={user} refreshUser={() => {
+          fetch(`${apiBase}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json()).then(d => { if (d?.data) handleUserUpdate(d.data); }).catch(() => {});
+        }} />
+      </CustomerLayout>
+    );
+  }
+
+  if (path.startsWith('/rewards/history/') && token && user) {
+    return (
+      <CustomerLayout {...customerNavProps}>
+        <CustomerPointHistoryDetail />
       </CustomerLayout>
     );
   }
