@@ -87,7 +87,7 @@ const NEXT_STATUS = {
   confirmed:        ['checked_in', 'cancelled'],
   checked_in:       ['in_progress', 'cancelled'],
   in_progress:      ['awaiting_payment', 'completed', 'cancelled'],
-  awaiting_payment: ['completed', 'cancelled'],
+  awaiting_payment: ['cancelled'], // Chỉ hủy — hoàn thành qua thanh toán
 };
 
 const TYPE_MAP = {
@@ -851,7 +851,13 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         body: JSON.stringify({ bookingId: booking._id, method, paymentType: booking.depositPaid ? 'remaining' : 'full' }),
       });
       if (!res.ok) throw new Error(await readErr(res));
-      onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: method });
+      onUpdated({
+        ...booking,
+        paymentStatus: 'paid',
+        paidAt: new Date().toISOString(),
+        paymentMethod: method,
+        ...(booking.status === 'awaiting_payment' ? { status: 'completed', checkOutTime: new Date().toISOString() } : {}),
+      });
       notify(`Xác nhận thanh toán ${method === 'cash' ? 'tiền mặt' : method === 'bank' ? 'chuyển khoản' : method === 'wallet' ? 'ví' : 'VNPay'} thành công!`, 'success');
     } catch (err) {
       notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
@@ -1023,7 +1029,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                       </span>
 
                       {/* Next action button rendered directly under current stage */}
-                      {isCurrent && stage.id !== 'completed' && (
+                      {isCurrent && stage.id !== 'completed' && stage.id !== 'awaiting_payment' && (
                         <button
                           disabled={busy}
                           onClick={() => updateStatus(stages[idx + 1].id)}
@@ -1032,6 +1038,11 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                           {busy ? 'Đang cập nhật...' : (STAGE_ACTION[stages[idx + 1].id] || `Chuyển sang ${stages[idx + 1].label}`)}
                           <ArrowRight size={14} weight="bold" />
                         </button>
+                      )}
+                      {isCurrent && stage.id === 'awaiting_payment' && (
+                        <span className="mt-3 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                          Đợi thanh toán để hoàn thành
+                        </span>
                       )}
                     </div>
                   );
@@ -1099,10 +1110,41 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
             {/* Financial summary */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Tổng giá trị dịch vụ:</span>
-                <span className="font-bold text-slate-900">{formatCurrency(booking.finalPrice || booking.totalAmount || 0)}</span>
-              </div>
+              {(() => {
+                const pkgPrice = booking.packageId?.price || 0;
+                const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
+                const totalValue = pkgPrice + subTotal;
+                return <>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Giá gói (cơ bản):</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(pkgPrice)}</span>
+                  </div>
+                  {booking.bookingType === 'slot_pack_usage' && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">Chiết khấu gói lượt:</span>
+                      <span className="font-bold text-emerald-600">-{formatCurrency(pkgPrice)}</span>
+                    </div>
+                  )}
+                  {(booking.selectedSubServices || []).filter(s => s.price > 0).length > 0 && (
+                    <>
+                      {(booking.selectedSubServices || []).filter(s => s.price > 0).map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs pl-3">
+                          <span className="text-slate-500">{s.name}:</span>
+                          <span className="font-medium text-slate-800">+{formatCurrency(s.price)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-dashed border-slate-200">
+                        <span className="text-slate-700 font-semibold">Tổng dịch vụ thêm:</span>
+                        <span className="font-bold text-slate-900">+{formatCurrency(subTotal)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100 font-bold">
+                    <span className="text-slate-800">Tổng giá trị dịch vụ:</span>
+                    <span className="text-slate-900">{formatCurrency(totalValue)}</span>
+                  </div>
+                </>;
+              })()}
               {(booking.depositPaid || booking.paymentStatus === 'deposit_paid' || booking.paymentStatus === 'paid') && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">Tiền đã trả:</span>
@@ -1129,7 +1171,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
               <Package size={16} className="text-indigo-600" /> Chi tiết Gói Dịch Vụ
             </h3>
-            {booking.status !== 'completed' && booking.status !== 'cancelled' && !editingSubServices && (
+            {booking.status !== 'completed' && booking.status !== 'cancelled' && booking.status !== 'awaiting_payment' && !editingSubServices && (
               <button onClick={handleStartEditSubServices}
                 className="inline-flex items-center gap-1 px-3 py-1 rounded-xl border border-violet-300 bg-violet-50 text-xs font-bold text-violet-700 hover:bg-violet-100 transition-colors cursor-pointer">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg> Chỉnh sửa dịch vụ
@@ -1316,6 +1358,49 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   <span className="text-[13px] font-semibold text-slate-900 text-right max-w-[55%]">{value}</span>
                 </div>
               ))}
+
+              {/* Full service value breakdown (for all booking types) */}
+              {(() => {
+                const pkgPrice = booking.packageId?.price || 0;
+                const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
+                const totalValue = pkgPrice + subTotal;
+                return <>
+                  <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                      <Package size={14} weight="fill" className="text-emerald-500 shrink-0" />
+                      Giá gói (cơ bản)
+                    </span>
+                    <span className="text-[13px] font-bold text-slate-900">{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  {booking.bookingType === 'slot_pack_usage' && (
+                    <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                      <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                        <CheckCircle size={14} weight="fill" className="text-emerald-500 shrink-0" />
+                        Chiết khấu gói lượt
+                      </span>
+                      <span className="text-[13px] font-bold text-emerald-600">-{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  {(booking.selectedSubServices || []).filter(s => s.price > 0).map((s, i) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                      <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                        <span className="w-2 h-2 rounded-full bg-indigo-300 shrink-0" />
+                        {s.name}
+                      </span>
+                      <span className="text-[13px] font-semibold text-slate-800">+{Number(s.price).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] font-bold text-slate-700">
+                      <CurrencyCircleDollar size={14} weight="fill" className="text-emerald-600 shrink-0" />
+                      Tổng giá trị dịch vụ
+                    </span>
+                    <span className="text-[13px] font-bold text-slate-900">
+                      {Number(totalValue).toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
+                </>;
+              })()}
 
               {booking.depositAmount > 0 && booking.depositAmount < (booking.totalAmount || booking.finalPrice || 0) && (
                 <>
