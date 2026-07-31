@@ -4,10 +4,10 @@ import PackagesSection from '../sections/PackagesSection';
 import { motion } from 'framer-motion';
 
 const stats = [
-  { value: '50.000+', label: 'LÆ°á»£t rá»­a xe' },
-  { value: '15+', label: 'Chi nhÃ¡nh' },
-  { value: '4.9', label: 'ÄÃ¡nh giÃ¡ trung bÃ¬nh' },
-  { value: '5+', label: 'NÄƒm kinh nghiá»‡m' },
+  { value: '50.000+', label: 'Lượt rửa xe' },
+  { value: '15+', label: 'Chi nhánh' },
+  { value: '4.9', label: 'Đánh giá trung bình' },
+  { value: '5+', label: 'Năm kinh nghiệm' },
 ];
 
 const values = [
@@ -17,8 +17,8 @@ const values = [
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
       </svg>
     ),
-    title: 'Cháº¥t lÆ°á»£ng vÆ°á»£t trá»™i',
-    desc: 'Sá»­ dá»¥ng cÃ´ng nghá»‡ vÃ  dung dá»‹ch chuyÃªn dá»¥ng cao cáº¥p, Ä‘áº£m báº£o xe cá»§a báº¡n luÃ´n sÃ¡ng bÃ³ng nhÆ° má»›i.',
+    title: 'Chất lượng vượt trội',
+    desc: 'Sử dụng công nghệ và dung dịch chuyên dụng cao cấp, đảm bảo xe của bạn luôn sáng bóng như mới.',
   },
   {
     icon: (
@@ -26,8 +26,8 @@ const values = [
         <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
       </svg>
     ),
-    title: 'Tiáº¿t kiá»‡m thá»i gian',
-    desc: 'Äáº·t lá»‹ch trÆ°á»›c qua á»©ng dá»¥ng, Ä‘áº¿n lÃ  rá»­a ngay â€” khÃ´ng chá» Ä‘á»£i. Quy trÃ¬nh tá»‘i Æ°u chá»‰ 15-45 phÃºt.',
+    title: 'Tiết kiệm thời gian',
+    desc: 'Đặt lịch trước qua ứng dụng, đến là rửa ngay — không chờ đợi. Quy trình tối ưu chỉ 15-45 phút.',
   },
   {
     icon: (
@@ -35,8 +35,8 @@ const values = [
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
       </svg>
     ),
-    title: 'Äá»™i ngÅ© chuyÃªn nghiá»‡p',
-    desc: 'Ká»¹ thuáº­t viÃªn Ä‘Æ°á»£c Ä‘Ã o táº¡o bÃ i báº£n, táº­n tÃ¢m vá»›i tá»«ng chi tiáº¿t nhá» nháº¥t trÃªn xe cá»§a báº¡n.',
+    title: 'Đội ngũ chuyên nghiệp',
+    desc: 'Kỹ thuật viên được đào tạo bài bản, tận tâm với từng chi tiết nhỏ nhất trên xe của bạn.',
   },
   {
     icon: (
@@ -44,24 +44,24 @@ const values = [
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       </svg>
     ),
-    title: 'An toÃ n & báº£o vá»‡',
-    desc: 'Cam káº¿t bá»“i thÆ°á»ng náº¿u cÃ³ hÆ° há»ng. Sáº£n pháº©m thÃ¢n thiá»‡n mÃ´i trÆ°á»ng, an toÃ n cho sá»©c khá»e.',
+    title: 'An toàn & bảo vệ',
+    desc: 'Cam kết bồi thường nếu có hư hỏng. Sản phẩm thân thiện môi trường, an toàn cho sức khỏe.',
   },
 ];
 
 const timeline = [
-  { year: '2019', title: 'ThÃ nh láº­p', desc: 'AutoWashPro ra Ä‘á»i vá»›i 1 chi nhÃ¡nh Ä‘áº§u tiÃªn táº¡i TP. Há»“ ChÃ­ Minh, mang Ä‘áº¿n dá»‹ch vá»¥ rá»­a xe chuyÃªn nghiá»‡p.' },
-  { year: '2020', title: 'Má»Ÿ rá»™ng', desc: 'PhÃ¡t triá»ƒn lÃªn 3 chi nhÃ¡nh, ra máº¯t á»©ng dá»¥ng Ä‘áº·t lá»‹ch trá»±c tuyáº¿n giÃºp khÃ¡ch hÃ ng chá»§ Ä‘á»™ng thá»i gian.' },
-  { year: '2022', title: 'Äá»•i má»›i', desc: 'Triá»ƒn khai há»‡ thá»‘ng gÃ³i lÆ°á»£t vÃ  chÆ°Æ¡ng trÃ¬nh khÃ¡ch hÃ ng thÃ¢n thiáº¿t, Ä‘áº¡t 10.000 lÆ°á»£t rá»­a.' },
-  { year: '2024', title: 'Dáº«n Ä‘áº§u', desc: '15+ chi nhÃ¡nh trÃªn toÃ n quá»‘c, phá»¥c vá»¥ hÆ¡n 50.000 lÆ°á»£t xe, trá»Ÿ thÃ nh thÆ°Æ¡ng hiá»‡u rá»­a xe uy tÃ­n hÃ ng Ä‘áº§u.' },
-  { year: '2025', title: 'TÆ°Æ¡ng lai', desc: 'Má»Ÿ rá»™ng há»‡ sinh thÃ¡i dá»‹ch vá»¥ xe hÆ¡i toÃ n diá»‡n: báº£o dÆ°á»¡ng, phá»¥ kiá»‡n, vÃ  chÄƒm sÃ³c xe táº¡i nhÃ .' },
+  { year: '2019', title: 'Thành lập', desc: 'AutoWashPro ra đời với 1 chi nhánh đầu tiên tại TP. Hồ Chí Minh, mang đến dịch vụ rửa xe chuyên nghiệp.' },
+  { year: '2020', title: 'Mở rộng', desc: 'Phát triển lên 3 chi nhánh, ra mắt ứng dụng đặt lịch trực tuyến giúp khách hàng chủ động thời gian.' },
+  { year: '2022', title: 'Đổi mới', desc: 'Triển khai hệ thống gói lượt và chương trình khách hàng thân thiết, đạt 10.000 lượt rửa.' },
+  { year: '2024', title: 'Dẫn đầu', desc: '15+ chi nhánh trên toàn quốc, phục vụ hơn 50.000 lượt xe, trở thành thương hiệu rửa xe uy tín hàng đầu.' },
+  { year: '2025', title: 'Tương lai', desc: 'Mở rộng hệ sinh thái dịch vụ xe hơi toàn diện: bảo dưỡng, phụ kiện, và chăm sóc xe tại nhà.' },
 ];
 
 const team = [
-  { name: 'Lá»¯ Anh Báº£o Khang', role: 'ThÃ nh viÃªn', avatar: 'LABK' },
-  { name: 'TrÆ°Æ¡ng Nguyá»…n ThÃ¡i BÃ¬nh', role: 'ThÃ nh viÃªn', avatar: 'TNTB' },
-  { name: 'Pháº¡m Thá»‹ Kim HÆ°Æ¡ng', role: 'ThÃ nh viÃªn', avatar: 'PTKH' },
-  { name: 'Há»“ ÄÃ¬nh Anh', role: 'ThÃ nh viÃªn', avatar: 'HDA' },
+  { name: 'Lữ Anh Bảo Khang', role: 'Thành viên', avatar: 'LABK' },
+  { name: 'Trương Nguyễn Thái Bình', role: 'Thành viên', avatar: 'TNTB' },
+  { name: 'Phạm Thị Kim Hương', role: 'Thành viên', avatar: 'PTKH' },
+  { name: 'Hồ Đình Anh', role: 'Thành viên', avatar: 'HDA' },
 ];
 
 function fadeInUp(i = 0) {
@@ -86,14 +86,14 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
         </div>
         <div className="relative max-w-4xl mx-auto px-6 text-center">
           <motion.p {...fadeInUp(0)} className="inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-emerald-200 mb-6 backdrop-blur-sm border border-white/10">
-            #1 Dá»‹ch vá»¥ rá»­a xe táº¡i Viá»‡t Nam
+            #1 Dịch vụ rửa xe tại Việt Nam
           </motion.p>
           <motion.h1 {...fadeInUp(1)} className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-tight mb-6">
-            ChÃºng tÃ´i yÃªu xe cá»§a báº¡n{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300">nhÆ° chÃ­nh báº¡n</span>
+            Chúng tôi yêu xe của bạn{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300">như chính bạn</span>
           </motion.h1>
           <motion.p {...fadeInUp(2)} className="text-emerald-100/80 text-lg max-w-2xl mx-auto leading-relaxed">
-            AutoWashPro ra Ä‘á»i vá»›i sá»© má»‡nh mang Ä‘áº¿n tráº£i nghiá»‡m chÄƒm sÃ³c xe chuyÃªn nghiá»‡p, tiá»‡n lá»£i vÃ  Ä‘Ã¡ng tin cáº­y cho má»i chá»§ xe táº¡i Viá»‡t Nam.
+            AutoWashPro ra đời với sứ mệnh mang đến trải nghiệm chăm sóc xe chuyên nghiệp, tiện lợi và đáng tin cậy cho mọi chủ xe tại Việt Nam.
           </motion.p>
           <motion.div {...fadeInUp(3)} className="flex items-center justify-center gap-4 mt-10">
             <div className="flex -space-x-2">
@@ -106,7 +106,7 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
               ))}
             </div>
             <p className="text-sm text-emerald-200/70">
-              ÄÆ°á»£c <span className="font-semibold text-emerald-200">50.000+</span> khÃ¡ch hÃ ng tin dÃ¹ng
+              Được <span className="font-semibold text-emerald-200">50.000+</span> khách hàng tin dùng
             </p>
           </motion.div>
         </div>
@@ -133,21 +133,21 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <motion.div {...fadeInUp(0)}>
-              <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">CÃ¢u chuyá»‡n</p>
+              <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Câu chuyện</p>
               <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-6">
-                Tá»« má»™t Ã½ tÆ°á»Ÿng nhá»{' '}
-                <span className="text-emerald-600">Ä‘áº¿n chuá»—i cá»­a hÃ ng</span> rá»­a xe hÃ ng Ä‘áº§u
+                Từ một ý tưởng nhỏ{' '}
+                <span className="text-emerald-600">đến chuỗi cửa hàng</span> rửa xe hàng đầu
               </h2>
               <div className="space-y-4 text-slate-600 leading-relaxed">
                 <p>
-                  AutoWashPro Ä‘Æ°á»£c thÃ nh láº­p vÃ o nÄƒm 2019 bá»Ÿi Ä‘á»™i ngÅ© nhá»¯ng ngÆ°á»i Ä‘am mÃª xe hÆ¡i vÃ  dá»‹ch vá»¥ khÃ¡ch hÃ ng. 
-                  ChÃºng tÃ´i nháº­n tháº¥y viá»‡c rá»­a xe táº¡i Viá»‡t Nam cÃ²n nhiá»u báº¥t cáº­p: thá»i gian chá» lÃ¢u, cháº¥t lÆ°á»£ng khÃ´ng Ä‘á»“ng nháº¥t, 
-                  vÃ  khÃ³ khÄƒn trong viá»‡c Ä‘áº·t lá»‹ch.
+                  AutoWashPro được thành lập vào năm 2019 bởi đội ngũ những người đam mê xe hơi và dịch vụ khách hàng. 
+                  Chúng tôi nhận thấy việc rửa xe tại Việt Nam còn nhiều bất cập: thời gian chờ lâu, chất lượng không đồng nhất, 
+                  và khó khăn trong việc đặt lịch.
                 </p>
                 <p>
-                  Tá»« Ä‘Ã³, chÃºng tÃ´i xÃ¢y dá»±ng má»™t há»‡ thá»‘ng rá»­a xe chuyÃªn nghiá»‡p vá»›i quy trÃ¬nh chuáº©n hÃ³a, á»©ng dá»¥ng Ä‘áº·t lá»‹ch thÃ´ng minh, 
-                  vÃ  cam káº¿t cháº¥t lÆ°á»£ng cho tá»«ng chiáº¿c xe. Sau hÆ¡n 5 nÄƒm, AutoWashPro Ä‘Ã£ trá»Ÿ thÃ nh thÆ°Æ¡ng hiá»‡u rá»­a xe Ä‘Æ°á»£c yÃªu thÃ­ch nháº¥t 
-                  táº¡i TP. Há»“ ChÃ­ Minh vÃ  Ä‘ang má»Ÿ rá»™ng ra cÃ¡c tá»‰nh thÃ nh khÃ¡c.
+                  Từ đó, chúng tôi xây dựng một hệ thống rửa xe chuyên nghiệp với quy trình chuẩn hóa, ứng dụng đặt lịch thông minh, 
+                  và cam kết chất lượng cho từng chiếc xe. Sau hơn 5 năm, AutoWashPro đã trở thành thương hiệu rửa xe được yêu thích nhất 
+                  tại TP. Hồ Chí Minh và đang mở rộng ra các tỉnh thành khác.
                 </p>
               </div>
             </motion.div>
@@ -160,7 +160,7 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
                     </svg>
                   </div>
                   <p className="text-lg font-bold text-slate-800">AutoWashPro</p>
-                  <p className="text-sm text-slate-500 mt-1">ChÄƒm sÃ³c xe táº­n tÃ¢m</p>
+                  <p className="text-sm text-slate-500 mt-1">Chăm sóc xe tận tâm</p>
                   <div className="mt-4 flex items-center justify-center gap-1 text-emerald-600 text-sm font-medium">
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
                     Since 2019
@@ -177,8 +177,8 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
       <section className="py-20 bg-slate-50/60">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div {...fadeInUp(0)} className="text-center mb-14">
-            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">GiÃ¡ trá»‹ cá»‘t lÃµi</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">Táº¡i sao chá»n chÃºng tÃ´i?</h2>
+            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Giá trị cốt lõi</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">Tại sao chọn chúng tôi?</h2>
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {values.map((v, i) => (
@@ -199,8 +199,8 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-6">
           <motion.div {...fadeInUp(0)} className="text-center mb-14">
-            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Lá»‹ch sá»­ phÃ¡t triá»ƒn</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">HÃ nh trÃ¬nh cá»§a chÃºng tÃ´i</h2>
+            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Lịch sử phát triển</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">Hành trình của chúng tôi</h2>
           </motion.div>
           <div className="relative">
             <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-0.5 bg-slate-200 -translate-x-1/2" />
@@ -230,8 +230,8 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
       <section className="py-20 bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div {...fadeInUp(0)} className="text-center mb-14">
-            <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">Äá»™i ngÅ©</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-white">Nhá»¯ng con ngÆ°á»i táº¡o nÃªn thÆ°Æ¡ng hiá»‡u</h2>
+            <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">Đội ngũ</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-white">Những con người tạo nên thương hiệu</h2>
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {team.map((m, i) => (
@@ -248,7 +248,7 @@ export default function AboutPage({ onOpenAuth, user, onLogout, onGoToProfile, o
         </div>
       </section>
 
-      {/* Giáº£i phÃ¡p Ä‘áº·t lá»‹ch */}
+      {/* Giải pháp đặt lịch */}
       <PackagesSection />
 
       <Footer />
