@@ -18,6 +18,7 @@ function resolvePageMeta(pathname, search = '') {
   if (pathname.startsWith('/admin/branches')) return ADMIN_PAGE_META.branches;
   if (pathname.startsWith('/admin/users')) return ADMIN_PAGE_META.users;
   if (pathname.startsWith('/admin/reviews')) return ADMIN_PAGE_META.reviews;
+  if (pathname.startsWith('/admin/system-config')) return ADMIN_PAGE_META['system-config'];
   if (pathname.startsWith('/admin/rewards/config')) return ADMIN_PAGE_META['rewards/config'];
   if (pathname.startsWith('/admin/rewards/history/')) {
     return { title: 'Chi tiết Giao dịch Điểm thưởng', description: 'Xem chi tiết lý do, công thức và đơn hàng tích điểm của khách hàng.' };
