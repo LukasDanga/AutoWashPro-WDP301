@@ -34,7 +34,7 @@ export default function CustomerLayout({
   const [searchParams, setSearchParams] = useSearchParams();
 
   const currentPath = location.pathname;
-  const isHistoryPage = currentPath === '/history';
+  const isHistoryPage = currentPath === '/history' || currentPath.startsWith('/history/');
   const [historyExpanded, setHistoryExpanded] = useState(isHistoryPage);
 
   // Keep expanded state in sync with path
@@ -82,7 +82,7 @@ export default function CustomerLayout({
         <div className="md:hidden w-full px-4 pt-4 pb-2 bg-white border-b border-slate-200 overflow-x-auto scrollbar-none flex gap-2">
           {sidebarLinks.map((link) => {
             const Icon = link.icon;
-            const active = currentPath === link.to;
+            const active = link.to === '/history' ? isHistoryPage : currentPath === link.to;
             return (
               <Link
                 key={link.to}
@@ -142,7 +142,7 @@ export default function CustomerLayout({
           <nav className="space-y-1 flex-1 mt-1">
             {sidebarLinks.map((link) => {
               const Icon = link.icon;
-              const active = currentPath === link.to;
+              const active = link.to === '/history' ? isHistoryPage : currentPath === link.to;
 
               // Expandable "Lịch sử đặt xe" with sub-tabs
               if (link.hasSubMenu) {

@@ -10,6 +10,7 @@ import MapPage from './components/landing/MapPage.jsx';
 import BranchDetailPage from './components/landing/BranchDetailPage.jsx';
 import ProfilePage from './components/landing/ProfilePage.jsx';
 import HistoryPage from './components/landing/HistoryPage.jsx';
+import CustomerBookingDetail from './components/customer/CustomerBookingDetail.jsx';
 import PaymentHistoryPage from './components/landing/PaymentHistoryPage.jsx';
 import NotificationsPage from './components/landing/NotificationsPage.jsx';
 import CustomerLayout from './components/landing/CustomerLayout.jsx';
@@ -285,6 +286,14 @@ export default function App() {
     return (
       <CustomerLayout {...customerNavProps}>
         <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} user={user} onUserUpdate={handleUserUpdate} />
+      </CustomerLayout>
+    );
+  }
+
+  if (path.startsWith('/history/') && token && user) {
+    return (
+      <CustomerLayout {...customerNavProps}>
+        <CustomerBookingDetail apiBase={apiBase} token={token} user={user} onUserUpdate={handleUserUpdate} />
       </CustomerLayout>
     );
   }

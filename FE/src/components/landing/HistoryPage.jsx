@@ -325,17 +325,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [slotPacks, setSlotPacks] = useState([]);
   const [slotPacksLoading, setSlotPacksLoading] = useState(false);
-  const [packagesList, setPackagesList] = useState([]);
-
-  useEffect(() => {
-    fetch(`${apiBase || API_BASE}/packages?limit=all`)
-      .then(res => res.json())
-      .then(data => {
-        const pkgs = data.data?.data || data.data || (Array.isArray(data) ? data : []);
-        setPackagesList(Array.isArray(pkgs) ? pkgs : []);
-      })
-      .catch(err => console.error(err));
-  }, [apiBase]);
 
   // Sync viewMode with URL ?view= param
   useEffect(() => {
@@ -350,7 +339,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [selectedDate, setSelectedDate] = useState(null);
   const [detailBooking, setDetailBooking] = useState(null);
-  const [viewBooking, setViewBooking] = useState(null);
 
   const [viewedBookingIds, setViewedBookingIds] = useState(() => {
     try {
@@ -379,8 +367,8 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     if (b._id) markBookingAsViewed(b._id);
     if (b.id) markBookingAsViewed(b.id);
     if (b.recurringGroupId) markBookingAsViewed(b.recurringGroupId);
-    setViewBooking(b);
-  }, [markBookingAsViewed]);
+    navigate(`/history/${b._id || b.id}`);
+  }, [markBookingAsViewed, navigate]);
 
   const handleOpenDetailBooking = useCallback((b) => {
     if (!b) return;
@@ -444,14 +432,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
   const [rating, setRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showAddService, setShowAddService] = useState(false);
-  const [availableSubServices, setAvailableSubServices] = useState([]);
-  const [selectedNewSubs, setSelectedNewSubs] = useState([]);
-  const [editingSubServices, setEditingSubServices] = useState(false);
-  const [editedSubServiceNames, setEditedSubServiceNames] = useState([]);
-  const [savingSubServices, setSavingSubServices] = useState(false);
-  const [refundConfirmData, setRefundConfirmData] = useState(null);
-  const [addingService, setAddingService] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
   const [showQR, setShowQR] = useState(false);
   const [qrData, setQrData] = useState('');
@@ -550,14 +530,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }, [showQuickBookModal]);
 
-  // Reset editing subservices state whenever viewBooking modal closes or changes
-  useEffect(() => {
-    if (!viewBooking) {
-      setEditingSubServices(false);
-      setEditedSubServiceNames([]);
-      setSavingSubServices(false);
-    }
-  }, [viewBooking]);
 
   // Cleanup rebook poll khi modal đóng
   useEffect(() => {
@@ -723,25 +695,10 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     const params = new URLSearchParams(window.location.search);
     const bId = params.get('bookingId');
     if (bId && token) {
-      loadDetail(bId);
+      navigate(`/history/${bId}`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [token]);
-
-  async function loadDetail(id) {
-    if (!id) return;
-    try {
-      const res = await fetch(`${apiBase || API_BASE}/bookings/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const payload = await res.json();
-        setViewBooking(payload.data || payload);
-      }
-    } catch (error) {
-      console.error('Failed to load detail', error);
-    }
-  }
+  }, [token, navigate]);
 
   const loadRecurringGroup = useCallback(async () => {
     if (!recurringGroupTarget?.recurringGroupId) return;
@@ -849,20 +806,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }, [bookings, recurringGroupBookings]);
 
-  useEffect(() => {
-    if (viewBooking) {
-      const bInList = bookings.find(b => b._id === viewBooking._id || b.id === viewBooking._id);
-      if (bInList) {
-        setViewBooking(bInList);
-        return;
-      }
-      const bInGroup = recurringGroupBookings.find(b => b._id === viewBooking._id || b.id === viewBooking._id);
-      if (bInGroup) {
-        setViewBooking(bInGroup);
-        return;
-      }
-    }
-  }, [bookings, recurringGroupBookings]);
 
   async function handleSubmitReview(e) {
     e.preventDefault();
@@ -1643,59 +1586,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   }
 
-  const handleOpenAddService = async (b) => {
-    setShowAddService(b);
-    setAvailableSubServices([]);
-    setSelectedNewSubs([]);
-    try {
-      const res = await fetch(`${API_BASE}/packages`);
-      if (res.ok) {
-        const data = await res.json();
-        const allPackages = data.data || [];
-        const currentPackage = allPackages.find(p => p._id === (b.packageId?._id || b.packageId));
-        const allSubs = [];
-        if (currentPackage && currentPackage.subServices) {
-          currentPackage.subServices.forEach(s => {
-            if (s.isOptional !== false && s.price > 0 && !allSubs.some(x => x.name === s.name)) {
-              allSubs.push(s);
-            }
-          });
-        }
-        setAvailableSubServices(allSubs);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const submitAddServices = async () => {
-    if (selectedNewSubs.length === 0 || !showAddService) return;
-    setAddingService(true);
-    try {
-      const bId = showAddService._id || showAddService.id;
-      const updatedSubs = [...(showAddService.selectedSubServices || []), ...selectedNewSubs].map(s => s.name || s);
-      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/sub-services`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ subServices: updatedSubs })
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Lỗi thêm dịch vụ');
-      }
-      showToast('Đã thêm dịch vụ thành công!', 'success');
-      setShowAddService(null);
-      setSelectedNewSubs([]);
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
-      if (detailBooking && (detailBooking._id === bId || detailBooking.id === bId)) {
-         setDetailBooking(null);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setAddingService(false);
-    }
-  };
 
   const handleRemoveSubService = async (b, subName) => {
     try {
@@ -1720,148 +1611,9 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     }
   };
 
-  const handleStartEditSubServices = (b) => {
-    const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
-    const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
-    const pkgObj = (pkgFromList && Array.isArray(pkgFromList.subServices) && pkgFromList.subServices.length > 0)
-      ? pkgFromList
-      : (typeof b.packageId === 'object' && b.packageId !== null && Array.isArray(b.packageId.subServices) && b.packageId.subServices.length > 0
-        ? b.packageId
-        : pkgFromList || (typeof b.packageId === 'object' ? b.packageId : null));
 
-    const pkgSubs = pkgObj?.subServices || [];
-    const defaultIncludedSubs = pkgSubs.filter(s => {
-      const sOpt = typeof s === 'object' ? s?.isOptional : false;
-      const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
-      return sOpt === false || sOpt === undefined || sPrice === 0;
-    });
-    const defaultIncludedNames = defaultIncludedSubs.map(s => (typeof s === 'string' ? s : s?.name));
-    const selectedNames = Array.isArray(b.selectedSubServices)
-      ? b.selectedSubServices.map(x => (typeof x === 'string' ? x : x?.name))
-      : [];
-    const hasAnyIncludedInSelected = selectedNames.length > 0 && defaultIncludedNames.some(name => selectedNames.includes(name));
-    const initialSelected = [];
 
-    if (Array.isArray(pkgSubs)) {
-      pkgSubs.forEach(s => {
-        const sName = typeof s === 'string' ? s : s?.name;
-        const sOpt = typeof s === 'object' ? s?.isOptional : false;
-        const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
-        const isDefaultIncluded = sOpt === false || sOpt === undefined || sPrice === 0;
-        const isKept = !hasAnyIncludedInSelected || selectedNames.includes(sName);
-        if (sName && isDefaultIncluded && isKept && !initialSelected.includes(sName)) {
-          initialSelected.push(sName);
-        }
-      });
-    }
 
-    if (Array.isArray(b.selectedSubServices)) {
-      b.selectedSubServices.forEach(s => {
-        const name = typeof s === 'string' ? s : s.name;
-        if (name && !initialSelected.includes(name)) {
-          initialSelected.push(name);
-        }
-      });
-    }
-
-    setEditedSubServiceNames(initialSelected);
-    setEditingSubServices(true);
-  };
-
-  const handleToggleSubService = (serviceName) => {
-    setEditedSubServiceNames(prev => 
-      prev.includes(serviceName)
-        ? prev.filter(name => name !== serviceName)
-        : [...prev, serviceName]
-    );
-  };
-
-  const executeSaveSubServices = async (b, targetSubServices) => {
-    const bId = b._id || b.id;
-    setSavingSubServices(true);
-    try {
-      const res = await fetch(`${apiBase || API_BASE}/bookings/${bId}/sub-services`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ subServices: targetSubServices })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Lỗi khi cập nhật dịch vụ');
-      }
-      
-      const updated = data.data || data;
-      const refunded = data.refundAmount || (updated && updated.refundAmount) || 0;
-      
-      if (refunded > 0) {
-        showToast(`🎉 Đã cập nhật dịch vụ và hoàn ${formatCurrency(refunded)} vào Ví của bạn thành công!`, 'success');
-      } else {
-        showToast('Đã cập nhật dịch vụ thành công!', 'success');
-      }
-
-      setViewBooking(updated);
-      setEditingSubServices(false);
-      setRefundConfirmData(null);
-      refreshUserProfile();
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setSavingSubServices(false);
-    }
-  };
-
-  const handleSaveSubServices = async (b) => {
-    const currentPaid = b.paymentStatus === 'paid'
-      ? Math.max(b.finalPrice || 0, b.depositAmount || 0)
-      : (b.depositPaid || b.paymentStatus === 'deposit_paid' ? (b.depositAmount || 0) : 0);
-
-    const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
-    const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
-    const pkgObj = (pkgFromList && Array.isArray(pkgFromList.subServices) && pkgFromList.subServices.length > 0)
-      ? pkgFromList
-      : (typeof b.packageId === 'object' && b.packageId !== null ? b.packageId : pkgFromList);
-
-    const pkgSubs = Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
-    const basePrice = b.bookingType === 'slot_pack_usage' ? 0 : (pkgObj?.price || b.packageId?.price || 0);
-
-    let editedExtraPrice = 0;
-    editedSubServiceNames.forEach(name => {
-      const foundPkgSub = pkgSubs.find(s => (s.name || s) === name);
-      const foundSelectedSub = Array.isArray(b.selectedSubServices) ? b.selectedSubServices.find(s => (s.name || s) === name) : null;
-      const subObj = foundPkgSub || foundSelectedSub;
-      
-      const isOpt = typeof subObj === 'object' ? subObj?.isOptional !== false : true;
-      const price = typeof subObj === 'object' ? (subObj?.price || 0) : 0;
-
-      if (isOpt && price > 0) {
-        editedExtraPrice += price;
-      }
-    });
-
-    const newFinalPrice = Math.max(0, basePrice + editedExtraPrice - (b.discountAmount || 0));
-    const actualRefundAmount = Math.max(0, currentPaid - newFinalPrice);
-
-    const prevSubServices = Array.isArray(b.selectedSubServices) ? b.selectedSubServices : [];
-    const removedOptionalSubs = prevSubServices.filter(s => {
-      const name = typeof s === 'string' ? s : s?.name;
-      const isOpt = typeof s === 'object' ? s.isOptional !== false : true;
-      return isOpt && !editedSubServiceNames.includes(name);
-    });
-
-    if (currentPaid > 0 && actualRefundAmount > 0 && removedOptionalSubs.length > 0) {
-      const canceledNames = removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name);
-      setRefundConfirmData({
-        booking: b,
-        refundAmount: actualRefundAmount,
-        canceledNames,
-        targetSubServices: editedSubServiceNames
-      });
-      return;
-    }
-
-    await executeSaveSubServices(b, editedSubServiceNames);
-  };
 
 
   async function handleCancelRecurring(b) {
@@ -2076,7 +1828,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       const canReview = b.status === 'completed';
                       const hasReview = b.rating || b.feedback;
                       return (
-                        <div key={bId} onClick={() => setViewBooking(b)} className="bg-white rounded-xl p-4 border border-slate-200 cursor-pointer transition-all hover:border-blue-400 hover:shadow-sm">
+                        <div key={bId} onClick={() => handleOpenViewBooking(b)} className="bg-white rounded-xl p-4 border border-slate-200 cursor-pointer transition-all hover:border-blue-400 hover:shadow-sm">
                           <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-semibold text-slate-800">{b.packageId?.name || b.packageName || 'Dịch vụ'}</div>
@@ -2233,7 +1985,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                         };
                         const colorCls = colorMap[b.status] || colorMap.pending;
                         return (
-                          <div key={b._id || b.id} onClick={() => setViewBooking(b)}
+                          <div key={b._id || b.id} onClick={() => handleOpenViewBooking(b)}
                             className={`relative rounded-lg border px-2 py-1.5 cursor-pointer transition-opacity hover:opacity-80 ${colorCls}`}>
                             <p className="text-[10px] font-bold leading-tight opacity-75">{b.startTime}{b.endTime ? `-${b.endTime}` : ''}</p>
                             <p className="text-[11px] font-semibold leading-tight truncate">{b.packageId?.name || b.packageName || '—'}</p>
@@ -2780,12 +2532,12 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                       <td className="py-3 text-right text-black align-top">{detailBooking.isGroup ? detailBooking.groupCount : 1}</td>
                       <td className="py-3 text-right text-black align-top">
                         {detailBooking.bookingType === 'slot_pack_usage' ? (
-                          <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packageId?.price || 0)}</span>
+                          <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packagePrice || detailBooking.packageId?.price || 0)}</span>
                         ) : null}
-                        {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
+                        {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
                       </td>
                       <td className="py-3 text-right text-black align-top">10%</td>
-                      <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
+                      <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                     </tr>
                     
                     {/* Sub-services rows */}
@@ -2970,442 +2722,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
         );
       })()}
 
-      {/* ── VIEW BOOKING MODAL ── */}
-      {viewBooking && (() => {
-        const b = viewBooking;
-        const st = STATUS_MAP[b.status] || { label: b.status, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
-        return (
-        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
-          onClick={() => setViewBooking(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-7 py-5 border-b border-slate-100 bg-white">
-              <div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">Chi tiết đơn đặt</h2>
-                <p className="text-xs sm:text-sm text-slate-400 font-mono mt-0.5">#{b.bookingCode || String(b._id || b.id).slice(-8).toUpperCase()}</p>
-              </div>
-              <button onClick={() => setViewBooking(null)} className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
-            <div className="p-7 overflow-y-auto flex-1 space-y-6">
-              <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">Trạng thái đơn:</span>
-                <span className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-2xs ${st.cls}`}>{st.label}</span>
-              </div>
-              {(() => {
-                const totalVal = b.finalPrice || b.totalAmount || 0;
-                const isFullyPaid = b.paymentStatus === 'paid' || (b.depositAmount > 0 && b.depositAmount >= totalVal);
-                const isDepositPaid = b.paymentStatus === 'deposit_paid' || b.depositPaid;
-                const paidVal = isFullyPaid ? totalVal : (isDepositPaid ? (b.depositAmount || 0) : 0);
-                const remainingVal = Math.max(0, totalVal - paidVal);
 
-                const paidBadgeLabel = isFullyPaid 
-                  ? 'Đã trả 100%' 
-                  : (isDepositPaid ? `Đã cọc ${formatCurrency(paidVal)}` : 'Chưa trả');
-
-                return (
-                  <>
-                    <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 space-y-3 text-xs sm:text-sm">
-                      <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
-                        <span className="text-slate-500 font-medium">🏢 Chi nhánh:</span>
-                        <span className="text-slate-900 font-bold text-right max-w-[65%]">{b.branchId?.name || b.branchName || '—'}</span>
-                      </div>
-                      <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
-                        <span className="text-slate-500 font-medium">📍 Địa chỉ:</span>
-                        <span className="text-slate-700 text-right max-w-[65%]">{b.branchId?.address || '—'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
-                        <span className="text-slate-500 font-medium">📦 Gói dịch vụ:</span>
-                        <span className="text-slate-900 font-extrabold text-sm sm:text-base">{b.packageId?.name || b.packageName || '—'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
-                        <span className="text-slate-500 font-medium">🪪 Biển số xe:</span>
-                        <span className="bg-slate-800 text-white font-mono font-bold text-xs sm:text-sm px-3 py-1 rounded-md tracking-wider shadow-2xs">
-                          {b.vehicleId?.licensePlate || b.vehiclePlate || '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
-                        <span className="text-slate-500 font-medium">📅 Ngày hẹn:</span>
-                        <span className="text-slate-900 font-bold">{formatDate(b.bookingDate)}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5">
-                        <span className="text-slate-500 font-medium">⏰ Khung giờ:</span>
-                        <span className="text-emerald-700 font-extrabold text-sm sm:text-base">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span>
-                      </div>
-                    </div>
-
-                    {/* FINANCIAL SUMMARY CARD */}
-                    <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-5 space-y-3 shadow-2xs text-xs sm:text-sm">
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-600 font-medium">Tổng tiền:</span>
-                        <span className="font-black text-slate-900 text-base sm:text-lg">{formatCurrency(totalVal)}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-600 font-medium flex items-center gap-2">
-                          Tiền đã thanh toán:
-                          <span className={`text-xs px-3 py-0.5 rounded-full font-bold ${isFullyPaid ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : isDepositPaid ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-200 text-slate-600'}`}>
-                            {paidBadgeLabel}
-                          </span>
-                        </span>
-                        <span className="font-bold text-slate-800 text-sm sm:text-base">{formatCurrency(paidVal)}</span>
-                      </div>
-                      <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center">
-                        <div className="text-xs sm:text-sm font-bold text-amber-700 flex items-center gap-1">
-                          🔥 Tiền còn lại
-                          <span className="text-xs font-normal text-slate-400">(Tổng tiền - Tiền đã thanh toán)</span>:
-                        </div>
-                        <span className={`text-base sm:text-xl font-black ${remainingVal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                          {formatCurrency(remainingVal)}
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-              {(() => {
-                const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
-                const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
-                const pkgObj = (pkgFromList && Array.isArray(pkgFromList.subServices) && pkgFromList.subServices.length > 0)
-                  ? pkgFromList
-                  : (typeof b.packageId === 'object' && b.packageId !== null && Array.isArray(b.packageId.subServices) && b.packageId.subServices.length > 0
-                    ? b.packageId
-                    : pkgFromList || (typeof b.packageId === 'object' ? b.packageId : null));
-
-                const pkgSubs = Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
-                const canEdit = b.status === 'pending';
-
-                // Get default included subservices for this package
-                const defaultIncludedSubs = pkgSubs.filter(s => {
-                  const sOpt = typeof s === 'object' ? s?.isOptional : false;
-                  const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
-                  return sOpt === false || sOpt === undefined || sPrice === 0;
-                });
-
-                const defaultIncludedNames = defaultIncludedSubs.map(s => (typeof s === 'string' ? s : s?.name));
-
-                // Check selectedSubServices on booking
-                const hasSelectedArr = Array.isArray(b.selectedSubServices) && b.selectedSubServices.length > 0;
-                const selectedNames = hasSelectedArr
-                  ? b.selectedSubServices.map(x => (typeof x === 'string' ? x : x?.name))
-                  : [];
-
-                // Check if the booking's selectedSubServices explicitly contains any default included subservices
-                const hasAnyIncludedInSelected = hasSelectedArr && defaultIncludedNames.some(name => selectedNames.includes(name));
-
-                // Build includedList:
-                const includedList = [];
-
-                if (defaultIncludedSubs.length > 0) {
-                  defaultIncludedSubs.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s?.name;
-                    // If booking explicitly has included subservices in selectedSubServices, only include those that were kept.
-                    // Otherwise (initial booking with only extra services or no subservices specified), include all default package included subservices!
-                    const isKept = !hasAnyIncludedInSelected || selectedNames.includes(sName);
-                    if (sName && isKept && !includedList.some(item => (item.name || item) === sName)) {
-                      includedList.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
-                    }
-                  });
-                }
-
-                // Fallback: If pkgSubs had no default included subservices, check selectedSubServices
-                if (hasSelectedArr && includedList.length === 0) {
-                  b.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s?.name;
-                    const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
-                    const sOpt = typeof s === 'object' ? s?.isOptional : undefined;
-                    
-                    if (sOpt === false || (sOpt === undefined && sPrice === 0)) {
-                      if (sName && !includedList.some(item => (item.name || item) === sName)) {
-                        includedList.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
-                      }
-                    }
-                  });
-                }
-
-                // Build extraList (optional subservices selected for this booking)
-                const extraList = [];
-                if (hasSelectedArr) {
-                  b.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s?.name;
-                    const isInc = includedList.some(inc => (inc.name || inc) === sName);
-                    if (!isInc && sName) {
-                      if (!extraList.some(item => (item.name || item) === sName)) {
-                        const fullSub = pkgSubs.find(x => (x.name || x) === sName);
-                        extraList.push(fullSub || (typeof s === 'object' ? s : { name: sName }));
-                      }
-                    }
-                  });
-                }
-
-                // Edit mode items calculation: strictly gather subservices belonging to THIS booked package
-                const allAvailableSubs = [];
-                if (pkgSubs.length > 0) {
-                  pkgSubs.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s?.name;
-                    if (sName && !allAvailableSubs.some(x => (x.name || x) === sName)) {
-                      allAvailableSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
-                    }
-                  });
-                }
-
-                if (Array.isArray(b.selectedSubServices)) {
-                  b.selectedSubServices.forEach(s => {
-                    const sName = typeof s === 'string' ? s : s?.name;
-                    if (sName && !allAvailableSubs.some(x => (x.name || x) === sName)) {
-                      allAvailableSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: true });
-                    }
-                  });
-                }
-
-                const editIncludedSubs = allAvailableSubs.filter(s => s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price)));
-                const editExtraSubs = allAvailableSubs.filter(s => s.isOptional !== false && s.price > 0);
-
-                // Realtime dynamic price calculation during editing
-                let editedExtraPrice = 0;
-                editedSubServiceNames.forEach(name => {
-                  const foundSub = allAvailableSubs.find(s => s.name === name);
-                  if (foundSub && foundSub.isOptional !== false && foundSub.price > 0) {
-                    editedExtraPrice += foundSub.price;
-                  }
-                });
-
-                const basePrice = b.bookingType === 'slot_pack_usage' ? 0 : (pkgObj?.price || b.packageId?.price || 0);
-                const discount = b.discountAmount || 0;
-                const calcTotal = Math.max(0, basePrice + editedExtraPrice - discount);
-                const deposit = b.depositAmount || 0;
-                const depositPaidOrActive = b.depositPaid || b.paymentStatus === 'deposit_paid' || b.paymentStatus === 'paid';
-                const calcRemaining = Math.max(0, calcTotal - (depositPaidOrActive ? deposit : 0));
-
-                return (
-                  <div className="pt-3 border-t border-slate-100 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        {editingSubServices ? '✏️ Chỉnh sửa dịch vụ' : 'Danh sách dịch vụ'}
-                      </span>
-                      {canEdit && (
-                        !editingSubServices ? (
-                          <button onClick={() => handleStartEditSubServices(b)}
-                            className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer">
-                            ✏️ Chỉnh sửa dịch vụ
-                          </button>
-                        ) : (
-                          <button onClick={() => setEditingSubServices(false)}
-                            className="text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-3 py-1 rounded-xl transition-colors cursor-pointer">
-                            ✕ Hủy sửa
-                          </button>
-                        )
-                      )}
-                    </div>
-
-                    {!editingSubServices ? (
-                      /* READ-ONLY VIEW */
-                      <div className="space-y-4">
-                        {includedList.length > 0 && (
-                          <div>
-                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Dịch vụ bao gồm trong gói:</span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {includedList.map((sub, i) => {
-                                const sName = sub.name || sub;
-                                const dur = sub.duration || pkgSubs.find(x => x.name === sName)?.duration;
-                                return (
-                                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/70 text-xs font-semibold text-emerald-900 shadow-2xs">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0">✓</div>
-                                      <span className="font-bold truncate">{sName}</span>
-                                    </div>
-                                    {dur && <span className="text-[11px] font-bold text-emerald-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200/60 shrink-0 ml-1">⏱ {dur} phút</span>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {extraList.length > 0 && (
-                          <div>
-                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Dịch vụ chọn thêm:</span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {extraList.map((sub, i) => {
-                                const sName = sub.name || sub;
-                                const dur = sub.duration || pkgSubs.find(x => x.name === sName)?.duration;
-                                return (
-                                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 shadow-2xs">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-[10px] shrink-0">+</div>
-                                      <span className="font-bold truncate">{sName}</span>
-                                    </div>
-                                    {dur && <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shrink-0 ml-1">⏱ {dur} phút</span>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      /* INTERACTIVE EDIT MODE */
-                      <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        {editIncludedSubs.length > 0 && (
-                          <div>
-                            <label className="text-xs font-bold text-slate-700 block mb-2">
-                              Dịch vụ bao gồm trong gói <span className="font-normal text-slate-500">(Tích chọn/Hủy chọn)</span>:
-                            </label>
-                            <div className="space-y-2">
-                              {editIncludedSubs.map((sub, i) => {
-                                const isChecked = editedSubServiceNames.includes(sub.name);
-                                return (
-                                  <label key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${isChecked ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900' : 'bg-white border-slate-200 text-slate-500 line-through'}`}>
-                                    <input type="checkbox" checked={isChecked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
-                                    <span>{sub.name} {sub.duration ? `(${sub.duration} phút)` : ''}</span>
-                                    <span className="ml-auto text-[11px] font-bold text-emerald-600">Đi kèm (0đ)</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        <div>
-                          <label className="text-xs font-bold text-slate-700 block mb-2">
-                            Dịch vụ chọn thêm <span className="font-normal text-slate-500">(Tích để chọn thêm)</span>:
-                          </label>
-                          {editExtraSubs.length === 0 ? (
-                            <p className="text-xs text-slate-400 italic">Không có dịch vụ thêm nào cho gói này.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {editExtraSubs.map((sub, i) => {
-                                const isChecked = editedSubServiceNames.includes(sub.name);
-                                return (
-                                  <label key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${isChecked ? 'bg-indigo-50/90 border-indigo-300 text-indigo-900' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                                    <input type="checkbox" checked={isChecked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
-                                    <span>{sub.name} {sub.duration ? `(${sub.duration} phút)` : ''}</span>
-                                    <span className="ml-auto text-[11px] font-bold text-indigo-600">+{formatCurrency(sub.price || 0)}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* LIVE DYNAMIC PRICE & DUE AMOUNT CALCULATION */}
-                        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
-                          <div className="flex justify-between items-center text-slate-700">
-                            <span className="font-medium">Tổng tiền dịch vụ mới:</span>
-                            <span className="font-bold text-slate-900 text-sm">{formatCurrency(calcTotal)}</span>
-                          </div>
-                          {deposit > 0 && (
-                            <div className="flex justify-between items-center text-amber-800">
-                              <span>Tiền cọc:</span>
-                              <span className="font-semibold">-{formatCurrency(deposit)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center text-emerald-800 font-bold border-t border-amber-200/80 pt-1.5 mt-1 text-sm">
-                            <span>Số tiền cần thanh toán còn lại:</span>
-                            <span className="text-emerald-700 font-extrabold">{formatCurrency(calcRemaining)}</span>
-                          </div>
-                        </div>
-
-                        {/* ACTIONS */}
-                        <div className="flex gap-2 pt-1">
-                          <button onClick={() => handleSaveSubServices(b)} disabled={savingSubServices}
-                            className="flex-1 py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
-                            {savingSubServices ? (
-                              <>
-                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Đang lưu...
-                              </>
-                            ) : (
-                              'Lưu thay đổi dịch vụ'
-                            )}
-                          </button>
-                          <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}
-                            className="py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors">
-                            Hủy
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              {b.feedback && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-slate-600">Đánh giá:</span>
-                    <div className="flex gap-0.5">
-                      {[1,2,3,4,5].map(s => (
-                        <span key={s} className={`text-base ${s <= (b.rating || 0) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600 italic">"{b.feedback}"</p>
-                </div>
-              )}
-            </div>
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center gap-3">
-              <button onClick={() => { setViewBooking(null); handleOpenDetailBooking(b); }}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer text-center">
-                Xem hóa đơn
-              </button>
-              {b.status !== 'cancelled' && b.paymentStatus !== 'paid' && (
-                <button onClick={() => { handlePayRemaining(b); }} disabled={cancelLoading}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer text-center disabled:opacity-50 border border-emerald-500/20">
-                  Thanh toán ngay
-                </button>
-              )}
-              <button onClick={() => setViewBooking(null)}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer text-center">
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-
-      {/* ── ADD SERVICE MODAL ── */}
-      {showAddService && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !addingService && setShowAddService(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Thêm dịch vụ</h3>
-            <p className="text-xs text-slate-500 mb-4">Bạn có thể chọn thêm các dịch vụ phát sinh. Hệ thống sẽ tự động tính lại tổng tiền.</p>
-            
-            <div className="max-h-60 overflow-y-auto space-y-2 mb-4 pr-2">
-              {availableSubServices.length === 0 ? (
-                <p className="text-sm text-slate-500">Đang tải hoặc không có dịch vụ nào thêm...</p>
-              ) : availableSubServices.map((sub, i) => {
-                const alreadyHas = showAddService?.selectedSubServices?.some(s => s.name === sub.name);
-                const checked = alreadyHas || selectedNewSubs.some(s => s.name === sub.name);
-                return (
-                  <label key={i} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${alreadyHas ? 'opacity-60 cursor-not-allowed bg-slate-50 border-slate-200' : checked ? 'border-emerald-400 bg-emerald-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'}`}>
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="hidden" checked={checked} disabled={alreadyHas} onChange={() => {
-                        if (alreadyHas) return;
-                        if (checked) setSelectedNewSubs(prev => prev.filter(s => s.name !== sub.name));
-                        else setSelectedNewSubs(prev => [...prev, sub]);
-                      }} />
-                      <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${checked ? (alreadyHas ? 'bg-slate-400 border-slate-400' : 'bg-emerald-600 border-emerald-600') + ' text-white' : 'border-slate-300'}`}>
-                        {checked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                      </div>
-                      <span className={`text-sm font-medium ${checked ? (alreadyHas ? 'text-slate-500' : 'text-emerald-800') : 'text-slate-700'}`}>{sub.name}</span>
-                    </div>
-                    <span className={`text-sm font-bold ${checked ? (alreadyHas ? 'text-slate-400' : 'text-emerald-600') : 'text-slate-900'}`}>{alreadyHas ? 'Đã có' : `+${formatCurrency(sub.price || 0)}`}</span>
-                  </label>
-                )
-              })}
-            </div>
-            
-            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-slate-100">
-              <button onClick={() => setShowAddService(null)} disabled={addingService} className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
-                Hủy
-              </button>
-              <button onClick={submitAddServices} disabled={addingService || selectedNewSubs.length === 0} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 disabled:opacity-50">
-                {addingService ? 'Đang thêm...' : 'Xác nhận thêm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── REVIEW MODAL ── */}
       {showReviewModal && reviewTarget && (
@@ -3762,7 +3079,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                     const canReview = b.status === 'completed';
                     const hasReview = b.rating || b.feedback;
                     return (
-                      <div key={bId} onClick={() => setViewBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
+                      <div key={bId} onClick={() => handleOpenViewBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <div className="flex items-center gap-2">
@@ -3938,65 +3255,6 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
                   Xác nhận hủy
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Refund Confirm Modal for Sub-services Cancellation */}
-      {refundConfirmData && (
-        <div className="fixed inset-0 z-[9999] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative border border-emerald-100 animate-in zoom-in-95 duration-150">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center text-2xl mb-3 mx-auto">
-              💡
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 text-center mb-1">
-              Xác nhận hủy dịch vụ & hoàn tiền vào Ví
-            </h3>
-            <p className="text-xs text-slate-500 text-center mb-4">
-              Mã đơn: <span className="font-bold text-slate-700">#{refundConfirmData.booking.bookingCode || refundConfirmData.booking._id?.slice(-6).toUpperCase()}</span>
-            </p>
-            
-            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-4 mb-4 space-y-2 text-xs">
-              <div className="text-slate-600 font-medium">
-                Bạn đã bỏ chọn dịch vụ chọn thêm:
-              </div>
-              <div className="font-bold text-emerald-800 bg-white/90 p-2.5 rounded-lg border border-emerald-100/80 space-y-1.5">
-                {refundConfirmData.canceledNames.map((n, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
-                    <span className="text-emerald-500 font-bold">•</span>
-                    <span>{String(n).replace(/^\+\s*/, '')}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-sm">
-                <span className="font-medium text-slate-700">Số tiền hoàn về Ví:</span>
-                <span className="font-black text-emerald-600 text-base">
-                  +{formatCurrency(refundConfirmData.refundAmount)}
-                </span>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-slate-500 text-center mb-6 leading-relaxed">
-              Số tiền trên sẽ được tự động hoàn trực tiếp vào <b>Ví AutoWash Pro</b> của bạn ngay khi bấm xác nhận. Trạng thái thanh toán và tiền cọc cũng sẽ được cập nhật chính xác.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setRefundConfirmData(null)}
-                disabled={savingSubServices}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors"
-              >
-                Quay lại
-              </button>
-              <button
-                type="button"
-                onClick={() => executeSaveSubServices(refundConfirmData.booking, refundConfirmData.targetSubServices)}
-                disabled={savingSubServices}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition-colors shadow-sm flex items-center justify-center gap-1.5"
-              >
-                {savingSubServices ? 'Đang xử lý...' : 'Xác nhận & Hoàn tiền'}
-              </button>
             </div>
           </div>
         </div>
