@@ -3,10 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Copy, Check, Sun, Sunset, X, AlertCircle, Clock } from 'lucide-react';
 import { showToast } from '@/lib/toast';
-import useSSE from '../../hooks/useSSE';
-import QuickBookModal from './QuickBookModal.jsx';
-import VoucherPicker from '../VoucherPicker.jsx';
-import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
+import useSSE from '@/hooks/useSSE';
+import QuickBookModal from '../../widgets/QuickBookModal.jsx';
+import VoucherPicker from '../../../VoucherPicker.jsx';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATUS_MAP = {

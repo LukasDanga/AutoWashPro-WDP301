@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
-import useSSE from '../../hooks/useSSE';
-import VoucherPicker from '../VoucherPicker.jsx';
+import useSSE from '@/hooks/useSSE';
+import VoucherPicker from '../../VoucherPicker.jsx';
 import {
   Calendar,
   Clock,

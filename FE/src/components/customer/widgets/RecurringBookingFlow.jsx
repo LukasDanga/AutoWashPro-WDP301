@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Plus, Car, Truck, Bike } from 'lucide-react';
-import VoucherPicker from '../VoucherPicker.jsx';
-import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
+import VoucherPicker from '../../VoucherPicker.jsx';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 
 const VEHICLE_TYPES = [
   { value: 'sedan', label: 'Sedan' },

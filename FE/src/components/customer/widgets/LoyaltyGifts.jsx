@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, Coins, CaretRight, Star, Tag, Ticket, CheckCircle } from '@phosphor-icons/react';
 import { confirmDialog } from '@/lib/confirm';
+import { getStoredToken } from '@/lib/authStorage';
 
 export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const [vouchers, setVouchers] = useState([]);
@@ -46,12 +47,12 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
   const fetchVouchers = async () => {
     setLoading(true);
     try {
-      const resTpl = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${token}` } });
+      const resTpl = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
       const dataTpl = await resTpl.json();
       const allVouchers = dataTpl.data || [];
       const templates = allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0);
       setVouchers(templates);
-      const resMy = await fetch(`${apiBase}/vouchers/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const resMy = await fetch(`${apiBase}/vouchers/me`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
       const dataMy = await resMy.json();
       setMyVouchers(dataMy.data || []);
     } catch (err) { console.error(err); }
@@ -66,7 +67,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
     try {
       const res = await fetch(`${apiBase}/vouchers/redeem-points`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getStoredToken()}` },
         body: JSON.stringify({ templateId })
       });
       const payload = await res.json();

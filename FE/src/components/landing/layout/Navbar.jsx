@@ -392,10 +392,14 @@ export default function Navbar({ onOpenAuth, user, onLogout, onGoToProfile, onGo
                           : 'text-slate-700 border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
+                      {user?.avatar ? (
+                        <img src={user.avatar} alt={user.name} className="w-5 h-5 rounded-full object-cover shrink-0 ring-1 ring-emerald-500/30" />
+                      ) : (
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      )}
                       <span className="hidden sm:inline">{user.name}</span>
                       <svg className="w-4 h-4 ml-1 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M6 9l6 6 6-6" />

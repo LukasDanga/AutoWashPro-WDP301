@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Calendar, CreditCard, Bell, Gift, LogOut, ChevronDown, Award, Wallet } from 'lucide-react';
-import Navbar from '../landing/layout/Navbar';
+import Navbar from '../../landing/layout/Navbar';
 
 const TIER_BADGES = {
   diamond: { label: 'Kim cương', bg: 'bg-blue-50 text-blue-600 border-blue-200' },
@@ -54,6 +54,7 @@ export default function CustomerLayout({
 
   const sidebarLinks = [
     { label: 'Thông tin cá nhân', to: '/profile', icon: User, badge: null },
+    { label: 'Ví của tôi', to: '/wallet', icon: Wallet, badge: null },
     { label: 'Lịch sử đặt xe', to: '/history', icon: Calendar, badge: null, hasSubMenu: true },
     { label: 'Lịch sử thanh toán', to: '/payments', icon: CreditCard, badge: null },
     { label: 'Thông báo', to: '/notifications', icon: Bell, badge: null },
@@ -82,7 +83,7 @@ export default function CustomerLayout({
         <div className="md:hidden w-full px-4 pt-4 pb-2 bg-white border-b border-slate-200 overflow-x-auto scrollbar-none flex gap-2">
           {sidebarLinks.map((link) => {
             const Icon = link.icon;
-            const active = link.to === '/history' ? isHistoryPage : currentPath === link.to;
+            const active = link.to === '/history' ? isHistoryPage : link.to === '/wallet' ? currentPath.startsWith('/wallet') : currentPath === link.to;
             return (
               <Link
                 key={link.to}
@@ -105,8 +106,12 @@ export default function CustomerLayout({
           {/* User Profile Card */}
           <div className="p-3.5 mb-3 rounded-2xl bg-gradient-to-br from-slate-50 to-emerald-50/40 border border-slate-100/80">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-500/20 shrink-0">
-                {(user?.name || user?.email || '?').charAt(0).toUpperCase()}
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-500/20 shrink-0 overflow-hidden">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt={user.name || 'Avatar'} className="w-full h-full object-cover" />
+                ) : (
+                  (user?.name || user?.email || '?').charAt(0).toUpperCase()
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-bold text-slate-900 truncate">
@@ -142,7 +147,7 @@ export default function CustomerLayout({
           <nav className="space-y-1 flex-1 mt-1">
             {sidebarLinks.map((link) => {
               const Icon = link.icon;
-              const active = link.to === '/history' ? isHistoryPage : currentPath === link.to;
+              const active = link.to === '/history' ? isHistoryPage : link.to === '/wallet' ? currentPath.startsWith('/wallet') : currentPath === link.to;
 
               // Expandable "Lịch sử đặt xe" with sub-tabs
               if (link.hasSubMenu) {
