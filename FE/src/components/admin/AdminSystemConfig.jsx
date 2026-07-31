@@ -19,17 +19,9 @@ export default function AdminSystemConfig() {
 
   return (
     <div className="flex h-full w-full flex-col bg-slate-50">
-      {/* Header */}
-      <div className="flex flex-col gap-4 border-b border-slate-200 bg-white px-8 py-6">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Cấu hình hệ thống</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý tập trung tất cả các quy tắc nghiệp vụ, chính sách booking, và điểm thưởng.
-          </p>
-        </div>
-        
-        {/* Tabs */}
-        <div className="flex gap-6 mt-4">
+      {/* Sub-navigation Tabs */}
+      <div className="border-b border-slate-200 bg-white px-8 py-3 shadow-2xs">
+        <div className="flex gap-6">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
