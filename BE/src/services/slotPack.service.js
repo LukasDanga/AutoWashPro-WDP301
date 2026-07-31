@@ -115,6 +115,8 @@ exports.createSlotPack = async (data) => {
         totalSlots,
         remainingSlots: totalSlots,
         usedSlots: 0,
+        packageName: pkg.name,
+        packageDuration: pkg.duration,
         unitPrice,
         discountPercent,
         discountAmount: qtyDiscount,

@@ -599,12 +599,12 @@ function PrintReceiptModal({ booking, onClose }) {
                   <td className="py-3 text-right text-black align-top">{detailBooking.isGroup ? detailBooking.groupCount || recurringGroupBookings.length : 1}</td>
                   <td className="py-3 text-right text-black align-top">
                     {detailBooking.bookingType === 'slot_pack_usage' ? (
-                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packageId?.price || 0)}</span>
+                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packagePrice || detailBooking.packageId?.price || 0)}</span>
                     ) : null}
-                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
+                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
                   </td>
                   <td className="py-3 text-right text-black align-top">10%</td>
-                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
+                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
                 
                 {/* Included services rows */}
@@ -1111,7 +1111,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             {/* Financial summary */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
               {(() => {
-                const pkgPrice = booking.packageId?.price || 0;
+                const pkgPrice = booking.packagePrice ?? booking.packageId?.price ?? 0;
                 const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
                 const totalValue = pkgPrice + subTotal;
                 return <>
@@ -1361,7 +1361,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
               {/* Full service value breakdown (for all booking types) */}
               {(() => {
-                const pkgPrice = booking.packageId?.price || 0;
+                const pkgPrice = booking.packagePrice ?? booking.packageId?.price ?? 0;
                 const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
                 const totalValue = pkgPrice + subTotal;
                 return <>

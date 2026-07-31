@@ -601,7 +601,7 @@ async function executeTool(name, args, userId, role) {
       return list.map(b => ({
         id: String(b._id),
         branchName: b.branchId?.name || '',
-        packageName: b.packageId?.name || '',
+        packageName: b.packageName || b.packageId?.name || '',
         licensePlate: b.vehicleId?.licensePlate || '',
         bookingDate: b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('vi-VN') : '',
         startTime: b.startTime,
@@ -623,7 +623,7 @@ async function executeTool(name, args, userId, role) {
       return packs.map(sp => ({
         id: String(sp._id), packCode: sp.packCode || '',
         branchName: sp.branchId?.name || '', branchAddress: sp.branchId?.address || '',
-        packageName: sp.packageId?.name || '', packagePrice: sp.packageId?.price || 0,
+        packageName: sp.packageName || sp.packageId?.name || '', packagePrice: sp.unitPrice ?? sp.packageId?.price ?? 0,
         totalSlots: sp.totalSlots, remainingSlots: sp.remainingSlots || 0,
         usedSlots: (sp.totalSlots || 0) - (sp.remainingSlots || 0),
         status: sp.status, expiresAt: sp.expiresAt,

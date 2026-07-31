@@ -4,6 +4,9 @@ const paymentSchema = new mongoose.Schema(
   {
     bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
     slotPackId: { type: mongoose.Schema.Types.ObjectId, ref: 'SlotPack' },
+    // Snapshot tên/giá gói tại thời điểm thanh toán — tránh bị đổi theo giá hiện tại khi admin chỉnh giá gói
+    packageName: { type: String, trim: true },
+    packagePrice: { type: Number, min: 0 },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     amount: { type: Number, required: true, min: 0 },
     method: { type: String, enum: ['cash', 'momo', 'vnpay', 'bank', 'wallet'], required: true },
