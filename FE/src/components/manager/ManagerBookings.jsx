@@ -40,6 +40,7 @@ import {
   ArrowRight,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
+import { useNavigate } from 'react-router-dom';
 import TierBadge from '@/components/ui/TierBadge';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/lib/toast';
@@ -718,7 +719,7 @@ function PrintReceiptModal({ booking, onClose }) {
     </div>
   );
 }
-function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
+export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
 
   const handleStartEditSubServices = () => {
@@ -1869,6 +1870,7 @@ function getTodayStr() {
 const PAGE_SIZE = 15;
 
 export default function ManagerBookings() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -1881,7 +1883,6 @@ export default function ManagerBookings() {
   const [todayOnly, setTodayOnly] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [selectedBooking, setSelectedBooking] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -1913,7 +1914,7 @@ export default function ManagerBookings() {
       localStorage.setItem('viewed_bookings', JSON.stringify(next));
       window.dispatchEvent(new Event('booking-viewed'));
     }
-    setSelectedBooking(b);
+    navigate(`/manager/bookings/${b._id}`);
   };
 
   const tableData = useMemo(() => {
@@ -1999,30 +2000,8 @@ export default function ManagerBookings() {
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
-    if (selectedBooking && selectedBooking._id === updated._id) {
-      setSelectedBooking(updated);
-    }
     notify('Đã cập nhật trạng thái đặt lịch');
   };
-
-  useEffect(() => {
-    if (selectedBooking && bookings.length > 0) {
-      const updated = bookings.find(b => b._id === selectedBooking._id);
-      if (updated) {
-        setSelectedBooking(updated);
-      } else {
-        for (const b of bookings) {
-          if (b.isGroup && b.children) {
-            const child = b.children.find(c => c._id === selectedBooking._id);
-            if (child) {
-              setSelectedBooking(child);
-              break;
-            }
-          }
-        }
-      }
-    }
-  }, [bookings]);
 
   const handleCancel = async (id) => {
     const reason = cancelReason.trim();
@@ -2061,10 +2040,6 @@ export default function ManagerBookings() {
       setConfirmAllOpen(false);
     }
   };
-
-  if (selectedBooking) {
-    return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} notify={notify} />;
-  }
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
@@ -2143,7 +2118,7 @@ export default function ManagerBookings() {
 
       {viewMode === 'calendar' && (
         <WeekView
-          onSelect={(b) => setSelectedBooking(b)}
+          onSelect={(b) => handleSelectBookingWithMark(b)}
           onConfirmAll={(ids, after) => confirmAll(ids, after)}
           onQR={(b) => setQrBooking(b)}
         />
@@ -2304,7 +2279,7 @@ export default function ManagerBookings() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <button onClick={() => setSelectedBooking(child)}
+                              <button onClick={() => handleSelectBookingWithMark(child)}
                                 className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
                                 Xem đơn
                               </button>
@@ -2393,7 +2368,7 @@ export default function ManagerBookings() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setSelectedBooking(b)}
+                        <button onClick={() => handleSelectBookingWithMark(b)}
                           className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
                           Xem đơn
                         </button>
