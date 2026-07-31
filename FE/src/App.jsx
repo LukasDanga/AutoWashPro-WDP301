@@ -8,14 +8,16 @@ import PackagesPage from './components/landing/pages/PackagesPage.jsx';
 import GiftStorePage from './components/landing/pages/GiftStorePage.jsx';
 import MapPage from './components/landing/pages/MapPage.jsx';
 import BranchDetailPage from './components/landing/pages/BranchDetailPage.jsx';
-import CustomerProfilePage from './components/customer/CustomerProfilePage.jsx';
-import CustomerHistoryPage from './components/customer/CustomerHistoryPage.jsx';
-import CustomerBookingDetail from './components/customer/CustomerBookingDetail.jsx';
-import CustomerPaymentHistoryPage from './components/customer/CustomerPaymentHistoryPage.jsx';
-import CustomerNotificationsPage from './components/customer/CustomerNotificationsPage.jsx';
-import CustomerLayout from './components/customer/CustomerLayout.jsx';
-import CustomerRewards from './components/customer/CustomerRewards.jsx';
-import CustomerPointHistoryDetail from './components/customer/CustomerPointHistoryDetail.jsx';
+import CustomerProfilePage from './components/customer/pages/CustomerProfilePage.jsx';
+import CustomerWalletPage from './components/customer/pages/wallet/CustomerWalletPage.jsx';
+import CustomerWalletDetailPage from './components/customer/pages/wallet/CustomerWalletDetailPage.jsx';
+import CustomerHistoryPage from './components/customer/pages/history/CustomerHistoryPage.jsx';
+import CustomerBookingDetail from './components/customer/pages/history/CustomerBookingDetail.jsx';
+import CustomerPaymentHistoryPage from './components/customer/pages/CustomerPaymentHistoryPage.jsx';
+import CustomerNotificationsPage from './components/customer/pages/CustomerNotificationsPage.jsx';
+import CustomerLayout from './components/customer/layout/CustomerLayout.jsx';
+import CustomerRewardsPage from './components/customer/pages/rewards/CustomerRewardsPage.jsx';
+import CustomerPointHistoryDetail from './components/customer/pages/rewards/CustomerPointHistoryDetail.jsx';
 import PolicyPage from './components/landing/pages/PolicyPage.jsx';
 import {
   clearSession as clearStoredSession,
@@ -268,6 +270,7 @@ export default function App() {
     onLogout: handleLogout,
     onOpenAuth: () => navigate('/auth'),
     onGoToProfile: () => navigate('/profile'),
+    onGoToWallet: () => navigate('/wallet'),
     onGoToHistory: () => navigate('/history'),
     onGoToPayments: () => navigate('/payments'),
     onGoToNotifications: () => navigate('/notifications'),
@@ -277,7 +280,23 @@ export default function App() {
   if (path === '/profile' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
-        <ProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => navigate('/')} onUserUpdate={handleUserUpdate} />
+        <CustomerProfilePage user={user} vehicles={vehicles} onLogout={handleLogout} apiBase={apiBase} token={token} onBack={() => navigate('/')} onUserUpdate={handleUserUpdate} />
+      </CustomerLayout>
+    );
+  }
+
+  if (path === '/wallet' && token && user) {
+    return (
+      <CustomerLayout {...customerNavProps}>
+        <CustomerWalletPage apiBase={apiBase} token={token} user={user} onUserUpdate={handleUserUpdate} />
+      </CustomerLayout>
+    );
+  }
+
+  if (path.startsWith('/wallet/') && token && user) {
+    return (
+      <CustomerLayout {...customerNavProps}>
+        <CustomerWalletDetailPage apiBase={apiBase} token={token} user={user} />
       </CustomerLayout>
     );
   }
@@ -285,7 +304,7 @@ export default function App() {
   if (path === '/history' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
-        <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} user={user} onUserUpdate={handleUserUpdate} />
+        <CustomerHistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} user={user} onUserUpdate={handleUserUpdate} />
       </CustomerLayout>
     );
   }
@@ -313,7 +332,7 @@ export default function App() {
   if (path === '/payments' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
-        <PaymentHistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
+        <CustomerPaymentHistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
       </CustomerLayout>
     );
   }
@@ -321,7 +340,7 @@ export default function App() {
   if (path === '/notifications' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
-        <NotificationsPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
+        <CustomerNotificationsPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
       </CustomerLayout>
     );
   }
@@ -329,7 +348,7 @@ export default function App() {
   if (path === '/rewards' && token && user) {
     return (
       <CustomerLayout {...customerNavProps}>
-        <CustomerRewards user={user} refreshUser={() => {
+        <CustomerRewardsPage user={user} refreshUser={() => {
           fetch(`${apiBase}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } })
             .then(r => r.json()).then(d => { if (d?.data) handleUserUpdate(d.data); }).catch(() => {});
         }} />

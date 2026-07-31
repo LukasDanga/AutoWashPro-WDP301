@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSystemConfig } from '../../hooks/useSystemConfig';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 

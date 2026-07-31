@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
-import useSSE from '../../hooks/useSSE';
+import useSSE from '@/hooks/useSSE';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 

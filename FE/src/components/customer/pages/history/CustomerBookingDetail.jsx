@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { showToast } from '@/lib/toast';
-import useSSE from '../../hooks/useSSE';
+import useSSE from '@/hooks/useSSE';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -811,7 +811,14 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">📦 Gói dịch vụ:</span>
-              <span className="text-slate-900 font-extrabold text-sm sm:text-base">{b.packageId?.name || b.packageName || '—'}</span>
+              <div className="text-right">
+                <span className="text-slate-900 font-extrabold text-sm sm:text-base">{b.packageId?.name || b.packageName || '—'}</span>
+                {basePrice > 0 && (
+                  <span className="ml-2 font-mono font-bold text-xs text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-md">
+                    {formatCurrency(basePrice)}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">🪪 Biển số xe:</span>
@@ -831,10 +838,34 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
           {/* Financial summary */}
           <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-5 space-y-3 shadow-2xs text-xs sm:text-sm">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-600 font-medium">Tổng tiền:</span>
+            <div className="space-y-2 border-b border-slate-200/80 pb-3 text-xs">
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Giá gói dịch vụ chính ({b.packageId?.name || b.packageName || 'Gói rửa xe'}):</span>
+                <span className="font-mono font-bold text-slate-800">{formatCurrency(basePrice)}</span>
+              </div>
+
+              {extraList.length > 0 && (
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Dịch vụ bổ sung chọn thêm ({extraList.length} dịch vụ):</span>
+                  <span className="font-mono font-bold text-amber-700">
+                    +{formatCurrency(extraList.reduce((sum, item) => sum + (item.price || 0), 0))}
+                  </span>
+                </div>
+              )}
+
+              {(b.discountAmount > 0 || b.voucherCode) && (
+                <div className="flex justify-between items-center text-emerald-700 font-semibold">
+                  <span>🎟️ Voucher giảm giá {b.voucherCode ? `(${b.voucherCode})` : ''}:</span>
+                  <span className="font-mono font-bold">-{formatCurrency(b.discountAmount || 0)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-slate-700 font-bold">TỔNG TIỀN ĐƠN HÀNG:</span>
               <span className="font-black text-slate-900 text-base sm:text-lg">{formatCurrency(totalVal)}</span>
             </div>
+
             <div className="flex justify-between items-center">
               <span className="text-slate-600 font-medium flex items-center gap-2">
                 Tiền đã thanh toán:
@@ -891,7 +922,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                               <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0">✓</div>
                               <span className="font-bold truncate">{sName}</span>
                             </div>
-                            {dur && <span className="text-[11px] font-bold text-emerald-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200/60 shrink-0 ml-1">⏱ {dur} phút</span>}
+                            <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                              {dur && <span className="text-[11px] font-bold text-emerald-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200/60">⏱ {dur} phút</span>}
+                              <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300/80">Miễn phí</span>
+                            </div>
                           </div>
                         );
                       })}
@@ -906,13 +940,17 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                       {extraList.map((sub, i) => {
                         const sName = sub.name || sub;
                         const dur = sub.duration || pkgSubs.find(x => x.name === sName)?.duration;
+                        const sPrice = sub.price || pkgSubs.find(x => x.name === sName)?.price || 0;
                         return (
                           <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 shadow-2xs">
                             <div className="flex items-center gap-2 min-w-0">
                               <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-[10px] shrink-0">+</div>
                               <span className="font-bold truncate">{sName}</span>
                             </div>
-                            {dur && <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shrink-0 ml-1">⏱ {dur} phút</span>}
+                            <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                              {dur && <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">⏱ {dur} phút</span>}
+                              {sPrice > 0 && <span className="text-[11px] font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">+{formatCurrency(sPrice)}</span>}
+                            </div>
                           </div>
                         );
                       })}

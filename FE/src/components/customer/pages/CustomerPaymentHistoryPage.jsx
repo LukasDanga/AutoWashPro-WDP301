@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CurrencyCircleDollar, TrendUp, TrendDown } from '@phosphor-icons/react';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -27,6 +28,8 @@ function StatusBadge({ status }) {
 }
 
 export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
+  const configs = useSystemConfig();
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 30;
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailPayment, setDetailPayment] = useState(null);

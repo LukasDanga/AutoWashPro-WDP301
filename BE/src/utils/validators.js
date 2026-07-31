@@ -54,7 +54,7 @@ const vehicleValidators = {
     body('brand').trim().notEmpty().withMessage('Hãng xe là bắt buộc').isLength({ max: 50 }),
     body('model').optional().trim().isLength({ max: 50 }),
     body('color').trim().notEmpty().withMessage('Màu xe là bắt buộc').isLength({ max: 30 }),
-    body('year').optional().isInt({ min: 1900, max: 2030 }),
+    body('year').optional().isInt({ min: 1900, max: new Date().getFullYear() }).withMessage(`Năm sản xuất không được lớn hơn năm hiện tại (${new Date().getFullYear()})`),
     body('isDefault').optional().isBoolean(),
   ],
   update: [
@@ -63,6 +63,7 @@ const vehicleValidators = {
     body('vehicleType').optional().isIn(['sedan', 'suv', 'pickup', 'van']),
     body('brand').optional().trim(),
     body('color').optional().trim(),
+    body('year').optional().isInt({ min: 1900, max: new Date().getFullYear() }).withMessage(`Năm sản xuất không được lớn hơn năm hiện tại (${new Date().getFullYear()})`),
     body('isDefault').optional().isBoolean(),
   ],
 };

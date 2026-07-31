@@ -2,10 +2,10 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X, MapPin, Clock, CheckCircle2, ShieldCheck, Check, Sparkles, Info, AlertCircle } from 'lucide-react';
-import VoucherPicker from '../VoucherPicker.jsx';
+import VoucherPicker from '../../VoucherPicker.jsx';
 import QuickBookModal from './QuickBookModal.jsx';
 import { showToast } from '@/lib/toast';
-import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 
 function buildDiscountTiers(rawDiscounts, maxQty = 50) {
   if (!Array.isArray(rawDiscounts) || rawDiscounts.length === 0) {

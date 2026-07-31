@@ -7,12 +7,12 @@ import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import useSSE from '@/hooks/useSSE';
 
 const apiBase = getApiBaseUrl();
-const token = getStoredToken();
+
 
 function api(path, opts = {}) {
   return fetch(`${apiBase}${path}`, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...opts.headers },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getStoredToken()}`, ...opts.headers },
   });
 }
 async function readErr(res) {
@@ -98,7 +98,7 @@ function PointHistoryTable({ items, loading, page, pagination, setPage, navigate
   );
 }
 
-export default function CustomerRewards({ user, refreshUser }) {
+export default function CustomerRewardsPage({ user, refreshUser }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'reward');
@@ -153,7 +153,7 @@ export default function CustomerRewards({ user, refreshUser }) {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  useSSE(token, 'points_updated', () => { fetchHistory(); refreshUser?.(); });
+  useSSE(getStoredToken(), 'points_updated', () => { fetchHistory(); refreshUser?.(); });
 
   const fetchVouchers = async () => {
     try {
