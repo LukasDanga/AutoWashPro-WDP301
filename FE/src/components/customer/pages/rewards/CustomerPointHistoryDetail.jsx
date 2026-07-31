@@ -102,19 +102,38 @@ export default function CustomerPointHistoryDetail() {
 
   const user = data.userId || {};
   const snap = data.snapshot || {};
+  const refBooking = (typeof data.referenceId === 'object' && data.referenceId) ? data.referenceId : {};
   const isEarned = data.type === 'earned';
-  const branchName = snap.branchName || '';
-  const branchAddress = snap.branchAddress || '';
-  const bookingCode = snap.bookingCode || '';
-  const bookingType = snap.bookingType || 'single';
+  const branchName = snap.branchName || refBooking.branchId?.name || '';
+  const branchAddress = snap.branchAddress || refBooking.branchId?.address || '';
+  const bookingCode = snap.bookingCode || refBooking.bookingCode || '';
+  const bookingType = snap.bookingType || refBooking.bookingType || 'single';
   const bookingTypeInfo = getBookingTypeLabel(bookingType);
-  const pkgName = snap.packageName || '';
-  const pkgPrice = snap.packagePrice || 0;
+  const pkgName = snap.packageName || refBooking.packageName || refBooking.packageId?.name || '';
+  const pkgPrice = snap.packagePrice ?? refBooking.packagePrice ?? refBooking.packageId?.price ?? 0;
   const baseRate = snap.baseRate || 5;
   const multiplier = snap.multiplier || 1;
   const effectiveRate = snap.effectiveRate || Number((baseRate * multiplier).toFixed(2));
 
-  let orderAmount = snap.orderAmount || 0;
+  // Sub-services & Voucher (Prioritize immutable snapshots over live packageId)
+  const rawIncluded = (Array.isArray(refBooking.includedSubServices) && refBooking.includedSubServices.length > 0)
+    ? refBooking.includedSubServices
+    : (Array.isArray(snap.includedSubServices) && snap.includedSubServices.length > 0)
+      ? snap.includedSubServices
+      : (Array.isArray(refBooking.packageSnapshot?.subServices) && refBooking.packageSnapshot.subServices.length > 0)
+        ? refBooking.packageSnapshot.subServices
+        : (refBooking.packageId?.subServices || []);
+  const includedSubServices = Array.isArray(rawIncluded)
+    ? rawIncluded.filter(s => s.isOptional === false || s.isOptional === undefined)
+    : [];
+  const selectedSubs = refBooking.selectedSubServices || snap.selectedSubServices || snap.subServices || [];
+  const addedSubServices = Array.isArray(selectedSubs)
+    ? selectedSubs.filter(s => s.isOptional !== false)
+    : [];
+  const voucherCode = snap.voucherCode || refBooking.voucherCode || '';
+  const discountAmount = snap.discountAmount || refBooking.discountAmount || 0;
+
+  let orderAmount = snap.orderAmount || refBooking.finalPrice || 0;
   if (!orderAmount && data.points && effectiveRate > 0) {
     orderAmount = Math.round((Math.abs(data.points) * 100) / effectiveRate);
   }
@@ -223,11 +242,67 @@ export default function CustomerPointHistoryDetail() {
             {snap.paymentMethod && <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1"><span className="text-slate-400 block font-semibold">PT thanh toán:</span><strong className="text-xs font-extrabold text-slate-800">{snap.paymentMethod}</strong></div>}
           </div>
           {pkgName && (
-            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-2 text-xs">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <span className="font-bold text-slate-700 flex items-center gap-1.5"><Tag size={15} className="text-blue-600" /> Gói dịch vụ: {pkgName}</span>
-                {pkgPrice > 0 && <span className="font-extrabold text-slate-800">{formatCurrency(pkgPrice)} ₫</span>}
+            <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/60 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Gói dịch vụ chính</span>
+                  <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                    <Tag size={16} className="text-blue-600" weight="fill" /> {pkgName}
+                  </span>
+                </div>
+                {pkgPrice > 0 && (
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 block">Giá gói cơ bản</span>
+                    <span className="font-extrabold text-sm text-slate-900">{formatCurrency(pkgPrice)} ₫</span>
+                  </div>
+                )}
               </div>
+
+              {/* Các dịch vụ bao gồm trong gói */}
+              {includedSubServices.length > 0 && (
+                <div className="space-y-1.5 pt-0.5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Các dịch vụ bao gồm trong gói:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {includedSubServices.map((sub, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-semibold">
+                        <CheckCircle size={13} weight="fill" className="text-emerald-600" /> {typeof sub === 'string' ? sub : sub.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Các dịch vụ chọn thêm */}
+              {addedSubServices.length > 0 && (
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200/60">
+                  <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider block">Dịch vụ chọn thêm:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {addedSubServices.map((sub, idx) => {
+                      const subName = typeof sub === 'string' ? sub : sub.name;
+                      const subPrice = typeof sub === 'object' ? sub.price : 0;
+                      return (
+                        <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
+                          <span>+ {subName}</span>
+                          {subPrice > 0 && <span className="text-[10px] text-indigo-500">({formatCurrency(subPrice)} ₫)</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Voucher áp dụng */}
+              {(voucherCode || discountAmount > 0) && (
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/80">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 font-bold text-[11px]">🎫 Voucher áp dụng</span>
+                    {voucherCode && <span className="font-mono font-black text-amber-900 text-xs uppercase tracking-wider">Mã: {voucherCode}</span>}
+                  </div>
+                  {discountAmount > 0 && (
+                    <span className="font-black text-amber-700 text-xs">-{formatCurrency(discountAmount)} ₫</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {branchName && (

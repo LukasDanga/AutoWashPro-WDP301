@@ -192,6 +192,24 @@ export default function AdminPointHistoryDetail() {
   const multiplier = snap.multiplier || 1;
   const effectiveRate = snap.effectiveRate || Number((baseRate * multiplier).toFixed(2));
 
+  // Included & Added sub-services & Voucher (Prioritize immutable snapshots)
+  const rawIncluded = (Array.isArray(refBooking?.includedSubServices) && refBooking.includedSubServices.length > 0)
+    ? refBooking.includedSubServices
+    : (Array.isArray(snap.includedSubServices) && snap.includedSubServices.length > 0)
+      ? snap.includedSubServices
+      : (Array.isArray(refBooking?.packageSnapshot?.subServices) && refBooking.packageSnapshot.subServices.length > 0)
+        ? refBooking.packageSnapshot.subServices
+        : (pkgObj.subServices || []);
+  const includedSubServices = Array.isArray(rawIncluded)
+    ? rawIncluded.filter(s => s.isOptional === false || s.isOptional === undefined)
+    : [];
+  const selectedSubs = refBooking?.selectedSubServices || snap.selectedSubServices || snap.subServices || [];
+  const addedSubServices = Array.isArray(selectedSubs)
+    ? selectedSubs.filter(s => s.isOptional !== false)
+    : [];
+  const voucherCode = snap.voucherCode || refBooking?.voucherCode || '';
+  const discountAmount = snap.discountAmount || refBooking?.discountAmount || 0;
+
   // Ground truth order amount calculation: ensure mathematical precision
   let orderAmount = snap.orderAmount || refBooking?.finalAmount || refBooking?.totalPrice || 0;
   if (!orderAmount && data.points && effectiveRate > 0) {
@@ -384,18 +402,68 @@ export default function AdminPointHistoryDetail() {
             </div>
           </div>
 
-          {/* Dịch vụ đã chọn */}
+          {/* Dịch vụ đã chọn & Chi tiết gói */}
           {(pkgName || pkgObj.name) && (
-            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-2 text-xs">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                  <Tag size={15} className="text-blue-600" />
-                  Gói dịch vụ đã đặt: {pkgName || pkgObj.name}
-                </span>
-                <span className="font-extrabold text-slate-800">{formatCurrency(pkgPrice || pkgObj.price || orderAmount)} ₫</span>
+            <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/60 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Gói dịch vụ chính</span>
+                  <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                    <Tag size={16} className="text-blue-600" weight="fill" /> {pkgName || pkgObj.name}
+                  </span>
+                </div>
+                {(pkgPrice > 0 || pkgObj.price > 0) && (
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 block">Giá gói cơ bản</span>
+                    <span className="font-extrabold text-sm text-slate-900">{formatCurrency(pkgPrice || pkgObj.price)} ₫</span>
+                  </div>
+                )}
               </div>
-              {pkgObj.description && (
-                <p className="text-slate-500 text-[11px] leading-relaxed">{pkgObj.description}</p>
+
+              {/* Các dịch vụ bao gồm trong gói */}
+              {includedSubServices.length > 0 && (
+                <div className="space-y-1.5 pt-0.5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Các dịch vụ bao gồm trong gói:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {includedSubServices.map((sub, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-semibold">
+                        <CheckCircle size={13} weight="fill" className="text-emerald-600" /> {typeof sub === 'string' ? sub : sub.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Các dịch vụ chọn thêm */}
+              {addedSubServices.length > 0 && (
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200/60">
+                  <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider block">Dịch vụ chọn thêm:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {addedSubServices.map((sub, idx) => {
+                      const subName = typeof sub === 'string' ? sub : sub.name;
+                      const subPrice = typeof sub === 'object' ? sub.price : 0;
+                      return (
+                        <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
+                          <span>+ {subName}</span>
+                          {subPrice > 0 && <span className="text-[10px] text-indigo-500">({formatCurrency(subPrice)} ₫)</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Voucher áp dụng */}
+              {(voucherCode || discountAmount > 0) && (
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/80">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 font-bold text-[11px]">🎫 Voucher áp dụng</span>
+                    {voucherCode && <span className="font-mono font-black text-amber-900 text-xs uppercase tracking-wider">Mã: {voucherCode}</span>}
+                  </div>
+                  {discountAmount > 0 && (
+                    <span className="font-black text-amber-700 text-xs">-{formatCurrency(discountAmount)} ₫</span>
+                  )}
+                </div>
               )}
             </div>
           )}

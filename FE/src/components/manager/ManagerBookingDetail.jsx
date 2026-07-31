@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Warning } from '@phosphor-icons/react';
 import { showToast } from '@/lib/toast';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -34,9 +34,21 @@ function Spinner({ size = 24 }) {
 export default function ManagerBookingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const handleBack = useCallback(() => {
+    const saved = sessionStorage.getItem('manager_bookings_filters');
+    if (location.state?.fromSearch) {
+      navigate(`/manager/bookings${location.state.fromSearch}`);
+    } else if (saved) {
+      navigate(`/manager/bookings?${saved}`);
+    } else {
+      navigate('/manager/bookings');
+    }
+  }, [navigate, location.state]);
 
   const fetchDetail = useCallback(async (opts = {}) => {
     if (!opts.silent) setLoading(true);
@@ -77,7 +89,7 @@ export default function ManagerBookingDetail() {
     return (
       <div className="space-y-4 max-w-4xl mx-auto py-8">
         <button
-          onClick={() => navigate('/manager/bookings')}
+          onClick={handleBack}
           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
         >
           <ArrowLeft size={16} /> Quay lại danh sách
@@ -93,9 +105,10 @@ export default function ManagerBookingDetail() {
   return (
     <BookingDetailsTab
       booking={booking}
-      onBack={() => navigate('/manager/bookings')}
+      onBack={handleBack}
       onUpdated={handleUpdated}
       notify={showToast}
     />
   );
 }
+

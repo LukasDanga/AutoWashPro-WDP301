@@ -214,7 +214,7 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
     try {
       const booking = await Booking.findById(bookingId)
         .populate('branchId', 'name address')
-        .populate('packageId', 'name price')
+        .populate('packageId', 'name price subServices')
         .session(session);
 
       if (booking) {
@@ -222,16 +222,39 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
         bookingType = booking.bookingType || 'single';
         paymentMethod = booking.paymentMethod || '';
         paymentStatus = booking.paymentStatus || 'paid';
+        voucherCode = booking.voucherCode || '';
+        discountAmount = booking.discountAmount || 0;
 
-        if (booking.packageId) {
-          packageName = booking.packageName || booking.packageId.name || '';
-          packagePrice = booking.packagePrice ?? booking.packageId.price ?? 0;
+        packageName = booking.packageName || booking.packageSnapshot?.name || booking.packageId?.name || '';
+        packagePrice = booking.packagePrice ?? booking.packageSnapshot?.price ?? booking.packageId?.price ?? 0;
+
+        if (Array.isArray(booking.includedSubServices) && booking.includedSubServices.length > 0) {
+          includedSubServices = booking.includedSubServices.map((s) => ({
+            name: typeof s === 'string' ? s : s.name,
+            price: s.price || 0,
+            duration: s.duration || 0,
+          }));
+        } else if (booking.packageSnapshot && Array.isArray(booking.packageSnapshot.subServices)) {
+          includedSubServices = booking.packageSnapshot.subServices
+            .filter((s) => s.isOptional === false)
+            .map((s) => ({ name: typeof s === 'string' ? s : s.name, price: s.price || 0 }));
+        } else if (booking.packageId && Array.isArray(booking.packageId.subServices)) {
+          includedSubServices = booking.packageId.subServices
+            .filter((s) => s.isOptional === false)
+            .map((s) => ({ name: typeof s === 'string' ? s : s.name, price: s.price || 0 }));
         }
 
-        if (Array.isArray(booking.subServices)) {
+        if (Array.isArray(booking.selectedSubServices) && booking.selectedSubServices.length > 0) {
+          subServices = booking.selectedSubServices.map((s) => ({
+            name: typeof s === 'string' ? s : s?.name || '',
+            price: typeof s === 'object' ? s?.price || 0 : 0,
+            isOptional: s?.isOptional !== false,
+          }));
+        } else if (Array.isArray(booking.subServices)) {
           subServices = booking.subServices.map((s) => ({
             name: typeof s === 'string' ? s : s?.name || '',
             price: typeof s === 'object' ? s?.price || 0 : 0,
+            isOptional: true,
           }));
         }
 
@@ -273,6 +296,9 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
       packageName,
       packagePrice,
       subServices,
+      includedSubServices,
+      voucherCode,
+      discountAmount,
       paymentMethod,
       paymentStatus,
       branchId,

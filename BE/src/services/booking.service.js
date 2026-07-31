@@ -300,6 +300,16 @@ exports.createBooking = async (data) => {
       ? 0
       : Math.round((computedFinalPrice * (await getDepositRate(user))) / 1000) * 1000;
 
+    const packageSubServicesSnapshot = Array.isArray(pkg.subServices)
+      ? pkg.subServices.map(s => ({
+          name: typeof s === 'string' ? s : s.name,
+          price: s.price || 0,
+          duration: s.duration || 0,
+          isOptional: s.isOptional !== false,
+        }))
+      : [];
+    const includedSubServicesSnapshot = packageSubServicesSnapshot.filter(s => !s.isOptional);
+
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
       bookingDate: bd, startTime, endTime, note,
@@ -309,6 +319,14 @@ exports.createBooking = async (data) => {
       finalPrice: computedFinalPrice,
       depositAmount,
       selectedSubServices: validSubServices,
+      includedSubServices: includedSubServicesSnapshot,
+      packageSnapshot: {
+        name: pkg.name,
+        price: pkg.price,
+        duration: pkg.duration,
+        description: pkg.description,
+        subServices: packageSubServicesSnapshot,
+      },
       slotPackId: slotPackId || undefined,
       bookingType,
       paymentStatus,

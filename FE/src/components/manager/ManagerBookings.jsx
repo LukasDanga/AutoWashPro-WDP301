@@ -40,7 +40,7 @@ import {
   ArrowRight,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import TierBadge from '@/components/ui/TierBadge';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -1874,27 +1874,61 @@ const PAGE_SIZE = 15;
 
 export default function ManagerBookings() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const getInitialValue = (paramKey, defaultValue) => {
+    if (searchParams.has(paramKey)) {
+      return searchParams.get(paramKey);
+    }
+    const saved = sessionStorage.getItem('manager_bookings_filters');
+    if (saved) {
+      const sp = new URLSearchParams(saved);
+      if (sp.has(paramKey)) return sp.get(paramKey);
+    }
+    return defaultValue;
+  };
+
   const [bookings, setBookings] = useState([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const val = getInitialValue('page', '1');
+    return parseInt(val, 10) || 1;
+  });
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [todayOnly, setTodayOnly] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [search, setSearch] = useState(() => getInitialValue('search', ''));
+  const [statusFilter, setStatusFilter] = useState(() => getInitialValue('status', ''));
+  const [typeFilter, setTypeFilter] = useState(() => getInitialValue('type', ''));
+  const [todayOnly, setTodayOnly] = useState(() => getInitialValue('today', 'false') === 'true');
+  const [dateFrom, setDateFrom] = useState(() => getInitialValue('dateFrom', ''));
+  const [dateTo, setDateTo] = useState(() => getInitialValue('dateTo', ''));
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
+  const [viewMode, setViewMode] = useState(() => getInitialValue('viewMode', 'table')); // 'table' | 'calendar'
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [qrBooking, setQrBooking] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
   const debounce = useRef(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter);
+    if (typeFilter) params.set('type', typeFilter);
+    if (todayOnly) params.set('today', 'true');
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    if (page > 1) params.set('page', String(page));
+    if (viewMode && viewMode !== 'table') params.set('viewMode', viewMode);
+
+    const queryString = params.toString();
+    sessionStorage.setItem('manager_bookings_filters', queryString);
+    setSearchParams(params, { replace: true });
+  }, [search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, page, viewMode, setSearchParams]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -1917,7 +1951,7 @@ export default function ManagerBookings() {
       localStorage.setItem('viewed_bookings', JSON.stringify(next));
       window.dispatchEvent(new Event('booking-viewed'));
     }
-    navigate(`/manager/bookings/${b._id}`);
+    navigate(`/manager/bookings/${b._id}`, { state: { fromSearch: location.search } });
   };
 
   const tableData = useMemo(() => {
