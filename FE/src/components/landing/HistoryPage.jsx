@@ -6,6 +6,7 @@ import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
 import QuickBookModal from '../customer/QuickBookModal.jsx';
 import VoucherPicker from '../VoucherPicker.jsx';
+import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATUS_MAP = {
@@ -306,6 +307,7 @@ function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
 }
 
 export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [], user, onUserUpdate }) {
+  const configs = useSystemConfig();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
@@ -1350,7 +1352,7 @@ export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehi
     const base = getQbBasePrice();
     const discounted = Math.max(0, base - qbVoucherDiscount);
     if (quickBookPack) return 0; // slot pack → đã thanh toán 100%
-    return Math.round(discounted * 0.3 / 1000) * 1000;
+    return Math.round((discounted * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
   }
 
   async function applyQbVoucher() {

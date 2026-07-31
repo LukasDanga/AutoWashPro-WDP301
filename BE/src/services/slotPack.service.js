@@ -2,18 +2,23 @@ const mongoose = require('mongoose');
 const { SlotPack, Package, Branch, Vehicle, User, Booking } = require('../models');
 const voucherService = require('./voucher.service');
 const notificationService = require('./notification.service');
+const configService = require('./config.service');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Ánh xạ tier → priority number */
 const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4 };
 
-/** Tính % chiết khấu dựa theo số lượng slot */
-function getDiscountPercent(totalSlots) {
-  if (totalSlots >= 20) return 15;
-  if (totalSlots >= 10) return 10;
-  if (totalSlots >= 5)  return 5;
-  return 0;
+/** Tính % chiết khấu dựa theo số lượng slot từ SystemConfig */
+async function getDiscountPercent(totalSlots) {
+  const discounts = await configService.get('SLOT_PACK_DISCOUNTS', {}, [
+    { minSlots: 20, discountPercent: 15 },
+    { minSlots: 10, discountPercent: 10 },
+    { minSlots: 5, discountPercent: 5 }
+  ]);
+  const sorted = Array.isArray(discounts) ? [...discounts].sort((a, b) => b.minSlots - a.minSlots) : [];
+  const match = sorted.find(d => totalSlots >= d.minSlots);
+  return match ? match.discountPercent : 0;
 }
 
 /** Sinh mã pack duy nhất: SP-XXXXXX */
@@ -76,15 +81,18 @@ exports.createSlotPack = async (data) => {
         throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
       }
 
-      if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
-        throw Object.assign(new Error('Số lượng gói phải từ 1 đến 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
+      const maxSlotQty = await configService.get('MAX_SLOT_PACK_QUANTITY', {}, 50);
+      if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > maxSlotQty) {
+        throw Object.assign(new Error(`Số lượng gói phải từ 1 đến ${maxSlotQty}`), { statusCode: 400, code: 'INVALID_SLOTS' });
       }
 
       // --- Chiết khấu theo số lượng và hạng VIP ---
       const unitPrice = pkg.price;
-      let discountPercent = getDiscountPercent(totalSlots);
-      if (user.tier === 'diamond') discountPercent += 10;
-      else if (user.tier === 'gold') discountPercent += 5;
+      let discountPercent = await getDiscountPercent(totalSlots);
+      const vipBonusMap = await configService.get('SLOT_PACK_VIP_BONUS_DISCOUNTS', {}, { gold: 2, diamond: 5, VIP: 5 });
+      if (vipBonusMap && vipBonusMap[user.tier]) {
+        discountPercent += vipBonusMap[user.tier];
+      }
       if (discountPercent > 100) discountPercent = 100;
 
       const grossTotal = unitPrice * totalSlots;

@@ -5,6 +5,7 @@ const notificationService = require('./notification.service');
 const voucherService = require('./voucher.service');
 const loyaltyService = require('./loyalty.service');
 const sseService = require('./sse.service');
+const configService = require('./config.service');
 
 const VALID_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment', 'completed', 'cancelled'];
 
@@ -20,7 +21,7 @@ const VALID_TRANSITIONS = {
 };
 
 // Tỉ lệ đặt cọc — luôn 30% (đã bỏ logic strike penalty)
-const DEPOSIT_RATE = 0.3;
+
 
 // Gửi cảnh báo "sắp bị hủy" trước khi hết hạn grace period bao nhiêu phút.
 //
@@ -41,7 +42,25 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment'];
 
-const getDepositRate = () => DEPOSIT_RATE;
+const getDepositRate = async (user) => await configService.get('DEPOSIT_RATE', {}, 0.3);
+
+const enforceAdvanceBookingLimit = async (userTier, bookingStr, todayStr) => {
+  const ADVANCE_BOOKING_DAYS = await configService.get('ADVANCE_BOOKING_LIMITS', {}, { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 });
+  const maxAdvanceDays = (ADVANCE_BOOKING_DAYS && ADVANCE_BOOKING_DAYS[userTier]) ? ADVANCE_BOOKING_DAYS[userTier] : 14;
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const daysAhead = Math.floor(
+    (new Date(bookingStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / msPerDay
+  );
+  if (daysAhead > maxAdvanceDays) {
+    throw Object.assign(
+      new Error(`Hạng thành viên của bạn chỉ được đặt trước tối đa ${maxAdvanceDays} ngày. Nâng hạng lên Gold để đặt trước 30 ngày hoặc Diamond để đặt trước 60 ngày.`),
+      { statusCode: 400, code: 'ADVANCE_BOOKING_LIMIT', maxAdvanceDays }
+    );
+  }
+};
+
+
+
 
 const parseTime = (t) => {
   if (!t || typeof t !== 'string') return null;
@@ -178,28 +197,16 @@ exports.createBooking = async (data) => {
       throw Object.assign(new Error('Ngày đặt không thể là ngày trong quá khứ'), { statusCode: 400, code: 'INVALID_DATE' });
     }
     if (bookingStr === todayStr) {
+      const minAdvance = await configService.get('MIN_ADVANCE_BOOKING_MINUTES', {}, 30);
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const startMinutes = parseTime(startTime);
-      if (startMinutes !== null && startMinutes <= currentMinutes + 30) {
-        throw Object.assign(new Error('Đặt lịch phải trước ít nhất 30 phút'), { statusCode: 400, code: 'INVALID_TIME' });
+      if (startMinutes !== null && startMinutes <= currentMinutes + minAdvance) {
+        throw Object.assign(new Error(`Đặt lịch phải trước ít nhất ${minAdvance} phút`), { statusCode: 400, code: 'INVALID_TIME' });
       }
     }
 
     // ── Kiểm tra giới hạn đặt trước theo tier ──
-    // Bronze/Silver: 14 ngày | Gold: 30 ngày | Diamond/VIP: 60 ngày
-    const ADVANCE_BOOKING_DAYS = { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 };
-    const maxAdvanceDays = ADVANCE_BOOKING_DAYS[user.tier] || 14;
-    const msPerDay = 1000 * 60 * 60 * 24;
-    // Dùng bookingStr và todayStr (đã tính sẵn) để tránh mutate Date object gốc
-    const daysAhead = Math.floor(
-      (new Date(bookingStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / msPerDay
-    );
-    if (daysAhead > maxAdvanceDays) {
-      throw Object.assign(
-        new Error(`Hạng thành viên của bạn chỉ được đặt trước tối đa ${maxAdvanceDays} ngày. Nâng hạng lên Gold để đặt trước 30 ngày hoặc Diamond để đặt trước 60 ngày.`),
-        { statusCode: 400, code: 'ADVANCE_BOOKING_LIMIT', maxAdvanceDays }
-      );
-    }
+    await enforceAdvanceBookingLimit(user.tier, bookingStr, todayStr);
 
     const capacityService = require('./capacity.service');
     const capacityResult = await capacityService.checkCapacity({
@@ -285,10 +292,13 @@ exports.createBooking = async (data) => {
       }
     }
 
+    const _dr = await getDepositRate(user);
+    console.log('DEBUG deposit:', {computedFinalPrice, _dr, user_tier: user?.tier, dr_func: getDepositRate.toString()});
+
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
     const depositAmount = bookingType === 'slot_pack_usage'
       ? 0
-      : Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
+      : Math.round((computedFinalPrice * (await getDepositRate(user))) / 1000) * 1000;
 
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
@@ -1160,7 +1170,8 @@ exports.getCancelPreview = async (id, userId) => {
   const [h, m] = booking.startTime.split(':').map(Number);
   bookingDateTime.setHours(h, m, 0, 0);
   const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
-  const isLateCancel = minutesBefore <= 60; // Dưới hoặc bằng 1 tiếng
+  const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
+  const isLateCancel = minutesBefore <= lateCancelThreshold;
 
   let totalPaid = 0;
   let refundAmount = 0;
@@ -1176,16 +1187,17 @@ exports.getCancelPreview = async (id, userId) => {
 
       if (isLateCancel) {
         if (booking.paymentStatus === 'paid') {
-          // Thanh toán full → mất 30% tổng tiền
-          penaltyPercent = 30;
-          penaltyAmount = Math.round(totalPaid * 0.3);
+          // Thanh toán full → mất % theo SystemConfig
+          penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          penaltyAmount = Math.round(totalPaid * penaltyPercent / 100);
           refundAmount = totalPaid - penaltyAmount;
-          policy = `Hủy trong vòng 1 tiếng trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
+          policy = `Hủy trong vòng ${Math.round(lateCancelThreshold)} phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
         } else {
-          // Chỉ đặt cọc → mất hết tiền cọc
-          penaltyAmount = totalPaid;
-          refundAmount = 0;
-          policy = `Hủy trong vòng 1 tiếng trước giờ hẹn: mất toàn bộ tiền cọc ${totalPaid.toLocaleString('vi-VN')}₫.`;
+          // Chỉ đặt cọc → mất hết tiền cọc theo SystemConfig
+          const depositPenalty = await configService.get('LATE_CANCEL_PENALTY_DEPOSIT_PERCENT', {}, 100);
+          penaltyAmount = Math.round(totalPaid * depositPenalty / 100);
+          refundAmount = Math.max(0, totalPaid - penaltyAmount);
+          policy = `Hủy trong vòng ${Math.round(lateCancelThreshold)} phút trước giờ hẹn: mất ${depositPenalty}% tiền cọc (${penaltyAmount.toLocaleString('vi-VN')}₫).`;
         }
       } else {
         // Hủy sớm → hoàn 100%
@@ -1200,10 +1212,11 @@ exports.getCancelPreview = async (id, userId) => {
   let slotPackRefundInfo = null;
   if (booking.bookingType === 'slot_pack_usage') {
     const hoursBefore = minutesBefore / 60;
-    if (hoursBefore >= 1) {
-      slotPackRefundInfo = 'Hủy lịch hẹn sớm (trước 1h) sẽ được hoàn lại 1 lượt vào gói.';
+    const thresholdHours = Math.round(lateCancelThreshold / 60);
+    if (hoursBefore >= lateCancelThreshold / 60) {
+      slotPackRefundInfo = `Hủy lịch hẹn sớm (trước ${thresholdHours}h) sẽ được hoàn lại 1 lượt vào gói.`;
     } else {
-      slotPackRefundInfo = 'Hủy lịch hẹn sát giờ (dưới 1h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.';
+      slotPackRefundInfo = `Hủy lịch hẹn sát giờ (dưới ${thresholdHours}h) hoặc không đến, bạn sẽ bị MẤT 1 lượt trong gói theo chính sách.`;
     }
     policy = slotPackRefundInfo;
   }
@@ -1279,23 +1292,25 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     if (booking.bookingType === 'slot_pack_usage' && booking.slotPackId) {
       const hoursBefore = minutesBefore / 60;
       let shouldRefundSlot = false;
+      const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
+      const systemCancelBonus = await configService.get('SYSTEM_CANCEL_BONUS_POINTS', {}, 50);
       
       if (cancelledBy === 'customer') {
-        // Hủy sớm >= 1h -> hoàn 1 lượt. Sát giờ < 1h -> mất lượt.
-        if (hoursBefore >= 1) {
+        // Hủy sớm >= threshold -> hoàn 1 lượt. Sát giờ < threshold -> mất lượt.
+        if (hoursBefore >= lateCancelThreshold / 60) {
           shouldRefundSlot = true;
         }
       } else {
-        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng 500 điểm đền bù
+        // Cửa hàng/Hệ thống hủy -> Luôn hoàn 1 lượt và tặng điểm đền bù
         shouldRefundSlot = true;
         
-        // Tặng 500 điểm
+        // Tặng điểm đền bù theo SystemConfig
         const User = mongoose.model('User');
         const PointHistory = mongoose.model('PointHistory');
-        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: 500, lifetimePoints: 500 } }, { session }).catch(() => {});
+        await User.findByIdAndUpdate(booking.userId, { $inc: { loyaltyPoints: systemCancelBonus, lifetimePoints: systemCancelBonus } }, { session }).catch(() => {});
         await PointHistory.create([{
           userId: booking.userId,
-          points: 500,
+          points: systemCancelBonus,
           type: 'earned',
           description: 'Hệ thống hủy lịch hẹn - Tặng điểm đền bù',
           bookingId: booking._id
@@ -1323,7 +1338,8 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     // ── Chính sách hoàn tiền ──
     let refundAmount = 0;
     let refundStatus = 'none';
-    const isLateCancel = minutesBefore <= 60;
+    const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
+    const isLateCancel = minutesBefore <= lateCancelThreshold;
 
     if (booking.bookingType === 'recurring') {
       let groupDepositAmount = 0;
@@ -1398,7 +1414,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
         if (isLateCancel) {
           if (booking.paymentStatus === 'paid') {
-            refundAmount = Math.round(totalPaid * 0.7);
+            const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+            const refundRate = Math.max(0, (100 - penaltyPercent) / 100);
+            refundAmount = Math.round(totalPaid * refundRate);
           } else {
             refundAmount = 0;
           }
@@ -1546,7 +1564,8 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
 
     const effectiveGrace = graceMinutes + (b.graceExtensionMinutes || 0);
     const deadline = new Date(startDateTime.getTime() + effectiveGrace * 60 * 1000);
-    const warnAt = new Date(deadline.getTime() - LATE_WARNING_OFFSET_MINUTES * 60 * 1000);
+    const warningOffset = await configService.get('LATE_WARNING_OFFSET_MINUTES', {}, 5);
+    const warnAt = new Date(deadline.getTime() - warningOffset * 60 * 1000);
 
     if (now < warnAt) continue; // còn sớm, chưa cần quan tâm đơn này
 
@@ -1654,14 +1673,17 @@ exports.extendGracePeriod = async (id, userRole, userBranchId) => {
   if (!['pending', 'confirmed'].includes(booking.status)) {
     throw Object.assign(new Error('Chỉ có thể gia hạn đơn đang chờ hoặc đã xác nhận'), { statusCode: 400, code: 'INVALID_STATUS' });
   }
-  if ((booking.graceExtensionMinutes || 0) >= MAX_GRACE_EXTENSION_MINUTES) {
-    throw Object.assign(new Error(`Đơn này đã được gia hạn tối đa ${MAX_GRACE_EXTENSION_MINUTES} phút`), { statusCode: 400, code: 'GRACE_LIMIT_REACHED' });
+  const maxGrace = await configService.get('MAX_GRACE_EXTENSION_MINUTES', {}, 15);
+  const stepGrace = await configService.get('GRACE_EXTENSION_STEP_MINUTES', {}, 5);
+
+  if ((booking.graceExtensionMinutes || 0) >= maxGrace) {
+    throw Object.assign(new Error(`Đơn này đã được gia hạn tối đa ${maxGrace} phút`), { statusCode: 400, code: 'GRACE_LIMIT_REACHED' });
   }
 
   const updated = await Booking.findByIdAndUpdate(
     id,
     {
-      $inc: { graceExtensionMinutes: GRACE_EXTENSION_STEP_MINUTES },
+      $inc: { graceExtensionMinutes: stepGrace },
       $unset: { lateWarningSentAt: '' },
     },
     { new: true }
@@ -1670,7 +1692,7 @@ exports.extendGracePeriod = async (id, userRole, userBranchId) => {
   notificationService.send(
     booking.userId,
     'Lịch hẹn của bạn đã được gia hạn',
-    `Nhân viên đã gia hạn thêm ${GRACE_EXTENSION_STEP_MINUTES} phút cho lịch hẹn lúc ${booking.startTime}. Vui lòng đến check-in sớm nhất có thể.`,
+    `Nhân viên đã gia hạn thêm ${stepGrace} phút cho lịch hẹn lúc ${booking.startTime}. Vui lòng đến check-in sớm nhất có thể.`,
     'booking_grace_extended',
     { bookingId: id, graceExtensionMinutes: updated.graceExtensionMinutes }
   ).catch(() => {});
@@ -1903,13 +1925,18 @@ exports.createRecurringBooking = async (data) => {
   }
 
   if (targetDates.length === 0) {
-    throw Object.assign(new Error('No valid dates to book for the selected weekdays and weeks'), { statusCode: 400, code: 'NO_DATES' });
-  }
+      throw Object.assign(new Error('No valid dates to book for the selected weekdays and weeks'), { statusCode: 400, code: 'NO_DATES' });
+    }
+
+    // ── Kiểm tra giới hạn đặt trước theo tier cho ngày xa nhất ──
+    const furthestDateStr = targetDates[targetDates.length - 1].toISOString().split('T')[0];
+    const todayStr = today.toISOString().split('T')[0];
+    await enforceAdvanceBookingLimit(user.tier, furthestDateStr, todayStr);
 
   // --- Đặt cọc cho cả nhóm định kỳ ---
   // Tính cọc cho TỪNG buổi (chia đều thay vì gộp hết vào buổi đầu)
   // để khi thanh toán phần còn lại, mỗi buổi được tính riêng rẽ.
-  const depositPerSession = Math.round((computedFinalPrice * getDepositRate(user)) / 1000) * 1000;
+  const depositPerSession = Math.round((computedFinalPrice * await getDepositRate(user)) / 1000) * 1000;
 
   // --- Tạo booking lần lượt, bỏ qua ngày conflict ---
   const created = [];
@@ -1927,11 +1954,12 @@ exports.createRecurringBooking = async (data) => {
       // Check if it's today and time has passed
       const todayStr = new Date().toLocaleDateString('en-CA');
       if (bookingStr === todayStr) {
+        const minAdvance = await configService.get('MIN_ADVANCE_BOOKING_MINUTES', {}, 30);
         const now = new Date();
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
         const startMinutes = parseTime(startTime);
-        if (startMinutes !== null && startMinutes <= currentMinutes + 30) {
-          throw new Error('Thời gian đặt lịch phải cách hiện tại ít nhất 30 phút');
+        if (startMinutes !== null && startMinutes <= currentMinutes + minAdvance) {
+          throw new Error(`Thời gian đặt lịch phải cách hiện tại ít nhất ${minAdvance} phút`);
         }
       }
 
@@ -2218,7 +2246,8 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
       const [h, m] = b.startTime.split(':').map(Number);
       bookingDateTime.setHours(h, m, 0, 0);
       const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
-      const isLateCancel = minutesBefore <= 60;
+      const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
+      const isLateCancel = minutesBefore <= lateCancelThreshold;
 
       let refundAmountForThisBooking = 0;
       if (cancelledBy !== 'customer') {
@@ -2610,7 +2639,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     discountAmount: computedDiscount,
     depositAmount: src.bookingType === 'slot_pack_usage'
       ? 0
-      : Math.round(((computedFinalPrice || 0) * DEPOSIT_RATE) / 1000) * 1000,
+      : Math.round(((computedFinalPrice || 0) * (await getDepositRate(user))) / 1000) * 1000,
     voucherCode: validatedVoucherCode,
     paymentStatus: 'unpaid',
   });

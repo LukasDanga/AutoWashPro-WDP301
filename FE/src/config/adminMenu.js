@@ -10,6 +10,7 @@ import {
   Ticket,
   CurrencyDollar,
   ArrowUUpLeft,
+  Gear,
 } from '@phosphor-icons/react';
 
 export const ADMIN_BRAND = {
@@ -60,6 +61,12 @@ export const ADMIN_MENU_ITEMS = [
     label: 'Quản lý đặt lịch',
     to: '/admin/bookings',
     icon: CalendarBlank,
+  },
+  {
+    id: 'system-config',
+    label: 'Cấu hình hệ thống',
+    to: '/admin/system-config',
+    icon: Gear,
   },
   {
     id: 'payments',

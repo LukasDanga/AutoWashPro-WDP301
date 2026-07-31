@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
 
-const POLICIES = [
+const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } = {}) => [
   {
     id: 'privacy',
     title: 'Chính sách bảo mật',
@@ -46,7 +47,7 @@ const POLICIES = [
       { subtitle: '1. Hình thức thanh toán',
         body: 'AutoWashPro chấp nhận các hình thức thanh toán sau: tiền mặt tại chi nhánh, chuyển khoản ngân hàng, thanh toán trực tuyến qua VNPay và MoMo.' },
       { subtitle: '2. Thanh toán đặt cọc',
-        body: 'Một số gói dịch vụ yêu cầu đặt cọc tối thiểu 30% giá trị đơn hàng khi đặt lịch. Khoản cọc sẽ được khấu trừ vào tổng số tiền khi khách hàng hoàn tất dịch vụ.' },
+        body: `Một số gói dịch vụ yêu cầu đặt cọc tối thiểu ${depositPercent}% giá trị đơn hàng khi đặt lịch. Khoản cọc sẽ được khấu trừ vào tổng số tiền khi khách hàng hoàn tất dịch vụ.` },
       { subtitle: '3. Thanh toán trực tuyến',
         body: 'Thanh toán trực tuyến qua VNPay/MoMo được xử lý ngay lập tức. Giao dịch thành công sẽ được xác nhận và cập nhật trạng thái thanh toán trong vòng 24h.' },
       { subtitle: '4. Hóa đơn và chứng từ',
@@ -65,7 +66,7 @@ const POLICIES = [
       { subtitle: '2. Hủy lịch muộn (dưới 2 giờ)',
         body: 'Trong trường hợp hủy lịch dưới 2 giờ trước giờ hẹn, khoản tiền cọc (nếu có) sẽ không được hoàn lại. Khách hàng vui lòng liên hệ chi nhánh qua số điện thoại để được hỗ trợ.' },
       { subtitle: '3. Không đến (No-show)',
-        body: 'Nếu khách hàng không đến sau 30 phút kể từ giờ hẹn, lịch hẹn sẽ tự động bị hủy bởi hệ thống. Tiền cọc sẽ không được hoàn lại và khách hàng sẽ bị ghi nhận một lượt "vắng mặt" (no-show).' },
+        body: `Nếu khách hàng không đến sau ${noShowGraceMinutes ?? '...'} phút kể từ giờ hẹn, lịch hẹn sẽ tự động bị hủy bởi hệ thống. Tiền cọc sẽ không được hoàn lại và khách hàng sẽ bị ghi nhận một lượt "vắng mặt" (no-show).` },
       { subtitle: '4. Hủy lịch do chi nhánh',
         body: 'Trong trường hợp chi nhánh phải hủy lịch hẹn vì lý do bất khả kháng (mất điện, hỏng thiết bị, thiên tai), AutoWashPro sẽ thông báo sớm nhất có thể và hỗ trợ khách hàng đặt lại lịch miễn phí.' },
       { subtitle: '5. Giới hạn số lần hủy',
@@ -114,7 +115,7 @@ const POLICIES = [
       { subtitle: '1. Quy trình đặt lịch',
         body: 'Khách hàng chọn chi nhánh, gói dịch vụ, thời gian và phương tiện. Hệ thống sẽ kiểm tra slot trống và xác nhận lịch hẹn. Mỗi lịch hẹn được cấp một mã duy nhất dùng để check-in tại chi nhánh.' },
       { subtitle: '2. Thời gian đặt lịch',
-        body: 'Khách hàng có thể đặt lịch trước tối thiểu 30 phút và tối đa 30 ngày so với thời điểm hiện tại. Mỗi khung giờ cách nhau 30 phút để đảm bảo đủ thời gian phục vụ.' },
+        body: `Khách hàng có thể đặt lịch trước tối thiểu ${minAdvanceMinutes ?? '...'} phút và tối đa 30 ngày so với thời điểm hiện tại. Mỗi khung giờ cách nhau 30 phút để đảm bảo đủ thời gian phục vụ.` },
       { subtitle: '3. Check-in và Check-out',
         body: 'Khách hàng đến chi nhánh đúng giờ hẹn, xuất trình mã lịch hẹn (QR code) để check-in. Sau khi hoàn tất dịch vụ, nhân viên thực hiện check-out và xác nhận hoàn thành.' },
       { subtitle: '4. Lịch hẹn định kỳ',
@@ -155,11 +156,11 @@ const POLICIES = [
   },
 ];
 
-function Sidebar({ activeSection, onSelect }) {
+function Sidebar({ policies = [], activeSection, onSelect }) {
   return (
     <nav className="space-y-1 sticky top-24">
       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 pb-2">Danh sách chính sách</p>
-      {POLICIES.map(p => (
+      {policies.map(p => (
         <button
           key={p.id}
           onClick={() => onSelect(p.id)}
@@ -179,14 +180,19 @@ function Sidebar({ activeSection, onSelect }) {
 
 export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   const location = useLocation();
+  const configs = useSystemConfig();
+  const depositPercent = Math.round((configs?.DEPOSIT_RATE ?? 0) * 100);
+  const noShowGraceMinutes = configs?.AUTO_CANCEL_GRACE_MINUTES;
+  const minAdvanceMinutes = configs?.MIN_ADVANCE_BOOKING_MINUTES;
+  const policies = getPolicies({ depositPercent, noShowGraceMinutes, minAdvanceMinutes });
   const [activeSection, setActiveSection] = useState('privacy');
 
   useEffect(() => {
     const hash = location.hash?.replace('#', '');
-    if (hash && POLICIES.some(p => p.id === hash)) {
+    if (hash && policies.some(p => p.id === hash)) {
       setActiveSection(hash);
     }
-  }, [location.hash]);
+  }, [location.hash, policies]);
 
   return (
     <div className="bg-white min-h-screen">
@@ -224,7 +230,7 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
           {/* Sidebar - desktop */}
           <aside className="hidden md:block w-64 lg:w-72 shrink-0">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-              <Sidebar activeSection={activeSection} onSelect={(id) => { setActiveSection(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+              <Sidebar policies={policies} activeSection={activeSection} onSelect={(id) => { setActiveSection(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
             </div>
           </aside>
 
@@ -237,14 +243,14 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
                 onChange={e => { setActiveSection(e.target.value); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 className="w-full h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               >
-                {POLICIES.map(p => (
+                {policies.map(p => (
                   <option key={p.id} value={p.id}>{p.icon} {p.title}</option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-10">
-              {POLICIES.filter(p => p.id === activeSection).map(policy => (
+              {policies.filter(p => p.id === activeSection).map(policy => (
                 <section
                   key={policy.id}
                   id={policy.id}
