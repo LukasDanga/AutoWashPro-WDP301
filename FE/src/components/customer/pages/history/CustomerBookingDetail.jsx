@@ -689,7 +689,15 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
       ? b.packageId
       : pkgFromList || (typeof b.packageId === 'object' ? b.packageId : null));
 
-  const pkgSubs = Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
+  const snapshotIncluded = (Array.isArray(b.includedSubServices) && b.includedSubServices.length > 0)
+    ? b.includedSubServices
+    : (Array.isArray(b.packageSnapshot?.subServices) && b.packageSnapshot.subServices.length > 0)
+      ? b.packageSnapshot.subServices.filter(s => s.isOptional === false || s.isOptional === undefined)
+      : null;
+
+  const pkgSubs = snapshotIncluded
+    ? snapshotIncluded
+    : Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
 
   const defaultIncludedSubs = pkgSubs.filter(s => {
     const sOpt = typeof s === 'object' ? s?.isOptional : false;

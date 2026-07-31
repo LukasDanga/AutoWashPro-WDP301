@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
 
@@ -10,8 +11,13 @@ const TYPE_ICON = {
   booking_cancelled: '❌',
   booking_completed: '🎉',
   booking_reminder: '⏰',
+  booking_at_risk: '⚠️',
+  booking_grace_extended: '🕐',
   payment_received: '💰',
   payment_confirmed: '💳',
+  points_earned: '⭐',
+  points_adjustment: '🎁',
+  tier_upgraded: '🏆',
   refund: '🔙',
   voucher: '🎫',
   system: '🔔',
@@ -22,6 +28,7 @@ function formatDateTime(d) {
 }
 
 export default function CustomerNotificationsPage({ onBack, apiBase, token }) {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -63,6 +70,24 @@ export default function CustomerNotificationsPage({ onBack, apiBase, token }) {
       window.dispatchEvent(new CustomEvent('unread_notifications_updated'));
     } catch (e) { showToast('Không thể đánh dấu đã đọc', 'error'); }
   }
+
+  const handleItemClick = (n) => {
+    const nId = n._id || n.id;
+    if (!n.isRead) markRead(nId);
+    if (n.type === 'points_earned' || n.type === 'points_adjustment' || n.type === 'tier_upgraded') {
+      navigate('/rewards?tab=history');
+    } else if (n.type === 'voucher') {
+      navigate('/rewards?tab=reward');
+    } else if (n.type?.startsWith('booking_')) {
+      if (n.data?.bookingId) {
+        navigate(`/history/${n.data.bookingId}`);
+      } else {
+        navigate('/history');
+      }
+    } else if (n.type?.startsWith('payment_') || n.type?.startsWith('wallet_')) {
+      navigate('/payments');
+    }
+  };
 
   async function markAllRead() {
     try {
@@ -130,7 +155,7 @@ export default function CustomerNotificationsPage({ onBack, apiBase, token }) {
             {notifications.map(n => {
               const nId = n._id || n.id;
               return (
-                <div key={nId} onClick={() => { if (!n.isRead) markRead(nId); }}
+                <div key={nId} onClick={() => handleItemClick(n)}
                   className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                     n.isRead
                       ? 'bg-white border-slate-200 hover:border-slate-300'

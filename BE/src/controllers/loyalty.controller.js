@@ -77,7 +77,12 @@ exports.getMyPointHistoryDetail = catchAsync(async (req, res, next) => {
   const { id } = req.params;
 
   const item = await PointHistory.findOne({ _id: id, userId: req.user._id, isDeleted: { $ne: true } })
-    .populate('userId', 'name email phone avatar tier loyaltyPoints lifetimePoints createdAt');
+    .populate('userId', 'name email phone avatar tier loyaltyPoints lifetimePoints createdAt')
+    .populate({
+      path: 'referenceId',
+      select: 'bookingCode status bookingDate startTime endTime packagePrice packageName selectedSubServices includedSubServices packageSnapshot voucherCode discountAmount finalPrice depositAmount paymentStatus paymentMethod note packageId',
+      populate: { path: 'packageId', select: 'name price subServices' }
+    });
 
   if (!item) {
     return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch điểm thưởng', code: 'NOT_FOUND' });
@@ -254,9 +259,9 @@ exports.getPointHistoryDetailAdmin = catchAsync(async (req, res, next) => {
     .populate('snapshot.branchId', 'name address phone email')
     .populate({
       path: 'referenceId',
-      select: 'bookingCode bookingType status paymentStatus totalPrice finalAmount depositAmount paymentMethod bookingDate startTime cancellationReason createdAt subServices packageId branchId',
+      select: 'bookingCode bookingType status paymentStatus totalPrice finalAmount depositAmount paymentMethod bookingDate startTime cancellationReason createdAt selectedSubServices includedSubServices packageSnapshot packagePrice packageName voucherCode discountAmount finalPrice note packageId branchId',
       populate: [
-        { path: 'packageId', select: 'name price duration description' },
+        { path: 'packageId', select: 'name price duration description subServices' },
         { path: 'branchId', select: 'name address phone' },
       ],
     });

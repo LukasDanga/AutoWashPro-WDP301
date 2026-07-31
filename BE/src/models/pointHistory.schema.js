@@ -24,6 +24,24 @@ const pointHistorySchema = new mongoose.Schema(
           price: { type: Number, default: 0 },
         },
       ],
+      includedSubServices: [
+        {
+          name: { type: String },
+          price: { type: Number, default: 0 },
+          duration: { type: Number, default: 0 },
+          isOptional: { type: Boolean, default: false },
+        },
+      ],
+      selectedSubServices: [
+        {
+          name: { type: String },
+          price: { type: Number, default: 0 },
+          duration: { type: Number, default: 0 },
+          isOptional: { type: Boolean, default: true },
+        },
+      ],
+      voucherCode: { type: String, trim: true },
+      discountAmount: { type: Number, default: 0 },
       paymentMethod: { type: String, trim: true },
       paymentStatus: { type: String, trim: true },
       branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
