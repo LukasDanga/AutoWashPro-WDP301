@@ -447,6 +447,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
   let paymentResult = null;
   let bookingResult = null;
   let slotPackResult = null;
+  let isNewlyProcessed = false;
 
   try {
     await session.withTransaction(async () => {
@@ -496,6 +497,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           
           await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, payment.slotPackId, session);
           // Removed spin wheel logic for slot pack purchase, user will earn it when they actually use the slot pack.
+          isNewlyProcessed = true;
         } else {
           payment.status = 'failed';
           await payment.save({ session });
@@ -528,6 +530,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
               }], { session });
             }
           }
+          isNewlyProcessed = true;
         } else {
           payment.status = 'failed';
           await payment.save({ session });
@@ -579,6 +582,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
             await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
           }
         }
+        isNewlyProcessed = true;
       } else {
         payment.status = 'failed';
         await payment.save({ session });
@@ -594,7 +598,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     const payment = paymentResult;
     
     // --- Side Effects outside of transaction ---
-    if (success && (payment.status === 'paid' || payment.status === 'failed')) {
+    if (isNewlyProcessed && success && (payment.status === 'paid' || payment.status === 'failed')) {
       if (payment.slotPackId && slotPackResult) {
         sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
         const user = await mongoose.model('User').findById(payment.userId);

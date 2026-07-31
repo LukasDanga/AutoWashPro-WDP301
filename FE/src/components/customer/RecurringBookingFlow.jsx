@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Plus, Car, Truck, Bike } from 'lucide-react';
 import VoucherPicker from '../VoucherPicker.jsx';
+import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
 
 const VEHICLE_TYPES = [
   { value: 'sedan', label: 'Sedan' },
@@ -48,6 +49,7 @@ function buildPreviewDates(weekdays, weeks) {
 export default function RecurringBookingFlow({ user, vehicles: userVehicles = [], apiBase, token }) {
   const [branches, setBranches] = useState([]);
   const [packages, setPackages] = useState([]);
+  const configs = useSystemConfig();
 
   // ─── Step state ──────────────────────────────────────────────────────────────
   const [selectedBranch, setSelectedBranch] = useState('');    // STEP 1 (must pick first)
@@ -185,7 +187,8 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
   else if (user?.tier === 'gold') pointMultiplier = 1.5;
   else if (user?.tier === 'silver') pointMultiplier = 1.2;
 
-  const pointsPerSession = Math.floor(pricePerSession * 0.05 * pointMultiplier);
+  const baseRate = configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0;
+  const pointsPerSession = Math.floor(pricePerSession * baseRate * pointMultiplier);
 
   function toggleWeekday(v) {
     setSelectedWeekdays(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);

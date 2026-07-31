@@ -7,6 +7,7 @@ import App from './App';
 import AdminRoutes from './routes/AdminRoutes';
 import ManagerRoutes from './routes/ManagerRoutes';
 import ChatBot from './components/ChatBot';
+import { ConfigProvider } from './hooks/useSystemConfig';
 import './index.css';
 import './styles.css';
 import './overrides.css';
@@ -14,12 +15,13 @@ import './overrides.css';
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/admin/*" element={<AdminRoutes />} />
-          <Route path="/manager/*" element={<ManagerRoutes />} />
-          <Route path="/*" element={<App />} />
-        </Routes>
+      <ConfigProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route path="/admin/*" element={<AdminRoutes />} />
+            <Route path="/manager/*" element={<ManagerRoutes />} />
+            <Route path="/*" element={<App />} />
+          </Routes>
         <ChatBot />
         <Toaster
           position="top-center"
@@ -40,6 +42,7 @@ createRoot(document.getElementById('root')).render(
           }}
         />
       </BrowserRouter>
+      </ConfigProvider>
     </GoogleOAuthProvider>
   </React.StrictMode>,
 );

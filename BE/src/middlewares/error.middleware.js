@@ -20,7 +20,8 @@ const errorHandler = (err, req, res, next) => {
   if (err.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Token không hợp lệ', code: 'INVALID_TOKEN' });
   if (err.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token đã hết hạn', code: 'TOKEN_EXPIRED' });
 
-  res.status(statusCode).json({ success: false, message, code });
+  console.error(err);
+  res.status(statusCode).json({ success: false, message, code, stack: err.stack });
 };
 
 const notFoundHandler = (req, res) => {

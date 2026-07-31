@@ -7,6 +7,7 @@ import SlotPackFlow from './customer/SlotPackFlow.jsx';
 import CustomerProfile from './customer/CustomerProfile.jsx';
 import VoucherPicker from './VoucherPicker.jsx';
 import useSSE from '../hooks/useSSE.js';
+import { useSystemConfig } from '../hooks/useSystemConfig.jsx';
 
 const sidebarItems = [
   { id: 'dashboard', label: 'Giới thiệu', hint: 'Các giải pháp đặt lịch', icon: '💡' },
@@ -46,6 +47,7 @@ function buildBookingDates() {
 }
 
 export default function BookingFlow({ user, vehicles: userVehicles = [], onLogout, apiBase, token }) {
+  const configs = useSystemConfig();
   const bookingDates = useMemo(() => buildBookingDates(), []);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -213,7 +215,8 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
   const discount = appliedVoucher ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value) : 0;
   const isPayingWithPack = !!selectedSlotPack;
   const total = isPayingWithPack ? 0 : Math.max(0, totalBase - discount);
-  const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
+  const baseRate = configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0;
+  const points = Math.floor((isPayingWithPack ? totalBase : total) * baseRate * pointMultiplier);
 
   async function confirmBooking() {
     if (!selectedTime) { setMessage('Vui lòng chọn khung giờ trước khi xác nhận đặt chỗ.'); return; }
@@ -397,7 +400,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                     </p>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
                       <li>✓ Đặt giữ chỗ nhanh trong 2 phút</li>
-                      <li>✓ Chỉ cần đặt cọc trước 30% online</li>
+                      <li>✓ Chỉ cần đặt cọc trước {depositPercent}% online</li>
                       <li>✓ Check-in tức thì bằng mã QR code</li>
                     </ul>
                   </div>
@@ -435,7 +438,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                     </p>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
                       <li>✓ Chiết khấu trực tiếp tới 15% gói</li>
-                      <li>✓ Đặt lịch rửa xe KHÔNG cần cọc 30%</li>
+                      <li>✓ Đặt lịch rửa xe KHÔNG cần cọc {depositPercent}%</li>
                       <li>✓ Sử dụng linh hoạt cho nhiều xe</li>
                     </ul>
                   </div>
@@ -722,7 +725,7 @@ export default function BookingFlow({ user, vehicles: userVehicles = [], onLogou
                     {/* Payment amount options display */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                       <div style={{ borderRadius: 10, border: '2px solid #e2e8f0', padding: '10px 12px', background: '#fff' }}>
-                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Thanh toán cọc 30%</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Thanh toán cọc {depositPercent}%</div>
                         <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
                       </div>
                       <div style={{ borderRadius: 10, border: '2px solid #10b981', background: 'rgba(16,185,129,0.06)', padding: '10px 12px' }}>

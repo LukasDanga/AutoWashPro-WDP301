@@ -5,13 +5,30 @@ import { RefreshCw, X, MapPin, Clock, CheckCircle2, ShieldCheck, Check, Sparkles
 import VoucherPicker from '../VoucherPicker.jsx';
 import QuickBookModal from './QuickBookModal.jsx';
 import { showToast } from '@/lib/toast';
+import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
 
-const DISCOUNT_TIERS = [
-  { min: 1, max: 4, pct: 0, label: 'Giá gốc' },
-  { min: 5, max: 9, pct: 5, label: 'Tiết kiệm 5%' },
-  { min: 10, max: 19, pct: 10, label: 'Tiết kiệm 10%' },
-  { min: 20, max: 50, pct: 15, label: 'Tiết kiệm 15%' },
-];
+function buildDiscountTiers(rawDiscounts, maxQty = 50) {
+  if (!Array.isArray(rawDiscounts) || rawDiscounts.length === 0) {
+    return [
+      { min: 1, max: 4, pct: 0, label: 'Giá gốc' },
+      { min: 5, max: 9, pct: 5, label: 'Tiết kiệm 5%' },
+      { min: 10, max: 19, pct: 10, label: 'Tiết kiệm 10%' },
+      { min: 20, max: 50, pct: 15, label: 'Tiết kiệm 15%' },
+    ];
+  }
+  const sorted = [...rawDiscounts].sort((a, b) => a.minSlots - b.minSlots);
+  const tiers = [];
+  if (sorted[0].minSlots > 1) {
+    tiers.push({ min: 1, max: sorted[0].minSlots - 1, pct: 0, label: 'Giá gốc' });
+  }
+  for (let i = 0; i < sorted.length; i++) {
+    const min = sorted[i].minSlots;
+    const max = i < sorted.length - 1 ? sorted[i + 1].minSlots - 1 : maxQty;
+    const pct = sorted[i].discountPercent;
+    tiers.push({ min, max, pct, label: pct > 0 ? `Tiết kiệm ${pct}%` : 'Giá gốc' });
+  }
+  return tiers;
+}
 
 const STATUS_MAP = {
   active: { label: 'Còn hiệu lực', color: '#10b981', bg: '#ecfdf5' },
@@ -21,8 +38,8 @@ const STATUS_MAP = {
 };
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
-function getDiscountPct(n) { return DISCOUNT_TIERS.find(t => n >= t.min && n <= t.max)?.pct || 0; }
-function getDiscountLabel(n) { return DISCOUNT_TIERS.find(t => n >= t.min && n <= t.max)?.label || ''; }
+function getDiscountPct(n, discountTiers) { return discountTiers.find(t => n >= t.min && n <= t.max)?.pct || 0; }
+function getDiscountLabel(n, discountTiers) { return discountTiers.find(t => n >= t.min && n <= t.max)?.label || ''; }
 
 function SlotMeter({ total, remaining }) {
   const pct = total > 0 ? (remaining / total) * 100 : 0;
@@ -228,6 +245,8 @@ function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
 }
 
 export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, user, vehicles: userVehicles = [], apiBase, token, onCanAdvanceChange, onGoToHistory }) {
+  const configs = useSystemConfig();
+  const discountTiers = React.useMemo(() => buildDiscountTiers(configs?.SLOT_PACK_DISCOUNTS, configs?.MAX_SLOT_PACK_QUANTITY ?? 50), [configs?.SLOT_PACK_DISCOUNTS, configs?.MAX_SLOT_PACK_QUANTITY]);
   const [internalStep, setInternalStep] = useState(1);
   const step = stepProp !== undefined ? stepProp : internalStep;
   const setStep = setStepProp || setInternalStep;
@@ -312,7 +331,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
   useEffect(() => { if (showMyPacks) loadMyPacks(); }, [showMyPacks, loadMyPacks]);
 
   const pkg = packages.find(p => p.id === selectedPackage || p._id === selectedPackage);
-  const discountPct = getDiscountPct(slotCount);
+  const discountPct = getDiscountPct(slotCount, discountTiers);
   const gross = (pkg?.price || 0) * slotCount;
   const qtyDiscount = Math.floor(gross * discountPct / 100);
   const baseTotal = gross - qtyDiscount;
@@ -690,11 +709,11 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <h3 className="text-lg font-semibold text-slate-800 mb-6">Chọn số lần rửa xe</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            {DISCOUNT_TIERS.map(t => {
+            {discountTiers.map(t => {
               const active = slotCount >= t.min && slotCount <= t.max;
               return (
-                <div key={t.pct} className={`text-center p-4 rounded-xl transition-all ${active ? 'bg-emerald-50 border-2 border-emerald-400 shadow-sm' : 'bg-slate-50 border border-slate-200'}`}>
-                  <div className="text-xs text-slate-500 font-medium">{t.min === 20 ? '20+' : `${t.min}–${t.max}`} lần</div>
+                <div key={`${t.min}-${t.pct}`} className={`text-center p-4 rounded-xl transition-all ${active ? 'bg-emerald-50 border-2 border-emerald-400 shadow-sm' : 'bg-slate-50 border border-slate-200'}`}>
+                  <div className="text-xs text-slate-500 font-medium">{t.min === 20 ? `${t.min}+` : `${t.min}–${t.max}`} lần</div>
                   <div className={`text-lg font-bold mt-1 ${active ? 'text-emerald-600' : 'text-slate-300'}`}>{t.pct > 0 ? `-${t.pct}%` : 'Gốc'}</div>
                   <div className="text-[10px] text-slate-400 mt-1">{t.label}</div>
                 </div>
@@ -708,7 +727,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
               <div className="text-5xl font-black text-slate-900 leading-none">{slotCount}</div>
               <div className="text-sm text-slate-500 font-medium mt-2">lần</div>
             </div>
-            <button onClick={() => setSlotCount(n => Math.min(50, n + 1))}
+            <button onClick={() => setSlotCount(n => Math.min(configs?.MAX_SLOT_PACK_QUANTITY ?? 50, n + 1))}
               className="w-12 h-12 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-xl font-bold text-slate-800 hover:bg-slate-50 transition-colors">+</button>
           </div>
           <div className="flex gap-2 justify-center flex-wrap mb-6">
@@ -716,8 +735,8 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
               <button key={n} onClick={() => setSlotCount(n)}
                 className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-all ${n === slotCount ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'}`}>
                 {n}x
-                {getDiscountPct(n) > 0 && (
-                  <span className="absolute -top-2 -right-2 text-[10px] font-bold text-white bg-emerald-500 rounded-full px-1.5 py-0.5">-{getDiscountPct(n)}%</span>
+                {getDiscountPct(n, discountTiers) > 0 && (
+                  <span className="absolute -top-2 -right-2 text-[10px] font-bold text-white bg-emerald-500 rounded-full px-1.5 py-0.5">-{getDiscountPct(n, discountTiers)}%</span>
                 )}
               </button>
             ))}

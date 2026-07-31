@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const configService = require('./config.service');
 
 // Utility to parse HH:mm to minutes
 const parseTime = (timeStr) => {
@@ -32,7 +33,7 @@ exports.checkCapacity = async ({ branch, bookingStr, startTime, endTime, userId,
   const Branch = mongoose.model('Branch');
   const Booking = mongoose.model('Booking');
   const branchId = branch._id;
-  const capacity = branch.capacity || 2;
+  const capacity = branch.capacity || (await configService.get('DEFAULT_BRANCH_CAPACITY', { branchId }, 2));
 
   // 1. Pessimistic Lock trên Branch
   await Branch.findByIdAndUpdate(branchId, { $set: { _lastBookingLock: new Date() } }, { session });

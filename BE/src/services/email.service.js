@@ -16,6 +16,10 @@ const transporter = nodemailer.createTransport({
 });
 
 exports.sendPasswordResetEmail = async (email, otp) => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log(`[EmailService - TEST MODE] Skipped sending Password Reset OTP to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Password Reset OTP to ${email}`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
@@ -38,6 +42,10 @@ exports.sendPasswordResetEmail = async (email, otp) => {
 };
 
 exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log(`[EmailService - TEST MODE] Skipped sending Booking Confirmation to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Booking Confirmation Email to ${email} (Code: ${bookingInfo?.bookingCode || 'N/A'})`);
   const isRecurring = bookingInfo.bookingType === 'recurring';
   const isSlotPack = bookingInfo.bookingType === 'slot_pack_usage';
@@ -74,6 +82,10 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
 };
 
 exports.sendCancellationOtpEmail = async (email, otp) => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log(`[EmailService - TEST MODE] Skipped sending Cancellation OTP to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Cancellation OTP (${otp}) to ${email}`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
@@ -96,6 +108,10 @@ exports.sendCancellationOtpEmail = async (email, otp) => {
 };
 
 exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log(`[EmailService - TEST MODE] Skipped sending SlotPack Confirmation to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending SlotPack Confirmation Email to ${email} (Code: ${slotPack?.packCode || 'N/A'})`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,
@@ -120,6 +136,10 @@ exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
 };
 
 exports.sendCancellationSuccessEmail = async (email, info, refundAmount) => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log(`[EmailService - TEST MODE] Skipped sending Cancellation Success to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Cancellation Success Email to ${email} (Code: ${info?.code || 'N/A'})`);
   return transporter.sendMail({
     from: `"AutoWashPro" <${SMTP_USER}>`,

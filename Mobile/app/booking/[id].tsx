@@ -78,6 +78,8 @@ interface RefundRequest {
 }
 
 export default function BookingDetailScreen() {
+  const configs = useSystemConfig();
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { i18n } = useTranslation();
@@ -691,7 +693,7 @@ export default function BookingDetailScreen() {
           {(booking.depositAmount ?? 0) > 0 && booking.paymentStatus !== 'paid' ? (
             <>
               <RowBetween
-                label={`Cọc (30%)`}
+                label={`Cọc (${depositPercent}%)`}
                 value={
                   booking.depositPaid
                     ? `${formatCurrency(booking.depositAmount ?? 0)} (đã cọc)`
