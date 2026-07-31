@@ -23,6 +23,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSystemConfig } from '../../src/contexts/ConfigContext';
 import {
   branchApi,
   packageApi,
@@ -95,6 +96,8 @@ function getPointMultiplier(tier?: string): number {
 }
 
 export default function RecurringBookingScreen() {
+  const configs = useSystemConfig();
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
   const toast = useToast();
@@ -588,7 +591,7 @@ export default function RecurringBookingScreen() {
       const computedTotal = Math.max(0, totalEstimate - voucherSavings);
       const computedDeposit = paymentOption === 'full'
         ? computedTotal
-        : Math.round((computedTotal * 0.3) / 1000) * 1000;
+        : Math.round((computedTotal * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
 
       const recurringDraft = {
         branchId: selectedBranch._id,
@@ -1054,15 +1057,16 @@ export default function RecurringBookingScreen() {
     const pricePerSession = basePrice + subServicesPrice;
     const totalEstimate = totalSessions * pricePerSession;
     const finalEstimate = Math.max(0, totalEstimate - voucherSavings);
-    // Cọc 30% × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
-    const depositAmount = Math.round((finalEstimate * 0.3) / 1000) * 1000;
+    // Cọc theo cấu hình DEPOSIT_RATE × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
+    const depositPercent = configs?.DEPOSIT_RATE ?? 0;
+    const depositAmount = Math.round((finalEstimate * depositPercent) / 1000) * 1000;
     const payNowAmount = paymentOption === 'full' ? finalEstimate : depositAmount;
     // Loyalty points — match FE RecurringBookingFlow.jsx (5% × tier multiplier).
     const priceAfterVoucherPerSession = totalSessions > 0
       ? Math.max(0, Math.floor(finalEstimate / totalSessions))
       : Math.max(0, pricePerSession - Math.floor(voucherSavings / Math.max(1, totalSessions)));
     const pointsPerSession = Math.floor(
-      priceAfterVoucherPerSession * 0.05 * getPointMultiplier(userTier),
+      priceAfterVoucherPerSession * (configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0) * getPointMultiplier(userTier, configs?.LOYALTY_TIERS),
     );
     const totalPoints = pointsPerSession * totalSessions;
     const weekdayLabels = selectedWeekdays
@@ -1208,7 +1212,7 @@ export default function RecurringBookingScreen() {
                 paymentOption === 'deposit' && styles.paymentOptionTitleActive,
               ]}
             >
-              Đặt cọc 30%
+              Đặt cọc {depositPercent}%
             </Text>
             <Text
               style={[

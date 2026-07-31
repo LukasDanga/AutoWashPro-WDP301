@@ -16,6 +16,7 @@ export const SOCKET_EVENTS = {
   REFUND_REQUEST_NEW: 'refund_request_new',
   REFUND_REQUESTS_UPDATED: 'refund_requests_updated',
   SYSTEM: 'system',
+  CONFIG_UPDATED: 'config_updated',
   PING: 'ping'
 } as const;
 

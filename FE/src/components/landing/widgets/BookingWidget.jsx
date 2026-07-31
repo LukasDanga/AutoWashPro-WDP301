@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Clock, ShieldCheck, Car, Truck, Bike, Calendar, Tag, Check, 
@@ -9,6 +9,7 @@ import VoucherPicker from '../../VoucherPicker.jsx';
 import SlotPackFlow from '../../customer/SlotPackFlow.jsx';
 import useSSE from '../../../hooks/useSSE.js';
 import { storageKeys } from '../../../lib/authStorage.js';
+import { useSystemConfig } from '../../../hooks/useSystemConfig.jsx';
 
 import { showToast } from '@/lib/toast';
 
@@ -61,6 +62,8 @@ function authHeader(token) {
 }
 
 export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate, initialBranchId, initialTab, rebookData }) {
+  const configs = useSystemConfig();
+  const depositPercent = Math.round((configs?.DEPOSIT_RATE ?? 0) * 100);
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -166,6 +169,26 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [vnpayLoading, setVnpayLoading] = useState(false);
   const [depositPollCount, setDepositPollCount] = useState(0);
   const [voucherModalOpen, setVoucherModalOpen] = useState(false);
+
+  // Real-time: recalculate deposit when DEPOSIT_RATE config changes
+  useEffect(() => {
+    if (pendingDeposit && pendingDeposit.finalPrice > 0) {
+      const newDeposit = Math.round((pendingDeposit.finalPrice * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      if (newDeposit !== pendingDeposit.depositAmount) {
+        setPendingDeposit(prev => ({ ...prev, depositAmount: newDeposit }));
+      }
+    }
+  }, [configs?.DEPOSIT_RATE, pendingDeposit?.finalPrice]);
+
+  // Real-time: recalculate recurring deposit when DEPOSIT_RATE config changes
+  useEffect(() => {
+    if (pendingDeposit && pendingDeposit.tab === 'recurring' && pendingDeposit.finalPrice > 0) {
+      const newDeposit = Math.round((pendingDeposit.finalPrice * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      if (newDeposit !== pendingDeposit.depositAmount) {
+        setPendingDeposit(prev => ({ ...prev, depositAmount: newDeposit }));
+      }
+    }
+  }, [configs?.DEPOSIT_RATE, pendingDeposit?.finalPrice, pendingDeposit?.tab]);
 
   // Add vehicle inline
   const [localVehicles, setLocalVehicles] = useState([]);
@@ -553,7 +576,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         sessionCount = Math.max(1, cnt);
       }
       const estimatedTotal = perSession * sessionCount;
-      const calculatedDeposit = Math.round((estimatedTotal * 0.3) / 1000) * 1000;
+      const calculatedDeposit = Math.round((estimatedTotal * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
 
       if (estimatedTotal > 0) {
         setPendingDeposit({
@@ -1214,7 +1237,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     try {
       const branchId = selectedBranch._id || selectedBranch.id;
       const pkgId = pkg._id || pkg.id;
-      const calculatedDeposit = Math.round((total * 0.3) / 1000) * 1000;
+      const calculatedDeposit = Math.round((total * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
       if (total > 0) {
         setPendingDeposit({
           isDraft: true, tab: 'regular', finalPrice: total, totalAmount: total, depositAmount: calculatedDeposit, depositPaid: false
@@ -1287,7 +1310,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
       const singlePrice = Math.max(0, totalBase - discount);
       const totalPrice = singlePrice * totalValid;
-      const totalDeposit = Math.round((totalPrice * 0.3) / 1000) * 1000;
+      const totalDeposit = Math.round((totalPrice * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
 
       const pb = {
         branchId,
@@ -2912,7 +2935,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <>
                         <div className="flex justify-between items-center pt-1">
                           <div>
-                            <span className="font-semibold text-sm text-amber-600">Đặt cọc (30%)</span>
+                            <span className="font-semibold text-sm text-amber-600">Đặt cọc ({depositPercent}%)</span>
                             {lastBooking.depositPaid && (
                               <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ĐÃ CỌC</span>
                             )}
@@ -3002,7 +3025,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <div className="text-[11px] text-slate-400 mt-1">
                         {paymentMode === 'full' 
                           ? 'Thanh toán 100%'
-                          : `Đặt cọc 30% · Còn lại ${formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)`
+                          : `Đặt cọc ${depositPercent}% · Còn lại ${formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)`
                         }
                       </div>
                     </div>
@@ -3102,8 +3125,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <>
                             <div className="flex justify-between items-end">
                               <div>
-                                <span className="text-amber-600 font-semibold text-sm">Đặt cọc (30%)</span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">30% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
+                                <span className="text-amber-600 font-semibold text-sm">Đặt cọc ({depositPercent}%)</span>
+                                <div className="text-[11px] text-slate-400 mt-0.5">{depositPercent}% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
                               </div>
                               <span className="font-black text-xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
                             </div>
@@ -3140,7 +3163,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             onClick={() => setPaymentMode('deposit')} 
                             className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'deposit' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-200 hover:border-amber-200 hover:bg-amber-50/50'}`}
                           >
-                            <div className={`font-bold text-xs ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc 30%</div>
+                            <div className={`font-bold text-xs ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc {depositPercent}%</div>
                             <div className={`mt-0.5 text-base font-black ${paymentMode === 'deposit' ? 'text-amber-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
                           </button>
                         )}

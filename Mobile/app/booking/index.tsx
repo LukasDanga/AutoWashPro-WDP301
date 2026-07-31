@@ -658,9 +658,13 @@ export default function BookingScreen() {
   // Loyalty tier multiplier — same factor table as the web BookingFlow:
   //   diamond -> 2.0, gold -> 1.5, silver -> 1.2, everyone else -> 1.
   let pointMultiplier = 1;
-  if (user?.tier === 'diamond') pointMultiplier = 2.0;
-  else if (user?.tier === 'gold') pointMultiplier = 1.5;
-  else if (user?.tier === 'silver') pointMultiplier = 1.2;
+  if (configs?.LOYALTY_TIERS && Array.isArray(configs.LOYALTY_TIERS)) {
+    const userTier = user?.tier || 'bronze';
+    const tierConfig = configs.LOYALTY_TIERS.find((t: any) => t.id === userTier);
+    if (tierConfig && tierConfig.multiplier) {
+      pointMultiplier = tierConfig.multiplier;
+    }
+  }
 
   const isPayingWithPack = !!selectedSlotPack;
 
@@ -762,9 +766,9 @@ export default function BookingScreen() {
   }, 0);
   const totalBase = basePrice + subServicesTotal;
   const finalPrice = isPayingWithPack ? 0 : Math.max(0, totalBase - voucherSavings);
-  const depositAmount = finalPrice * 0.3;
+  const depositAmount = finalPrice * (configs?.DEPOSIT_RATE ?? 0);
   // Web uses 5% earn rate × tier multiplier, floored to an integer.
-  const pointsEarned = Math.floor((isPayingWithPack ? totalBase : finalPrice) * 0.05 * pointMultiplier);
+  const pointsEarned = Math.floor((isPayingWithPack ? totalBase : finalPrice) * (configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0) * pointMultiplier);
 
   const stepsForIndicator = STEP_META.map((s) => ({
     key: s.key,

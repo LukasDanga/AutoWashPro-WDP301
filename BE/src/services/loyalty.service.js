@@ -1,6 +1,7 @@
-const { User, PointHistory, LoyaltyConfig } = require('../models');
+const { User, PointHistory } = require('../models');
 const notificationService = require('./notification.service');
 const sseService = require('./sse.service');
+const configService = require('./config.service');
 
 const DEFAULT_TIERS = [
   {
@@ -79,19 +80,19 @@ function normalizeTiers(tiers = []) {
 }
 
 /**
- * Lấy cấu hình điểm thưởng hiện tại từ DB (nếu chưa có sẽ tạo mặc định)
+ * Lấy cấu hình điểm thưởng hiện tại từ SystemConfig
  */
 exports.getLoyaltyConfig = async () => {
-  if (cachedConfig) return cachedConfig;
   try {
-    let doc = await LoyaltyConfig.findOne();
-    if (!doc) {
-      doc = await LoyaltyConfig.create(DEFAULT_CONFIG);
-    }
-    const obj = doc.toObject();
-    obj.tiers = normalizeTiers(obj.tiers);
-    cachedConfig = obj;
-    return cachedConfig;
+    const baseEarningRate = await configService.get('LOYALTY_BASE_EARNING_RATE', {}, DEFAULT_CONFIG.baseEarningRate);
+    const pointExpirationMonths = await configService.get('LOYALTY_EXPIRATION_MONTHS', {}, DEFAULT_CONFIG.pointExpirationMonths);
+    const rawTiers = await configService.get('LOYALTY_TIERS', {}, DEFAULT_CONFIG.tiers);
+    
+    return {
+      baseEarningRate,
+      pointExpirationMonths,
+      tiers: normalizeTiers(rawTiers),
+    };
   } catch (err) {
     return DEFAULT_CONFIG;
   }
@@ -99,20 +100,17 @@ exports.getLoyaltyConfig = async () => {
 
 /**
  * Cập nhật cấu hình điểm thưởng (Admin)
+ * NOTE: Cần chuyển sang dùng API config.controller.js
  */
 exports.updateLoyaltyConfig = async (data) => {
-  let doc = await LoyaltyConfig.findOne();
-  if (!doc) {
-    doc = new LoyaltyConfig(DEFAULT_CONFIG);
-  }
   if (data.baseEarningRate !== undefined) {
-    doc.baseEarningRate = Number(data.baseEarningRate);
+    await configService.set({ key: 'LOYALTY_BASE_EARNING_RATE', value: Number(data.baseEarningRate), type: 'number', category: 'loyalty' });
   }
   if (data.pointExpirationMonths !== undefined) {
-    doc.pointExpirationMonths = Number(data.pointExpirationMonths);
+    await configService.set({ key: 'LOYALTY_EXPIRATION_MONTHS', value: Number(data.pointExpirationMonths), type: 'number', category: 'loyalty' });
   }
   if (Array.isArray(data.tiers)) {
-    doc.tiers = data.tiers.map((t) => ({
+    const newTiers = data.tiers.map((t) => ({
       id: String(t.id || '').trim(),
       name: String(t.name || '').trim(),
       minPoints: Number(t.minPoints || 0),
@@ -124,18 +122,15 @@ exports.updateLoyaltyConfig = async (data) => {
       icon: t.icon || 'Circle',
       benefits: Array.isArray(t.benefits) ? t.benefits.map((b) => String(b).trim()) : [],
     }));
+    await configService.set({ key: 'LOYALTY_TIERS', value: newTiers, type: 'json', category: 'loyalty', isPublic: true });
   }
-  doc.isDefault = false;
-  await doc.save();
-  cachedConfig = doc.toObject();
-  cachedConfig.tiers = normalizeTiers(cachedConfig.tiers);
-  return cachedConfig;
+  return await exports.getLoyaltyConfig();
 };
 
 /**
  * Tính điểm dựa trên số tiền và hạng thành viên theo config động
  */
-exports.calculatePoints = (amount, tier = 'bronze', config = cachedConfig || DEFAULT_CONFIG) => {
+exports.calculatePoints = (amount, tier = 'bronze', config = DEFAULT_CONFIG) => {
   const rate = (config.baseEarningRate ?? 5) / 100;
   const tierObj = (config.tiers || DEFAULT_TIERS).find((t) => t.id === tier);
   const multiplier = tierObj ? tierObj.multiplier : 1.0;
@@ -145,7 +140,7 @@ exports.calculatePoints = (amount, tier = 'bronze', config = cachedConfig || DEF
 /**
  * Xác định hạng dựa trên tổng điểm lifetimePoints và config động
  */
-exports.determineTier = (lifetimePoints, config = cachedConfig || DEFAULT_CONFIG) => {
+exports.determineTier = (lifetimePoints, config = DEFAULT_CONFIG) => {
   const tiers = [...(config.tiers || DEFAULT_TIERS)].sort((a, b) => b.minPoints - a.minPoints);
   for (const t of tiers) {
     if (lifetimePoints >= t.minPoints) {

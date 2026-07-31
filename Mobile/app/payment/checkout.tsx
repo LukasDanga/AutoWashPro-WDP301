@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSystemConfig } from '../../src/contexts/ConfigContext';
 import { useBooking } from '../../src/contexts/BookingContext';
 import { paymentApi, bookingApi } from '../../src/api';
 import {
@@ -245,21 +246,22 @@ export default function PaymentCheckoutScreen() {
     }
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
+    const depositRate = configs?.DEPOSIT_RATE ?? 0.3;
     if (beDeposit > 0) {
-      return Math.round(beDeposit / 0.3 / 1000) * 1000;
+      return Math.round(beDeposit / depositRate / 1000) * 1000;
     }
     return booking.finalPrice ?? booking.totalPrice ?? 0;
-  }, [booking, isProvisional, isRecurringType, recurringDraft, baseServiceAmount, activeVoucherDiscount]);
+  }, [booking, isProvisional, isRecurringType, recurringDraft, baseServiceAmount, activeVoucherDiscount, configs]);
 
   const depositAmount = useMemo(() => {
     if (isProvisional) {
       if (isRecurringType && recurringDraft) {
-        return recurringDraft.depositAmount ?? Math.round((totalAmount * 0.3) / 1000) * 1000;
+        return recurringDraft.depositAmount ?? Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
       }
-      return Math.round((totalAmount * 0.3) / 1000) * 1000;
+      return Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
     }
     if (!booking) return 0;
-    return booking.depositAmount ?? Math.round((totalAmount * 0.3) / 1000) * 1000;
+    return booking.depositAmount ?? Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
   }, [booking, totalAmount, isProvisional, isRecurringType, recurringDraft]);
 
   const amount = useMemo(() => {
@@ -1082,10 +1084,10 @@ export default function PaymentCheckoutScreen() {
               <View style={styles.summaryRow}>
                 <View style={{ flex: 1 }}>
                   <AppText variant="body" style={{ color: '#d97706', fontWeight: '600' }}>
-                    Đặt cọc (30%)
+                    Đặt cọc ({depositPercent}%)
                   </AppText>
                   <AppText variant="caption" color="textTertiary">
-                    30% × {formatCurrency(totalAmount)}
+                    {depositPercent}% × {formatCurrency(totalAmount)}
                   </AppText>
                 </View>
                 <AppText variant="h3" style={{ color: '#d97706' }}>
@@ -1154,7 +1156,7 @@ export default function PaymentCheckoutScreen() {
                 color={paymentMode === 'deposit' ? 'primary' : 'textSecondary'}
                 style={{ fontWeight: '600', marginBottom: 4 }}
               >
-                Đặt cọc 30%
+                Đặt cọc {depositPercent}%
               </AppText>
               <AppText
                 variant="body"

@@ -244,7 +244,7 @@ export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
                       </p>
                       {p.paymentType === 'deposit' && booking?.finalPrice && (
                         <p className="text-xs text-amber-600 font-semibold mt-1.5">
-                          Đặt cọc 30% · Còn lại {formatCurrency(Math.max(0, (booking.finalPrice || 0) - (p.amount || 0)))}
+                          Đặt cọc {depositPercent}% · Còn lại {formatCurrency(Math.max(0, (booking.finalPrice || 0) - (p.amount || 0)))}
                         </p>
                       )}
                     </div>

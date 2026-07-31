@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AdminLayout from '@/components/admin/AdminLayout';
 import BranchManagement from '@/components/admin/BranchManagement';
 import AdminRewards from '@/components/admin/AdminRewards';
-import AdminRewardsConfig from '@/components/admin/AdminRewardsConfig';
+import AdminSystemConfig from '@/components/admin/AdminSystemConfig';
 import AdminPointHistoryDetail from '@/components/admin/AdminPointHistoryDetail';
 import UserManagement from '@/components/admin/UserManagement';
 import AdminOverview from '@/components/admin/AdminOverview';
@@ -107,8 +107,8 @@ export default function AdminRoutes() {
           element={<AdminRewards />}
         />
         <Route
-          path="rewards/config"
-          element={<AdminRewardsConfig />}
+          path="system-config"
+          element={<AdminSystemConfig />}
         />
         <Route
           path="rewards/history/:id"

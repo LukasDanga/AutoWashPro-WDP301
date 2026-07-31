@@ -271,4 +271,32 @@ const notificationValidators = {
   ],
 };
 
-module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, refundRequestValidators, voucherValidators, checkinValidators, notificationValidators };
+const configValidators = {
+  getPublic: [
+    query('branchId').optional().isMongoId().withMessage('Branch ID không hợp lệ')
+  ],
+  getAll: [
+    query('scope').optional().isIn(['global', 'branch', 'package']).withMessage('Scope không hợp lệ'),
+    query('isPublic').optional().isBoolean().withMessage('isPublic phải là boolean'),
+    query('category').optional().isString()
+  ],
+  update: [
+    body('key').trim().notEmpty().withMessage('Key không được để trống'),
+    body('value').exists().withMessage('Value không được để trống'),
+    body('type').notEmpty().isIn(['number', 'string', 'boolean', 'json']).withMessage('Type không hợp lệ'),
+    body('category').optional().isString(),
+    body('scope').optional().isIn(['global', 'branch', 'package']).withMessage('Scope không hợp lệ'),
+    body('referenceId').optional().isMongoId().withMessage('Reference ID không hợp lệ'),
+    body('isPublic').optional().isBoolean().withMessage('isPublic phải là boolean'),
+    body('description').optional().isString(),
+    body('reason').optional().isString().withMessage('Lý do phải là chuỗi')
+  ],
+  rollback: [
+    body('key').trim().notEmpty().withMessage('Key không được để trống'),
+    body('version').isInt({ min: 1 }).withMessage('Version phải là số nguyên dương'),
+    body('scope').optional().isIn(['global', 'branch', 'package']).withMessage('Scope không hợp lệ'),
+    body('referenceId').optional().isMongoId().withMessage('Reference ID không hợp lệ')
+  ]
+};
+
+module.exports = { authValidators, vehicleValidators, branchValidators, packageValidators, bookingValidators, paymentValidators, refundRequestValidators, voucherValidators, checkinValidators, notificationValidators, configValidators };

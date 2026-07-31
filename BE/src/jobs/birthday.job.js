@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { User, Voucher } = require('../models');
 const notificationService = require('../services/notification.service');
+const configService = require('../services/config.service');
 
 /**
  * Run every day at 08:00 AM.
@@ -26,6 +27,11 @@ function startBirthdayJob() {
         },
       });
 
+      // Lấy config
+      const percent = await configService.get('BIRTHDAY_VOUCHER_PERCENT', {}, 20);
+      const maxDiscount = await configService.get('BIRTHDAY_VOUCHER_MAX_AMOUNT', {}, 100000);
+      const validityDays = await configService.get('BIRTHDAY_VOUCHER_VALIDITY_DAYS', {}, 7);
+
       for (const user of users) {
         const thisYear = now.getFullYear();
         const existingCode = `BD${thisYear}${String(user._id).slice(-6).toUpperCase()}`;
@@ -35,15 +41,15 @@ function startBirthdayJob() {
         if (exists) continue;
 
         const endDate = new Date(now);
-        endDate.setDate(endDate.getDate() + 7);
+        endDate.setDate(endDate.getDate() + validityDays);
 
         await Voucher.create({
           code: existingCode,
           name: `Voucher sinh nhật ${user.name}`,
-          description: `Quà sinh nhật dành riêng cho ${user.name} — giảm 20% tối đa 100.000đ.`,
+          description: `Quà sinh nhật dành riêng cho ${user.name} — giảm ${percent}% tối đa ${maxDiscount.toLocaleString('vi-VN')}đ.`,
           type: 'percentage',
-          value: 20,
-          maxDiscount: 100000,
+          value: percent,
+          maxDiscount: maxDiscount,
           minOrder: 0,
           quantity: 1,
           remaining: 1,
@@ -60,7 +66,7 @@ function startBirthdayJob() {
         await notificationService.send(
           user._id,
           'Chúc mừng sinh nhật! 🎂',
-          `AutoWash Pro gửi tặng bạn voucher giảm 20% nhân dịp sinh nhật. Mã: ${existingCode} (hiệu lực 7 ngày).`,
+          `AutoWash Pro gửi tặng bạn voucher giảm ${percent}% nhân dịp sinh nhật. Mã: ${existingCode} (hiệu lực ${validityDays} ngày).`,
           'voucher',
           { code: existingCode }
         );

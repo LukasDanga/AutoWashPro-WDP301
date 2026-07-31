@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSystemConfig } from '../../hooks/useSystemConfig';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -13,6 +14,8 @@ export default function PackagesSection() {
   const [activeTab, setActiveTab] = useState('single');
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const configs = useSystemConfig();
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
 
   useEffect(() => {
     async function fetchPackages() {
@@ -169,7 +172,7 @@ export default function PackagesSection() {
                         3
                       </div>
                       <div>
-                        <h4 className="font-bold text-slate-800 text-sm md:text-base">Đặt cọc online 30%</h4>
+                        <h4 className="font-bold text-slate-800 text-sm md:text-base">Đặt cọc online {depositPercent}%</h4>
                         <p className="text-xs md:text-sm text-slate-400">Thanh toán đặt cọc qua chuyển khoản để đảm bảo slot, không phải xếp hàng chờ đợi.</p>
                       </div>
                     </div>
@@ -213,7 +216,7 @@ export default function PackagesSection() {
                     <div className="pt-4 border-t border-white/20 flex justify-between items-center z-10">
                       <div>
                         <div className="text-[10px] text-emerald-100/60 uppercase">Phí đặt cọc</div>
-                        <div className="text-lg font-bold">Chỉ 30%</div>
+                        <div className="text-lg font-bold">Chỉ {depositPercent}%</div>
                       </div>
                       <div className="w-9 h-9 rounded-full bg-white text-emerald-600 flex items-center justify-center font-bold">
                         →
@@ -351,7 +354,7 @@ export default function PackagesSection() {
                       </div>
                       <div className="p-4 rounded-2xl bg-slate-50 border border-slate-150">
                         <div className="text-xl font-bold text-emerald-600">Không cần đặt cọc</div>
-                        <p className="text-xs text-slate-400 mt-1">Khi đặt lịch bằng gói slot, bạn không cần phải thanh toán đặt cọc 30% tại bước xác nhận.</p>
+                        <p className="text-xs text-slate-400 mt-1">Khi đặt lịch bằng gói slot, bạn không cần phải thanh toán đặt cọc {depositPercent}% tại bước xác nhận.</p>
                       </div>
                       <div className="p-4 rounded-2xl bg-slate-50 border border-slate-150">
                         <div className="text-xl font-bold text-emerald-600">Áp dụng đa xe</div>
@@ -491,7 +494,7 @@ export default function PackagesSection() {
                                       <svg className={`w-4 h-4 mt-0.5 shrink-0 ${pkg.popular || i === 1 ? 'text-emerald-200' : 'text-emerald-500'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                         <polyline points="20 6 9 17 4 12" />
                                       </svg>
-                                      <span className={pkg.popular || i === 1 ? 'text-emerald-50/90' : 'text-slate-500'}>Không cần đặt cọc 30%</span>
+                                      <span className={pkg.popular || i === 1 ? 'text-emerald-50/90' : 'text-slate-500'}>Không cần đặt cọc {depositPercent}%</span>
                                     </li>
                                     <li className="flex items-start gap-2.5 text-xs">
                                       <svg className={`w-4 h-4 mt-0.5 shrink-0 ${pkg.popular || i === 1 ? 'text-emerald-200' : 'text-emerald-500'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -26,6 +26,7 @@ import { AuthProvider } from '../src/contexts/AuthContext';
 import { NotificationProvider } from '../src/contexts/NotificationContext';
 import { BookingProvider } from '../src/contexts/BookingContext';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
+import { ConfigProvider } from '../src/contexts/ConfigContext';
 import { ToastProvider, registerToastBridge } from '../src/components/common/Toast';
 import { AlertDialogProvider, registerAlertBridge, useAlertDialog } from '../src/components/common/AlertDialog';
 
@@ -105,19 +106,21 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <BookingProvider>
-            <AlertDialogProvider>
-              <ToastProvider>
-                <AlertBridgeRegistrar>
-                  <RootLayoutContent />
-                </AlertBridgeRegistrar>
-              </ToastProvider>
-            </AlertDialogProvider>
-          </BookingProvider>
-        </NotificationProvider>
-      </AuthProvider>
+      <ConfigProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <BookingProvider>
+              <AlertDialogProvider>
+                <ToastProvider>
+                  <AlertBridgeRegistrar>
+                    <RootLayoutContent />
+                  </AlertBridgeRegistrar>
+                </ToastProvider>
+              </AlertDialogProvider>
+            </BookingProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </ConfigProvider>
     </ThemeProvider>
   );
 }
