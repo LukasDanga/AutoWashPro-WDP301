@@ -21,7 +21,7 @@ function formatDateTime(d) {
   return new Date(d).toLocaleString('vi-VN');
 }
 
-export default function NotificationsPage({ onBack, apiBase, token }) {
+export default function CustomerNotificationsPage({ onBack, apiBase, token }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);

@@ -26,7 +26,7 @@ function StatusBadge({ status }) {
   return <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${s.cls}`}>{s.label}</span>;
 }
 
-export default function PaymentHistoryPage({ onBack, apiBase, token }) {
+export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailPayment, setDetailPayment] = useState(null);

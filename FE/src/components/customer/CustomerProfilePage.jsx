@@ -14,7 +14,7 @@ const FALLBACK_TIER_MAP = {
   bronze: { label: 'Đồng', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200', minPoints: 0, benefits: [] },
 };
 
-export default function ProfilePage({ user, vehicles: initialVehicles, onLogout, apiBase, token, onBack, onUserUpdate }) {
+export default function CustomerProfilePage({ user, vehicles: initialVehicles, onLogout, apiBase, token, onBack, onUserUpdate }) {
   const isLoggedIn = !!user && !!token;
 
   const getTabFromUrl = () => {

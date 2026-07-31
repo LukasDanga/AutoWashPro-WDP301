@@ -1,14 +1,14 @@
-import { motion } from 'framer-motion';
+﻿import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import VideoBackground from './VideoBackground';
+import VideoBackground from '../widgets/VideoBackground';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATIC_STATS = [
-  { num: '2k+', label: 'LƯỢT RỬA' },
-  { num: '100.0%', label: 'HÀI LÒNG' },
-  { num: '5', label: 'CHI NHÁNH' },
+  { num: '2k+', label: 'LÆ¯á»¢T Rá»¬A' },
+  { num: '100.0%', label: 'HÃ€I LÃ’NG' },
+  { num: '5', label: 'CHI NHÃNH' },
 ];
 
 function formatNum(n) {
@@ -27,9 +27,9 @@ export default function HeroSection() {
         const d = payload?.data;
         if (!d) return;
         setStats([
-          { num: formatNum(d.totalCompleted), label: 'LƯỢT RỬA' },
-          { num: d.satisfactionRate, label: 'HÀI LÒNG' },
-          { num: `${d.totalBranches}`, label: 'CHI NHÁNH' },
+          { num: formatNum(d.totalCompleted), label: 'LÆ¯á»¢T Rá»¬A' },
+          { num: d.satisfactionRate, label: 'HÃ€I LÃ’NG' },
+          { num: `${d.totalBranches}`, label: 'CHI NHÃNH' },
         ]);
       })
       .catch(() => {});
@@ -49,16 +49,16 @@ export default function HeroSection() {
           >
             <div className="mb-4">
               <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white backdrop-blur-md text-xs font-semibold tracking-[0.2em] uppercase shadow-lg">
-                Hệ thống đặt lịch thông minh
+                Há»‡ thá»‘ng Ä‘áº·t lá»‹ch thÃ´ng minh
               </span>
             </div>
 
             <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-bold tracking-tight leading-[1.1] text-white mb-6 drop-shadow-2xl">
-              Chăm sóc xế yêu<br className="hidden md:block"/> một cách <span className="text-emerald-400">chuyên nghiệp</span>
+              ChÄƒm sÃ³c xáº¿ yÃªu<br className="hidden md:block"/> má»™t cÃ¡ch <span className="text-emerald-400">chuyÃªn nghiá»‡p</span>
             </h1>
 
             <p className="text-white/80 md:text-white/90 text-base md:text-xl max-w-2xl mx-auto leading-relaxed mb-10 drop-shadow-md">
-              Hệ thống đặt lịch rửa xe trực tuyến nhanh chóng. Trải nghiệm dịch vụ vệ sinh và chăm sóc xe hơi đẳng cấp nhất tại AutoWash Pro.
+              Há»‡ thá»‘ng Ä‘áº·t lá»‹ch rá»­a xe trá»±c tuyáº¿n nhanh chÃ³ng. Tráº£i nghiá»‡m dá»‹ch vá»¥ vá»‡ sinh vÃ  chÄƒm sÃ³c xe hÆ¡i Ä‘áº³ng cáº¥p nháº¥t táº¡i AutoWash Pro.
             </p>
           </motion.div>
 
@@ -74,7 +74,7 @@ export default function HeroSection() {
             >
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
               <span className="relative z-10 flex items-center justify-center gap-2">
-                Bắt đầu đặt lịch ngay
+                Báº¯t Ä‘áº§u Ä‘áº·t lá»‹ch ngay
                 <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
@@ -86,7 +86,7 @@ export default function HeroSection() {
               }}
               className="group w-full sm:w-auto px-8 py-3.5 rounded-full border border-white/30 bg-white/5 text-white font-semibold text-sm md:text-base hover:bg-white/10 transition-all duration-300 backdrop-blur-md hover:-translate-y-0.5 flex items-center justify-center gap-2"
             >
-              Cuộn để khám phá
+              Cuá»™n Ä‘á»ƒ khÃ¡m phÃ¡
               <svg className="w-4 h-4 group-hover:translate-y-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M12 5v14M5 12l7 7 7-7" />
               </svg>

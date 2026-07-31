@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Copy, Check, Sun, Sunset, X, AlertCircle, Clock } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '../../hooks/useSSE';
-import QuickBookModal from '../customer/QuickBookModal.jsx';
+import QuickBookModal from './QuickBookModal.jsx';
 import VoucherPicker from '../VoucherPicker.jsx';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -305,7 +305,7 @@ function PackCard({ pack, onQuickBook, onCancelPack, apiBase, token }) {
   );
 }
 
-export default function HistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [], user, onUserUpdate }) {
+export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: userVehicles = [], user, onUserUpdate }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);

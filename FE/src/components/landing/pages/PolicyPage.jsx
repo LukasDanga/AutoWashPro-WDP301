@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import Navbar from './Navbar';
-import Footer from './Footer';
+import Navbar from '../layout/Navbar';
+import Footer from '../layout/Footer';
 
 const POLICIES = [
   {

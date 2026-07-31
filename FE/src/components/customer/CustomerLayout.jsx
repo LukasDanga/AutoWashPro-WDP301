@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Calendar, CreditCard, Bell, Gift, LogOut, ChevronDown, Award, Wallet } from 'lucide-react';
-import Navbar from './Navbar';
+import Navbar from '../landing/layout/Navbar';
 
 const TIER_BADGES = {
   diamond: { label: 'Kim cương', bg: 'bg-blue-50 text-blue-600 border-blue-200' },

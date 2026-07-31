@@ -1,14 +1,14 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Clock, ShieldCheck, Car, Truck, Bike, Calendar, Tag, Check, 
   ArrowLeft, ArrowRight, RefreshCw, AlertCircle, Sparkles, Sun, Sunset, Plus,
   Copy, Info, CheckCircle2, X
 } from 'lucide-react';
-import VoucherPicker from '../VoucherPicker.jsx';
-import SlotPackFlow from '../customer/SlotPackFlow.jsx';
-import useSSE from '../../hooks/useSSE.js';
-import { storageKeys } from '../../lib/authStorage.js';
+import VoucherPicker from '../../VoucherPicker.jsx';
+import SlotPackFlow from '../../customer/SlotPackFlow.jsx';
+import useSSE from '../../../hooks/useSSE.js';
+import { storageKeys } from '../../../lib/authStorage.js';
 
 import { showToast } from '@/lib/toast';
 
@@ -29,7 +29,7 @@ const WEEKDAY_OPTIONS = [
 const TIME_SLOTS = ['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'];
 
 function formatCurrency(v) {
-  return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
+  return `${new Intl.NumberFormat('vi-VN').format(v || 0)}Ä‘`;
 }
 
 function buildBookingDates() {
@@ -42,7 +42,7 @@ function buildBookingDates() {
     const isoString = date.toLocaleDateString('en-CA');
     return {
       id: isoString,
-      label: index === 0 ? 'Hôm nay' : weekdayFormatter.format(date).toUpperCase(),
+      label: index === 0 ? 'HÃ´m nay' : weekdayFormatter.format(date).toUpperCase(),
       day, month, iso: isoString,
     };
   });
@@ -184,9 +184,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   async function handleAddVehicle(e) {
     e.preventDefault();
-    if (!vehicleForm.licensePlate.trim()) { setError('Vui lòng nhập biển số xe'); return; }
-    if (!vehicleForm.brand.trim()) { setError('Vui lòng nhập hãng xe'); return; }
-    if (!vehicleForm.color.trim()) { setError('Vui lòng nhập màu xe'); return; }
+    if (!vehicleForm.licensePlate.trim()) { setError('Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe'); return; }
+    if (!vehicleForm.brand.trim()) { setError('Vui lÃ²ng nháº­p hÃ£ng xe'); return; }
+    if (!vehicleForm.color.trim()) { setError('Vui lÃ²ng nháº­p mÃ u xe'); return; }
     setAddingVehicle(true);
     setError('');
     try {
@@ -199,13 +199,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Thêm xe thất bại');
+      if (!res.ok) throw new Error(data?.message || 'ThÃªm xe tháº¥t báº¡i');
       const newVehicle = data?.data || data;
       setLocalVehicles(prev => [...prev, newVehicle]);
       setSelectedVehicle(newVehicle._id || newVehicle.id);
       setShowAddVehicle(false);
       setVehicleForm({ licensePlate: '', vehicleType: 'sedan', brand: '', model: '', color: '', year: '' });
-      showToast('Đã thêm xe thành công!', 'success');
+      showToast('ÄÃ£ thÃªm xe thÃ nh cÃ´ng!', 'success');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -213,7 +213,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }
 
-  // Draft data để tạo booking sau khi payment confirm
+  // Draft data Ä‘á»ƒ táº¡o booking sau khi payment confirm
   const [depositDraft, setDepositDraft] = useState(null);
   const [creatingBooking, setCreatingBooking] = useState(false);
 
@@ -309,7 +309,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
 
     setStep(2);
-    showToast('Thông tin từ lần đặt trước đã được điền sẵn. Bạn có thể chỉnh sửa hoặc thêm dịch vụ nếu cần.');
+    showToast('ThÃ´ng tin tá»« láº§n Ä‘áº·t trÆ°á»›c Ä‘Ã£ Ä‘Æ°á»£c Ä‘iá»n sáºµn. Báº¡n cÃ³ thá»ƒ chá»‰nh sá»­a hoáº·c thÃªm dá»‹ch vá»¥ náº¿u cáº§n.');
   }, [rebookData, branches]);
 
   // Pre-fill package & sub-services when packages load for rebookData
@@ -500,15 +500,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               licensePlate: gv.licensePlate.trim(),
-              brand: gv.brand?.trim() || 'Khác',
+              brand: gv.brand?.trim() || 'KhÃ¡c',
               model: gv.model?.trim() || '',
               vehicleType: gv.type || 'sedan',
-              color: 'Khác',
+              color: 'KhÃ¡c',
             }),
           });
           if (!vehRes.ok) {
             const errData = await vehRes.json().catch(() => null);
-            // If duplicate, vehicle was already created — fetch it
+            // If duplicate, vehicle was already created â€” fetch it
             if (vehRes.status === 409) {
               const found = userVehicles.find(v =>
                 (v.licensePlate || '').replace(/\s+/g, '').toUpperCase() === gv.licensePlate.trim().replace(/\s+/g, '').toUpperCase()
@@ -516,11 +516,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               if (found) {
                 vehicleId = found._id || found.id || '';
               } else {
-                throw new Error('Xe đã tồn tại nhưng không tìm thấy trong danh sách');
+                throw new Error('Xe Ä‘Ã£ tá»“n táº¡i nhÆ°ng khÃ´ng tÃ¬m tháº¥y trong danh sÃ¡ch');
               }
             } else {
               console.error('Vehicle creation failed:', vehRes.status, errData);
-              throw new Error(errData?.message || 'Không thể lưu thông tin xe');
+              throw new Error(errData?.message || 'KhÃ´ng thá»ƒ lÆ°u thÃ´ng tin xe');
             }
           } else {
             const vehData = await vehRes.json();
@@ -535,7 +535,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       }
 
       // Show payment modal first; booking is only created after user picks payment method.
-      // Với ĐỊNH KỲ: tổng tiền = giá 1 buổi × số buổi dự kiến (không phải 1 buổi).
+      // Vá»›i Äá»ŠNH Ká»²: tá»•ng tiá»n = giÃ¡ 1 buá»•i Ã— sá»‘ buá»•i dá»± kiáº¿n (khÃ´ng pháº£i 1 buá»•i).
       const perSession = totalBase || 0;
       let sessionCount = 1;
       if (pb.tab === 'recurring') {
@@ -578,7 +578,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           ? { branchId: pb.branchId, packageId: pb.packageId, vehicleId, weekdays: pb.selectedDays, startTime: pb.selectedTime, weeks: pb.weeks, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' }
           : { branchId: pb.branchId, packageId: pb.packageId, vehicleId, bookingDate: pb.selectedDate || undefined, startTime: pb.selectedTime, voucherCode: pb.appliedVoucher?.code || undefined, selectedSubServices: pb.selectedSubServices || [], note: '' };
         const r = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(directBody) });
-        if (!r.ok) { const e = await r.json().catch(() => null); throw new Error(e?.message || 'Không thể tạo lịch hẹn'); }
+        if (!r.ok) { const e = await r.json().catch(() => null); throw new Error(e?.message || 'KhÃ´ng thá»ƒ táº¡o lá»‹ch háº¹n'); }
         const p2 = await r.json();
         const bk = p2?.data || p2;
         const code = isRec ? (bk?.recurringGroupId || '') : (bk?.bookingCode || bk?.code || '');
@@ -597,7 +597,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       }
     } catch (err) {
       console.error('processPendingBooking error:', err);
-      setError(err.message || 'Không thể tạo lịch hẹn');
+      setError(err.message || 'KhÃ´ng thá»ƒ táº¡o lá»‹ch háº¹n');
       onSetPendingBooking(null);
     } finally {
       setBookingLoading(false);
@@ -610,7 +610,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setError('');
     try {
       if (pendingDeposit.isDraft) {
-        // Draft: lưu data, tạo provisional bank payment (có QR code)
+        // Draft: lÆ°u data, táº¡o provisional bank payment (cÃ³ QR code)
         const pb = pendingDeposit._pendingData;
         const isRec = pendingDeposit.tab === 'recurring';
         const vId = pendingDeposit._vehicleId || selectedVehicle || (allVehicles[0]?._id || allVehicles[0]?.id || '');
@@ -636,7 +636,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         };
         setDepositDraft(draft);
 
-        // Tạo provisional bank payment (có QR code)
+        // Táº¡o provisional bank payment (cÃ³ QR code)
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
         const res = await fetch(`${apiBase}/payments/bank-provisional`, {
           method: 'POST',
@@ -644,13 +644,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify({ amount: actualAmount, paymentType: paymentMode }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Lỗi tạo thanh toán');
+        if (!res.ok) throw new Error(data.message || 'Lá»—i táº¡o thanh toÃ¡n');
         const payment = data?.data || data;
         setDepositPayment(payment);
         setDepositQrStep('qr');
         setDepositPollCount(0);
       } else {
-        // Booking đã tồn tại (VD: định kỳ) — tạo payment ngay
+        // Booking Ä‘Ã£ tá»“n táº¡i (VD: Ä‘á»‹nh ká»³) â€” táº¡o payment ngay
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
         let bkId = pendingDeposit._id || pendingDeposit.id;
         if (!bkId && pendingDeposit.bookings && pendingDeposit.bookings.length > 0) {
@@ -663,14 +663,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify({ bookingId: bkId, method: depositMethod, paymentType: paymentMode, amount: actualAmount }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Lỗi thanh toán');
+        if (!res.ok) throw new Error(data.message || 'Lá»—i thanh toÃ¡n');
         const payment = data?.data || data;
         setDepositPayment(payment);
         setDepositQrStep('qr');
         setDepositPollCount(0);
       }
     } catch (err) {
-      setError(err.message || 'Lỗi thanh toán');
+      setError(err.message || 'Lá»—i thanh toÃ¡n');
     } finally {
       setDepositLoading(false);
     }
@@ -725,7 +725,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setError('');
     try {
       if (pendingDeposit.isDraft) {
-        // Draft: lưu draft, tạo provisional VNPay — chưa tạo booking
+        // Draft: lÆ°u draft, táº¡o provisional VNPay â€” chÆ°a táº¡o booking
         const isRec = pendingDeposit.tab === 'recurring';
         const vId = pendingDeposit._vehicleId || selectedVehicle || (allVehicles[0]?._id || allVehicles[0]?.id || '');
         const pb = pendingDeposit._pendingData;
@@ -756,18 +756,18 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         };
         sessionStorage.setItem('aw_bookingDraft', JSON.stringify(draft));
 
-        // Gọi provisional VNPay
+        // Gá»i provisional VNPay
         const res = await fetch(`${apiBase}/bookings/vnpay-provisional`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: authHeader(token) },
           body: JSON.stringify({ amount: actualAmount, origin: window.location.origin }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
+        if (!res.ok) throw new Error(data?.message || 'Táº¡o thanh toÃ¡n VNPay tháº¥t báº¡i');
         const paymentUrl = data?.data?.paymentUrl;
-        if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
+        if (!paymentUrl) throw new Error('KhÃ´ng nháº­n Ä‘Æ°á»£c URL thanh toÃ¡n');
 
-        // Lưu lastBooking preview để khôi phục sau VNPay return
+        // LÆ°u lastBooking preview Ä‘á»ƒ khÃ´i phá»¥c sau VNPay return
         const lastBk = {
           branch: selectedBranch || { name: '' },
           vehicle: vehicle || { licensePlate: '' },
@@ -789,7 +789,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
         window.location.href = paymentUrl;
       } else {
-        // Booking đã tồn tại — tạo VNPay payment bình thường
+        // Booking Ä‘Ã£ tá»“n táº¡i â€” táº¡o VNPay payment bÃ¬nh thÆ°á»ng
         const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
         let bkId = pendingDeposit._id || pendingDeposit.id;
         if (!bkId && pendingDeposit.bookings && pendingDeposit.bookings.length > 0) {
@@ -801,9 +801,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify({ bookingId: bkId, paymentType: paymentMode, amount: actualAmount, origin: window.location.origin }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data?.message || 'Tạo thanh toán VNPay thất bại');
+        if (!res.ok) throw new Error(data?.message || 'Táº¡o thanh toÃ¡n VNPay tháº¥t báº¡i');
         const paymentUrl = data?.data?.paymentUrl;
-        if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
+        if (!paymentUrl) throw new Error('KhÃ´ng nháº­n Ä‘Æ°á»£c URL thanh toÃ¡n');
 
         const fullPrice = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
         const depositAmt = pendingDeposit.depositAmount || 0;
@@ -828,7 +828,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         window.location.href = paymentUrl;
       }
     } catch (e) {
-      setError(e.message || 'Thanh toán VNPay thất bại');
+      setError(e.message || 'Thanh toÃ¡n VNPay tháº¥t báº¡i');
       setVnpayLoading(false);
     }
   }
@@ -840,7 +840,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     try {
       const actualAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
       if (!user || (user.walletBalance || 0) < actualAmount) {
-        throw new Error('Số dư ví không đủ để thanh toán');
+        throw new Error('Sá»‘ dÆ° vÃ­ khÃ´ng Ä‘á»§ Ä‘á»ƒ thanh toÃ¡n');
       }
 
       if (pendingDeposit.isDraft) {
@@ -856,7 +856,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify({ bookingId: bkId, method: 'wallet', paymentType: paymentMode, amount: actualAmount }),
         });
         const payData = await payRes.json();
-        if (!payRes.ok) throw new Error(payData.message || 'Thanh toán ví thất bại');
+        if (!payRes.ok) throw new Error(payData.message || 'Thanh toÃ¡n vÃ­ tháº¥t báº¡i');
 
         setLastBooking({
           _id: bkId,
@@ -883,7 +883,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify({ bookingId: bkId, method: 'wallet', paymentType: paymentMode, amount: actualAmount }),
         });
         const payData = await payRes.json();
-        if (!payRes.ok) throw new Error(payData.message || 'Thanh toán ví thất bại');
+        if (!payRes.ok) throw new Error(payData.message || 'Thanh toÃ¡n vÃ­ tháº¥t báº¡i');
 
         setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
       }
@@ -895,18 +895,18 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       setShowSuccessModal(true);
       if (onUserUpdate) onUserUpdate({ walletBalance: (user?.walletBalance || 0) - actualAmount });
     } catch (err) {
-      setError(err.message || 'Thanh toán ví thất bại');
+      setError(err.message || 'Thanh toÃ¡n vÃ­ tháº¥t báº¡i');
     } finally {
       setDepositLoading(false);
     }
   }
 
-  // Xử lý VNPay return callback (BE đã tự confirm, FE chỉ đọc kết quả)
+  // Xá»­ lÃ½ VNPay return callback (BE Ä‘Ã£ tá»± confirm, FE chá»‰ Ä‘á»c káº¿t quáº£)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const vnpayResult = params.get('vnpay_result');
     if (vnpayResult) {
-      // Nếu là slot pack payment, chuyển qua SlotPackFlow xử lý
+      // Náº¿u lÃ  slot pack payment, chuyá»ƒn qua SlotPackFlow xá»­ lÃ½
       if (sessionStorage.getItem('aw_lastSlotPack')) {
         sessionStorage.setItem('aw_slotPackVnpayResult', vnpayResult);
         setTab('slot_pack');
@@ -921,17 +921,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
         if (success) {
           if (!authHeader(token)) {
-            showToast('Bạn cần đăng nhập lại để hoàn tất đặt lịch', 'error');
+            showToast('Báº¡n cáº§n Ä‘Äƒng nháº­p láº¡i Ä‘á»ƒ hoÃ n táº¥t Ä‘áº·t lá»‹ch', 'error');
             return;
           }
-          // Tạo booking từ draft data đã lưu (provisional VNPay)
+          // Táº¡o booking tá»« draft data Ä‘Ã£ lÆ°u (provisional VNPay)
           createBookingAfterPayment();
         } else {
-          const failReason = parsed?.message || (parsed?.data?.responseCode === '24' ? 'Giao dịch bị hủy' : parsed?.data?.responseCode === '09' ? 'Thẻ/Tài khoản không đủ số dư' : 'Thanh toán VNPay thất bại');
-          showToast('❌ ' + failReason, 'error');
+          const failReason = parsed?.message || (parsed?.data?.responseCode === '24' ? 'Giao dá»‹ch bá»‹ há»§y' : parsed?.data?.responseCode === '09' ? 'Tháº»/TÃ i khoáº£n khÃ´ng Ä‘á»§ sá»‘ dÆ°' : 'Thanh toÃ¡n VNPay tháº¥t báº¡i');
+          showToast('âŒ ' + failReason, 'error');
         }
       } catch (e) {
-        showToast('❌ Lỗi xử lý kết quả thanh toán VNPay', 'error');
+        showToast('âŒ Lá»—i xá»­ lÃ½ káº¿t quáº£ thanh toÃ¡n VNPay', 'error');
       }
       setPendingDeposit(null);
       setDepositPayment(null);
@@ -943,12 +943,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }, [token]);
 
-  // Tạo booking sau khi VNPay/Bank payment thành công
+  // Táº¡o booking sau khi VNPay/Bank payment thÃ nh cÃ´ng
   async function createBookingAfterPayment(isBank = false, pendingData = null, skipSuccessModal = false) {
     if (creatingBooking) return;
     setCreatingBooking(true);
     const draft = isBank ? pendingData : JSON.parse(sessionStorage.getItem('aw_bookingDraft') || '{}');
-    if (!draft || !draft.branchId) { setError('Lỗi dữ liệu draft'); return; }
+    if (!draft || !draft.branchId) { setError('Lá»—i dá»¯ liá»‡u draft'); return; }
 
     setBookingLoading(true);
     try {
@@ -962,13 +962,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const bd = await br.json();
       if (!br.ok) {
         const fieldErrors = bd?.errors?.map(e => `${e.field}: ${e.message}`).join(', ');
-        throw new Error(fieldErrors || bd.message || bd.error || 'Không thể tạo lịch hẹn');
+        throw new Error(fieldErrors || bd.message || bd.error || 'KhÃ´ng thá»ƒ táº¡o lá»‹ch háº¹n');
       }
       const newBk = bd?.data || bd;
       const bkId = isRec ? (newBk.created?.[0]?._id || newBk.created?.[0]?.id) : (newBk._id || newBk.id);
       const newCode = isRec ? newBk.recurringGroupId : (newBk?.bookingCode || newBk?.code || '');
 
-      // Tạo payment cho booking
+      // Táº¡o payment cho booking
       const actualAmount = draft.paymentMode === 'full' ? draft.finalPrice : draft.depositAmount;
       const method = isBank ? 'bank' : 'vnpay';
       const payRes = await fetch(`${apiBase}/payments`, {
@@ -977,7 +977,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         body: JSON.stringify({ bookingId: bkId, method, paymentType: draft.paymentMode, amount: actualAmount }),
       });
       const payData = await payRes.json();
-      if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
+      if (!payRes.ok) throw new Error(payData.message || 'Táº¡o thanh toÃ¡n tháº¥t báº¡i');
       const payment = payData?.data || payData;
 
       // Confirm payment
@@ -1004,7 +1004,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             if (parts.length === 3) {
               const [y, m, d] = parts.map(Number);
               const dateObj = new Date(y, m - 1, d);
-              const days = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+              const days = ['CN', 'Thá»© 2', 'Thá»© 3', 'Thá»© 4', 'Thá»© 5', 'Thá»© 6', 'Thá»© 7'];
               return `${days[dateObj.getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
             }
             return draft.bookingDate;
@@ -1027,7 +1027,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         setShowSuccessModal(true);
       }
     } catch (err) {
-      showToast('❌ ' + (err.message || 'Không thể tạo lịch hẹn sau thanh toán'), 'error');
+      showToast('âŒ ' + (err.message || 'KhÃ´ng thá»ƒ táº¡o lá»‹ch háº¹n sau thanh toÃ¡n'), 'error');
       setCreatingBooking(false);
     } finally {
       setBookingLoading(false);
@@ -1042,7 +1042,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setDepositLoading(true);
     try {
       if (depositDraft) {
-        // Draft flow: tạo booking + payment + confirm
+        // Draft flow: táº¡o booking + payment + confirm
         await createBookingAfterPayment(true, depositDraft, true);
         setDepositQrStep('success');
         setTimeout(() => {
@@ -1053,7 +1053,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           setTimeout(() => setShowSuccessModal(true), 400);
         }, 1500);
       } else {
-        // Booking đã tồn tại — chỉ simulate confirm payment
+        // Booking Ä‘Ã£ tá»“n táº¡i â€” chá»‰ simulate confirm payment
         const res = await fetch(`${apiBase}/payments/simulate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1064,7 +1064,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Lỗi xác nhận thanh toán');
+        if (!res.ok) throw new Error(data.message || 'Lá»—i xÃ¡c nháº­n thanh toÃ¡n');
         setLastBooking(prev => prev ? { ...prev, depositPaid: true, paymentMode } : prev);
         setDepositQrStep('success');
         setTimeout(() => {
@@ -1075,7 +1075,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         }, 1500);
       }
     } catch (err) {
-      setError(err.message || 'Lỗi xác nhận thanh toán');
+      setError(err.message || 'Lá»—i xÃ¡c nháº­n thanh toÃ¡n');
     } finally {
       setDepositLoading(false);
     }
@@ -1159,7 +1159,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const actualRecurringSessions = useMemo(() => {
     if (tab !== 'recurring') return 0;
     if (conflictCheck.status === 'done' && conflictCheck.results.length > 0) {
-      return conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length;
+      return conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('cÃ³ giá» thay tháº¿'))).length;
     }
     return previewDates.length;
   }, [tab, conflictCheck, previewDates]);
@@ -1207,8 +1207,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   async function confirmBooking() {
     if (!isLoggedIn) { storePendingAndAuth(); return; }
     if (pendingBooking) { await processPendingBooking(); return; }
-    if (!selectedTime) { setError('Vui lòng chọn khung giờ.'); return; }
-    if (!vehicle) { setError('Vui lòng chọn xe.'); return; }
+    if (!selectedTime) { setError('Vui lÃ²ng chá»n khung giá».'); return; }
+    if (!vehicle) { setError('Vui lÃ²ng chá»n xe.'); return; }
     setBookingLoading(true); setMessage(''); setError(''); setBookingCode('');
 
     try {
@@ -1242,7 +1242,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       });
       setShowSuccessModal(true);
     } catch (err) {
-      setError(err.message || 'Không thể tạo lịch hẹn');
+      setError(err.message || 'KhÃ´ng thá»ƒ táº¡o lá»‹ch háº¹n');
     } finally {
       setBookingLoading(false);
     }
@@ -1252,19 +1252,19 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     if (!isLoggedIn) { storePendingAndAuth(); return; }
     if (pendingBooking) { await processPendingBooking(); return; }
     if (!selectedBranch || !selectedPackage || selectedDays.length === 0 || !selectedTime) {
-      setError('Vui lòng điền đầy đủ thông tin.');
+      setError('Vui lÃ²ng Ä‘iá»n Ä‘áº§y Ä‘á»§ thÃ´ng tin.');
       return;
     }
-    if (isLoggedIn && !selectedVehicle) { setError('Vui lòng chọn xe.'); return; }
+    if (isLoggedIn && !selectedVehicle) { setError('Vui lÃ²ng chá»n xe.'); return; }
     setBookingLoading(true); setError(''); setResult(null); setShowSuccessModal(false);
 
     try {
       const branchId = selectedBranch._id || selectedBranch.id;
       const pkgId = pkg._id || pkg.id;
-      // Đảm bảo đã có thông tin check trùng lịch
+      // Äáº£m báº£o Ä‘Ã£ cÃ³ thÃ´ng tin check trÃ¹ng lá»‹ch
       let totalValid = 0;
       if (conflictCheck.status === 'done' && conflictCheck.results.length > 0) {
-        totalValid = conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length;
+        totalValid = conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('cÃ³ giá» thay tháº¿'))).length;
       } else {
         const checkBody = {
           branchId, packageId: pkgId, vehicleId: vehicle?._id || vehicle?.id || '',
@@ -1276,13 +1276,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify(checkBody),
         });
         const checkData = await checkRes.json();
-        if (!checkRes.ok) throw new Error(checkData.message || 'Lỗi kiểm tra lịch');
+        if (!checkRes.ok) throw new Error(checkData.message || 'Lá»—i kiá»ƒm tra lá»‹ch');
         const results = checkData.data || checkData || [];
-        totalValid = Array.isArray(results) ? results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length : 0;
+        totalValid = Array.isArray(results) ? results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('cÃ³ giá» thay tháº¿'))).length : 0;
       }
 
       if (totalValid <= 0) {
-        throw new Error('Tất cả các buổi đều bị trùng lịch hoặc đã qua thời gian.');
+        throw new Error('Táº¥t cáº£ cÃ¡c buá»•i Ä‘á»u bá»‹ trÃ¹ng lá»‹ch hoáº·c Ä‘Ã£ qua thá»i gian.');
       }
 
       const singlePrice = Math.max(0, totalBase - discount);
@@ -1319,7 +1319,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           body: JSON.stringify(pb),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Lỗi tạo lịch định kỳ');
+        if (!res.ok) throw new Error(data.message || 'Lá»—i táº¡o lá»‹ch Ä‘á»‹nh ká»³');
         const resultData = data.data || data;
         setResult(resultData);
         if (resultData.totalCreated > 0) {
@@ -1370,7 +1370,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Lỗi kiểm tra lịch');
+      if (!res.ok) throw new Error(data.message || 'Lá»—i kiá»ƒm tra lá»‹ch');
       const results = data.data || data || [];
       const totalConflicts = Array.isArray(results) ? results.filter(r => r.conflict).length : 0;
       setConflictCheck({ status: 'done', results: Array.isArray(results) ? results : [], totalConflicts });
@@ -1405,7 +1405,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const getVehicleIcon = (type) => {
     const t = (type || '').toLowerCase();
-    if (t.includes('motor') || t.includes('máy')) {
+    if (t.includes('motor') || t.includes('mÃ¡y')) {
       return <Bike className="w-5 h-5" />;
     }
     if (t.includes('suv') || t.includes('truck') || t.includes('pickup') || t.includes('van')) {
@@ -1482,7 +1482,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
         <div className="bg-white/80 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] rounded-3xl p-6 md:p-8">
 
-          {/* ── Tabs ── */}
+          {/* â”€â”€ Tabs â”€â”€ */}
           <div className="flex items-center gap-1.5 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1.5 border border-slate-200/50 w-fit mx-auto mb-6 shadow-inner">
             <button onClick={() => { setTab('regular'); reset(); }}
               className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
@@ -1490,7 +1490,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/10 scale-[1.02]' 
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}>
-              Đặt lịch thường
+              Äáº·t lá»‹ch thÆ°á»ng
             </button>
             <button onClick={() => { setTab('recurring'); reset(); }}
               className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
@@ -1498,7 +1498,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/10 scale-[1.02]' 
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}>
-              Đặt lịch định kì
+              Äáº·t lá»‹ch Ä‘á»‹nh kÃ¬
             </button>
             <button onClick={() => { setTab('slot_pack'); reset(); }}
               className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
@@ -1506,49 +1506,49 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/10 scale-[1.02]' 
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}>
-              Gói lượt
+              GÃ³i lÆ°á»£t
             </button>
           </div>
 
-          {/* ── Slot Pack Tab ── */}
+          {/* â”€â”€ Slot Pack Tab â”€â”€ */}
           {tab === 'slot_pack' && (
             isLoggedIn ? (
               <>
-                {renderStepIndicator(['Chi nhánh', 'Xe & gói', 'Số lần', 'Thanh toán'])}
+                {renderStepIndicator(['Chi nhÃ¡nh', 'Xe & gÃ³i', 'Sá»‘ láº§n', 'Thanh toÃ¡n'])}
                 <SlotPackFlow step={step} setStep={setStep} user={user} vehicles={userVehicles} apiBase={apiBase} token={token} onCanAdvanceChange={setSpCanAdvance} onGoToHistory={onGoToHistory} />
               </>
             ) : (
               <div className="text-center py-16 space-y-4">
-                <div className="text-5xl mb-2">🎫</div>
-                <p className="text-slate-600 font-medium">Đăng nhập để mua và quản lý gói lượt rửa xe</p>
+                <div className="text-5xl mb-2">ðŸŽ«</div>
+                <p className="text-slate-600 font-medium">ÄÄƒng nháº­p Ä‘á»ƒ mua vÃ  quáº£n lÃ½ gÃ³i lÆ°á»£t rá»­a xe</p>
                 <button onClick={onOpenAuth}
                   className="inline-block px-8 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-500 transition-colors">
-                  Đăng nhập ngay
+                  ÄÄƒng nháº­p ngay
                 </button>
               </div>
             )
           )}
 
-          {/* ── Regular + Recurring Step Flow ── */}
+          {/* â”€â”€ Regular + Recurring Step Flow â”€â”€ */}
           {tab !== 'slot_pack' && (
             <>
               {renderStepIndicator(tab === 'recurring'
-                ? ['Chi nhánh', 'Gói DV', 'Xe', 'Lịch định kỳ', 'Xác nhận']
-                : ['Chi nhánh', 'Gói DV', 'Xe', 'Thời gian', 'Xác nhận']
+                ? ['Chi nhÃ¡nh', 'GÃ³i DV', 'Xe', 'Lá»‹ch Ä‘á»‹nh ká»³', 'XÃ¡c nháº­n']
+                : ['Chi nhÃ¡nh', 'GÃ³i DV', 'Xe', 'Thá»i gian', 'XÃ¡c nháº­n']
               )}
 
-              {/* STEP 1: Chi nhánh */}
+              {/* STEP 1: Chi nhÃ¡nh */}
               {step === 1 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <div className="flex items-center gap-2 mb-2">
                     <MapPin className="w-5 h-5 text-emerald-600" />
-                    <h3 className="text-lg font-bold text-slate-800">Chọn chi nhánh gần bạn</h3>
+                    <h3 className="text-lg font-bold text-slate-800">Chá»n chi nhÃ¡nh gáº§n báº¡n</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {branches.length === 0 ? (
                       <div className="col-span-2 text-center text-slate-400 py-12 flex flex-col items-center justify-center gap-3">
                         <RefreshCw className="w-8 h-8 animate-spin text-slate-300" />
-                        <span>Đang tải danh sách chi nhánh...</span>
+                        <span>Äang táº£i danh sÃ¡ch chi nhÃ¡nh...</span>
                       </div>
                     ) : branches.map((b) => {
                       const isSelected = (selectedBranch?._id || selectedBranch?.id) === (b._id || b.id);
@@ -1586,11 +1586,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 {b.openingTime && (
                                   <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium">
                                     <Clock className="w-3.5 h-3.5" />
-                                    {b.openingTime} – {b.closingTime}
+                                    {b.openingTime} â€“ {b.closingTime}
                                   </span>
                                 )}
                                 <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100">
-                                  🟢 Đang hoạt động
+                                  ðŸŸ¢ Äang hoáº¡t Ä‘á»™ng
                                 </span>
                               </div>
                             </div>
@@ -1602,13 +1602,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
-              {/* STEP 2: Gói dịch vụ */}
+              {/* STEP 2: GÃ³i dá»‹ch vá»¥ */}
               {step === 2 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <div className="flex items-center gap-2 mb-2">
                     <ShieldCheck className="w-5 h-5 text-emerald-600" />
                     <h3 className="text-lg font-bold text-slate-800">
-                      Chọn gói dịch vụ{isLoggedIn && selectedBranch ? ` tại ${selectedBranch.name}` : ''}
+                      Chá»n gÃ³i dá»‹ch vá»¥{isLoggedIn && selectedBranch ? ` táº¡i ${selectedBranch.name}` : ''}
                     </h3>
                   </div>
                   
@@ -1616,7 +1616,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     {packages.length === 0 ? (
                       <div className="col-span-2 text-center text-slate-400 py-12 flex flex-col items-center justify-center gap-3">
                         <Info className="w-8 h-8 text-slate-300" />
-                        <span>Chi nhánh này chưa có gói dịch vụ nào.</span>
+                        <span>Chi nhÃ¡nh nÃ y chÆ°a cÃ³ gÃ³i dá»‹ch vá»¥ nÃ o.</span>
                       </div>
                     ) : packages.map((p, index) => {
                       const pId = p._id || p.id;
@@ -1634,7 +1634,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         >
                           {isPopular && (
                             <div className="absolute right-0 top-0 bg-gradient-to-l from-emerald-600 to-teal-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider uppercase shadow-sm">
-                              Khuyên Dùng
+                              KhuyÃªn DÃ¹ng
                             </div>
                           )}
 
@@ -1653,7 +1653,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <div className="flex items-baseline justify-between mt-auto pt-4 border-t border-slate-50">
                               <span className="inline-flex items-center gap-1 text-xs text-slate-400 font-semibold bg-slate-50 px-2 py-1 rounded-lg">
                                 <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                {p.duration} phút
+                                {p.duration} phÃºt
                               </span>
                               <span className="text-xl font-extrabold text-emerald-600">{formatCurrency(p.price)}</span>
                             </div>
@@ -1675,7 +1675,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="mb-6">
                           <div className="flex items-center gap-2 mb-4">
                             <Check className="w-4 h-4 text-emerald-600" />
-                            <h4 className="text-sm font-bold text-slate-700">Dịch vụ đã bao gồm</h4>
+                            <h4 className="text-sm font-bold text-slate-700">Dá»‹ch vá»¥ Ä‘Ã£ bao gá»“m</h4>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {selectedPackage.subServices.filter(sub => sub.isOptional === false || (sub.isOptional === undefined && (sub.price === 0 || !sub.price))).map(sub => {
@@ -1711,7 +1711,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     <span className="text-sm font-medium">{sub.name}</span>
                                   </div>
                                   <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
-                                    {sub.duration > 0 ? `${sub.duration} phút` : 'Bao gồm'}
+                                    {sub.duration > 0 ? `${sub.duration} phÃºt` : 'Bao gá»“m'}
                                   </span>
                                 </button>
                               );
@@ -1725,7 +1725,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div>
                           <div className="flex items-center gap-2 mb-4">
                             <Sparkles className="w-4 h-4 text-indigo-600" />
-                            <h4 className="text-sm font-bold text-slate-700">Dịch vụ chọn thêm (Tùy chọn)</h4>
+                            <h4 className="text-sm font-bold text-slate-700">Dá»‹ch vá»¥ chá»n thÃªm (TÃ¹y chá»n)</h4>
                           </div>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1764,11 +1764,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                   <div className="flex items-center gap-2">
                                     {sub.duration > 0 && (
                                       <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
-                                        {sub.duration} phút
+                                        {sub.duration} phÃºt
                                       </span>
                                     )}
                                     <span className="text-xs font-semibold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg">
-                                      {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'}
+                                      {sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miá»…n phÃ­'}
                                     </span>
                                   </div>
                                 </button>
@@ -1790,23 +1790,23 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Car className="w-5 h-5 text-emerald-600" />
-                          <h3 className="text-lg font-bold text-slate-800">Chọn xe của bạn</h3>
+                          <h3 className="text-lg font-bold text-slate-800">Chá»n xe cá»§a báº¡n</h3>
                         </div>
                       </div>
                       {hasNoVehicles ? (
                         <div className="max-w-xl mx-auto">
-                          <p className="text-sm text-emerald-700 font-medium mb-4 text-center">Bạn chưa có xe nào. Vui lòng thêm xe mới:</p>
+                          <p className="text-sm text-emerald-700 font-medium mb-4 text-center">Báº¡n chÆ°a cÃ³ xe nÃ o. Vui lÃ²ng thÃªm xe má»›i:</p>
                           <form onSubmit={handleAddVehicle} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
-                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biển số xe *</label>
-                                <input required placeholder="Ví dụ: 30A-12345" value={vehicleForm.licensePlate}
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biá»ƒn sá»‘ xe *</label>
+                                <input required placeholder="VÃ­ dá»¥: 30A-12345" value={vehicleForm.licensePlate}
                                   onChange={e => handleVehicleFormChange('licensePlate', e.target.value)}
                                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-semibold uppercase tracking-wider font-mono" />
                               </div>
                               <div>
-                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Hãng xe *</label>
-                                <input required placeholder="Ví dụ: Toyota, Honda, Hyundai..." value={vehicleForm.brand}
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">HÃ£ng xe *</label>
+                                <input required placeholder="VÃ­ dá»¥: Toyota, Honda, Hyundai..." value={vehicleForm.brand}
                                   onChange={e => handleVehicleFormChange('brand', e.target.value)}
                                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
                               </div>
@@ -1814,14 +1814,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
-                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Dòng xe</label>
-                                <input placeholder="Ví dụ: Camry, Tucson, SH..." value={vehicleForm.model}
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">DÃ²ng xe</label>
+                                <input placeholder="VÃ­ dá»¥: Camry, Tucson, SH..." value={vehicleForm.model}
                                   onChange={e => handleVehicleFormChange('model', e.target.value)}
                                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
                               </div>
                               <div>
-                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Màu xe *</label>
-                                <input required placeholder="Ví dụ: Trắng, Đen, Xanh..." value={vehicleForm.color}
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">MÃ u xe *</label>
+                                <input required placeholder="VÃ­ dá»¥: Tráº¯ng, Äen, Xanh..." value={vehicleForm.color}
                                   onChange={e => handleVehicleFormChange('color', e.target.value)}
                                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
                               </div>
@@ -1829,7 +1829,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
-                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Loại xe *</label>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Loáº¡i xe *</label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                   {VEHICLE_TYPES.map(t => {
                                     const isSelected = vehicleForm.vehicleType === t.value;
@@ -1851,7 +1851,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 </div>
                               </div>
                               <div>
-                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Năm SX</label>
+                                <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">NÄƒm SX</label>
                                 <input type="number" placeholder="2020" value={vehicleForm.year}
                                   onChange={e => handleVehicleFormChange('year', e.target.value)}
                                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" />
@@ -1862,7 +1862,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               <button type="submit" disabled={addingVehicle}
                                 className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all">
                                 {addingVehicle ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
-                                {addingVehicle ? 'Đang thêm...' : 'Lưu xe'}
+                                {addingVehicle ? 'Äang thÃªm...' : 'LÆ°u xe'}
                               </button>
                             </div>
                           </form>
@@ -1890,7 +1890,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="font-bold text-slate-800 text-sm truncate">
-                                  {v.name || `${v.brand || ''} ${v.model || ''}`.trim() || 'Xe chưa đặt tên'}
+                                  {v.name || `${v.brand || ''} ${v.model || ''}`.trim() || 'Xe chÆ°a Ä‘áº·t tÃªn'}
                                 </div>
                                 <div className="text-xs text-slate-400 capitalize mt-0.5">{v.vehicleType || v.type || 'Sedan'}</div>
                                 
@@ -1911,28 +1911,28 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <>
                       <div className="flex items-center gap-2 mb-2">
                         <Car className="w-5 h-5 text-emerald-600" />
-                        <h3 className="text-lg font-bold text-slate-800">Thông tin xe của bạn</h3>
+                        <h3 className="text-lg font-bold text-slate-800">ThÃ´ng tin xe cá»§a báº¡n</h3>
                       </div>
-                      <p className="text-sm text-slate-500 mb-6">Nhập thông tin xe để tiếp tục. Sau khi đăng nhập, xe sẽ tự động lưu vào tài khoản.</p>
+                      <p className="text-sm text-slate-500 mb-6">Nháº­p thÃ´ng tin xe Ä‘á»ƒ tiáº¿p tá»¥c. Sau khi Ä‘Äƒng nháº­p, xe sáº½ tá»± Ä‘á»™ng lÆ°u vÃ o tÃ i khoáº£n.</p>
                       
                       <div className="max-w-xl mx-auto bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
-                            <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biển số xe *</label>
+                            <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Biá»ƒn sá»‘ xe *</label>
                             <input 
                               type="text" 
                               value={guestVehicle.licensePlate} 
-                              placeholder="Ví dụ: 30A-12345"
+                              placeholder="VÃ­ dá»¥: 30A-12345"
                               onChange={e => setGuestVehicle(prev => ({ ...prev, licensePlate: e.target.value }))}
                               className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-semibold uppercase tracking-wider font-mono" 
                             />
                           </div>
                           <div>
-                            <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Hãng xe *</label>
+                            <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">HÃ£ng xe *</label>
                             <input 
                               type="text" 
                               value={guestVehicle.brand} 
-                              placeholder="Ví dụ: Toyota, Honda, Hyundai..."
+                              placeholder="VÃ­ dá»¥: Toyota, Honda, Hyundai..."
                               onChange={e => setGuestVehicle(prev => ({ ...prev, brand: e.target.value }))}
                               className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" 
                             />
@@ -1940,18 +1940,18 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         </div>
 
                         <div>
-                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">Dòng xe (Model)</label>
+                          <label className="text-xs text-slate-500 font-bold block mb-1.5 uppercase tracking-wide">DÃ²ng xe (Model)</label>
                           <input 
                             type="text" 
                             value={guestVehicle.model} 
-                            placeholder="Ví dụ: Camry, Tucson, SH..."
+                            placeholder="VÃ­ dá»¥: Camry, Tucson, SH..."
                             onChange={e => setGuestVehicle(prev => ({ ...prev, model: e.target.value }))}
                             className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all" 
                           />
                         </div>
 
                         <div>
-                          <label className="text-xs text-slate-500 font-bold block mb-3 uppercase tracking-wide">Loại xe *</label>
+                          <label className="text-xs text-slate-500 font-bold block mb-3 uppercase tracking-wide">Loáº¡i xe *</label>
                           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                             {VEHICLE_TYPES.map(t => {
                               const isSelected = guestVehicle.type === t.value;
@@ -1981,19 +1981,19 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
-              {/* STEP 4: Thời gian */}
+              {/* STEP 4: Thá»i gian */}
               {step === 4 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <div className="flex items-center gap-2 mb-2">
                     <Calendar className="w-5 h-5 text-emerald-600" />
                     <h3 className="text-lg font-bold text-slate-800">
-                      {tab === 'regular' ? 'Chọn ngày & giờ hẹn' : 'Lịch định kỳ'}
+                      {tab === 'regular' ? 'Chá»n ngÃ y & giá» háº¹n' : 'Lá»‹ch Ä‘á»‹nh ká»³'}
                     </h3>
                   </div>
 
                   {tab === 'regular' ? (
                     <div className="mb-6">
-                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chọn ngày</label>
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chá»n ngÃ y</label>
                       <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-200">
                         {bookingDates.map((d) => {
                           const isSelected = selectedDate === d.id;
@@ -2022,7 +2022,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         {/* Extended Custom Date Selector */}
                         <div className="flex flex-col items-center justify-between min-w-[130px] p-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 transition-all shrink-0">
                           <span className="text-[10px] uppercase font-bold text-emerald-800 flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Chọn ngày khác
+                            <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Chá»n ngÃ y khÃ¡c
                           </span>
                           <input
                             type="date"
@@ -2033,7 +2033,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               if (!val) return;
                               const todayStr = new Date().toLocaleDateString('en-CA');
                               if (val < todayStr) {
-                                showToast('Chỉ được chọn ngày từ hiện tại trở đi vào tương lai!', 'error');
+                                showToast('Chá»‰ Ä‘Æ°á»£c chá»n ngÃ y tá»« hiá»‡n táº¡i trá»Ÿ Ä‘i vÃ o tÆ°Æ¡ng lai!', 'error');
                                 return;
                               }
                               setSelectedDate(val);
@@ -2042,7 +2042,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           />
                           {!bookingDates.some(d => d.id === selectedDate) && selectedDate && (
                             <span className="text-[10px] font-extrabold text-emerald-600 mt-1">
-                              Đã chọn: {(() => {
+                              ÄÃ£ chá»n: {(() => {
                                 const parts = String(selectedDate).split('T')[0].split('-');
                                 return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : selectedDate;
                               })()}
@@ -2053,7 +2053,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   ) : (
                     <div className="mb-6">
-                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Các ngày trong tuần</label>
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">CÃ¡c ngÃ y trong tuáº§n</label>
                       <div className="flex gap-2">
                         {WEEKDAY_OPTIONS.map(({ label, value }) => (
                           <button 
@@ -2074,12 +2074,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   )}
 
                   <div className="mb-6">
-                    <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chọn khung giờ{tab === 'recurring' ? ' cố định' : ''}</label>
+                    <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chá»n khung giá»{tab === 'recurring' ? ' cá»‘ Ä‘á»‹nh' : ''}</label>
                     <div className="space-y-6">
                       {slotsLoading ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
                           <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
-                          <span className="text-sm">Đang tìm lịch trống...</span>
+                          <span className="text-sm">Äang tÃ¬m lá»‹ch trá»‘ng...</span>
                         </div>
                       ) : availableSlots.filter(s => s.available).length === 0 ? (
                         (() => {
@@ -2099,20 +2099,20 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
                                 isTodayClosed ? 'bg-slate-100' : 'bg-amber-100'
                               }`}>
-                                {isTodayClosed ? '🔒' : '📅'}
+                                {isTodayClosed ? 'ðŸ”’' : 'ðŸ“…'}
                               </div>
                               <div>
                                 <p className={`text-sm font-bold ${
                                   isTodayClosed ? 'text-slate-700' : 'text-amber-800'
                                 }`}>
-                                  {isTodayClosed ? 'Cửa hàng hôm nay đã đóng cửa' : 'Hết lịch trống'}
+                                  {isTodayClosed ? 'Cá»­a hÃ ng hÃ´m nay Ä‘Ã£ Ä‘Ã³ng cá»­a' : 'Háº¿t lá»‹ch trá»‘ng'}
                                 </p>
                                 <p className={`text-xs mt-0.5 ${
                                   isTodayClosed ? 'text-slate-500' : 'text-amber-600'
                                 }`}>
                                   {isTodayClosed 
-                                    ? 'Đã hết giờ tiếp nhận cho hôm nay. Vui lòng chọn ngày khác từ ngày mai.'
-                                    : 'Ngày này đã hết chỗ. Vui lòng chọn ngày khác.'
+                                    ? 'ÄÃ£ háº¿t giá» tiáº¿p nháº­n cho hÃ´m nay. Vui lÃ²ng chá»n ngÃ y khÃ¡c tá»« ngÃ y mai.'
+                                    : 'NgÃ y nÃ y Ä‘Ã£ háº¿t chá»—. Vui lÃ²ng chá»n ngÃ y khÃ¡c.'
                                   }
                                 </p>
                               </div>
@@ -2125,11 +2125,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <div className="space-y-3">
                             <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-amber-600">
                               <Sun className="w-4 h-4" />
-                              <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi sáng</h4>
+                              <h4 className="text-xs font-bold uppercase tracking-wider">Khung giá» buá»•i sÃ¡ng</h4>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {groupedSlots.morning.length === 0 ? (
-                                <span className="text-xs text-slate-400 py-2">Không có lịch trống buổi sáng</span>
+                                <span className="text-xs text-slate-400 py-2">KhÃ´ng cÃ³ lá»‹ch trá»‘ng buá»•i sÃ¡ng</span>
                               ) : groupedSlots.morning.map(s => {
                                 const timeLabel = s.startTime;
                                 const isDisabled = tab === 'recurring' ? false : !s.available;
@@ -2150,9 +2150,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     }`}
                                   >
                                     <span className={isDisabled ? 'line-through text-slate-300 text-sm' : 'text-sm'}>{timeLabel}</span>
-                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">Đã kín</span>}
+                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">ÄÃ£ kÃ­n</span>}
                                     {isVipBooked && (
-                                      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
+                                      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="KhÃ¡ch VIP Ä‘Ã£ Ä‘áº·t giá» nÃ y">
                                         <Sparkles className="w-3 h-3" />
                                       </span>
                                     )}
@@ -2166,11 +2166,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <div className="space-y-3">
                             <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-blue-600">
                               <Sunset className="w-4 h-4" />
-                              <h4 className="text-xs font-bold uppercase tracking-wider">Khung giờ buổi chiều</h4>
+                              <h4 className="text-xs font-bold uppercase tracking-wider">Khung giá» buá»•i chiá»u</h4>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {groupedSlots.afternoon.length === 0 ? (
-                                <span className="text-xs text-slate-400 py-2">Không có lịch trống buổi chiều</span>
+                                <span className="text-xs text-slate-400 py-2">KhÃ´ng cÃ³ lá»‹ch trá»‘ng buá»•i chiá»u</span>
                               ) : groupedSlots.afternoon.map(s => {
                                 const timeLabel = s.startTime;
                                 const isDisabled = tab === 'recurring' ? false : !s.available;
@@ -2191,9 +2191,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     }`}
                                   >
                                     <span className={isDisabled ? 'line-through text-slate-300 text-sm' : 'text-sm'}>{timeLabel}</span>
-                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">Đã kín</span>}
+                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">ÄÃ£ kÃ­n</span>}
                                     {isVipBooked && (
-                                      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
+                                      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="KhÃ¡ch VIP Ä‘Ã£ Ä‘áº·t giá» nÃ y">
                                         <Sparkles className="w-3 h-3" />
                                       </span>
                                     )}
@@ -2209,7 +2209,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                   {tab === 'recurring' && (
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Số tuần lặp lại</label>
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Sá»‘ tuáº§n láº·p láº¡i</label>
                       <div className="flex gap-2 flex-wrap mb-4">
                         {WEEKS_OPTIONS.map(w => (
                           <button 
@@ -2223,15 +2223,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
                             }`}
                           >
-                            {w} tuần
+                            {w} tuáº§n
                           </button>
                         ))}
                       </div>
                       {previewDates.length > 0 && (
                         <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
                           <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 flex items-center justify-between">
-                            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">📋 Danh sách buổi dự kiến</p>
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">{previewDates.length} buổi</span>
+                            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">ðŸ“‹ Danh sÃ¡ch buá»•i dá»± kiáº¿n</p>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">{previewDates.length} buá»•i</span>
                           </div>
                           <div className="p-3 max-h-52 overflow-y-auto">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -2240,7 +2240,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 const isChecked = conflictCheck.status === 'done';
                                 const hasConflict = conflictResult?.conflict;
                                 const conflictReason = conflictResult?.reason || '';
-                                const hasAlt = hasConflict && conflictReason.includes('thay thế');
+                                const hasAlt = hasConflict && conflictReason.includes('thay tháº¿');
                                 const noSlot = isChecked && hasConflict && !hasAlt;
                                 const isValid = isChecked && !hasConflict;
                                 return (
@@ -2256,14 +2256,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] shrink-0 ${
                                       noSlot ? 'bg-red-100 text-red-600' : hasAlt ? 'bg-amber-100 text-amber-600' : isValid ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'
                                     }`}>
-                                      {noSlot ? '✕' : hasAlt ? '⚠' : isValid ? '✓' : '-'}
+                                      {noSlot ? 'âœ•' : hasAlt ? 'âš ' : isValid ? 'âœ“' : '-'}
                                     </div>
                                     <div className="min-w-0">
                                       <div className="font-semibold truncate">
                                         {d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })}
                                       </div>
-                                      {noSlot && <div className="text-[9px] text-red-500 mt-0.5">Hết slot — bỏ qua</div>}
-                                      {hasAlt && <div className="text-[9px] text-amber-600 mt-0.5">Trùng giờ — đổi tự động</div>}
+                                      {noSlot && <div className="text-[9px] text-red-500 mt-0.5">Háº¿t slot â€” bá» qua</div>}
+                                      {hasAlt && <div className="text-[9px] text-amber-600 mt-0.5">TrÃ¹ng giá» â€” Ä‘á»•i tá»± Ä‘á»™ng</div>}
                                     </div>
                                   </div>
                                 );
@@ -2278,25 +2278,25 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 className="w-full py-2 rounded-lg bg-emerald-100 text-emerald-700 font-bold text-xs hover:bg-emerald-200 transition-colors flex items-center justify-center gap-1.5"
                               >
                                 <Calendar className="w-3.5 h-3.5" />
-                                Kiểm tra lịch trống ngay
+                                Kiá»ƒm tra lá»‹ch trá»‘ng ngay
                               </button>
                             </div>
                           )}
                           {conflictCheck.status === 'checking' && (
                             <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-2 text-slate-500 text-xs font-semibold">
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Đang kiểm tra...</span>
+                              <span>Äang kiá»ƒm tra...</span>
                             </div>
                           )}
                           {conflictCheck.totalConflicts > 0 && (
                             <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-100 flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                                <span className="text-[10px] text-red-600 font-semibold">{conflictCheck.results.filter(r => r.conflict && !r.reason?.includes('thay thế')).length} buổi sẽ bị bỏ qua</span>
+                                <span className="text-[10px] text-red-600 font-semibold">{conflictCheck.results.filter(r => r.conflict && !r.reason?.includes('thay tháº¿')).length} buá»•i sáº½ bá»‹ bá» qua</span>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                                <span className="text-[10px] text-amber-600 font-semibold">{conflictCheck.results.filter(r => r.conflict && r.reason?.includes('thay thế')).length} buổi đổi giờ tự động</span>
+                                <span className="text-[10px] text-amber-600 font-semibold">{conflictCheck.results.filter(r => r.conflict && r.reason?.includes('thay tháº¿')).length} buá»•i Ä‘á»•i giá» tá»± Ä‘á»™ng</span>
                               </div>
                             </div>
                           )}
@@ -2307,15 +2307,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 </motion.div>
               )}
 
-              {/* STEP 5: Xác nhận */}
+              {/* STEP 5: XÃ¡c nháº­n */}
               {step === 5 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-xl mx-auto space-y-6">
                   <div className="text-center mb-6">
                     <div className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center mx-auto mb-3 text-emerald-500">
                       <Sparkles className="w-7 h-7" />
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800">Xác nhận lịch hẹn của bạn</h3>
-                    <p className="text-sm text-slate-500 mt-1">Vui lòng kiểm tra lại thông tin chi tiết trước khi đặt chỗ</p>
+                    <h3 className="text-xl font-bold text-slate-800">XÃ¡c nháº­n lá»‹ch háº¹n cá»§a báº¡n</h3>
+                    <p className="text-sm text-slate-500 mt-1">Vui lÃ²ng kiá»ƒm tra láº¡i thÃ´ng tin chi tiáº¿t trÆ°á»›c khi Ä‘áº·t chá»—</p>
                   </div>
 
                   {/* Booking Ticket Card */}
@@ -2333,7 +2333,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="flex items-start gap-3">
                           <MapPin className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Chi nhánh</span>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Chi nhÃ¡nh</span>
                             <span className="text-sm font-bold text-slate-700">{selectedBranch?.name}</span>
                           </div>
                         </div>
@@ -2341,7 +2341,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="flex items-start gap-3">
                           <Car className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Phương tiện</span>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">PhÆ°Æ¡ng tiá»‡n</span>
                             <span className="text-sm font-bold text-slate-700">
                               {pendingBooking?.guestVehicle?.licensePlate ? (
                                 `${pendingBooking.guestVehicle.licensePlate} (${pendingBooking.guestVehicle.brand} ${pendingBooking.guestVehicle.model})`
@@ -2350,7 +2350,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               ) : !isLoggedIn && guestVehicle.licensePlate ? (
                                 `${guestVehicle.licensePlate} (${guestVehicle.brand} ${guestVehicle.model})`
                               ) : (
-                                'Chưa chọn xe'
+                                'ChÆ°a chá»n xe'
                               )}
                             </span>
                           </div>
@@ -2359,7 +2359,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="flex items-start gap-3">
                           <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Dịch vụ chính</span>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Dá»‹ch vá»¥ chÃ­nh</span>
                             <span className="text-sm font-bold text-slate-700">{pkg?.name}</span>
                           </div>
                         </div>
@@ -2367,16 +2367,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="flex items-start gap-3">
                           <Calendar className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Thời gian</span>
+                            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Thá»i gian</span>
                             <span className="text-sm font-bold text-slate-700">
                               {tab === 'regular'
                                 ? (() => {
                                     const dateFormatted = currentDate?.iso 
                                       ? new Date(currentDate.iso.includes('T') ? currentDate.iso : currentDate.iso + 'T00:00:00').toLocaleDateString('vi-VN')
                                       : '';
-                                    return `${currentDate?.label || ''}${dateFormatted ? ` (${dateFormatted})` : ''} · ${selectedTime}`;
+                                    return `${currentDate?.label || ''}${dateFormatted ? ` (${dateFormatted})` : ''} Â· ${selectedTime}`;
                                   })()
-                                : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần (${actualRecurringSessions} buổi)`
+                                : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) Â· ${weeks} tuáº§n (${actualRecurringSessions} buá»•i)`
                               }
                             </span>
                           </div>
@@ -2385,14 +2385,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                       {/* Sub-services summary: Included & Optional */}
                       <div className="pb-6 border-b border-dashed border-slate-200 space-y-4">
-                        {/* Dịch vụ đã bao gồm trong gói */}
+                        {/* Dá»‹ch vá»¥ Ä‘Ã£ bao gá»“m trong gÃ³i */}
                         {(() => {
                           const keptIncluded = (pkg?.subServices || []).filter(s => (s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))) && currentSubServices.includes(s.name));
                           if (keptIncluded.length === 0) return null;
                           return (
                             <div>
                               <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
-                                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> Dịch vụ có sẵn (Đã bao gồm)
+                                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> Dá»‹ch vá»¥ cÃ³ sáºµn (ÄÃ£ bao gá»“m)
                               </span>
                               <div className="flex flex-wrap gap-2">
                                 {keptIncluded.map(sub => (
@@ -2407,20 +2407,20 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           );
                         })()}
 
-                        {/* Dịch vụ chọn thêm */}
+                        {/* Dá»‹ch vá»¥ chá»n thÃªm */}
                         {(() => {
                           const addedOptional = (pkg?.subServices || []).filter(s => s.isOptional && currentSubServices.includes(s.name));
                           if (addedOptional.length === 0) return null;
                           return (
                             <div>
                               <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide block mb-2 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Dịch vụ chọn thêm (Tùy chọn)
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Dá»‹ch vá»¥ chá»n thÃªm (TÃ¹y chá»n)
                               </span>
                               <div className="flex flex-wrap gap-2">
                                 {addedOptional.map(sub => (
                                   <span key={sub.name} className="text-xs font-semibold px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 flex items-center gap-1">
                                     <span>+ {sub.name}</span>
-                                    <span className="text-[10px] text-indigo-600 font-bold">({sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miễn phí'})</span>
+                                    <span className="text-[10px] text-indigo-600 font-bold">({sub.price > 0 ? `+${formatCurrency(sub.price)}` : 'Miá»…n phÃ­'})</span>
                                   </span>
                                 ))}
                               </div>
@@ -2435,9 +2435,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           {tab === 'regular' && validPacks.length > 0 && (
                             <div className="rounded-2xl border border-emerald-200 overflow-hidden">
                               <div className="px-4 py-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 flex items-center gap-2">
-                                <span className="text-base">🎫</span>
-                                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Thanh toán bằng Gói Lượt</span>
-                                <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">{validPacks.length} gói</span>
+                                <span className="text-base">ðŸŽ«</span>
+                                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Thanh toÃ¡n báº±ng GÃ³i LÆ°á»£t</span>
+                                <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">{validPacks.length} gÃ³i</span>
                               </div>
                               <div className="p-3 space-y-2">
                                 <button
@@ -2454,7 +2454,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                   }`}>
                                     {!selectedSlotPack && <span className="w-2 h-2 rounded-full bg-white" />}
                                   </span>
-                                  <span className="font-medium">Không sử dụng gói lượt</span>
+                                  <span className="font-medium">KhÃ´ng sá»­ dá»¥ng gÃ³i lÆ°á»£t</span>
                                 </button>
                                 {validPacks.map(p => (
                                   <button
@@ -2473,10 +2473,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                       {selectedSlotPack === (p._id || p.id) && <span className="w-2 h-2 rounded-full bg-white" />}
                                     </span>
                                     <div className="flex-1 text-left">
-                                      <div className="font-semibold">{p.packageId?.name || 'Gói lượt'}</div>
-                                      <div className="text-xs opacity-70">Còn {p.remainingSlots} lần sử dụng · Miễn đặt cọc</div>
+                                      <div className="font-semibold">{p.packageId?.name || 'GÃ³i lÆ°á»£t'}</div>
+                                      <div className="text-xs opacity-70">CÃ²n {p.remainingSlots} láº§n sá»­ dá»¥ng Â· Miá»…n Ä‘áº·t cá»c</div>
                                     </div>
-                                    <span className="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">{p.remainingSlots} lần</span>
+                                    <span className="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">{p.remainingSlots} láº§n</span>
                           </button>
                         ))}
                       </div>
@@ -2486,10 +2486,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <>
                               <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex justify-between items-center cursor-pointer transition-colors hover:bg-emerald-100/50" onClick={() => setVoucherModalOpen(true)}>
                                 <div>
-                                   <h4 className="text-emerald-800 font-bold text-sm">VOUCHER & ƯU ĐÃI</h4>
-                                   {appliedVoucher ? <p className="text-emerald-600 font-medium text-xs mt-1">Đã áp dụng: {appliedVoucher.code}</p> : <p className="text-emerald-600 font-medium text-xs mt-1">Bấm để chọn ưu đãi</p>}
+                                   <h4 className="text-emerald-800 font-bold text-sm">VOUCHER & Æ¯U ÄÃƒI</h4>
+                                   {appliedVoucher ? <p className="text-emerald-600 font-medium text-xs mt-1">ÄÃ£ Ã¡p dá»¥ng: {appliedVoucher.code}</p> : <p className="text-emerald-600 font-medium text-xs mt-1">Báº¥m Ä‘á»ƒ chá»n Æ°u Ä‘Ã£i</p>}
                                 </div>
-                                <span className="text-emerald-600 text-xs font-bold border border-emerald-200 px-3 py-1.5 rounded-full bg-white shadow-sm">Chọn</span>
+                                <span className="text-emerald-600 text-xs font-bold border border-emerald-200 px-3 py-1.5 rounded-full bg-white shadow-sm">Chá»n</span>
                               </div>
                             </>
                           )}
@@ -2498,15 +2498,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                       {/* Detailed Financial Breakdown */}
                       <div className="space-y-2.5 pt-2">
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIẾT GIÁ DỊCH VỤ</div>
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIáº¾T GIÃ Dá»ŠCH Vá»¤</div>
                         
                         {/* Package price */}
                         <div className="flex justify-between text-sm text-slate-800 font-bold">
-                          <span>{pkg?.name || 'Gói dịch vụ chính'}</span>
+                          <span>{pkg?.name || 'GÃ³i dá»‹ch vá»¥ chÃ­nh'}</span>
                           <span className="font-bold">{formatCurrency(basePrice)}</span>
                         </div>
 
-                        {/* Included sub-services (Dịch vụ có sẵn trong gói - Miễn phí) */}
+                        {/* Included sub-services (Dá»‹ch vá»¥ cÃ³ sáºµn trong gÃ³i - Miá»…n phÃ­) */}
                         {(() => {
                           const keptIncluded = (pkg?.subServices || []).filter(s => (s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))) && currentSubServices.includes(s.name));
                           if (keptIncluded.length === 0) return null;
@@ -2515,21 +2515,21 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               {keptIncluded.map(sub => (
                                 <div key={sub.name} className="flex justify-between text-xs text-slate-500">
                                   <span>+ {sub.name}</span>
-                                  <span className="text-slate-400 font-medium">Miễn phí</span>
+                                  <span className="text-slate-400 font-medium">Miá»…n phÃ­</span>
                                 </div>
                               ))}
                             </div>
                           );
                         })()}
 
-                        {/* Optional added sub-services (Dịch vụ chọn thêm - Trả phí) */}
+                        {/* Optional added sub-services (Dá»‹ch vá»¥ chá»n thÃªm - Tráº£ phÃ­) */}
                         {(() => {
                           const addedSubServices = (pkg?.subServices || []).filter(s => s.isOptional && currentSubServices.includes(s.name));
                           if (addedSubServices.length === 0) return null;
                           return (
                             <div className="pt-2 border-t border-slate-100/80 space-y-1">
                               <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <Sparkles className="w-3 h-3 text-indigo-500" /> Dịch vụ chọn thêm (Trả phí)
+                                <Sparkles className="w-3 h-3 text-indigo-500" /> Dá»‹ch vá»¥ chá»n thÃªm (Tráº£ phÃ­)
                               </div>
                               <div className="pl-3 space-y-1">
                                 {addedSubServices.map(sub => (
@@ -2546,7 +2546,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         {/* Package slot usage discount */}
                         {isPayingWithPack && (
                           <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                            <span>Sử dụng gói lượt</span>
+                            <span>Sá»­ dá»¥ng gÃ³i lÆ°á»£t</span>
                             <span>-{formatCurrency(basePrice)}</span>
                           </div>
                         )}
@@ -2554,28 +2554,28 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         {/* Voucher discount */}
                         {isLoggedIn && discount > 0 && (
                           <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                            <span>Mã giảm giá {appliedVoucher?.code ? `(${appliedVoucher.code})` : ''}</span>
+                            <span>MÃ£ giáº£m giÃ¡ {appliedVoucher?.code ? `(${appliedVoucher.code})` : ''}</span>
                             <span className="font-bold">-{formatCurrency(discount)}</span>
                           </div>
                         )}
 
                         {isLoggedIn && points > 0 && (
                           <div className="flex justify-between text-xs text-amber-600 font-semibold">
-                            <span>Thưởng tích điểm thành viên</span>
-                            <span>+{points} điểm</span>
+                            <span>ThÆ°á»Ÿng tÃ­ch Ä‘iá»ƒm thÃ nh viÃªn</span>
+                            <span>+{points} Ä‘iá»ƒm</span>
                           </div>
                         )}
 
                         {tab === 'recurring' && pkg && actualRecurringSessions > 0 && (
                           <div className="flex justify-between text-xs text-slate-400 border-t border-slate-100 pt-2.5">
-                            <span>Tổng số buổi định kỳ</span>
-                            <span>{actualRecurringSessions} buổi</span>
+                            <span>Tá»•ng sá»‘ buá»•i Ä‘á»‹nh ká»³</span>
+                            <span>{actualRecurringSessions} buá»•i</span>
                           </div>
                         )}
                         
                         <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
                           <span className="text-base font-bold text-slate-800">
-                            {tab === 'recurring' ? 'Tổng dự kiến (tạm tính)' : 'Thành tiền tổng cộng'}
+                            {tab === 'recurring' ? 'Tá»•ng dá»± kiáº¿n (táº¡m tÃ­nh)' : 'ThÃ nh tiá»n tá»•ng cá»™ng'}
                           </span>
                           <span className="text-2xl font-extrabold text-emerald-600">
                             {tab === 'recurring' 
@@ -2598,26 +2598,26 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           className="w-full py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-600 font-bold text-sm hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50/50 transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                         >
                           <Calendar className="w-4 h-4" />
-                          Kiểm tra lịch trống ({previewDates.length} buổi)
+                          Kiá»ƒm tra lá»‹ch trá»‘ng ({previewDates.length} buá»•i)
                         </button>
                       )}
                       {conflictCheck.status === 'checking' && (
                         <div className="flex items-center justify-center gap-2 py-3 text-slate-500 text-sm font-semibold">
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Đang kiểm tra lịch trống...</span>
+                          <span>Äang kiá»ƒm tra lá»‹ch trá»‘ng...</span>
                         </div>
                       )}
                       {conflictCheck.status === 'done' && conflictCheck.totalConflicts === 0 && (
                         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center gap-2 text-sm text-emerald-700 font-semibold">
                           <CheckCircle2 className="w-5 h-5 shrink-0" />
-                          <span>Tất cả {previewDates.length} buổi đều trống lịch ✓</span>
+                          <span>Táº¥t cáº£ {previewDates.length} buá»•i Ä‘á»u trá»‘ng lá»‹ch âœ“</span>
                         </div>
                       )}
                       {conflictCheck.status === 'done' && conflictCheck.totalConflicts > 0 && (
                         <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 space-y-2">
                           <div className="flex items-center gap-2 text-sm text-amber-700 font-semibold">
                             <AlertCircle className="w-5 h-5 shrink-0" />
-                            <span>Có {conflictCheck.totalConflicts}/{previewDates.length} buổi bị trùng lịch</span>
+                            <span>CÃ³ {conflictCheck.totalConflicts}/{previewDates.length} buá»•i bá»‹ trÃ¹ng lá»‹ch</span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {conflictCheck.results.filter(r => r.conflict).map(r => (
@@ -2627,11 +2627,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               </span>
                             ))}
                           </div>
-                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('thay thế')) && (
-                            <p className="text-xs text-amber-600">Một số ngày có giờ thay thế — hệ thống sẽ tự động đổi giờ nếu tạo.</p>
+                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('thay tháº¿')) && (
+                            <p className="text-xs text-amber-600">Má»™t sá»‘ ngÃ y cÃ³ giá» thay tháº¿ â€” há»‡ thá»‘ng sáº½ tá»± Ä‘á»™ng Ä‘á»•i giá» náº¿u táº¡o.</p>
                           )}
-                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('không có giờ thay thế')) && (
-                            <p className="text-xs text-rose-600">Một số ngày không còn slot trống — những ngày này sẽ bị bỏ qua.</p>
+                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('khÃ´ng cÃ³ giá» thay tháº¿')) && (
+                            <p className="text-xs text-rose-600">Má»™t sá»‘ ngÃ y khÃ´ng cÃ²n slot trá»‘ng â€” nhá»¯ng ngÃ y nÃ y sáº½ bá»‹ bá» qua.</p>
                           )}
                         </div>
                       )}
@@ -2640,8 +2640,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                   {result && tab === 'recurring' && (
                     <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 space-y-1">
-                      {result.totalCreated > 0 && <div className="text-sm text-emerald-700 font-bold">✓ Đã tạo thành công {result.totalCreated} lịch hẹn!</div>}
-                      {result.totalFailed > 0 && <div className="text-sm text-amber-600 font-semibold">⚠ {result.totalFailed} ngày bị bỏ qua do trùng lịch.</div>}
+                      {result.totalCreated > 0 && <div className="text-sm text-emerald-700 font-bold">âœ“ ÄÃ£ táº¡o thÃ nh cÃ´ng {result.totalCreated} lá»‹ch háº¹n!</div>}
+                      {result.totalFailed > 0 && <div className="text-sm text-amber-600 font-semibold">âš  {result.totalFailed} ngÃ y bá»‹ bá» qua do trÃ¹ng lá»‹ch.</div>}
                     </div>
                   )}
 
@@ -2660,7 +2660,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   {processingPending && (
                     <div className="flex items-center justify-center gap-2 text-emerald-600 font-semibold py-2">
                       <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>Đang xử lý đặt lịch sau đăng nhập...</span>
+                      <span>Äang xá»­ lÃ½ Ä‘áº·t lá»‹ch sau Ä‘Äƒng nháº­p...</span>
                     </div>
                   )}
 
@@ -2670,11 +2670,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             </>
           )}
 
-          {/* ── Shared Navigation is rendered outside to escape backdrop-filter containing block ── */}
+          {/* â”€â”€ Shared Navigation is rendered outside to escape backdrop-filter containing block â”€â”€ */}
         </div>
       </div>
 
-      {/* ── Shared Navigation ── */}
+      {/* â”€â”€ Shared Navigation â”€â”€ */}
       {(tab !== 'slot_pack' || isLoggedIn) && (
         <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-3 w-full max-w-[calc(100%-2rem)] sm:w-auto">
           
@@ -2683,7 +2683,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             <div className="pointer-events-auto w-full max-w-[600px] p-3 sm:p-4 rounded-3xl bg-amber-50/90 backdrop-blur-xl border border-amber-200/50 flex items-start gap-3 text-left shadow-[0_10px_30px_-10px_rgba(0,0,0,0.1)]">
               <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
               <p className="text-xs sm:text-sm text-amber-700 leading-relaxed font-medium">
-                Bạn cần đăng nhập để hoàn tất đặt chỗ. Thông tin xe bạn nhập ở bước trước sẽ được tự động lưu vào tài khoản sau khi đăng nhập thành công.
+                Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ hoÃ n táº¥t Ä‘áº·t chá»—. ThÃ´ng tin xe báº¡n nháº­p á»Ÿ bÆ°á»›c trÆ°á»›c sáº½ Ä‘Æ°á»£c tá»± Ä‘á»™ng lÆ°u vÃ o tÃ i khoáº£n sau khi Ä‘Äƒng nháº­p thÃ nh cÃ´ng.
               </p>
             </div>
           )}
@@ -2698,7 +2698,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[1.5rem] sm:rounded-full border border-white/30 bg-white/20 text-slate-700 text-sm font-bold hover:bg-white/40 hover:text-slate-900 transition-colors active:scale-[0.98]"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Quay lại
+                Quay láº¡i
               </button>
             )}
             
@@ -2709,7 +2709,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[1.5rem] sm:rounded-full border border-white/30 bg-white/20 text-slate-600 text-sm font-bold hover:bg-white/40 hover:text-slate-800 transition-colors active:scale-[0.98]"
               >
                 <RefreshCw className="w-4 h-4" />
-                Đặt lại
+                Äáº·t láº¡i
               </button>
             )}
             
@@ -2726,7 +2726,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   border: canNextStep() ? 'none' : '1px solid rgba(255,255,255,0.4)'
                 }}
               >
-                <span>Tiếp theo</span>
+                <span>Tiáº¿p theo</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
@@ -2740,12 +2740,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   {bookingLoading ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Đang xử lý...</span>
+                      <span>Äang xá»­ lÃ½...</span>
                     </>
                   ) : isLoggedIn ? (
-                    'Xác nhận đặt chỗ ngay'
+                    'XÃ¡c nháº­n Ä‘áº·t chá»— ngay'
                   ) : (
-                    'Đăng nhập để đặt lịch'
+                    'ÄÄƒng nháº­p Ä‘á»ƒ Ä‘áº·t lá»‹ch'
                   )}
                 </button>
               ) : (
@@ -2758,12 +2758,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   {bookingLoading ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Đang xử lý...</span>
+                      <span>Äang xá»­ lÃ½...</span>
                     </>
                   ) : isLoggedIn ? (
-                    `Xác nhận ${actualRecurringSessions} buổi`
+                    `XÃ¡c nháº­n ${actualRecurringSessions} buá»•i`
                   ) : (
-                    'Đăng nhập để đặt lịch'
+                    'ÄÄƒng nháº­p Ä‘á»ƒ Ä‘áº·t lá»‹ch'
                   )}
                 </button>
               )
@@ -2802,15 +2802,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 
                 <h3 className="text-xl font-bold text-slate-800">
                   {lastBooking.depositPaid 
-                    ? (lastBooking.paymentMode === 'full' ? 'Thanh toán thành công' : 'Đặt cọc thành công') 
-                    : 'Đặt lịch thành công'}
+                    ? (lastBooking.paymentMode === 'full' ? 'Thanh toÃ¡n thÃ nh cÃ´ng' : 'Äáº·t cá»c thÃ nh cÃ´ng') 
+                    : 'Äáº·t lá»‹ch thÃ nh cÃ´ng'}
                 </h3>
                 <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                   {lastBooking.depositPaid
                     ? (lastBooking.paymentMode === 'full' 
-                       ? `Đã thanh toán ${formatCurrency(lastBooking.total || 0)}` 
-                       : `Đã đặt cọc ${formatCurrency(lastBooking.depositAmount || 0)}`)
-                    : 'Cảm ơn bạn đã sử dụng dịch vụ của AutoWash Pro'}
+                       ? `ÄÃ£ thanh toÃ¡n ${formatCurrency(lastBooking.total || 0)}` 
+                       : `ÄÃ£ Ä‘áº·t cá»c ${formatCurrency(lastBooking.depositAmount || 0)}`)
+                    : 'Cáº£m Æ¡n báº¡n Ä‘Ã£ sá»­ dá»¥ng dá»‹ch vá»¥ cá»§a AutoWash Pro'}
                 </p>
 
                 {/* Lucky Spin Notification */}
@@ -2820,8 +2820,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <Sparkles className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
-                      <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
+                      <p className="text-sm font-bold text-amber-900 leading-tight">Báº¡n nháº­n Ä‘Æ°á»£c 1 vÃ²ng quay may máº¯n!</p>
+                      <p className="text-xs text-amber-700 mt-0.5">VÃ o trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">QuÃ  táº·ng</a> Ä‘á»ƒ quay ngay.</p>
                     </div>
                   </div>
                 )}
@@ -2830,7 +2830,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               <div className="p-6 space-y-4 overflow-y-auto flex-1">
                 {/* Booking Code Callout */}
                 <div className="text-center bg-gradient-to-br from-emerald-50 to-emerald-100/60 border-2 border-emerald-200/70 p-5 rounded-2xl shadow-sm">
-                  <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wider block">Mã đặt lịch của bạn</span>
+                  <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wider block">MÃ£ Ä‘áº·t lá»‹ch cá»§a báº¡n</span>
                   <span className="block mt-2 text-2xl font-black text-emerald-700 tracking-[0.15em] font-mono">
                     {lastBooking.bookingCode?.length === 36 ? `#${lastBooking.bookingCode.slice(-6).toUpperCase()}` : lastBooking.bookingCode}
                   </span>
@@ -2839,7 +2839,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                 {/* Details list */}
                 <div className="divide-y divide-slate-100 text-sm">
                   <div className="flex justify-between py-3">
-                    <span className="text-slate-400 text-xs font-semibold">Chi nhánh</span>
+                    <span className="text-slate-400 text-xs font-semibold">Chi nhÃ¡nh</span>
                     <span className="font-bold text-slate-700 text-sm">{lastBooking.branch?.name}</span>
                   </div>
                   {lastBooking.vehicle && (
@@ -2849,17 +2849,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
                   <div className="flex justify-between py-3">
-                    <span className="text-slate-400 text-xs font-semibold">Thời gian hẹn</span>
+                    <span className="text-slate-400 text-xs font-semibold">Thá»i gian háº¹n</span>
                     <span className="font-bold text-slate-700 text-sm">
                       {lastBooking.currentDate
                         ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
-                        : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
+                        : `${lastBooking.selectedTime} Â· ${lastBooking.recurringCount || 0} buá»•i Ä‘á»‹nh ká»³`}
                     </span>
                   </div>
 
                   {/* Bill Section */}
                   <div className="bg-slate-50/60 -mx-6 px-6 py-4 space-y-2.5 mt-2">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIẾT THANH TOÁN</div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">CHI TIáº¾T THANH TOÃN</div>
 
                     <div className="flex justify-between items-center">
                       <span className="text-slate-600 text-sm">{lastBooking.pkg?.name}</span>
@@ -2872,7 +2872,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       return (
                         <div className="flex justify-between items-center" key={i}>
                           <span className="text-slate-500 text-xs pl-3">+ {n}</span>
-                          <span className="font-bold text-slate-600 text-xs">{p > 0 ? formatCurrency(p) : 'Miễn phí'}</span>
+                          <span className="font-bold text-slate-600 text-xs">{p > 0 ? formatCurrency(p) : 'Miá»…n phÃ­'}</span>
                         </div>
                       );
                     })}
@@ -2880,7 +2880,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     {lastBooking.discount > 0 && (
                       <div className="flex justify-between items-center text-xs">
                         <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                          <span>Mã giảm giá</span>
+                          <span>MÃ£ giáº£m giÃ¡</span>
                           {lastBooking.voucherCode && <span className="font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-bold">({lastBooking.voucherCode})</span>}
                         </span>
                         <span className="font-bold text-emerald-600">-{formatCurrency(lastBooking.discount)}</span>
@@ -2888,7 +2888,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     )}
 
                     <div className="!mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
-                      <span className="font-bold text-sm text-slate-700">Tổng dịch vụ</span>
+                      <span className="font-bold text-sm text-slate-700">Tá»•ng dá»‹ch vá»¥</span>
                       <span className="font-extrabold text-base text-emerald-600">{formatCurrency(lastBooking.total || 0)}</span>
                     </div>
 
@@ -2896,31 +2896,31 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <>
                         <div className="flex justify-between items-center pt-1">
                           <div>
-                            <span className="font-semibold text-sm text-emerald-600">Thanh toán (100%)</span>
+                            <span className="font-semibold text-sm text-emerald-600">Thanh toÃ¡n (100%)</span>
                             {lastBooking.depositPaid && (
-                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ĐÃ THANH TOÁN</span>
+                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ÄÃƒ THANH TOÃN</span>
                             )}
                           </div>
                           <span className="font-bold text-base text-emerald-600">{formatCurrency(lastBooking.total || 0)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-400 font-medium">Còn lại (thanh toán sau)</span>
-                          <span className="font-bold text-slate-500">0đ</span>
+                          <span className="text-slate-400 font-medium">CÃ²n láº¡i (thanh toÃ¡n sau)</span>
+                          <span className="font-bold text-slate-500">0Ä‘</span>
                         </div>
                       </>
                     ) : (
                       <>
                         <div className="flex justify-between items-center pt-1">
                           <div>
-                            <span className="font-semibold text-sm text-amber-600">Đặt cọc (30%)</span>
+                            <span className="font-semibold text-sm text-amber-600">Äáº·t cá»c (30%)</span>
                             {lastBooking.depositPaid && (
-                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ĐÃ CỌC</span>
+                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ÄÃƒ Cá»ŒC</span>
                             )}
                           </div>
                           <span className="font-bold text-base text-amber-600">{formatCurrency(lastBooking.depositAmount || 0)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-400 font-medium">Còn lại (thanh toán sau)</span>
+                          <span className="text-slate-400 font-medium">CÃ²n láº¡i (thanh toÃ¡n sau)</span>
                           <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, (lastBooking.total || 0) - (lastBooking.depositAmount || 0)))}</span>
                         </div>
                       </>
@@ -2936,7 +2936,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   onClick={() => { setShowSuccessModal(false); reset(); }}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98]"
                 >
-                  Đóng
+                  ÄÃ³ng
                 </button>
                 <button 
                   type="button"
@@ -2948,7 +2948,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   }}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98]"
                 >
-                  Xem hóa đơn đơn hàng
+                  Xem hÃ³a Ä‘Æ¡n Ä‘Æ¡n hÃ ng
                 </button>
               </div>
             </motion.div>
@@ -2983,8 +2983,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" /><path d="M2 12v4h20v-4" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-800">Chuyển khoản ngân hàng</h3>
-                    <p className="text-slate-400 text-[11px] mt-0.5">Quét mã QR hoặc chuyển khoản thủ công</p>
+                    <h3 className="text-lg font-bold text-slate-800">Chuyá»ƒn khoáº£n ngÃ¢n hÃ ng</h3>
+                    <p className="text-slate-400 text-[11px] mt-0.5">QuÃ©t mÃ£ QR hoáº·c chuyá»ƒn khoáº£n thá»§ cÃ´ng</p>
                   </div>
 
                   {depositPayment.qrCode && (
@@ -2997,38 +2997,38 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
                   <div className="px-5 py-1 space-y-2">
                     <div className="bg-slate-50 rounded-xl p-2 text-center">
-                      <div className="text-xs text-slate-400 mb-1">Số tiền cần chuyển</div>
+                      <div className="text-xs text-slate-400 mb-1">Sá»‘ tiá»n cáº§n chuyá»ƒn</div>
                       <div className="text-2xl font-black text-emerald-600">{formatCurrency(depositPayment.amount || 0)}</div>
                       <div className="text-[11px] text-slate-400 mt-1">
                         {paymentMode === 'full' 
-                          ? 'Thanh toán 100%'
-                          : `Đặt cọc 30% · Còn lại ${formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toán sau)`
+                          ? 'Thanh toÃ¡n 100%'
+                          : `Äáº·t cá»c 30% Â· CÃ²n láº¡i ${formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (depositPayment.amount || pendingDeposit.depositAmount || 0)))} (thanh toÃ¡n sau)`
                         }
                       </div>
                     </div>
 
-                    {/* Thông tin tài khoản thụ hưởng */}
+                    {/* ThÃ´ng tin tÃ i khoáº£n thá»¥ hÆ°á»Ÿng */}
                     <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
                       <div className="px-3 py-1.5 flex items-center justify-between">
-                        <span className="text-[11px] text-slate-400 font-semibold">Ngân hàng</span>
-                        <span className="text-xs font-bold text-slate-700">{depositPayment.bankInfo?.bankName || 'Ngân hàng TMCP Quân đội (MB)'}</span>
+                        <span className="text-[11px] text-slate-400 font-semibold">NgÃ¢n hÃ ng</span>
+                        <span className="text-xs font-bold text-slate-700">{depositPayment.bankInfo?.bankName || 'NgÃ¢n hÃ ng TMCP QuÃ¢n Ä‘á»™i (MB)'}</span>
                       </div>
                       <div className="px-3 py-1.5 flex items-center justify-between">
-                        <span className="text-[11px] text-slate-400 font-semibold">Số tài khoản</span>
+                        <span className="text-[11px] text-slate-400 font-semibold">Sá»‘ tÃ i khoáº£n</span>
                         <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{depositPayment.bankInfo?.accountNumber || '6200320046868'}</span>
                       </div>
                       <div className="px-3 py-1.5 flex items-center justify-between">
-                        <span className="text-[11px] text-slate-400 font-semibold">Chủ tài khoản</span>
+                        <span className="text-[11px] text-slate-400 font-semibold">Chá»§ tÃ i khoáº£n</span>
                         <span className="text-xs font-bold text-slate-700">{depositPayment.bankInfo?.accountHolder || 'CONG TY CO PHAN AUTO WASH PRO'}</span>
                       </div>
                       <div className="px-3 py-1.5">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] text-slate-400 font-semibold">Nội dung chuyển khoản</span>
+                          <span className="text-[11px] text-slate-400 font-semibold">Ná»™i dung chuyá»ƒn khoáº£n</span>
                           <button
                             type="button"
                             onClick={() => {
                               navigator.clipboard.writeText(depositPayment.bankInfo?.transferContent || `${paymentMode === 'full' ? 'THANH TOAN' : 'DAT COC'} ${depositPayment.transactionId}`);
-                              alert('Đã copy nội dung CK!');
+                              alert('ÄÃ£ copy ná»™i dung CK!');
                             }}
                             className="text-[10px] font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider"
                           >
@@ -3042,19 +3042,19 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
 
                     <div className="bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400 font-semibold">Mã giao dịch</span>
+                      <span className="text-[11px] text-slate-400 font-semibold">MÃ£ giao dá»‹ch</span>
                       <span className="text-xs font-bold text-slate-700 font-mono">{depositPayment.transactionId}</span>
                     </div>
                     <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400 pt-0.5">
                       <RefreshCw className={`w-3 h-3 ${depositPollCount % 2 === 0 ? 'animate-spin' : ''}`} />
-                      Đang kiểm tra thanh toán...
+                      Äang kiá»ƒm tra thanh toÃ¡n...
                     </div>
                   </div>
 
                   <div className="p-3 bg-slate-50 border-t border-slate-100">
                     <button type="button" onClick={() => { setPendingDeposit(null); setDepositPayment(null); setDepositQrStep('select'); setError(''); }}
                       className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors">
-                      Hủy giao dịch
+                      Há»§y giao dá»‹ch
                     </button>
                   </div>
                 </>
@@ -3066,10 +3066,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <CheckCircle2 className="w-10 h-10 text-emerald-500" />
                     </div>
                     <h3 className="text-2xl font-black text-slate-800">
-                      {paymentMode === 'full' ? 'Thanh toán thành công!' : 'Đặt cọc thành công!'}
+                      {paymentMode === 'full' ? 'Thanh toÃ¡n thÃ nh cÃ´ng!' : 'Äáº·t cá»c thÃ nh cÃ´ng!'}
                     </h3>
                     <p className="text-slate-400 text-sm mt-2">
-                      {paymentMode === 'full' ? 'Thanh toán 100% hoàn tất, lịch hẹn đã được xác nhận.' : 'Cảm ơn bạn, lịch hẹn đã được xác nhận.'}
+                      {paymentMode === 'full' ? 'Thanh toÃ¡n 100% hoÃ n táº¥t, lá»‹ch háº¹n Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c nháº­n.' : 'Cáº£m Æ¡n báº¡n, lá»‹ch háº¹n Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c nháº­n.'}
                     </p>
                   </div>
                 </>
@@ -3084,10 +3084,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       </svg>
                     </div>
                     <h3 className="text-lg font-bold text-slate-800">
-                      {paymentMode === 'full' ? 'Thanh toán' : 'Thanh toán đặt cọc'}
+                      {paymentMode === 'full' ? 'Thanh toÃ¡n' : 'Thanh toÃ¡n Ä‘áº·t cá»c'}
                     </h3>
                     <p className="text-slate-400 text-[11px] mt-0.5 leading-relaxed">
-                      {paymentMode === 'full' ? 'Vui lòng thanh toán để hoàn tất đặt lịch' : 'Vui lòng đặt cọc để hoàn tất đặt lịch'}
+                      {paymentMode === 'full' ? 'Vui lÃ²ng thanh toÃ¡n Ä‘á»ƒ hoÃ n táº¥t Ä‘áº·t lá»‹ch' : 'Vui lÃ²ng Ä‘áº·t cá»c Ä‘á»ƒ hoÃ n táº¥t Ä‘áº·t lá»‹ch'}
                     </p>
                   </div>
 
@@ -3095,21 +3095,21 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <div>
                       <div className="bg-slate-50 border border-slate-100/60 p-2.5 rounded-xl space-y-2">
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-400 font-semibold">Tổng dịch vụ</span>
+                          <span className="text-slate-400 font-semibold">Tá»•ng dá»‹ch vá»¥</span>
                           <span className="font-bold text-slate-700">{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</span>
                         </div>
                         {paymentMode === 'deposit' ? (
                           <>
                             <div className="flex justify-between items-end">
                               <div>
-                                <span className="text-amber-600 font-semibold text-sm">Đặt cọc (30%)</span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">30% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
+                                <span className="text-amber-600 font-semibold text-sm">Äáº·t cá»c (30%)</span>
+                                <div className="text-[11px] text-slate-400 mt-0.5">30% Ã— {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
                               </div>
                               <span className="font-black text-xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
                             </div>
                             <div className="h-px bg-slate-200" />
                             <div className="flex justify-between text-sm">
-                              <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
+                              <span className="text-slate-400 font-semibold">CÃ²n láº¡i (thanh toÃ¡n sau)</span>
                               <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (pendingDeposit.depositAmount || 0)))}</span>
                             </div>
                           </>
@@ -3117,15 +3117,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <>
                             <div className="flex justify-between items-end">
                               <div>
-                                <span className="text-emerald-600 font-semibold text-sm">Thanh toán (100%)</span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">Thanh toán toàn bộ hóa đơn</div>
+                                <span className="text-emerald-600 font-semibold text-sm">Thanh toÃ¡n (100%)</span>
+                                <div className="text-[11px] text-slate-400 mt-0.5">Thanh toÃ¡n toÃ n bá»™ hÃ³a Ä‘Æ¡n</div>
                               </div>
                               <span className="font-black text-xl text-emerald-600">{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</span>
                             </div>
                             <div className="h-px bg-slate-200" />
                             <div className="flex justify-between text-sm">
-                              <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
-                              <span className="font-bold text-slate-500">0đ</span>
+                              <span className="text-slate-400 font-semibold">CÃ²n láº¡i (thanh toÃ¡n sau)</span>
+                              <span className="font-bold text-slate-500">0Ä‘</span>
                             </div>
                           </>
                         )}
@@ -3133,14 +3133,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
 
                     <div>
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Số tiền cần thanh toán</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Sá»‘ tiá»n cáº§n thanh toÃ¡n</span>
                       <div className="grid grid-cols-2 gap-3">
                         {pendingDeposit.depositAmount > 0 && (
                           <button 
                             onClick={() => setPaymentMode('deposit')} 
                             className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'deposit' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-200 hover:border-amber-200 hover:bg-amber-50/50'}`}
                           >
-                            <div className={`font-bold text-xs ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toán cọc 30%</div>
+                            <div className={`font-bold text-xs ${paymentMode === 'deposit' ? 'text-amber-700' : 'text-slate-500'}`}>Thanh toÃ¡n cá»c 30%</div>
                             <div className={`mt-0.5 text-base font-black ${paymentMode === 'deposit' ? 'text-amber-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.depositAmount || 0)}</div>
                           </button>
                         )}
@@ -3148,22 +3148,22 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           onClick={() => setPaymentMode('full')} 
                           className={`p-2.5 border-2 rounded-xl text-left transition-all ${paymentMode === 'full' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 hover:border-emerald-200 hover:bg-emerald-50/50'} ${pendingDeposit.depositAmount === 0 ? 'col-span-2' : ''}`}
                         >
-                          <div className={`font-bold text-xs ${paymentMode === 'full' ? 'text-emerald-700' : 'text-slate-500'}`}>Thanh toán 100%</div>
+                          <div className={`font-bold text-xs ${paymentMode === 'full' ? 'text-emerald-700' : 'text-slate-500'}`}>Thanh toÃ¡n 100%</div>
                           <div className={`mt-0.5 text-base font-black ${paymentMode === 'full' ? 'text-emerald-600' : 'text-slate-700'}`}>{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
                         </button>
                       </div>
                     </div>
 
                     <div>
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Chọn phương thức</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Chá»n phÆ°Æ¡ng thá»©c</span>
                       <div className="grid grid-cols-2 gap-2">
                         {(() => {
                           const walletAmount = paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0);
                           const walletDisabled = !user || (user.walletBalance || 0) < walletAmount;
                           const methods = [
-                            { value: 'bank', label: 'Ngân hàng', color: '#10b981' },
+                            { value: 'bank', label: 'NgÃ¢n hÃ ng', color: '#10b981' },
                             { value: 'vnpay', label: 'VNPay', color: '#2563eb' },
-                            { value: 'wallet', label: 'Ví của tôi', color: '#f59e0b', disabled: walletDisabled },
+                            { value: 'wallet', label: 'VÃ­ cá»§a tÃ´i', color: '#f59e0b', disabled: walletDisabled },
                           ];
                           return methods.map(m => {
                             const isWalletDisabled = m.value === 'wallet' && m.disabled;
@@ -3196,7 +3196,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               )}
                             </div>
                             <span className={`text-xs font-bold ${depositMethod === m.value ? 'text-emerald-700' : 'text-slate-500'}`}>
-                              {m.value === 'wallet' ? 'Ví (' + formatCurrency(user?.walletBalance || 0) + ')' : m.label}
+                              {m.value === 'wallet' ? 'VÃ­ (' + formatCurrency(user?.walletBalance || 0) + ')' : m.label}
                             </span>
                           </button>
                             );
@@ -3214,16 +3214,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     <button type="button" onClick={() => { if (!depositLoading) { setPendingDeposit(null); setError(''); } }} disabled={depositLoading}
                       className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5">
                       <ArrowLeft className="w-4 h-4" />
-                      Quay lại
+                      Quay láº¡i
                     </button>
                     <button type="button" onClick={depositMethod === 'vnpay' ? payWithVnpay : depositMethod === 'wallet' ? payWithWallet : payDeposit} disabled={depositLoading || vnpayLoading || (depositMethod === 'wallet' && (!user || (user.walletBalance || 0) < (paymentMode === 'full' ? (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) : (pendingDeposit.depositAmount || 0))))}
                       className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm transition-colors active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
                       {depositLoading || vnpayLoading ? (
-                        <><RefreshCw className="w-4 h-4 animate-spin" />{'ĐANG XỬ LÝ...'}</>
+                        <><RefreshCw className="w-4 h-4 animate-spin" />{'ÄANG Xá»¬ LÃ...'}</>
                       ) : paymentMode === 'full' ? (
-                        'THANH TOÁN ' + formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)
+                        'THANH TOÃN ' + formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)
                       ) : (
-                        'ĐẶT CỌC ' + formatCurrency(pendingDeposit.depositAmount || 0)
+                        'Äáº¶T Cá»ŒC ' + formatCurrency(pendingDeposit.depositAmount || 0)
                       )}
                     </button>
                   </div>
@@ -3246,7 +3246,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               onClick={e => e.stopPropagation()}
             >
               <div className="shrink-0 border-b border-slate-100 px-5 py-4 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-lg">Chọn Ưu Đãi</h3>
+                <h3 className="font-bold text-slate-800 text-lg">Chá»n Æ¯u ÄÃ£i</h3>
                 <button
                   onClick={() => setVoucherModalOpen(false)}
                   className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
