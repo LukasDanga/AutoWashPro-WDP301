@@ -1,11 +1,11 @@
-import { useNavigate } from 'react-router-dom';
-import Navbar from './Navbar';
-import HeroSection from './HeroSection';
-import HowItWorksSection from './HowItWorksSection';
-import TestimonialsSection from './TestimonialsSection';
-import BranchCarouselSection from './BranchCarouselSection';
-import CTASection from './CTASection';
-import Footer from './Footer';
+﻿import { useNavigate } from 'react-router-dom';
+import Navbar from '../layout/Navbar';
+import HeroSection from '../sections/HeroSection';
+import HowItWorksSection from '../sections/HowItWorksSection';
+import TestimonialsSection from '../sections/TestimonialsSection';
+import BranchCarouselSection from '../sections/BranchCarouselSection';
+import CTASection from '../sections/CTASection';
+import Footer from '../layout/Footer';
 
 export default function LandingPage({ onOpenAuth, user, vehicles, onLogout, apiBase, token, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications, pendingBooking, onSetPendingBooking, onVehicleCreated }) {
   const navigate = useNavigate();

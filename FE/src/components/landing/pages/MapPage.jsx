@@ -1,6 +1,6 @@
-import Navbar from './Navbar';
-import MapSection from './MapSection';
-import Footer from './Footer';
+﻿import Navbar from '../layout/Navbar';
+import MapSection from '../sections/MapSection';
+import Footer from '../layout/Footer';
 
 export default function MapPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   return (

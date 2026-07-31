@@ -224,8 +224,8 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
         paymentStatus = booking.paymentStatus || 'paid';
 
         if (booking.packageId) {
-          packageName = booking.packageId.name || '';
-          packagePrice = booking.packageId.price || 0;
+          packageName = booking.packageName || booking.packageId.name || '';
+          packagePrice = booking.packagePrice ?? booking.packageId.price ?? 0;
         }
 
         if (Array.isArray(booking.subServices)) {

@@ -26,7 +26,7 @@ function StatusBadge({ status }) {
   return <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${s.cls}`}>{s.label}</span>;
 }
 
-export default function PaymentHistoryPage({ onBack, apiBase, token }) {
+export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailPayment, setDetailPayment] = useState(null);
@@ -345,8 +345,8 @@ export default function PaymentHistoryPage({ onBack, apiBase, token }) {
                     <div className="flex justify-between py-1.5">
                       <span className="text-xs text-slate-500">Dịch vụ</span>
                       <span className="text-sm text-slate-700 text-right">
-                        {detailPayment.bookingId.packageId?.name || detailPayment.bookingId.packageName || '—'}
-                        {detailPayment.bookingId.packageId?.price && <span className="text-xs text-slate-400 ml-1">({formatCurrency(detailPayment.bookingId.packageId.price)})</span>}
+                        {detailPayment.packageName || detailPayment.bookingId.packageName || detailPayment.bookingId.packageId?.name || '—'}
+                        {(detailPayment.packagePrice || detailPayment.bookingId.packagePrice || detailPayment.bookingId.packageId?.price) && <span className="text-xs text-slate-400 ml-1">({formatCurrency(detailPayment.packagePrice || detailPayment.bookingId.packagePrice || detailPayment.bookingId.packageId?.price)})</span>}
                       </span>
                     </div>
                     {(detailPayment.bookingId.vehicleId?.licensePlate || detailPayment.bookingId.vehicleId?.brand) && (

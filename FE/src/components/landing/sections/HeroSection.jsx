@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion';
+﻿import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import VideoBackground from './VideoBackground';
+import VideoBackground from '../widgets/VideoBackground';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 

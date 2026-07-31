@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import Navbar from './Navbar';
-import Footer from './Footer';
-import { useSystemConfig } from '../../hooks/useSystemConfig.jsx';
+import Navbar from '../layout/Navbar';
+import Footer from '../layout/Footer';
+import { useSystemConfig } from '../../../hooks/useSystemConfig.jsx';
 
 const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } = {}) => [
   {

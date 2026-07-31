@@ -1,7 +1,7 @@
-import { motion, useInView } from 'framer-motion';
+﻿import { motion, useInView } from 'framer-motion';
 import { useRef, useState, useEffect, useCallback } from 'react';
-import CustomLuckyWheel from './CustomLuckyWheel.jsx';
-import { storageKeys } from '../../lib/authStorage.js';
+import CustomLuckyWheel from '../widgets/CustomLuckyWheel.jsx';
+import { storageKeys } from '../../../lib/authStorage.js';
 import { showToast } from '@/lib/toast';
 import { Trophy, CheckCircle, Warning, ClockCounterClockwise } from '@phosphor-icons/react';
 

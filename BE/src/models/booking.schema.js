@@ -8,6 +8,8 @@ const bookingSchema = new mongoose.Schema(
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', required: true },
     packageName: { type: String },
     packageDuration: { type: Number },
+    // Snapshot giá gói tại thời điểm đặt — tránh bị đổi theo giá hiện tại khi admin chỉnh giá gói
+    packagePrice: { type: Number, min: 0 },
     vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
     bookingDate: { type: Date, required: true },
     startTime: { type: String, required: true },

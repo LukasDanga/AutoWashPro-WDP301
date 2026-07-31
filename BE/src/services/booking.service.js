@@ -314,6 +314,7 @@ exports.createBooking = async (data) => {
       paymentStatus,
       packageName: pkg.name,
       packageDuration: pkg.duration,
+      packagePrice: pkg.price,
     });
 
     await booking.save({ session });
@@ -828,7 +829,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
         );
         // Award loyalty points when booking is completed (points removed from payment flow)
         const pointsBaseAmount = currentBooking.bookingType === 'slot_pack_usage'
-          ? (booking.packageId?.price || 0) + (currentBooking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+          ? (currentBooking.packagePrice ?? booking.packageId?.price ?? 0) + (currentBooking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
           : currentBooking.finalPrice || 0;
         if ((pointsBaseAmount || 0) > 0) {
           const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
@@ -977,7 +978,8 @@ exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, 
 
     booking.selectedSubServices = validSubServices;
     booking.endTime = endTime;
-    const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : pkg.price;
+    // Dùng giá gói snapshot tại thời điểm đặt để không nhảy giá khi admin chỉnh sửa giữa chừng
+    const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : (booking.packagePrice ?? pkg.price);
     const newFinalPrice = Math.max(0, basePrice + addedPrice - (booking.discountAmount || 0));
 
     // Determine actual total amount paid so far by the customer
@@ -2043,6 +2045,7 @@ exports.createRecurringBooking = async (data) => {
         selectedSubServices: validSubServices,
         packageName: pkg.name,
         packageDuration: pkg.duration,
+        packagePrice: pkg.price,
       });
       await booking.save({ session });
       savedBooking = booking;
@@ -2625,6 +2628,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     packageId: src.packageId,
     packageName: pkgName,
     packageDuration: pkgDuration,
+    packagePrice: pkgPrice,
     vehicleId: src.vehicleId,
     bookingDate: bookingDateObj,
     startTime,

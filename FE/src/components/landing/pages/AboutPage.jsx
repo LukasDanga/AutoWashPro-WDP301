@@ -1,6 +1,6 @@
-import Navbar from './Navbar';
-import Footer from './Footer';
-import PackagesSection from './PackagesSection';
+﻿import Navbar from '../layout/Navbar';
+import Footer from '../layout/Footer';
+import PackagesSection from '../sections/PackagesSection';
 import { motion } from 'framer-motion';
 
 const stats = [

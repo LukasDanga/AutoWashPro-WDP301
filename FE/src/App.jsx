@@ -1,21 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthScreen from './components/AuthScreen.jsx';
-import LandingPage from './components/landing/LandingPage.jsx';
-import AboutPage from './components/landing/AboutPage.jsx';
-import BookingPage from './components/landing/BookingPage.jsx';
-import PackagesPage from './components/landing/PackagesPage.jsx';
-import GiftStorePage from './components/landing/GiftStorePage.jsx';
-import MapPage from './components/landing/MapPage.jsx';
-import BranchDetailPage from './components/landing/BranchDetailPage.jsx';
-import ProfilePage from './components/landing/ProfilePage.jsx';
-import HistoryPage from './components/landing/HistoryPage.jsx';
-import PaymentHistoryPage from './components/landing/PaymentHistoryPage.jsx';
-import NotificationsPage from './components/landing/NotificationsPage.jsx';
-import CustomerLayout from './components/landing/CustomerLayout.jsx';
+import LandingPage from './components/landing/pages/LandingPage.jsx';
+import AboutPage from './components/landing/pages/AboutPage.jsx';
+import BookingPage from './components/landing/pages/BookingPage.jsx';
+import PackagesPage from './components/landing/pages/PackagesPage.jsx';
+import GiftStorePage from './components/landing/pages/GiftStorePage.jsx';
+import MapPage from './components/landing/pages/MapPage.jsx';
+import BranchDetailPage from './components/landing/pages/BranchDetailPage.jsx';
+import CustomerProfilePage from './components/customer/CustomerProfilePage.jsx';
+import CustomerHistoryPage from './components/customer/CustomerHistoryPage.jsx';
+import CustomerBookingDetail from './components/customer/CustomerBookingDetail.jsx';
+import CustomerPaymentHistoryPage from './components/customer/CustomerPaymentHistoryPage.jsx';
+import CustomerNotificationsPage from './components/customer/CustomerNotificationsPage.jsx';
+import CustomerLayout from './components/customer/CustomerLayout.jsx';
 import CustomerRewards from './components/customer/CustomerRewards.jsx';
 import CustomerPointHistoryDetail from './components/customer/CustomerPointHistoryDetail.jsx';
-import PolicyPage from './components/landing/PolicyPage.jsx';
+import PolicyPage from './components/landing/pages/PolicyPage.jsx';
 import {
   clearSession as clearStoredSession,
   getApiBaseUrl,
@@ -285,6 +286,14 @@ export default function App() {
     return (
       <CustomerLayout {...customerNavProps}>
         <HistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} vehicles={vehicles} user={user} onUserUpdate={handleUserUpdate} />
+      </CustomerLayout>
+    );
+  }
+
+  if (path.startsWith('/history/') && token && user) {
+    return (
+      <CustomerLayout {...customerNavProps}>
+        <CustomerBookingDetail apiBase={apiBase} token={token} user={user} onUserUpdate={handleUserUpdate} />
       </CustomerLayout>
     );
   }

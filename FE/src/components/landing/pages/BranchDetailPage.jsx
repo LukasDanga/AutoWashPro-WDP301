@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/authStorage';
 import {
   MapPin, Clock, Phone, Envelope, ArrowRight, Tag,
   CaretLeft, Compass, Star, Ticket, X,
 } from '@phosphor-icons/react';
-import Navbar from './Navbar';
-import Footer from './Footer';
-import DirectionsMap from './DirectionsMap';
+import Navbar from '../layout/Navbar';
+import Footer from '../layout/Footer';
+import DirectionsMap from '../widgets/DirectionsMap';
 
 const API_BASE = getApiBaseUrl() || 'http://localhost:5000/api';
 

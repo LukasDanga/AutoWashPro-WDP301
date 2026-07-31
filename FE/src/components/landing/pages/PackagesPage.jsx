@@ -1,6 +1,6 @@
-import Navbar from './Navbar';
-import PackagesSection from './PackagesSection';
-import Footer from './Footer';
+﻿import Navbar from '../layout/Navbar';
+import PackagesSection from '../sections/PackagesSection';
+import Footer from '../layout/Footer';
 
 export default function PackagesPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   return (

@@ -1,7 +1,7 @@
-import { useSearchParams, useLocation } from 'react-router-dom';
-import Navbar from './Navbar';
-import BookingWidget from './BookingWidget';
-import Footer from './Footer';
+﻿import { useSearchParams, useLocation } from 'react-router-dom';
+import Navbar from '../layout/Navbar';
+import BookingWidget from '../widgets/BookingWidget';
+import Footer from '../layout/Footer';
 
 export default function BookingPage({ onOpenAuth, user, vehicles, apiBase, token, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate }) {
   const [searchParams] = useSearchParams();

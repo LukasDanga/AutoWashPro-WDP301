@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import ManagerLayout from '@/components/manager/ManagerLayout';
 import ManagerOverview from '@/components/manager/ManagerOverview';
 import ManagerBookings from '@/components/manager/ManagerBookings';
+import ManagerBookingDetail from '@/components/manager/ManagerBookingDetail';
 import ManagerBranch from '@/components/manager/ManagerBranch';
 import ManagerPromotions from '@/components/manager/ManagerPromotions';
 import ManagerRevenue from '@/components/manager/ManagerRevenue';
@@ -82,6 +83,7 @@ export default function ManagerRoutes() {
       <Route element={<ManagerLayout user={user} onLogout={handleLogout} />}>
         <Route index element={<ManagerOverview user={user} />} />
         <Route path="bookings" element={<ManagerBookings user={user} />} />
+        <Route path="bookings/:id" element={<ManagerBookingDetail />} />
         <Route path="schedule" element={<ManagerSchedule user={user} />} />
         <Route path="branch" element={<ManagerBranch user={user} />} />
         <Route path="vouchers" element={<ManagerPromotions user={user} />} />

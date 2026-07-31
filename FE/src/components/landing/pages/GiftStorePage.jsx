@@ -1,6 +1,6 @@
-import Navbar from './Navbar';
-import GiftStoreSection from './GiftStoreSection';
-import Footer from './Footer';
+﻿import Navbar from '../layout/Navbar';
+import GiftStoreSection from '../sections/GiftStoreSection';
+import Footer from '../layout/Footer';
 
 export default function GiftStorePage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   return (

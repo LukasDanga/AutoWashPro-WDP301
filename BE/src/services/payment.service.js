@@ -96,7 +96,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
   // Trươc đây thu cả nhóm, nay khách yêu cầu thanh toán ĐƠN NÀO THU ĐƠN ĐÓ
   // nên chỉ lấy đúng finalPrice của đơn hiện tại.
-  let fullPrice = booking.finalPrice ?? booking.packageId.price;
+  let fullPrice = booking.finalPrice ?? booking.packagePrice ?? booking.packageId?.price;
 
   const deposit = booking.depositAmount || 0;
 
@@ -133,6 +133,8 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
         paymentType,
         transactionId: generateTransactionId(),
         status: 'pending',
+        packageName: booking.packageName || booking.packageId?.name || '',
+        packagePrice: booking.packagePrice ?? booking.packageId?.price ?? 0,
       },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -202,7 +204,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
           // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
             const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
-              ? (booking.packageId?.price || 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+              ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
               : fullPrice;
             if ((pointsBaseAmount || 0) > 0) {
               const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: bookingId, type: 'earned' }).session(session);
@@ -270,6 +272,8 @@ exports.createSlotPackPayment = async (slotPackId, userId, method, amount, clien
     status: 'pending',
     transactionId,
     client,
+    packageName: slotPack.packageName || '',
+    packagePrice: slotPack.unitPrice ?? 0,
   });
 
   if (method === 'bank') {
@@ -402,7 +406,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       // Award points here when payment completes the booking (bypasses updateBookingStatus)
       if (['awaiting_payment', 'completed'].includes(booking.status)) {
         const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
-          ? (booking.packageId?.price || 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+          ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
           : payment.amount;
         if ((pointsBaseAmount || 0) > 0) {
           const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
@@ -565,7 +569,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
             const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
-              ? (booking.packageId?.price || 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+              ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
               : payment.amount;
             if ((pointsBaseAmount || 0) > 0) {
               const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
