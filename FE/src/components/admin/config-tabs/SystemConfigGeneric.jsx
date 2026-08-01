@@ -32,7 +32,7 @@ const ADVANCE_TIERS = [
   { key: 'silver', label: 'Bạc', color: 'bg-slate-100 border-slate-300 text-slate-700' },
   { key: 'gold', label: 'Vàng', color: 'bg-yellow-50 border-yellow-200 text-yellow-800' },
   { key: 'diamond', label: 'Kim cương', color: 'bg-blue-50 border-blue-200 text-blue-800' },
-  { key: 'VIP', label: 'VIP', color: 'bg-purple-50 border-purple-200 text-purple-800' },
+  { key: 'Ruby', label: 'Hồng ngọc', color: 'bg-purple-50 border-purple-200 text-purple-800' },
 ];
 
 const CATEGORY_LABELS = {

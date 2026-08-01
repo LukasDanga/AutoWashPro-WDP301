@@ -59,7 +59,7 @@ const enforceAdvanceBookingLimit = async (userTier, bookingStr, todayStr) => {
 
   // Fallback: config ADVANCE_BOOKING_LIMITS cũ (dữ liệu cũ chưa có advanceDays trong tier)
   if (maxAdvanceDays === null) {
-    const ADVANCE_BOOKING_DAYS = await configService.get('ADVANCE_BOOKING_LIMITS', {}, { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 });
+    const ADVANCE_BOOKING_DAYS = await configService.get('ADVANCE_BOOKING_LIMITS', {}, { bronze: 14, silver: 14, gold: 30, diamond: 60, Ruby: 60 });
     maxAdvanceDays = (ADVANCE_BOOKING_DAYS && ADVANCE_BOOKING_DAYS[userTier]) ? ADVANCE_BOOKING_DAYS[userTier] : 14;
   }
 
@@ -1854,7 +1854,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
 };
 
 // ─── Tier → Priority mapping ─────────────────────────────────────────────────
-const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4 };
+const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4, Ruby: 5 };
 
 // ─── Recurring Booking ────────────────────────────────────────────────────────
 

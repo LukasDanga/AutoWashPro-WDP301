@@ -7,7 +7,7 @@ const configService = require('./config.service');
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Ánh xạ tier → priority number */
-const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4 };
+const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4, Ruby: 5 };
 
 /** Tính % chiết khấu dựa theo số lượng slot từ SystemConfig */
 async function getDiscountPercent(totalSlots) {
@@ -89,7 +89,7 @@ exports.createSlotPack = async (data) => {
       // --- Chiết khấu theo số lượng và hạng VIP ---
       const unitPrice = pkg.price;
       let discountPercent = await getDiscountPercent(totalSlots);
-      const vipBonusMap = await configService.get('SLOT_PACK_VIP_BONUS_DISCOUNTS', {}, { gold: 2, diamond: 5, VIP: 5 });
+      const vipBonusMap = await configService.get('SLOT_PACK_VIP_BONUS_DISCOUNTS', {}, { gold: 2, diamond: 5, Ruby: 5 });
       if (vipBonusMap && vipBonusMap[user.tier]) {
         discountPercent += vipBonusMap[user.tier];
       }
