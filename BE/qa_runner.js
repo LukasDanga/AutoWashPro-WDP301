@@ -193,7 +193,7 @@ async function runQA() {
         method: 'POST',
         body: JSON.stringify({
           key: 'ADVANCE_BOOKING_LIMITS',
-          value: { bronze: 3, silver: 14, gold: 30, diamond: 60, VIP: 60 },
+          value: { bronze: 3, silver: 14, gold: 30, diamond: 60, Ruby: 60 },
           type: 'json',
           isPublic: true
         })
