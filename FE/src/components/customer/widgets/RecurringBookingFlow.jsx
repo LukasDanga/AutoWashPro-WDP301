@@ -19,7 +19,7 @@ const WEEKDAYS = [
   { value: 6, label: 'T7', full: 'Thứ 7' },
   { value: 0, label: 'CN', full: 'Chủ Nhật' },
 ];
-const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
+const WEEKS_OPTIONS = [4, 8, 12, 16, 20, 24];
 const TIME_SLOTS = [
   '07:00','07:30','08:00','08:30','09:00','09:30',
   '10:00','10:30','11:00','11:30','13:00','13:30',
@@ -71,6 +71,8 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
   const [selectedWeekdays, setSelectedWeekdays] = useState([]);
   const [selectedTime, setSelectedTime] = useState('');
   const [weeks, setWeeks] = useState(4);
+  const [weeksInput, setWeeksInput] = useState('4');
+  const [weeksError, setWeeksError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState(null);
 
   const [localVehicles, setLocalVehicles] = useState([]);
@@ -206,9 +208,32 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
     setSelectedWeekdays(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   }
 
+  function handleWeeksInput(e) {
+    const raw = e.target.value.replace(/[^0-9]/g, '');
+    setWeeksInput(raw);
+    const n = raw === '' ? 0 : parseInt(raw, 10);
+    if (raw === '' || !Number.isInteger(n) || n < 2) {
+      setWeeksError('Số tuần phải là số nguyên dương lớn hơn 1');
+      setWeeks(n);
+      return;
+    }
+    setWeeksError('');
+    setWeeks(n);
+  }
+
+  function selectWeek(w) {
+    setWeeks(w);
+    setWeeksInput(String(w));
+    setWeeksError('');
+  }
+
   async function handleSubmit() {
     if (!selectedBranch || !selectedVehicle || !selectedPackage || selectedWeekdays.length === 0 || !selectedTime) {
       setError('Vui lòng điền đầy đủ thông tin (chi nhánh, xe, gói, ngày trong tuần, giờ).');
+      return;
+    }
+    if (!Number.isInteger(weeks) || weeks < 2) {
+      setError('Số tuần lặp lại phải là số nguyên dương lớn hơn 1.');
       return;
     }
     setLoading(true);
@@ -494,10 +519,23 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
                 {WEEKS_OPTIONS.map(w => (
                   <button key={w} type="button"
                     className={w === weeks ? 'rb-week-btn active' : 'rb-week-btn'}
-                    onClick={() => setWeeks(w)}>
+                    onClick={() => selectWeek(w)}>
                     {w} tuần
                   </button>
                 ))}
+              </div>
+              <div className="rb-weeks-manual">
+                <span className="rb-weeks-manual-label">HOẶC NHẬP SỐ TUẦN:</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className={weeksError ? 'rb-weeks-manual-input error' : 'rb-weeks-manual-input'}
+                  value={weeksInput}
+                  onChange={handleWeeksInput}
+                  placeholder="Nhập số tuần (> 1)"
+                  aria-label="Số tuần lặp lại"
+                />
+                {weeksError && <span className="rb-weeks-manual-error">{weeksError}</span>}
               </div>
             </article>
 
