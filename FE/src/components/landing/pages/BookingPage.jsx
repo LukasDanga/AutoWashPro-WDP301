@@ -1,0 +1,20 @@
+﻿import { useSearchParams, useLocation } from 'react-router-dom';
+import Navbar from '../layout/Navbar';
+import BookingWidget from '../widgets/BookingWidget';
+import Footer from '../layout/Footer';
+
+export default function BookingPage({ onOpenAuth, user, vehicles, apiBase, token, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate }) {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const initialBranchId = searchParams.get('branchId') || undefined;
+  const initialTab = searchParams.get('tab') || undefined;
+  const rebookData = location.state?.rebookData || undefined;
+
+  return (
+    <div className="bg-white min-h-screen">
+      <Navbar onOpenAuth={onOpenAuth} user={user} onLogout={onLogout} onGoToProfile={onGoToProfile} onGoToHistory={onGoToHistory} onGoToPayments={onGoToPayments} onGoToNotifications={onGoToNotifications} />
+      <BookingWidget onOpenAuth={onOpenAuth} user={user} vehicles={vehicles} apiBase={apiBase} token={token} onGoToHistory={onGoToHistory} pendingBooking={pendingBooking} onSetPendingBooking={onSetPendingBooking} onVehicleCreated={onVehicleCreated} onUserUpdate={onUserUpdate} initialBranchId={initialBranchId} initialTab={initialTab} rebookData={rebookData} />
+      <Footer />
+    </div>
+  );
+}

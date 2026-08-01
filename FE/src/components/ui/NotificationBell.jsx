@@ -9,6 +9,9 @@ import {
   Tag,
   ArrowCounterClockwise,
   Trash,
+  Coin,
+  Trophy,
+  Star,
 } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import useSSE from '@/hooks/useSSE';
@@ -31,6 +34,9 @@ const TYPE_CONFIG = {
   booking_reminder:  { Icon: Clock,                   color: 'text-amber-500',  bg: 'bg-amber-50' },
   payment_received:  { Icon: CurrencyCircleDollar,    color: 'text-emerald-500', bg: 'bg-emerald-50' },
   payment_confirmed: { Icon: CurrencyCircleDollar,    color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  points_earned:     { Icon: Star,                    color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  points_adjustment: { Icon: Coin,                    color: 'text-amber-600',   bg: 'bg-amber-50' },
+  tier_upgraded:     { Icon: Trophy,                  color: 'text-amber-500',  bg: 'bg-amber-50' },
   refund:            { Icon: ArrowCounterClockwise,   color: 'text-orange-500', bg: 'bg-orange-50' },
   voucher:           { Icon: Tag,                     color: 'text-purple-500', bg: 'bg-purple-50' },
   system:            { Icon: Bell,                    color: 'text-slate-500',  bg: 'bg-slate-50' },

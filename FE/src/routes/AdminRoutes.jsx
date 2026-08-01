@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AdminLayout from '@/components/admin/AdminLayout';
 import BranchManagement from '@/components/admin/BranchManagement';
 import AdminRewards from '@/components/admin/AdminRewards';
+import AdminSystemConfig from '@/components/admin/AdminSystemConfig';
+import AdminPointHistoryDetail from '@/components/admin/AdminPointHistoryDetail';
 import UserManagement from '@/components/admin/UserManagement';
 import AdminOverview from '@/components/admin/AdminOverview';
 import FeaturePlaceholder from '@/components/admin/FeaturePlaceholder';
@@ -103,6 +105,14 @@ export default function AdminRoutes() {
         <Route
           path="rewards"
           element={<AdminRewards />}
+        />
+        <Route
+          path="system-config"
+          element={<AdminSystemConfig />}
+        />
+        <Route
+          path="rewards/history/:id"
+          element={<AdminPointHistoryDetail />}
         />
         <Route path="activity" element={<AdminActivity />} />
         <Route path="bookings" element={<AdminBookings />} />

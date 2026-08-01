@@ -96,7 +96,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
 
   // Trươc đây thu cả nhóm, nay khách yêu cầu thanh toán ĐƠN NÀO THU ĐƠN ĐÓ
   // nên chỉ lấy đúng finalPrice của đơn hiện tại.
-  let fullPrice = booking.finalPrice ?? booking.packageId.price;
+  let fullPrice = booking.finalPrice ?? booking.packagePrice ?? booking.packageId?.price;
 
   const deposit = booking.depositAmount || 0;
 
@@ -133,6 +133,8 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
         paymentType,
         transactionId: generateTransactionId(),
         status: 'pending',
+        packageName: booking.packageName || booking.packageId?.name || '',
+        packagePrice: booking.packagePrice ?? booking.packageId?.price ?? 0,
       },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -199,18 +201,24 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
             { session }
           );
           await markRecurringSiblingsPaid(booking, method, session);
-          await loyaltyService.addPointsFromPayment(targetUserId, fullPrice, bookingId, session);
+          // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
-            // Spin wheel logic has been moved to booking.service.js to avoid double-awarding
-            // But we still need to trigger it if this payment completes the booking.
-            // Since this bypasses updateBookingStatus, we add the missing side effects:
+            const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
+              ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+              : fullPrice;
+            if ((pointsBaseAmount || 0) > 0) {
+              const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: bookingId, type: 'earned' }).session(session);
+              if (!alreadyAwarded) {
+                await loyaltyService.addPointsFromPayment(targetUserId, pointsBaseAmount, bookingId, session);
+              }
+            }
+            // Spin wheel + no-show side effects (missing because this bypasses updateBookingStatus)
             await mongoose.model('User').findOneAndUpdate(
               { _id: targetUserId, noShowCount: { $gt: 0 } },
               { $inc: { noShowCount: -1 } },
               { session }
             ).catch(() => {});
             
-            // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
             await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
             sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
           }
@@ -264,6 +272,8 @@ exports.createSlotPackPayment = async (slotPackId, userId, method, amount, clien
     status: 'pending',
     transactionId,
     client,
+    packageName: slotPack.packageName || '',
+    packagePrice: slotPack.unitPrice ?? 0,
   });
 
   if (method === 'bank') {
@@ -363,7 +373,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       return payment;
     }
 
-    const booking = await Booking.findById(payment.bookingId).session(session);
+    const booking = await Booking.findById(payment.bookingId).populate('packageId').session(session);
     if (!booking) {
       await session.abortTransaction();
       throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
@@ -393,14 +403,22 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
       }
       await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
       await markRecurringSiblingsPaid(booking, payment.method, session);
-      await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+      // Award points here when payment completes the booking (bypasses updateBookingStatus)
       if (['awaiting_payment', 'completed'].includes(booking.status)) {
+        const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
+          ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+          : payment.amount;
+        if ((pointsBaseAmount || 0) > 0) {
+          const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
+          if (!alreadyAwarded) {
+            await loyaltyService.addPointsFromPayment(payment.userId, pointsBaseAmount, booking._id, session);
+          }
+        }
         await mongoose.model('User').findOneAndUpdate(
           { _id: payment.userId, noShowCount: { $gt: 0 } },
           { $inc: { noShowCount: -1 } },
           { session }
         ).catch(() => {});
-        // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
         sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
       }
@@ -433,6 +451,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
   let paymentResult = null;
   let bookingResult = null;
   let slotPackResult = null;
+  let isNewlyProcessed = false;
 
   try {
     await session.withTransaction(async () => {
@@ -482,6 +501,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           
           await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, payment.slotPackId, session);
           // Removed spin wheel logic for slot pack purchase, user will earn it when they actually use the slot pack.
+          isNewlyProcessed = true;
         } else {
           payment.status = 'failed';
           await payment.save({ session });
@@ -514,6 +534,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
               }], { session });
             }
           }
+          isNewlyProcessed = true;
         } else {
           payment.status = 'failed';
           await payment.save({ session });
@@ -522,7 +543,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         return;
       }
 
-      const booking = await Booking.findById(payment.bookingId).session(session);
+      const booking = await Booking.findById(payment.bookingId).populate('packageId').session(session);
       if (!booking) {
         throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
       }
@@ -545,8 +566,17 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
           }
           await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
           await markRecurringSiblingsPaid(booking, payment.method, session);
-          await loyaltyService.addPointsFromPayment(payment.userId, payment.amount, booking._id, session);
+          // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
+            const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
+              ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+              : payment.amount;
+            if ((pointsBaseAmount || 0) > 0) {
+              const alreadyAwarded = await mongoose.model('PointHistory').findOne({ referenceId: booking._id, type: 'earned' }).session(session);
+              if (!alreadyAwarded) {
+                await loyaltyService.addPointsFromPayment(payment.userId, pointsBaseAmount, booking._id, session);
+              }
+            }
             await mongoose.model('User').findOneAndUpdate(
               { _id: payment.userId, noShowCount: { $gt: 0 } },
               { $inc: { noShowCount: -1 } },
@@ -556,6 +586,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
             await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
           }
         }
+        isNewlyProcessed = true;
       } else {
         payment.status = 'failed';
         await payment.save({ session });
@@ -571,7 +602,7 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
     const payment = paymentResult;
     
     // --- Side Effects outside of transaction ---
-    if (success && (payment.status === 'paid' || payment.status === 'failed')) {
+    if (isNewlyProcessed && success && (payment.status === 'paid' || payment.status === 'failed')) {
       if (payment.slotPackId && slotPackResult) {
         sseService.sendToUser(payment.userId, 'slot_pack_paid', { slotPackId: payment.slotPackId, paymentId: payment._id });
         const user = await mongoose.model('User').findById(payment.userId);
@@ -588,6 +619,10 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
         sseService.broadcastToManagers(bookingResult.branchId, 'payment_new', { paymentId: payment._id, bookingId: payment.bookingId });
         if (['awaiting_payment', 'completed'].includes(bookingResult.status)) {
           sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
+        }
+        const user = await mongoose.model('User').findById(payment.userId);
+        if (user && user.email) {
+          emailService.sendBookingConfirmationEmail(user.email, bookingResult).catch(e => console.error('Lỗi gửi email xác nhận đặt lịch:', e));
         }
       }
     }

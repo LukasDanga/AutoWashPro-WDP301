@@ -40,6 +40,8 @@ import {
   ArrowRight,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 import TierBadge from '@/components/ui/TierBadge';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/lib/toast';
@@ -87,7 +89,7 @@ const NEXT_STATUS = {
   confirmed:        ['checked_in', 'cancelled'],
   checked_in:       ['in_progress', 'cancelled'],
   in_progress:      ['awaiting_payment', 'completed', 'cancelled'],
-  awaiting_payment: ['completed', 'cancelled'],
+  awaiting_payment: ['cancelled'], // Chỉ hủy — hoàn thành qua thanh toán
 };
 
 const TYPE_MAP = {
@@ -238,7 +240,9 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
 /* ── "sắp bị auto-cancel" cảnh báo + nút gia hạn thủ công (đồng bộ với QR check-in) ── */
 function AtRiskNotice({ booking, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
-  if (!['pending', 'confirmed'].includes(booking.status) || !booking.lateWarningSentAt) return null;
+  const configs = useSystemConfig();
+  const graceStep = configs?.GRACE_EXTENSION_STEP_MINUTES ?? 5;
+  const maxGrace = configs?.MAX_GRACE_EXTENSION_MINUTES ?? 15;
 
   const extend = async () => {
     setBusy(true);
@@ -247,7 +251,7 @@ function AtRiskNotice({ booking, onUpdated, notify }) {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.message || 'Gia hạn thất bại');
       onUpdated(payload?.data ?? payload);
-      notify('Đã gia hạn thêm 15 phút cho đơn', 'success');
+      notify(`Đã gia hạn thêm ${graceStep} phút cho đơn`, 'success');
     } catch (err) {
       notify(err.message, 'error');
     } finally { setBusy(false); }
@@ -258,10 +262,10 @@ function AtRiskNotice({ booking, onUpdated, notify }) {
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title="Khách chưa check-in, sắp bị hệ thống tự hủy">
         <Clock size={10} weight="fill" /> Sắp hết hạn
       </span>
-      {(booking.graceExtensionMinutes || 0) < 15 && (
+      {(booking.graceExtensionMinutes || 0) < maxGrace && (
         <button onClick={extend} disabled={busy}
           className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 disabled:opacity-50 transition-colors">
-          {busy ? '...' : 'Gia hạn +5p'}
+          {busy ? '...' : `Gia hạn +${graceStep}p`}
         </button>
       )}
       {booking.suggestedSlotStartTime && (
@@ -599,12 +603,12 @@ function PrintReceiptModal({ booking, onClose }) {
                   <td className="py-3 text-right text-black align-top">{detailBooking.isGroup ? detailBooking.groupCount || recurringGroupBookings.length : 1}</td>
                   <td className="py-3 text-right text-black align-top">
                     {detailBooking.bookingType === 'slot_pack_usage' ? (
-                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packageId?.price || 0)}</span>
+                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packagePrice || detailBooking.packageId?.price || 0)}</span>
                     ) : null}
-                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
+                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
                   </td>
                   <td className="py-3 text-right text-black align-top">10%</td>
-                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
+                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
                 
                 {/* Included services rows */}
@@ -718,7 +722,7 @@ function PrintReceiptModal({ booking, onClose }) {
     </div>
   );
 }
-function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
+export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
 
   const handleStartEditSubServices = () => {
@@ -851,7 +855,13 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         body: JSON.stringify({ bookingId: booking._id, method, paymentType: booking.depositPaid ? 'remaining' : 'full' }),
       });
       if (!res.ok) throw new Error(await readErr(res));
-      onUpdated({ ...booking, paymentStatus: 'paid', paidAt: new Date().toISOString(), paymentMethod: method });
+      onUpdated({
+        ...booking,
+        paymentStatus: 'paid',
+        paidAt: new Date().toISOString(),
+        paymentMethod: method,
+        ...(booking.status === 'awaiting_payment' ? { status: 'completed', checkOutTime: new Date().toISOString() } : {}),
+      });
       notify(`Xác nhận thanh toán ${method === 'cash' ? 'tiền mặt' : method === 'bank' ? 'chuyển khoản' : method === 'wallet' ? 'ví' : 'VNPay'} thành công!`, 'success');
     } catch (err) {
       notify(err.message || 'Lỗi xác nhận thanh toán', 'error');
@@ -1023,7 +1033,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                       </span>
 
                       {/* Next action button rendered directly under current stage */}
-                      {isCurrent && stage.id !== 'completed' && (
+                      {isCurrent && stage.id !== 'completed' && stage.id !== 'awaiting_payment' && (
                         <button
                           disabled={busy}
                           onClick={() => updateStatus(stages[idx + 1].id)}
@@ -1032,6 +1042,11 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                           {busy ? 'Đang cập nhật...' : (STAGE_ACTION[stages[idx + 1].id] || `Chuyển sang ${stages[idx + 1].label}`)}
                           <ArrowRight size={14} weight="bold" />
                         </button>
+                      )}
+                      {isCurrent && stage.id === 'awaiting_payment' && (
+                        <span className="mt-3 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                          Đợi thanh toán để hoàn thành
+                        </span>
                       )}
                     </div>
                   );
@@ -1099,10 +1114,41 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
             {/* Financial summary */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Tổng giá trị dịch vụ:</span>
-                <span className="font-bold text-slate-900">{formatCurrency(booking.finalPrice || booking.totalAmount || 0)}</span>
-              </div>
+              {(() => {
+                const pkgPrice = booking.packagePrice ?? booking.packageId?.price ?? 0;
+                const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
+                const totalValue = pkgPrice + subTotal;
+                return <>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Giá gói (cơ bản):</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(pkgPrice)}</span>
+                  </div>
+                  {booking.bookingType === 'slot_pack_usage' && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">Chiết khấu gói lượt:</span>
+                      <span className="font-bold text-emerald-600">-{formatCurrency(pkgPrice)}</span>
+                    </div>
+                  )}
+                  {(booking.selectedSubServices || []).filter(s => s.price > 0).length > 0 && (
+                    <>
+                      {(booking.selectedSubServices || []).filter(s => s.price > 0).map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs pl-3">
+                          <span className="text-slate-500">{s.name}:</span>
+                          <span className="font-medium text-slate-800">+{formatCurrency(s.price)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-dashed border-slate-200">
+                        <span className="text-slate-700 font-semibold">Tổng dịch vụ thêm:</span>
+                        <span className="font-bold text-slate-900">+{formatCurrency(subTotal)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100 font-bold">
+                    <span className="text-slate-800">Tổng giá trị dịch vụ:</span>
+                    <span className="text-slate-900">{formatCurrency(totalValue)}</span>
+                  </div>
+                </>;
+              })()}
               {(booking.depositPaid || booking.paymentStatus === 'deposit_paid' || booking.paymentStatus === 'paid') && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">Tiền đã trả:</span>
@@ -1129,7 +1175,7 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
               <Package size={16} className="text-indigo-600" /> Chi tiết Gói Dịch Vụ
             </h3>
-            {booking.status !== 'completed' && booking.status !== 'cancelled' && !editingSubServices && (
+            {booking.status !== 'completed' && booking.status !== 'cancelled' && booking.status !== 'awaiting_payment' && !editingSubServices && (
               <button onClick={handleStartEditSubServices}
                 className="inline-flex items-center gap-1 px-3 py-1 rounded-xl border border-violet-300 bg-violet-50 text-xs font-bold text-violet-700 hover:bg-violet-100 transition-colors cursor-pointer">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg> Chỉnh sửa dịch vụ
@@ -1316,6 +1362,49 @@ function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   <span className="text-[13px] font-semibold text-slate-900 text-right max-w-[55%]">{value}</span>
                 </div>
               ))}
+
+              {/* Full service value breakdown (for all booking types) */}
+              {(() => {
+                const pkgPrice = booking.packagePrice ?? booking.packageId?.price ?? 0;
+                const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
+                const totalValue = pkgPrice + subTotal;
+                return <>
+                  <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                      <Package size={14} weight="fill" className="text-emerald-500 shrink-0" />
+                      Giá gói (cơ bản)
+                    </span>
+                    <span className="text-[13px] font-bold text-slate-900">{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  {booking.bookingType === 'slot_pack_usage' && (
+                    <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                      <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                        <CheckCircle size={14} weight="fill" className="text-emerald-500 shrink-0" />
+                        Chiết khấu gói lượt
+                      </span>
+                      <span className="text-[13px] font-bold text-emerald-600">-{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  {(booking.selectedSubServices || []).filter(s => s.price > 0).map((s, i) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                      <span className="flex items-center gap-2 text-[13px] text-slate-500">
+                        <span className="w-2 h-2 rounded-full bg-indigo-300 shrink-0" />
+                        {s.name}
+                      </span>
+                      <span className="text-[13px] font-semibold text-slate-800">+{Number(s.price).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] font-bold text-slate-700">
+                      <CurrencyCircleDollar size={14} weight="fill" className="text-emerald-600 shrink-0" />
+                      Tổng giá trị dịch vụ
+                    </span>
+                    <span className="text-[13px] font-bold text-slate-900">
+                      {Number(totalValue).toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
+                </>;
+              })()}
 
               {booking.depositAmount > 0 && booking.depositAmount < (booking.totalAmount || booking.finalPrice || 0) && (
                 <>
@@ -1784,28 +1873,62 @@ function getTodayStr() {
 const PAGE_SIZE = 15;
 
 export default function ManagerBookings() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const getInitialValue = (paramKey, defaultValue) => {
+    if (searchParams.has(paramKey)) {
+      return searchParams.get(paramKey);
+    }
+    const saved = sessionStorage.getItem('manager_bookings_filters');
+    if (saved) {
+      const sp = new URLSearchParams(saved);
+      if (sp.has(paramKey)) return sp.get(paramKey);
+    }
+    return defaultValue;
+  };
+
   const [bookings, setBookings] = useState([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const val = getInitialValue('page', '1');
+    return parseInt(val, 10) || 1;
+  });
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [todayOnly, setTodayOnly] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [search, setSearch] = useState(() => getInitialValue('search', ''));
+  const [statusFilter, setStatusFilter] = useState(() => getInitialValue('status', ''));
+  const [typeFilter, setTypeFilter] = useState(() => getInitialValue('type', ''));
+  const [todayOnly, setTodayOnly] = useState(() => getInitialValue('today', 'false') === 'true');
+  const [dateFrom, setDateFrom] = useState(() => getInitialValue('dateFrom', ''));
+  const [dateTo, setDateTo] = useState(() => getInitialValue('dateTo', ''));
   const [showCheckin, setShowCheckin] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
+  const [viewMode, setViewMode] = useState(() => getInitialValue('viewMode', 'table')); // 'table' | 'calendar'
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [qrBooking, setQrBooking] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
   const debounce = useRef(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter);
+    if (typeFilter) params.set('type', typeFilter);
+    if (todayOnly) params.set('today', 'true');
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    if (page > 1) params.set('page', String(page));
+    if (viewMode && viewMode !== 'table') params.set('viewMode', viewMode);
+
+    const queryString = params.toString();
+    sessionStorage.setItem('manager_bookings_filters', queryString);
+    setSearchParams(params, { replace: true });
+  }, [search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, page, viewMode, setSearchParams]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -1828,7 +1951,7 @@ export default function ManagerBookings() {
       localStorage.setItem('viewed_bookings', JSON.stringify(next));
       window.dispatchEvent(new Event('booking-viewed'));
     }
-    setSelectedBooking(b);
+    navigate(`/manager/bookings/${b._id}`, { state: { fromSearch: location.search } });
   };
 
   const tableData = useMemo(() => {
@@ -1914,30 +2037,8 @@ export default function ManagerBookings() {
 
   const handleUpdated = (updated) => {
     setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
-    if (selectedBooking && selectedBooking._id === updated._id) {
-      setSelectedBooking(updated);
-    }
     notify('Đã cập nhật trạng thái đặt lịch');
   };
-
-  useEffect(() => {
-    if (selectedBooking && bookings.length > 0) {
-      const updated = bookings.find(b => b._id === selectedBooking._id);
-      if (updated) {
-        setSelectedBooking(updated);
-      } else {
-        for (const b of bookings) {
-          if (b.isGroup && b.children) {
-            const child = b.children.find(c => c._id === selectedBooking._id);
-            if (child) {
-              setSelectedBooking(child);
-              break;
-            }
-          }
-        }
-      }
-    }
-  }, [bookings]);
 
   const handleCancel = async (id) => {
     const reason = cancelReason.trim();
@@ -1976,10 +2077,6 @@ export default function ManagerBookings() {
       setConfirmAllOpen(false);
     }
   };
-
-  if (selectedBooking) {
-    return <BookingDetailsTab booking={selectedBooking} onBack={() => setSelectedBooking(null)} onUpdated={handleUpdated} notify={notify} />;
-  }
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
@@ -2058,7 +2155,7 @@ export default function ManagerBookings() {
 
       {viewMode === 'calendar' && (
         <WeekView
-          onSelect={(b) => setSelectedBooking(b)}
+          onSelect={(b) => handleSelectBookingWithMark(b)}
           onConfirmAll={(ids, after) => confirmAll(ids, after)}
           onQR={(b) => setQrBooking(b)}
         />
@@ -2219,7 +2316,7 @@ export default function ManagerBookings() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <button onClick={() => setSelectedBooking(child)}
+                              <button onClick={() => handleSelectBookingWithMark(child)}
                                 className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
                                 Xem đơn
                               </button>
@@ -2308,7 +2405,7 @@ export default function ManagerBookings() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setSelectedBooking(b)}
+                        <button onClick={() => handleSelectBookingWithMark(b)}
                           className="rounded-lg px-3 py-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
                           Xem đơn
                         </button>

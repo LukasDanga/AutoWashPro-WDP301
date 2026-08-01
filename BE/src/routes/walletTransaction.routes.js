@@ -15,4 +15,15 @@ const { ROLES } = require('../config/permissions');
  */
 router.get('/my', authenticate, authorize(ROLES.CUSTOMER), walletTransactionController.getMyWalletTransactions);
 
+/**
+ * @swagger
+ * /api/wallet-transactions/:id:
+ *   get:
+ *     summary: Get wallet transaction details by ID
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/:id', authenticate, authorize(ROLES.CUSTOMER), walletTransactionController.getWalletTransactionById);
+
 module.exports = router;

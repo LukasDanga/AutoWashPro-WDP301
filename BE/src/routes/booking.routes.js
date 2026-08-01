@@ -167,7 +167,7 @@ router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUS
  *     security:
  *       - bearerAuth: []
  */
-router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
+router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
 
 /**
  * @swagger

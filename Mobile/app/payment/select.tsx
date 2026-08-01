@@ -6,7 +6,7 @@
  * URL params:
  *   - bookingId:  id của booking cần thu tiền.
  *   - type:       'deposit' (mặc định) | 'remaining' | 'full'.
- *                 'deposit'   → 30% × finalPrice (gộp cả nhóm nếu recurring).
+ *                 'deposit'   → DEPOSIT_RATE × finalPrice (gộp cả nhóm nếu recurring).
  *                 'remaining' → finalPrice − depositAmount (sau khi cọc).
  *                 'full'      → toàn bộ finalPrice (một lần).
  *
@@ -31,6 +31,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSystemConfig } from '../../src/contexts/ConfigContext';
 import { paymentApi, bookingApi } from '../../src/api';
 import {
   Text as AppText,
@@ -113,6 +114,8 @@ const TYPE_DESCRIPTION: Record<PayableType, string> = {
 };
 
 export default function PaymentSelectScreen() {
+  const configs = useSystemConfig();
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
   const router = useRouter();
   const params = useLocalSearchParams();
   const { isAuthenticated, user, fetchUser } = useAuth();
@@ -146,11 +149,12 @@ export default function PaymentSelectScreen() {
   const fullAmount = useMemo(() => {
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
+    const depositRate = configs?.DEPOSIT_RATE ?? 0.3;
     if (beDeposit > 0) {
-      return Math.round((beDeposit / 0.3) / 1000) * 1000;
+      return Math.round((beDeposit / depositRate) / 1000) * 1000;
     }
     return booking.finalPrice ?? booking.totalPrice ?? 0;
-  }, [booking]);
+  }, [booking, configs]);
 
   const computedAmount = useMemo(() => {
     if (!booking) return 0;
@@ -492,7 +496,7 @@ export default function PaymentSelectScreen() {
           </View>
           {booking.depositAmount ? (
             <View style={styles.summaryRow}>
-              <AppText variant="caption" color="textSecondary">Cọc (30%)</AppText>
+              <AppText variant="caption" color="textSecondary">Cọc ({depositPercent}%)</AppText>
               <AppText variant="bodySmall" style={[styles.summaryValue, { color: booking.depositPaid ? colors.success : colors.warning }]}>
                 {formatCurrency(booking.depositAmount)}
                 {booking.depositPaid ? ' • đã cọc' : ' • chưa cọc'}

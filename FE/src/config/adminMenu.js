@@ -10,6 +10,7 @@ import {
   Ticket,
   CurrencyDollar,
   ArrowUUpLeft,
+  Gear,
 } from '@phosphor-icons/react';
 
 export const ADMIN_BRAND = {
@@ -62,6 +63,12 @@ export const ADMIN_MENU_ITEMS = [
     icon: CalendarBlank,
   },
   {
+    id: 'system-config',
+    label: 'Cấu hình hệ thống',
+    to: '/admin/system-config',
+    icon: Gear,
+  },
+  {
     id: 'payments',
     label: 'Quản lý thanh toán',
     to: '/admin/payments',
@@ -108,6 +115,10 @@ export const ADMIN_PAGE_META = {
     title: 'Khuyến mãi & Quà tặng',
     description: 'Cấu hình chương trình tích điểm và đổi quà.',
   },
+  'rewards/config': {
+    title: 'Cấu hình tích điểm & Hạng thành viên',
+    description: 'Tùy chỉnh tỷ lệ tích điểm cơ bản và các mốc thăng hạng thành viên.',
+  },
   activity: {
     title: 'Hoạt động gần đây',
     description: 'Dòng thời gian các sự kiện đặt lịch, hoàn thành, hủy và đánh giá.',
@@ -115,6 +126,10 @@ export const ADMIN_PAGE_META = {
   bookings: {
     title: 'Quản lý đặt lịch',
     description: 'Xem và quản lý toàn bộ đặt lịch trên tất cả chi nhánh.',
+  },
+  'system-config': {
+    title: 'Cấu hình hệ thống',
+    description: 'Quản lý tập trung tất cả các quy tắc nghiệp vụ, chính sách booking, và điểm thưởng.',
   },
   payments: {
     title: 'Quản lý thanh toán',

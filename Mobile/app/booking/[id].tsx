@@ -78,6 +78,8 @@ interface RefundRequest {
 }
 
 export default function BookingDetailScreen() {
+  const configs = useSystemConfig();
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { i18n } = useTranslation();
@@ -186,7 +188,7 @@ export default function BookingDetailScreen() {
     }
   };
 
-  const requestCancelOtp = async () => {
+  const confirmCancel = async () => {
     if (!id) return;
     const reason = cancelReason.trim();
     if (!reason) {
@@ -195,29 +197,7 @@ export default function BookingDetailScreen() {
     }
     setIsCancelling(true);
     try {
-      await bookingApi.requestCancelOtp(id);
-      setCancelStep(2);
-      toast.success('Gửi mã thành công', 'Vui lòng kiểm tra email của bạn');
-    } catch (error: any) {
-      AlertDialog.error(
-        'Không thể lấy mã OTP',
-        error.response?.data?.message || 'Đã xảy ra lỗi khi lấy mã OTP.',
-      );
-    } finally {
-      setIsCancelling(false);
-    }
-  };
-
-  const confirmCancel = async () => {
-    if (!id) return;
-    const otp = cancelOtp.trim();
-    if (!otp) {
-      AlertDialog.error('Lỗi', 'Vui lòng nhập mã OTP.');
-      return;
-    }
-    setIsCancelling(true);
-    try {
-      const res = await bookingApi.cancelBooking(id, cancelReason.trim(), otp);
+      const res = await bookingApi.cancelBooking(id, reason);
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       setShowCancelModal(false);
       
@@ -713,7 +693,7 @@ export default function BookingDetailScreen() {
           {(booking.depositAmount ?? 0) > 0 && booking.paymentStatus !== 'paid' ? (
             <>
               <RowBetween
-                label={`Cọc (30%)`}
+                label={`Cọc (${depositPercent}%)`}
                 value={
                   booking.depositPaid
                     ? `${formatCurrency(booking.depositAmount ?? 0)} (đã cọc)`
@@ -1072,57 +1052,34 @@ export default function BookingDetailScreen() {
                     </View>
                   )}
 
-                  {cancelStep === 1 ? (
-                    <>
-                      <AppText variant="body" color="textSecondary" style={styles.cancelIntro}>
-                        Bạn có chắc chắn muốn hủy đơn này? Vui lòng cho chúng tôi biết lý do hủy.
-                      </AppText>
+                  <AppText variant="body" color="textSecondary" style={styles.cancelIntro}>
+                    Bạn có chắc chắn muốn hủy đơn này? Vui lòng cho chúng tôi biết lý do hủy.
+                  </AppText>
 
-                      <Text style={styles.cancelReasonLabel}>Lý do hủy</Text>
-                      <Input
-                        placeholder="Nhập lý do hủy đặt lịch..."
-                        value={cancelReason}
-                        onChangeText={setCancelReason}
-                        multiline
-                        numberOfLines={3}
-                        inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
-                        containerStyle={styles.cancelInputContainer}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <AppText variant="body" color="textSecondary" style={styles.cancelIntro}>
-                        Mã xác nhận (OTP) đã được gửi đến email của bạn. Vui lòng kiểm tra và nhập vào bên dưới.
-                      </AppText>
-
-                      <Text style={styles.cancelReasonLabel}>Mã OTP</Text>
-                      <Input
-                        placeholder="Nhập mã 6 số"
-                        value={cancelOtp}
-                        onChangeText={setCancelOtp}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        containerStyle={styles.cancelInputContainer}
-                      />
-                    </>
-                  )}
+                  <Text style={styles.cancelReasonLabel}>Lý do hủy</Text>
+                  <Input
+                    placeholder="Nhập lý do hủy đặt lịch..."
+                    value={cancelReason}
+                    onChangeText={setCancelReason}
+                    multiline
+                    numberOfLines={3}
+                    inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
+                    containerStyle={styles.cancelInputContainer}
+                  />
 
                   <View style={styles.cancelActions}>
                     <TouchableOpacity
                       style={[styles.cancelBackBtn, { borderColor: colors.border }]}
-                      onPress={() => {
-                        if (cancelStep === 2) setCancelStep(1);
-                        else setShowCancelModal(false);
-                      }}
+                      onPress={() => setShowCancelModal(false)}
                       activeOpacity={0.7}
                       accessibilityRole="button"
                     >
-                      <Text style={[styles.cancelBackBtnText, { color: colors.textPrimary }]}>Quay lại</Text>
+                      <Text style={[styles.cancelBackBtnText, { color: colors.textPrimary }]}>Hủy</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={[styles.cancelConfirmBtn, isCancelling && { opacity: 0.7 }]}
-                      onPress={cancelStep === 1 ? requestCancelOtp : confirmCancel}
+                      onPress={confirmCancel}
                       disabled={isCancelling}
                       activeOpacity={0.85}
                       accessibilityRole="button"
@@ -1133,14 +1090,11 @@ export default function BookingDetailScreen() {
                         end={{ x: 1, y: 1 }}
                         style={styles.cancelConfirmGradient}
                       >
-                        {/* Decorative white blob for depth */}
                         <View style={styles.cancelConfirmBlob} />
                         {isCancelling ? (
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
-                          <Text style={styles.cancelConfirmText}>
-                            {cancelStep === 1 ? 'Lấy mã OTP' : 'Xác nhận hủy'}
-                          </Text>
+                          <Text style={styles.cancelConfirmText}>Xác nhận hủy</Text>
                         )}
                       </LinearGradient>
                     </TouchableOpacity>

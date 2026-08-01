@@ -2,18 +2,23 @@ const mongoose = require('mongoose');
 const { SlotPack, Package, Branch, Vehicle, User, Booking } = require('../models');
 const voucherService = require('./voucher.service');
 const notificationService = require('./notification.service');
+const configService = require('./config.service');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Ánh xạ tier → priority number */
 const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4 };
 
-/** Tính % chiết khấu dựa theo số lượng slot */
-function getDiscountPercent(totalSlots) {
-  if (totalSlots >= 20) return 15;
-  if (totalSlots >= 10) return 10;
-  if (totalSlots >= 5)  return 5;
-  return 0;
+/** Tính % chiết khấu dựa theo số lượng slot từ SystemConfig */
+async function getDiscountPercent(totalSlots) {
+  const discounts = await configService.get('SLOT_PACK_DISCOUNTS', {}, [
+    { minSlots: 20, discountPercent: 15 },
+    { minSlots: 10, discountPercent: 10 },
+    { minSlots: 5, discountPercent: 5 }
+  ]);
+  const sorted = Array.isArray(discounts) ? [...discounts].sort((a, b) => b.minSlots - a.minSlots) : [];
+  const match = sorted.find(d => totalSlots >= d.minSlots);
+  return match ? match.discountPercent : 0;
 }
 
 /** Sinh mã pack duy nhất: SP-XXXXXX */
@@ -76,15 +81,18 @@ exports.createSlotPack = async (data) => {
         throw Object.assign(new Error('Gói dịch vụ không thuộc chi nhánh này'), { statusCode: 400, code: 'PACKAGE_BRANCH_MISMATCH' });
       }
 
-      if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > 50) {
-        throw Object.assign(new Error('Số lượng gói phải từ 1 đến 50'), { statusCode: 400, code: 'INVALID_SLOTS' });
+      const maxSlotQty = await configService.get('MAX_SLOT_PACK_QUANTITY', {}, 50);
+      if (!Number.isInteger(totalSlots) || totalSlots < 1 || totalSlots > maxSlotQty) {
+        throw Object.assign(new Error(`Số lượng gói phải từ 1 đến ${maxSlotQty}`), { statusCode: 400, code: 'INVALID_SLOTS' });
       }
 
       // --- Chiết khấu theo số lượng và hạng VIP ---
       const unitPrice = pkg.price;
-      let discountPercent = getDiscountPercent(totalSlots);
-      if (user.tier === 'diamond') discountPercent += 10;
-      else if (user.tier === 'gold') discountPercent += 5;
+      let discountPercent = await getDiscountPercent(totalSlots);
+      const vipBonusMap = await configService.get('SLOT_PACK_VIP_BONUS_DISCOUNTS', {}, { gold: 2, diamond: 5, VIP: 5 });
+      if (vipBonusMap && vipBonusMap[user.tier]) {
+        discountPercent += vipBonusMap[user.tier];
+      }
       if (discountPercent > 100) discountPercent = 100;
 
       const grossTotal = unitPrice * totalSlots;
@@ -115,6 +123,8 @@ exports.createSlotPack = async (data) => {
         totalSlots,
         remainingSlots: totalSlots,
         usedSlots: 0,
+        packageName: pkg.name,
+        packageDuration: pkg.duration,
         unitPrice,
         discountPercent,
         discountAmount: qtyDiscount,
@@ -351,6 +361,11 @@ exports.requestCancelOtp = async (packId, userId) => {
     throw Object.assign(new Error(`Không thể yêu cầu hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
   }
 
+  const user = await User.findById(userId);
+  if (!user || !user.email) {
+    throw Object.assign(new Error('Tài khoản của bạn chưa có email. Vui lòng cập nhật email để nhận mã OTP!'), { statusCode: 400, code: 'EMAIL_REQUIRED' });
+  }
+
   // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const bcrypt = require('bcryptjs');
@@ -359,16 +374,19 @@ exports.requestCancelOtp = async (packId, userId) => {
   pack.cancelOtpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
   await pack.save();
 
-  const user = await User.findById(userId);
-  if (user && user.email) {
+  console.log(`[CANCEL OTP SLOTPACK] User: ${user.email}, Pack: ${pack.packCode || pack._id}, OTP: ${otp}`);
+
+  try {
     const emailService = require('./email.service');
-    emailService.sendCancellationOtpEmail(user.email, otp).catch(e => console.error('Lỗi gửi OTP hủy gói:', e));
+    await emailService.sendCancellationOtpEmail(user.email, otp);
+  } catch (e) {
+    console.error('Lỗi gửi OTP hủy gói:', e);
+    throw Object.assign(new Error(`Không thể gửi email OTP đến ${user.email}: ${e.message || 'Lỗi hệ thống email'}`), { statusCode: 500, code: 'EMAIL_FAILED' });
   }
   return true;
 };
 
-exports.cancelSlotPack = async (packId, userId, userRole, otp) => {
-  const bcrypt = require('bcryptjs');
+exports.cancelSlotPack = async (packId, userId, userRole, reason) => {
   const pack = await SlotPack.findById(packId);
   
   if (!pack) throw Object.assign(new Error('Gói lượt không tồn tại'), { statusCode: 404, code: 'SLOT_PACK_NOT_FOUND' });
@@ -377,19 +395,6 @@ exports.cancelSlotPack = async (packId, userId, userRole, otp) => {
   }
   if (pack.status !== 'active') {
     throw Object.assign(new Error(`Không thể hủy gói lượt ở trạng thái ${pack.status}`), { statusCode: 400, code: 'INVALID_STATUS' });
-  }
-
-  if (userRole === 'customer') {
-    if (!otp) {
-      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy gói'), { statusCode: 400 });
-    }
-    if (!pack.cancelOtpToken || !pack.cancelOtpExpires || Date.now() > pack.cancelOtpExpires) {
-      throw Object.assign(new Error('Mã OTP không hợp lệ hoặc đã hết hạn'), { statusCode: 400 });
-    }
-    const isMatch = bcrypt.compareSync(otp, pack.cancelOtpToken);
-    if (!isMatch) {
-      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
-    }
   }
 
   // Calculate refund

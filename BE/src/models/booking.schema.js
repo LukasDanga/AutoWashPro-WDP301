@@ -8,6 +8,32 @@ const bookingSchema = new mongoose.Schema(
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', required: true },
     packageName: { type: String },
     packageDuration: { type: Number },
+    // Snapshot giá gói tại thời điểm đặt — tránh bị đổi theo giá hiện tại khi admin chỉnh giá gói
+    packagePrice: { type: Number, min: 0 },
+    // Snapshot danh sách dịch vụ đi kèm cố định trong gói tại thời điểm đặt
+    includedSubServices: [
+      {
+        name: { type: String, required: true },
+        price: { type: Number, default: 0, min: 0 },
+        duration: { type: Number, default: 0, min: 0 },
+        isOptional: { type: Boolean, default: false },
+      },
+    ],
+    // Snapshot toàn bộ thông tin gói dịch vụ tại thời điểm đặt lịch
+    packageSnapshot: {
+      name: { type: String },
+      price: { type: Number },
+      duration: { type: Number },
+      description: { type: String },
+      subServices: [
+        {
+          name: { type: String },
+          price: { type: Number, default: 0 },
+          duration: { type: Number, default: 0 },
+          isOptional: { type: Boolean, default: false },
+        },
+      ],
+    },
     vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
     bookingDate: { type: Date, required: true },
     startTime: { type: String, required: true },

@@ -104,7 +104,7 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   if (req.body.status === 'checked_in') {
     updateData.staffId = req.userId;
   }
-  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId);
+  const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
   success(res, booking, 'Cập nhật trạng thái đặt lịch thành công');
@@ -140,6 +140,13 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
     throw Object.assign(new Error('Không thể yêu cầu OTP hủy lúc này'), { statusCode: 400 });
   }
 
+  // Need user email
+  const User = require('../models/user.schema');
+  const user = await User.findById(req.userId);
+  if (!user || !user.email) {
+    throw Object.assign(new Error('Tài khoản của bạn chưa có email. Vui lòng cập nhật email để nhận mã OTP!'), { statusCode: 400 });
+  }
+
   // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const bcrypt = require('bcryptjs');
@@ -148,45 +155,21 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
   booking.cancelOtpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
   await booking.save();
 
-  // Need user email
-  const User = require('../models/user.schema');
-  const user = await User.findById(req.userId);
-  if (user && user.email) {
-    emailService.sendCancellationOtpEmail(user.email, otp).catch(e => console.error('Lỗi gửi OTP hủy đơn:', e));
+  console.log(`[CANCEL OTP BOOKING] User: ${user.email}, Booking: ${booking.bookingCode || booking._id}, OTP: ${otp}`);
+
+  try {
+    await emailService.sendCancellationOtpEmail(user.email, otp);
+  } catch (e) {
+    console.error('Lỗi gửi OTP hủy đơn:', e);
+    throw Object.assign(new Error(`Không thể gửi email OTP đến ${user.email}: ${e.message || 'Lỗi hệ thống email'}`), { statusCode: 500 });
   }
 
-  success(res, null, 'OTP đã được gửi đến email của bạn');
+  success(res, null, `Mã OTP đã được gửi thành công đến email ${user.email}`);
 });
 
 exports.cancelBooking = catchAsync(async (req, res) => {
-  const bcrypt = require('bcryptjs');
-  const Booking = require('../models/booking.schema');
-
-  if (req.user.role === 'customer') {
-    if (!req.body.otp) {
-      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy đơn'), { statusCode: 400 });
-    }
-    const booking = await Booking.findById(req.params.id);
-    if (!booking || !booking.cancelOtpToken || !booking.cancelOtpExpires) {
-      throw Object.assign(new Error('Yêu cầu OTP không hợp lệ hoặc đã hết hạn'), { statusCode: 400 });
-    }
-    if (Date.now() > booking.cancelOtpExpires) {
-      throw Object.assign(new Error('Mã OTP đã hết hạn, vui lòng lấy mã mới'), { statusCode: 400 });
-    }
-    const isMatch = bcrypt.compareSync(req.body.otp, booking.cancelOtpToken);
-    if (!isMatch) {
-      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
-    }
-  }
-
-  const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, req.body.cancellationReason);
-  
-  if (req.user.role === 'customer') {
-    // Xóa OTP
-    await Booking.findByIdAndUpdate(req.params.id, {
-      $unset: { cancelOtpToken: "", cancelOtpExpires: "" }
-    });
-  }
+  const reason = req.body.cancellationReason || req.body.reason || 'Khách hàng yêu cầu hủy đơn';
+  const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, reason);
 
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
@@ -390,21 +373,21 @@ exports.sepayWebhook = catchAsync(async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, '').trim();
   if (process.env.SEPAY_API_KEY && token !== process.env.SEPAY_API_KEY) {
-    return res.status(401).json({ success: false, message: 'Invalid API Key' });
+    return res.status(401).json({ success: false, message: 'Mã API Key không hợp lệ' });
   }
 
   const { content, referenceCode, transferType } = req.body;
   
   // Chỉ xử lý giao dịch nhận tiền
   if (transferType !== 'in') {
-    return res.json({ success: true, message: 'Ignored outbound transaction' });
+    return res.json({ success: true, message: 'Đã bỏ qua giao dịch tiền ra' });
   }
 
   // Tìm mã giao dịch trong nội dung (ví dụ: TXN123456ABC)
   // content có thể là "WASHPRO TXN123456ABC"
   const match = content ? content.match(/TXN\d+[A-Z0-9]+/) : null;
   if (!match) {
-    return res.json({ success: true, message: 'No transaction ID found in content' });
+    return res.json({ success: true, message: 'Không tìm thấy mã giao dịch trong nội dung chuyển khoản' });
   }
 
   const transactionId = match[0];
@@ -428,7 +411,7 @@ exports.simulatePayment = catchAsync(async (req, res) => {
 exports.createVnpayProvisional = catchAsync(async (req, res) => {
   const { amount, paymentType } = req.body;
   if (!amount || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'Invalid amount' });
+    return res.status(400).json({ success: false, message: 'Số tiền thanh toán không hợp lệ' });
   }
   const ipAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
 
@@ -458,13 +441,13 @@ exports.createVnpayProvisional = catchAsync(async (req, res) => {
     returnUrl: targetReturnUrl,
   });
 
-  success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'VNPay provisional URL created');
+  success(res, { paymentUrl: vnpayUrl, transactionId, payment }, 'Đã tạo URL thanh toán VNPay tạm tính');
 });
 
 exports.createBankProvisional = catchAsync(async (req, res) => {
   const { amount, paymentType } = req.body;
   if (!amount || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'Invalid amount' });
+    return res.status(400).json({ success: false, message: 'Số tiền thanh toán không hợp lệ' });
   }
   const paymentService = require('../services/payment.service');
   const payment = await paymentService.createProvisionalBankPayment(req.userId, amount, paymentType || 'deposit');
@@ -484,11 +467,11 @@ exports.createBankProvisional = catchAsync(async (req, res) => {
 exports.vnpayCallback = catchAsync(async (req, res) => {
   const { transactionId, gatewayTransactionId, status: paymentStatus } = req.body;
   if (!transactionId) {
-    return res.status(400).json({ success: false, message: 'Missing transactionId' });
+    return res.status(400).json({ success: false, message: 'Thiếu thông tin mã giao dịch' });
   }
   const isSuccess = paymentStatus !== 'failed';
   const payment = await paymentService.confirmPaymentCallback(transactionId, gatewayTransactionId || 'VNPAY', isSuccess);
-  success(res, payment, isSuccess ? 'VNPay payment confirmed' : 'VNPay payment failed');
+  success(res, payment, isSuccess ? 'Thanh toán VNPay đã được xác nhận' : 'Thanh toán VNPay thất bại');
 });
 
 exports.createVnpayPayment = catchAsync(async (req, res) => {

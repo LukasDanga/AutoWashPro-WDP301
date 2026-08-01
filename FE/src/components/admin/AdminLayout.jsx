@@ -11,14 +11,34 @@ function api(path) {
   return fetch(`${getApiBaseUrl()}${path}`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
 }
 
-function resolvePageMeta(pathname) {
+function resolvePageMeta(pathname, search = '') {
   if (pathname === '/admin' || pathname === '/admin/') {
     return ADMIN_PAGE_META.overview;
   }
   if (pathname.startsWith('/admin/branches')) return ADMIN_PAGE_META.branches;
   if (pathname.startsWith('/admin/users')) return ADMIN_PAGE_META.users;
   if (pathname.startsWith('/admin/reviews')) return ADMIN_PAGE_META.reviews;
-  if (pathname.startsWith('/admin/rewards')) return ADMIN_PAGE_META.rewards;
+  if (pathname.startsWith('/admin/system-config')) return ADMIN_PAGE_META['system-config'];
+  if (pathname.startsWith('/admin/rewards/config')) return ADMIN_PAGE_META['rewards/config'];
+  if (pathname.startsWith('/admin/rewards/history/')) {
+    return { title: 'Chi tiết Giao dịch Điểm thưởng', description: 'Xem chi tiết lý do, công thức và đơn hàng tích điểm của khách hàng.' };
+  }
+  if (pathname.startsWith('/admin/rewards')) {
+    const tab = new URLSearchParams(search).get('tab');
+    if (tab === 'list') {
+      return { title: 'Khuyến mãi & Quà tặng — Danh sách Voucher', description: 'Quản lý các mã giảm giá và voucher ưu đãi.' };
+    }
+    if (tab === 'history') {
+      return { title: 'Khuyến mãi & Quà tặng — Lịch sử điểm thưởng', description: 'Theo dõi biến động điểm tích lũy của khách hàng toàn hệ thống.' };
+    }
+    if (tab === 'wheel') {
+      return { title: 'Khuyến mãi & Quà tặng — Quản lý Vòng Quay', description: 'Cấu hình phần thưởng và ô quay trúng thưởng.' };
+    }
+    if (tab === 'report') {
+      return { title: 'Khuyến mãi & Quà tặng — Báo cáo sử dụng', description: 'Báo cáo thống kê tình hình áp dụng voucher và quà tặng.' };
+    }
+    return { title: 'Khuyến mãi & Quà tặng — Cấu hình điểm thưởng', description: 'Cấu hình chương trình tích điểm và mốc thăng hạng.' };
+  }
   if (pathname.startsWith('/admin/activity')) return ADMIN_PAGE_META.activity;
   if (pathname.startsWith('/admin/bookings')) return ADMIN_PAGE_META.bookings;
   if (pathname.startsWith('/admin/payments')) return ADMIN_PAGE_META.payments;
@@ -31,7 +51,7 @@ function resolvePageMeta(pathname) {
 export default function AdminLayout({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const meta = resolvePageMeta(location.pathname);
+  const meta = resolvePageMeta(location.pathname, location.search);
   const [badges, setBadges] = useState({});
 
   // Đếm số mục "mới / cần xử lý" toàn hệ thống: đơn chờ xác nhận + đánh giá chưa phản hồi + thanh toán chưa xem

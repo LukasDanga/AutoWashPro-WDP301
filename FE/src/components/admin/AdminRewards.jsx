@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import { confirmDialog } from '@/lib/confirm';
 import {
@@ -6,6 +7,7 @@ import {
   CheckCircle,
   MagnifyingGlass,
   Plus,
+  Star,
   Tag,
   Trash,
   Warning,
@@ -18,6 +20,7 @@ import {
   Trophy,
   ArrowUp,
   ArrowDown,
+  Eye,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -385,7 +388,13 @@ function VoucherUsageReportTab() {
     let mounted = true;
     api('/vouchers/usage-report')
       .then(res => { if (!res.ok) throw new Error('Không thể tải báo cáo sử dụng'); return res.json(); })
-      .then(p => { if (mounted) { setReport(p?.data ?? []); setLoading(false); } })
+      .then(p => {
+        if (mounted) {
+          const raw = p?.data?.data ?? p?.data ?? [];
+          setReport(Array.isArray(raw) ? raw : []);
+          setLoading(false);
+        }
+      })
       .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
     return () => { mounted = false; };
   }, []);
@@ -729,10 +738,1005 @@ function DashboardOverview({ vouchers }) {
   );
 }
 
+/* ═══ Loyalty Config Modal ═══ */
+function LoyaltyConfigModal({ initialConfig, onSave, onClose, saving }) {
+  const [form, setForm] = useState(() => {
+    if (initialConfig) {
+      return {
+        baseEarningRate: initialConfig.baseEarningRate ?? 5,
+        pointExpirationMonths: initialConfig.pointExpirationMonths ?? 6,
+        tiers: Array.isArray(initialConfig.tiers)
+          ? initialConfig.tiers.map((t) => ({
+              id: t.id || '',
+              name: t.name || '',
+              minPoints: t.minPoints ?? 0,
+              multiplier: t.multiplier ?? 1.0,
+              benefitsText: Array.isArray(t.benefits) ? t.benefits.join('\n') : '',
+            }))
+          : [],
+      };
+    }
+    return {
+      baseEarningRate: 5,
+      pointExpirationMonths: 6,
+      tiers: [
+        { id: 'bronze', name: 'Đồng', minPoints: 0, multiplier: 1.0, benefitsText: 'Tích lũy điểm thưởng từ mỗi hóa đơn' },
+        { id: 'silver', name: 'Bạc', minPoints: 100000, multiplier: 1.2, benefitsText: 'Tất cả ưu đãi của hạng Đồng\nHệ số nhân điểm x1.2' },
+        { id: 'gold', name: 'Vàng', minPoints: 500000, multiplier: 1.5, benefitsText: 'Tất cả ưu đãi của hạng Bạc\nHệ số nhân điểm x1.5' },
+        { id: 'diamond', name: 'Kim cương', minPoints: 1000000, multiplier: 2.0, benefitsText: 'Tất cả ưu đãi của hạng Vàng\nHệ số nhân điểm x2.0' },
+      ],
+    };
+  });
+
+  const handleTierChange = (index, field, value) => {
+    setForm((prev) => {
+      const nextTiers = [...prev.tiers];
+      nextTiers[index] = { ...nextTiers[index], [field]: value };
+      return { ...prev, tiers: nextTiers };
+    });
+  };
+
+  const handleAddTier = () => {
+    setForm((prev) => ({
+      ...prev,
+      tiers: [
+        ...prev.tiers,
+        { id: `tier_${Date.now()}`, name: 'Hạng mới', minPoints: 2000000, multiplier: 2.5, benefitsText: '' },
+      ],
+    }));
+  };
+
+  const handleRemoveTier = (index) => {
+    if (form.tiers.length <= 1) return;
+    setForm((prev) => ({
+      ...prev,
+      tiers: prev.tiers.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const payload = {
+      baseEarningRate: Number(form.baseEarningRate),
+      pointExpirationMonths: Number(form.pointExpirationMonths),
+      tiers: form.tiers.map((t) => ({
+        id: t.id,
+        name: t.name,
+        minPoints: Number(t.minPoints),
+        multiplier: Number(t.multiplier),
+        benefits: t.benefitsText ? t.benefitsText.split('\n').filter((b) => b.trim()) : [],
+      })),
+    };
+    onSave(payload);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdf4)' }}>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <Coin size={20} weight="duotone" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">Cấu hình tích điểm & hạng thành viên</h3>
+              <p className="text-xs text-slate-500">Tùy chỉnh tỷ lệ tích điểm và mốc thăng hạng toàn hệ thống</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <form id="loyalty-config-form" onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6">
+          {/* General Config */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Tỷ lệ tích điểm cơ bản (% giá trị đơn)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={form.baseEarningRate}
+                  onChange={(e) => setForm({ ...form, baseEarningRate: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-8 text-sm font-semibold text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">%</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Ví dụ: 5% nghĩa là đơn 100,000đ nhận 5,000 điểm cơ bản</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Thời hạn điểm tích lũy (tháng)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={form.pointExpirationMonths}
+                  onChange={(e) => setForm({ ...form, pointExpirationMonths: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  required
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Thời gian điểm tích lũy tự động hết hạn tính từ ngày tích</p>
+            </div>
+          </div>
+
+          {/* Tiers List */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Trophy size={16} className="text-amber-500" />
+                Cấu hình mốc điểm & hệ số nhân từng hạng
+              </h4>
+              <button
+                type="button"
+                onClick={handleAddTier}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+              >
+                <Plus size={14} weight="bold" /> Thêm hạng
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {form.tiers.map((tier, idx) => (
+                <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                        {idx + 1}
+                      </span>
+                      <TierBadge tier={tier.id} />
+                    </div>
+                    {form.tiers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTier(idx)}
+                        className="text-slate-400 hover:text-red-600 transition-colors p-1"
+                        title="Xóa hạng này"
+                      >
+                        <Trash size={15} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Mã ID hạng</label>
+                      <input
+                        type="text"
+                        value={tier.id}
+                        onChange={(e) => handleTierChange(idx, 'id', e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-mono font-semibold text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Tên hiển thị</label>
+                      <input
+                        type="text"
+                        value={tier.name}
+                        onChange={(e) => handleTierChange(idx, 'name', e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Điểm thăng hạng (minPoints)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={tier.minPoints}
+                        onChange={(e) => handleTierChange(idx, 'minPoints', e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-extrabold text-amber-700"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Hệ số nhân điểm (Multiplier)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        max="10"
+                        value={tier.multiplier}
+                        onChange={(e) => handleTierChange(idx, 'multiplier', e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-extrabold text-emerald-700"
+                        required
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Danh sách ưu đãi (Mỗi dòng 1 ưu đãi)</label>
+                      <textarea
+                        rows={2}
+                        value={tier.benefitsText}
+                        onChange={(e) => handleTierChange(idx, 'benefitsText', e.target.value)}
+                        placeholder="Nhập các ưu đãi của hạng..."
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            type="submit"
+            form="loyalty-config-form"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+          >
+            {saving ? <Spinner size={14} /> : null}
+            Lưu cấu hình
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ Lifetime Points Tab ═══ */
+function LifetimePointsTab({ branches = [], isManager = false }) {
+  const navigate = useNavigate();
+  const [allHistory, setAllHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [branchId, setBranchId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [dateError, setDateError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+
+  useEffect(() => {
+    if (startDate && endDate && startDate > endDate) {
+      setDateError('Ngày bắt đầu không được lớn hơn ngày kết thúc');
+    } else {
+      setDateError('');
+    }
+  }, [startDate, endDate]);
+
+  const fetchAll = useCallback(async () => {
+    if (startDate && endDate && startDate > endDate) return;
+    setLoading(true); setError('');
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (branchId && !isManager) params.append('branchId', branchId);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      params.append('page', page);
+      params.append('limit', 10);
+      const res = await api(`/loyalty/admin/history?${params.toString()}`);
+      if (!res.ok) throw new Error(await readErr(res));
+      const json = await res.json();
+      const list = json?.data ?? [];
+      setAllHistory(Array.isArray(list) ? list : []);
+      if (json?.pagination) setPagination(json.pagination);
+    } catch (err) {
+      setError(err.message || 'Không thể tải điểm tích lũy');
+    } finally { setLoading(false); }
+  }, [search, branchId, startDate, endDate, page, isManager]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const lifetimeHistory = allHistory.filter(item => item.type === 'earned' || item.type === 'adjustment');
+
+  const totalLifetime = lifetimeHistory.reduce((sum, item) => {
+    if (item.type === 'earned' || (item.type === 'adjustment' && item.points > 0)) return sum + Math.abs(item.points);
+    return sum;
+  }, 0);
+
+  const handleResetFilters = () => {
+    setSearch(''); setBranchId(''); setStartDate(''); setEndDate(''); setDateError(''); setPage(1);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={() => { setPage(1); fetchAll(); }} disabled={loading || Boolean(dateError)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors" title="Tải lại">
+            <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <div className="relative flex-1 min-w-[220px]">
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Tìm theo tên, email, SĐT, mã đơn..." value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors" />
+            {search && <button onClick={() => { setSearch(''); setPage(1); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X size={12} /></button>}
+          </div>
+          {!isManager && (
+            <select value={branchId} onChange={(e) => { setBranchId(e.target.value); setPage(1); }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100">
+              <option value="">Tất cả chi nhánh</option>
+              {branches.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Từ ngày:</span>
+            <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs text-slate-700 focus:outline-none transition-colors ${dateError ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100' : 'border-slate-200 bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100'}`} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Đến ngày:</span>
+            <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs text-slate-700 focus:outline-none transition-colors ${dateError ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100' : 'border-slate-200 bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100'}`} />
+          </div>
+          {(search || branchId || startDate || endDate) && (
+            <button onClick={handleResetFilters} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Xóa bộ lọc</button>
+          )}
+        </div>
+        {dateError && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs font-semibold text-red-600">
+            <Warning size={15} weight="fill" />{dateError}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <ArrowUp size={20} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Tổng điểm tích lũy</p>
+            <p className="text-xl font-extrabold text-blue-700">+{totalLifetime.toLocaleString('vi-VN')} điểm</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+            <Trophy size={20} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Số giao dịch tích lũy</p>
+            <p className="text-xl font-extrabold text-sky-700">{lifetimeHistory.length} giao dịch</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600">
+            <Coin size={20} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Chỉ bao gồm</p>
+            <p className="text-xl font-extrabold text-cyan-700">Tích điểm + Điều chỉnh</p>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-24 text-slate-400"><Spinner size={24} /></div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-red-100 bg-red-50 py-16 text-red-500">
+          <Warning size={26} weight="duotone" /><p className="text-sm">{error}</p>
+        </div>
+      ) : lifetimeHistory.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20">
+          <Trophy size={40} weight="thin" className="text-slate-300" />
+          <p className="text-sm text-slate-500">Chưa có lịch sử điểm tích lũy nào</p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                <th className="px-4 py-3">Khách hàng</th>
+                <th className="px-4 py-3">Loại</th>
+                <th className="px-4 py-3">Số điểm</th>
+                <th className="px-4 py-3">Chi tiết & Lý do (Snapshot)</th>
+                <th className="px-4 py-3">Thời gian</th>
+                <th className="px-4 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {lifetimeHistory.map((item) => {
+                const user = item.userId || {};
+                const snap = item.snapshot || {};
+                const isEarned = item.type === 'earned';
+                const branchName = snap.branchName || snap.branchId?.name || '';
+                return (
+                  <tr key={item._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <img src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} alt=""
+                          className="h-8 w-8 rounded-full object-cover border border-slate-200" />
+                        <div>
+                          <p className="font-semibold text-slate-800 text-xs">{user.name || 'Khách hàng'}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] text-slate-400">{user.phone || user.email || '-'}</span>
+                            {user.tier && <TierBadge tier={user.tier} />}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          isEarned
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-purple-50 text-purple-700 border border-purple-200'
+                        }`}>
+                          {isEarned ? <ArrowUp size={12} weight="bold" /> : <ArrowDown size={12} weight="bold" />}
+                          {isEarned ? 'Tích điểm thưởng' : 'Truy thu/Điều chỉnh'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-extrabold text-sm ${isEarned ? 'text-emerald-600' : 'text-purple-600'}`}>
+                        {isEarned ? `+${Math.abs(item.points).toLocaleString('vi-VN')}` : `${Math.abs(item.points).toLocaleString('vi-VN')}`} điểm
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 max-w-md">
+                      <p className="text-xs font-semibold text-slate-800">{item.description}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      {formatDate(item.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <button onClick={() => navigate(`${isManager ? '/manager' : '/admin'}/rewards/history/${item._id}`)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors shadow-2xs" title="Xem chi tiết">
+                        <Eye size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+            <p className="text-xs text-slate-500">
+              Hiển thị {(pagination.page - 1) * 10 + 1}–{Math.min(pagination.page * 10, pagination.total)} / {pagination.total} giao dịch
+            </p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={!pagination.hasPrevPage}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Trước</button>
+              <span className="px-2 text-xs font-bold text-slate-700">Trang {pagination.page} / {pagination.totalPages}</span>
+              <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={!pagination.hasNextPage}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Sau</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ Point History Tab ═══ */
+export function PointHistoryTab({ branches = [], isManager = false }) {
+  const navigate = useNavigate();
+  const [history, setHistory] = useState([]);
+  const [summary, setSummary] = useState({ totalEarned: 0, totalRedeemed: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [branchId, setBranchId] = useState('');
+  const [type, setType] = useState('');
+  const [deleteStatus, setDeleteStatus] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [dateError, setDateError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [deleteModalItem, setDeleteModalItem] = useState(null);
+  const [deleteMode, setDeleteMode] = useState('soft');
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteHistory = async () => {
+    if (!deleteModalItem) return;
+    setDeleting(true);
+    try {
+      const res = await api(`/loyalty/admin/history/${deleteModalItem._id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ mode: deleteMode }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      showToast.success(deleteMode === 'hard' ? 'Đã xóa vĩnh viễn giao dịch khỏi CSDL!' : 'Đã ẩn giao dịch điểm thưởng khỏi danh sách!');
+      setDeleteModalItem(null);
+      fetchHistory();
+    } catch (err) {
+      showToast.error(err.message || 'Lỗi khi xóa giao dịch điểm');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (startDate && endDate && startDate > endDate) {
+      setDateError('Ngày bắt đầu không được lớn hơn ngày kết thúc');
+    } else {
+      setDateError('');
+    }
+  }, [startDate, endDate]);
+
+  const fetchHistory = useCallback(async () => {
+    if (startDate && endDate && startDate > endDate) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (branchId && !isManager) params.append('branchId', branchId);
+      if (type) params.append('type', type);
+      if (!isManager && deleteStatus) params.append('deleteStatus', deleteStatus);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      params.append('page', page);
+      params.append('limit', 10);
+
+      const res = await api(`/loyalty/admin/history?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(await readErr(res));
+      }
+      const json = await res.json();
+      const list = json?.data ?? [];
+      setHistory(Array.isArray(list) ? list : []);
+      if (json?.pagination) {
+        setPagination(json.pagination);
+        if (json.pagination.summary) {
+          setSummary(json.pagination.summary);
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Không thể tải lịch sử điểm thưởng');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, branchId, type, deleteStatus, startDate, endDate, page, isManager]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setBranchId('');
+    setType('');
+    setDeleteStatus('all');
+    setStartDate('');
+    setEndDate('');
+    setDateError('');
+    setPage(1);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Filter Bar */}
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => { setPage(1); fetchHistory(); }}
+            disabled={loading || Boolean(dateError)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+            title="Tải lại"
+          >
+            <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+
+          {/* Search box */}
+          <div className="relative flex-1 min-w-[220px]">
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên, email, SĐT, mã đơn..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+            />
+            {search && (
+              <button
+                onClick={() => { setSearch(''); setPage(1); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Branch filter (Only shown for Admin, hidden for Manager) */}
+          {!isManager && (
+            <select
+              value={branchId}
+              onChange={(e) => { setBranchId(e.target.value); setPage(1); }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+            >
+              <option value="">Tất cả chi nhánh</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>{b.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Delete Status Filter (Only shown for Admin) */}
+          {!isManager && (
+            <select
+              value={deleteStatus}
+              onChange={(e) => { setDeleteStatus(e.target.value); setPage(1); }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors font-medium"
+            >
+              <option value="all">Tất cả (Chưa xóa & Xóa mềm)</option>
+              <option value="active">Chưa xóa (Khả dụng)</option>
+              <option value="deleted">Chỉ giao dịch đã xóa mềm</option>
+            </select>
+          )}
+
+          {/* Type filter */}
+          <select
+            value={type}
+            onChange={(e) => { setType(e.target.value); setPage(1); }}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+          >
+            <option value="">Tất cả loại giao dịch</option>
+            <option value="earned">Tích điểm thưởng (+)</option>
+            <option value="redeemed">Đổi quà / Sử dụng (-)</option>
+            <option value="expired">Điểm hết hạn (-)</option>
+            <option value="adjustment">Truy thu / Điều chỉnh (+/-)</option>
+          </select>
+        </div>
+
+        {/* Date range filters */}
+        <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Từ ngày:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs text-slate-700 focus:outline-none transition-colors ${
+                dateError ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100' : 'border-slate-200 bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
+              }`}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Đến ngày:</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs text-slate-700 focus:outline-none transition-colors ${
+                dateError ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100' : 'border-slate-200 bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
+              }`}
+            />
+          </div>
+
+          {(search || branchId || type || startDate || endDate) && (
+            <button
+              onClick={handleResetFilters}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Xóa bộ lọc
+            </button>
+          )}
+        </div>
+
+        {/* Date Validation Alert */}
+        {dateError && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs font-semibold text-red-600 animate-in fade-in duration-200">
+            <Warning size={15} weight="fill" />
+            {dateError}
+          </div>
+        )}
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <ArrowUp size={20} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Tổng điểm đã tích</p>
+            <p className="text-xl font-extrabold text-emerald-700">+{summary.totalEarned.toLocaleString('vi-VN')} điểm</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+            <ArrowDown size={20} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Tổng điểm đã đổi / hết hạn</p>
+            <p className="text-xl font-extrabold text-rose-700">-{summary.totalRedeemed.toLocaleString('vi-VN')} điểm</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Trophy size={20} weight="bold" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Tổng giao dịch điểm</p>
+            <p className="text-xl font-extrabold text-blue-700">{pagination.total} giao dịch</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Table Content */}
+      {loading ? (
+        <div className="flex items-center justify-center py-24 text-slate-400"><Spinner size={24} /></div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-red-100 bg-red-50 py-16 text-red-500">
+          <Warning size={26} weight="duotone" /><p className="text-sm">{error}</p>
+        </div>
+      ) : history.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20">
+          <Trophy size={40} weight="thin" className="text-slate-300" />
+          <p className="text-sm text-slate-500">Chưa có lịch sử điểm thưởng nào</p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                <th className="px-4 py-3">Khách hàng</th>
+                <th className="px-4 py-3">Loại</th>
+                <th className="px-4 py-3">Số điểm</th>
+                <th className="px-4 py-3">Chi tiết & Lý do (Snapshot)</th>
+                <th className="px-4 py-3">Thời gian</th>
+                <th className="px-4 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {history.map((item) => {
+                const user = item.userId || {};
+                const snap = item.snapshot || {};
+                const isEarned = item.type === 'earned';
+                const branchName = snap.branchName || snap.branchId?.name || '';
+                return (
+                  <tr key={item._id} className="hover:bg-slate-50 transition-colors">
+                    {/* User */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+                          alt=""
+                          className="h-8 w-8 rounded-full object-cover border border-slate-200"
+                        />
+                        <div>
+                          <p className="font-semibold text-slate-800 text-xs">{user.name || 'Khách hàng'}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] text-slate-400">{user.phone || user.email || '-'}</span>
+                            {user.tier && <TierBadge tier={user.tier} />}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Type */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          isEarned
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : item.type === 'redeemed'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : item.type === 'adjustment'
+                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          {isEarned ? <ArrowUp size={12} weight="bold" /> : <ArrowDown size={12} weight="bold" />}
+                          {isEarned
+                            ? 'Tích điểm thưởng'
+                            : item.type === 'redeemed'
+                            ? 'Đổi quà'
+                            : item.type === 'adjustment'
+                            ? 'Truy thu/Điều chỉnh'
+                            : 'Điểm hết hạn'}
+                        </span>
+                        {item.isDeleted && (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200">
+                            <Trash size={10} /> Đã xóa mềm
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Points */}
+                    <td className="px-4 py-3">
+                      <span className={`font-extrabold text-sm ${isEarned ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {isEarned ? `+${item.points.toLocaleString('vi-VN')}` : item.points.toLocaleString('vi-VN')} điểm
+                      </span>
+                    </td>
+
+                    {/* Details & Snapshot */}
+                    <td className="px-4 py-3 max-w-md">
+                      <p className="text-xs font-semibold text-slate-800">{item.description}</p>
+                    </td>
+
+                    {/* Time */}
+                    <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      {formatDate(item.createdAt)}
+                    </td>
+
+                    {/* Action */}
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => navigate(`${isManager ? '/manager' : '/admin'}/rewards/history/${item._id}`)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors shadow-2xs"
+                          title="Xem chi tiết giao dịch"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        {!isManager && (
+                          <button
+                            onClick={() => { setDeleteModalItem(item); setDeleteMode('soft'); }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors shadow-2xs"
+                            title="Xóa giao dịch điểm"
+                          >
+                            <Trash size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+            <p className="text-xs text-slate-500">
+              Hiển thị {(pagination.page - 1) * 10 + 1}–{Math.min(pagination.page * 10, pagination.total)} / {pagination.total} giao dịch
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={!pagination.hasPrevPage}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Trước
+              </button>
+              <span className="px-2 text-xs font-bold text-slate-700">Trang {pagination.page} / {pagination.totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                disabled={!pagination.hasNextPage}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4 border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Trash size={22} weight="bold" />
+                <h3 className="text-base font-extrabold text-slate-800">Xóa Giao dịch Điểm thưởng</h3>
+              </div>
+              <button
+                onClick={() => setDeleteModalItem(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-600">
+              <p className="font-semibold text-slate-800">
+                Bạn có chắc chắn muốn xóa lịch sử điểm thưởng của khách hàng <strong>{deleteModalItem.userId?.name || 'Khách hàng'}</strong>?
+              </p>
+              <p className="text-[11px] text-slate-500 font-mono">Mã ID Giao dịch: {deleteModalItem._id}</p>
+
+              {/* Mode selection */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <span className="font-bold text-slate-700 block">Chọn phương thức xóa:</span>
+                
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="deleteMode"
+                    value="soft"
+                    checked={deleteMode === 'soft'}
+                    onChange={() => setDeleteMode('soft')}
+                    className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <strong className="text-slate-800 font-bold block">Xóa mềm (Mặc định - Khuyên dùng)</strong>
+                    <span className="text-[11px] text-slate-500 block">Ẩn giao dịch khỏi danh sách hiển thị, bảo toàn lịch sử CSDL.</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer border-t border-slate-200/60 pt-2">
+                  <input
+                    type="radio"
+                    name="deleteMode"
+                    value="hard"
+                    checked={deleteMode === 'hard'}
+                    onChange={() => setDeleteMode('hard')}
+                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                  />
+                  <div>
+                    <strong className="text-rose-700 font-bold block">Xóa cứng (Vĩnh viễn)</strong>
+                    <span className="text-[11px] text-rose-600 block">Xóa vĩnh viễn khỏi CSDL MongoDB. Không thể khôi phục!</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
+              <button
+                onClick={() => setDeleteModalItem(null)}
+                disabled={deleting}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleDeleteHistory}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50"
+              >
+                {deleting ? 'Đang xóa...' : 'Xác nhận xóa'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══ Main ═══ */
 export default function AdminRewards() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'config';
+  const [activeTab, setActiveTabState] = useState(initialTab);
+
+  const setActiveTab = useCallback((tabKey) => {
+    setActiveTabState(tabKey);
+    setSearchParams({ tab: tabKey }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab') || 'config';
+    if (tabFromUrl !== activeTab) {
+      setActiveTabState(tabFromUrl);
+    }
+  }, [searchParams]);
+
   const [vouchers, setVouchers] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [loyaltyConfig, setLoyaltyConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -740,7 +1744,6 @@ export default function AdminRewards() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
@@ -748,6 +1751,20 @@ export default function AdminRewards() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  const fetchLoyaltyConfig = useCallback(async () => {
+    try {
+      const res = await api('/loyalty/config');
+      if (res.ok) {
+        const json = await res.json();
+        setLoyaltyConfig(json?.data ?? json);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchLoyaltyConfig();
+  }, [fetchLoyaltyConfig]);
 
   useEffect(() => {
     api('/branches').then(r => r.json()).then(p => {
@@ -802,6 +1819,25 @@ export default function AdminRewards() {
     finally { setSaving(false); }
   };
 
+  const handleSaveLoyaltyConfig = async (payload) => {
+    setSaving(true);
+    try {
+      const res = await api('/loyalty/config', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const json = await res.json();
+      setLoyaltyConfig(json?.data ?? json);
+      setModal(null);
+      notify('Cập nhật cấu hình tích điểm thành công!');
+    } catch (err) {
+      notify(err.message || 'Cập nhật thất bại', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!(await confirmDialog({ title: 'Xóa voucher', message: 'Bạn có chắc chắn muốn xóa voucher này?', confirmLabel: 'Xóa', danger: true }))) return;
     try {
@@ -818,9 +1854,11 @@ export default function AdminRewards() {
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
+      <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit flex-wrap">
         {[
-          { key: 'dashboard', label: 'Tổng quan', icon: Coin },
+          { key: 'config',    label: 'Cấu hình điểm thưởng', icon: Coin },
+          { key: 'history',   label: 'Lịch sử điểm thưởng', icon: Trophy },
+          { key: 'lifetime',  label: 'Điểm tích lũy',        icon: Star },
           { key: 'list',      label: 'Danh sách Voucher', icon: Tag },
           { key: 'wheel',     label: 'Quản lý Vòng Quay', icon: Gift },
           { key: 'report',    label: 'Báo cáo sử dụng', icon: ClockCounterClockwise },
@@ -841,17 +1879,21 @@ export default function AdminRewards() {
         })}
       </div>
 
-      {activeTab === 'dashboard' && (
+      {activeTab === 'config' && (
         <div className="space-y-5">
-          <DashboardOverview vouchers={vouchers} />
-
           {/* Points config */}
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-slate-100" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdf4)' }}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdf4)' }}>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <Coin size={16} weight="duotone" className="text-emerald-600" />
                 Cấu hình chương trình điểm thưởng
               </h3>
+              <button
+                onClick={() => navigate('/admin/system-config?tab=loyalty')}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+              >
+                <PencilSimple size={14} /> Chỉnh sửa cấu hình
+              </button>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -863,7 +1905,7 @@ export default function AdminRewards() {
                     </div>
                     <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Tích điểm</p>
                   </div>
-                  <p className="text-3xl font-extrabold text-blue-700">5%</p>
+                  <p className="text-3xl font-extrabold text-blue-700">{loyaltyConfig?.baseEarningRate ?? 5}%</p>
                   <p className="text-xs text-blue-500 mt-1">Giá trị đơn hàng</p>
                 </div>
 
@@ -875,8 +1917,10 @@ export default function AdminRewards() {
                     </div>
                     <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Hạng thành viên</p>
                   </div>
-                  <div className="flex gap-2">
-                    {['bronze', 'silver', 'gold', 'diamond'].map(t => <TierBadge key={t} tier={t} />)}
+                  <div className="flex gap-2 flex-wrap">
+                    {(loyaltyConfig?.tiers || [{ id: 'bronze' }, { id: 'silver' }, { id: 'gold' }, { id: 'diamond' }]).map(t => (
+                      <TierBadge key={t.id} tier={t} />
+                    ))}
                   </div>
                 </div>
 
@@ -891,15 +1935,15 @@ export default function AdminRewards() {
                     <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Hệ số nhân</p>
                   </div>
                   <div className="space-y-1.5">
-                    {[
-                      { label: 'Đồng', mult: 'x1', color: '#b45309', bg: '#fef3c7' },
-                      { label: 'Bạc', mult: 'x1.2', color: '#475569', bg: '#f1f5f9' },
-                      { label: 'Vàng', mult: 'x1.5', color: '#a16207', bg: '#fef9c3' },
-                      { label: 'Kim Cương', mult: 'x2', color: '#0e7490', bg: '#ecfeff' },
-                    ].map(r => (
-                      <div key={r.label} className="flex items-center justify-between rounded-lg px-2.5 py-1" style={{ background: r.bg }}>
-                        <span className="text-[11px] font-semibold" style={{ color: r.color }}>{r.label}</span>
-                        <span className="text-xs font-extrabold" style={{ color: r.color }}>{r.mult}</span>
+                    {(loyaltyConfig?.tiers || [
+                      { id: 'bronze', name: 'Đồng', multiplier: 1 },
+                      { id: 'silver', name: 'Bạc', multiplier: 1.2 },
+                      { id: 'gold', name: 'Vàng', multiplier: 1.5 },
+                      { id: 'diamond', name: 'Kim Cương', multiplier: 2 },
+                    ]).map(r => (
+                      <div key={r.id} className="flex items-center justify-between rounded-lg px-2.5 py-1" style={{ background: '#f8fafc' }}>
+                        <span className="text-[11px] font-semibold text-slate-700">{r.name}</span>
+                        <span className="text-xs font-extrabold text-emerald-700">x{r.multiplier}</span>
                       </div>
                     ))}
                   </div>
@@ -910,54 +1954,70 @@ export default function AdminRewards() {
 
           {/* Tier progression */}
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-slate-100" style={{ background: 'linear-gradient(135deg,#fefce8,#fffbeb)' }}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,#fefce8,#fffbeb)' }}>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Trophy size={16} weight="duotone" className="text-amber-500" />
-                Ngưỡng nâng hạng
+                <Trophy size={18} weight="duotone" className="text-amber-500" />
+                Ngưỡng nâng hạng & Quyền lợi thành viên
               </h3>
             </div>
             <div className="p-6">
-              <div className="relative">
-                {/* Connection line */}
-                <div className="absolute top-10 left-0 right-0 h-0.5 bg-slate-100 hidden md:block" />
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {[
-                    { tier: 'bronze', label: 'Đồng', points: '0', mult: 'x1', desc: 'Bắt đầu', color: '#b45309', bg: '#fef3c7', border: '#fcd34d' },
-                    { tier: 'silver', label: 'Bạc', points: '100,000đ', mult: 'x1.2', desc: 'Tích lũy', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
-                    { tier: 'gold', label: 'Vàng', points: '500,000đ', mult: 'x1.5', desc: 'Thân thiết', color: '#a16207', bg: '#fef9c3', border: '#facc15' },
-                    { tier: 'diamond', label: 'Kim Cương', points: '1,000,000đ', mult: 'x2', desc: 'VIP', color: '#0e7490', bg: '#ecfeff', border: '#22d3ee' },
-                  ].map((row, i) => (
-                    <div key={row.tier} className="relative flex flex-col items-center text-center">
-                      <div className="relative z-10 w-full rounded-xl p-4 transition-all hover:scale-105 hover:shadow-md"
-                        style={{ background: row.bg, border: `2px solid ${row.border}` }}>
-                        <div className="flex justify-center mb-2">
-                          <TierBadge tier={row.tier} />
-                        </div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{row.desc}</p>
-                        <p className="text-lg font-extrabold" style={{ color: row.color }}>{row.points}</p>
-                        <p className="text-xs font-semibold mt-1" style={{ color: row.color }}>Hệ số {row.mult}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {(loyaltyConfig?.tiers || [
+                  { id: 'bronze', name: 'Đồng', minPoints: 0, multiplier: 1.0 },
+                  { id: 'silver', name: 'Bạc', minPoints: 100000, multiplier: 1.2 },
+                  { id: 'gold', name: 'Vàng', minPoints: 500000, multiplier: 1.5 },
+                  { id: 'diamond', name: 'Kim Cương', minPoints: 1000000, multiplier: 2.0 },
+                ]).map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex flex-col h-full rounded-2xl border border-slate-200/90 bg-slate-50/50 p-5 transition-all hover:bg-white hover:border-amber-300 hover:shadow-md"
+                  >
+                    <div className="flex flex-col items-center text-center pb-3 border-b border-slate-200/60">
+                      <div className="mb-2">
+                        <TierBadge tier={row} />
                       </div>
-                      {i < 3 && (
-                        <div className="hidden md:block absolute top-10 -right-2 z-20 text-slate-300">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
-                        </div>
-                      )}
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{row.name}</h4>
+                      <p className="text-xl font-black text-slate-800 mt-1">
+                        {row.minPoints ? `${Number(row.minPoints).toLocaleString('vi-VN')} điểm` : '0 điểm'}
+                      </p>
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-extrabold text-emerald-700 border border-emerald-200">
+                        Hệ số thưởng: x{row.multiplier}
+                      </span>
                     </div>
-                  ))}
-                </div>
+
+                    {row.benefits && row.benefits.length > 0 && (
+                      <div className="mt-3 flex-1 text-xs text-slate-700 space-y-2">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                          Đặc quyền & Ưu đãi:
+                        </span>
+                        {row.benefits.map((b, bIdx) => (
+                          <div key={bIdx} className="flex items-start gap-2 leading-relaxed">
+                            <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5" weight="fill" />
+                            <span className="font-medium text-slate-700 break-words">{b}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {activeTab === 'wheel' ? (
+      {activeTab === 'history' ? (
+        <PointHistoryTab branches={branches} />
+      ) : activeTab === 'lifetime' ? (
+        <LifetimePointsTab branches={branches} />
+      ) : activeTab === 'wheel' ? (
         <WheelManagementTab />
       ) : activeTab === 'report' ? (
         <VoucherUsageReportTab />
       ) : activeTab === 'list' && (
-        <>
+        <div className="space-y-5">
+          <DashboardOverview vouchers={vouchers} />
+
           {/* Toolbar */}
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -1158,7 +2218,7 @@ export default function AdminRewards() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {modal === 'create' && (
@@ -1169,6 +2229,9 @@ export default function AdminRewards() {
       )}
       {modal === 'usage' && selected && (
         <VoucherUsageModal voucherId={selected._id} onClose={() => setModal(null)} />
+      )}
+      {modal === 'loyaltyConfig' && (
+        <LoyaltyConfigModal initialConfig={loyaltyConfig} onSave={handleSaveLoyaltyConfig} onClose={() => setModal(null)} saving={saving} />
       )}
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>

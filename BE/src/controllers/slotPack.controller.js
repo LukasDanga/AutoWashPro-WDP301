@@ -52,7 +52,8 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
 
 /** POST /api/slot-packs/:id/cancel — Hủy gói */
 exports.cancelSlotPack = catchAsync(async (req, res) => {
-  const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role, req.body.otp);
+  const reason = req.body.reason || req.body.cancellationReason || 'Khách hàng yêu cầu hủy gói';
+  const pack = await slotPackService.cancelSlotPack(req.params.id, req.userId, req.user.role, reason);
   success(res, pack, 'Hủy gói lượt rửa thành công');
 });
 
@@ -108,7 +109,7 @@ exports.previewDiscount = catchAsync(async (req, res) => {
   const slots = parseInt(totalSlots, 10);
   const price = parseFloat(unitPrice);
   if (!slots || !price) {
-    return res.status(400).json({ message: 'totalSlots and unitPrice are required' });
+    return res.status(400).json({ success: false, message: 'Thiếu số lượng slot và đơn giá dịch vụ' });
   }
   const preview = slotPackService.previewDiscount(slots, price);
   success(res, preview, 'Tính toán xem trước thành công');

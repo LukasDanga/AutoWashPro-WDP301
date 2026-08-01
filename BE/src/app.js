@@ -9,7 +9,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const config = require('./config/env');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
-const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, refundRequestRoutes, voucherRoutes, notificationRoutes, slotPackRoutes, reportRoutes, chatbotRoutes, sseRoutes, slotProductRoutes, giftRoutes, testimonialRoutes, statsRoutes, loyaltyRoutes, walletTransactionRoutes } = require('./routes');
+const { authRoutes, vehiclesRoutes, branchRoutes, packageRoutes, bookingRoutes, paymentRoutes, refundRequestRoutes, voucherRoutes, notificationRoutes, slotPackRoutes, reportRoutes, chatbotRoutes, sseRoutes, slotProductRoutes, giftRoutes, testimonialRoutes, statsRoutes, loyaltyRoutes, walletTransactionRoutes, configRoutes } = require('./routes');
 
 const extraOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const allowedOrigins = [config.APP_URL, config.API_URL, config.FE_URL, ...extraOrigins].filter(Boolean);
@@ -24,7 +24,8 @@ const isDev = process.env.NODE_ENV !== 'production';
 const ALLOWED_VERCEL_HOSTS = new Set([
   'autowashpro.vercel.app',
   'autowash-pro.vercel.app',
-  // thêm domain Vercel cụ thể của dự án tại đây
+  'auto-wash-pro-wdp-301.vercel.app',
+  'auto-wash-pro-wdp301.vercel.app',
 ]);
 
 const app = express();
@@ -37,22 +38,19 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
 
-    // Vercel wildcard — chỉ chấp nhận nếu parent hostname nằm trong whitelist.
-    // Ví dụ: my-app-abc123.vercel.app → parent = 'my-app-abc123' hoặc
-    // nếu deploy với domain gốc 'autowashpro' → autowashpro.vercel.app match.
+    // Vercel wildcard — chấp nhận domain trong ALLOWED_VERCEL_HOSTS hoặc domain của dự án
     const vercelMatch = origin.match(/^https?:\/\/([a-z0-9-]+)\.vercel\.app$/i);
     if (vercelMatch) {
-      const parentHost = vercelMatch[1];
-      // Cho phép nếu parentHost nằm trong whitelist (vd: 'autowashpro' nhận
-      // mọi PR-branch domain).
-      if (ALLOWED_VERCEL_HOSTS.has(`${parentHost}.vercel.app`)) {
+      const parentHost = vercelMatch[1].toLowerCase();
+      if (ALLOWED_VERCEL_HOSTS.has(`${parentHost}.vercel.app`) || 
+          parentHost.startsWith('auto-wash') || 
+          parentHost.startsWith('autowash')) {
         return callback(null, true);
       }
     }
 
-    // Localhost (chỉ dev) — production vẫn chấp nhận để tiện smoke test qua
-    // browser, có thể siết lại bằng cách remove nếu muốn.
-    if (isDev && origin.includes('localhost')) {
+    // Localhost & 127.0.0.1 — cho phép để FE local (localhost:5173) gọi được BE
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
 
@@ -69,7 +67,7 @@ if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
 app.use(
   '/api/',
-  rateLimit({ windowMs: 15 * 60 * 1000, max: 10000, message: { success: false, message: 'Too many requests' } })
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10000, message: { success: false, message: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' } })
 );
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -96,6 +94,7 @@ app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
 app.use('/api/wallet-transactions', walletTransactionRoutes);
+app.use('/api/configs', configRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

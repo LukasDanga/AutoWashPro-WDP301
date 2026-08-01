@@ -54,7 +54,7 @@ export const MANAGER_MENU_ITEMS = [
   },
   {
     id: 'vouchers',
-    label: 'Voucher',
+    label: 'Khuyến mãi & Quà tặng',
     to: '/manager/vouchers',
     icon: Tag,
   },
@@ -115,8 +115,8 @@ export const MANAGER_PAGE_META = {
     description: 'Xem và chỉnh sửa thông tin chi nhánh bạn phụ trách.',
   },
   vouchers: {
-    title: 'Quản lý voucher',
-    description: 'Tạo và quản lý mã giảm giá áp dụng tại chi nhánh.',
+    title: 'Khuyến mãi & Quà tặng',
+    description: 'Quản lý voucher giảm giá, lịch sử điểm thưởng, vòng quay may mắn.',
   },
   'refund-requests': {
     title: 'Yêu cầu hoàn tiền',

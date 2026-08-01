@@ -18,6 +18,9 @@ const slotPackSchema = new mongoose.Schema(
     branchId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', required: true },
     vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle' },
+    // Snapshot thông tin gói tại thời điểm mua — tránh bị đổi theo gói hiện tại khi admin chỉnh sửa
+    packageName: { type: String, trim: true },
+    packageDuration: { type: Number, min: 0 },
 
     // Số lần mua khi tạo gói
     totalSlots:     { type: Number, required: true, min: 1, max: 50 },
