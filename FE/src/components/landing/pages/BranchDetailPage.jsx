@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/authStorage';
 import {
@@ -14,13 +14,6 @@ const API_BASE = getApiBaseUrl() || 'http://localhost:5000/api';
 function fmtCurrency(n) {
   return new Intl.NumberFormat('vi-VN').format(n ?? 0) + 'đ';
 }
-
-const TIER_COLORS = {
-  bronze:  'text-amber-700 bg-amber-50 border-amber-200',
-  silver:  'text-slate-600 bg-slate-100 border-slate-200',
-  gold:    'text-yellow-700 bg-yellow-50 border-yellow-200',
-  diamond: 'text-cyan-700 bg-cyan-50 border-cyan-200',
-};
 
 const VOUCHER_TYPE_MAP = {
   percentage: 'Giảm %',

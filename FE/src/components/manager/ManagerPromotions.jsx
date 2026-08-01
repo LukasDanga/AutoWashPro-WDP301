@@ -102,7 +102,19 @@ const EMPTY_VOUCHER = {
 function VoucherModal({ initial, onSave, onClose, saving }) {
   const [form, setForm] = useState({ ...EMPTY_VOUCHER, ...initial });
   const [errors, setErrors] = useState({});
+  const [tierList, setTierList] = useState([
+    { id: 'bronze', name: 'Đồng' },
+    { id: 'silver', name: 'Bạc' },
+    { id: 'gold', name: 'Vàng' },
+    { id: 'diamond', name: 'Kim Cương' },
+  ]);
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); };
+
+  useEffect(() => {
+    api('/loyalty/tiers').then(r => r.json()).then(p => {
+      if (Array.isArray(p?.data) && p.data.length > 0) setTierList(p.data.map(t => ({ id: t.id, name: t.name })));
+    }).catch(() => {});
+  }, []);
 
   const validate = () => {
     const e = {};
@@ -206,12 +218,7 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Áp dụng cho hạng thành viên (để trống là áp dụng tất cả)</label>
             <div className="flex flex-wrap gap-3 mt-1">
-              {[
-                { id: 'bronze', label: 'Đồng' },
-                { id: 'silver', label: 'Bạc' },
-                { id: 'gold', label: 'Vàng' },
-                { id: 'diamond', label: 'Kim Cương' }
-              ].map((tier) => {
+              {tierList.map((tier) => {
                 const currentTiers = form.applicableTiers || [];
                 const isChecked = currentTiers.includes(tier.id);
                 return (
@@ -228,7 +235,7 @@ function VoucherModal({ initial, onSave, onClose, saving }) {
                       }} 
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
                     />
-                    {tier.label}
+                    {tier.name || tier.label}
                   </label>
                 );
               })}

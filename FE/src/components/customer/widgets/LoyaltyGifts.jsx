@@ -20,22 +20,22 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
     bronze: { label: 'Đồng', color: '#b45309', minPoints: 0 },
   };
 
+  const [tierList, setTierList] = useState([]);
+
   useEffect(() => {
     async function fetchTiers() {
       try {
         const res = await fetch(`${apiBase}/loyalty/tiers`);
         if (res.ok) {
           const payload = await res.json();
-          const map = {};
-          payload.data.forEach(t => {
-            // map color class to hex for styles if needed, but we can also just use existing colors
-            let hex = '#b45309';
-            if (t.id === 'diamond') hex = '#0891b2';
-            else if (t.id === 'silver') hex = '#64748b';
-            else if (t.id === 'gold') hex = '#b45309';
-            map[t.id] = { label: t.name, color: hex, minPoints: t.minPoints };
-          });
-          setTierConfig(map);
+          if (Array.isArray(payload.data)) {
+            setTierList(payload.data);
+            const map = {};
+            payload.data.forEach(t => {
+              map[t.id] = { label: t.name, color: t.color || '#b45309', minPoints: t.minPoints, ...t };
+            });
+            setTierConfig(map);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch tiers', err);
@@ -87,10 +87,18 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
     return actualTierMap[tier]?.color || '#b45309';
   };
 
-  const nextTierId = user?.tier === 'bronze' ? 'silver' : user?.tier === 'silver' ? 'gold' : user?.tier === 'gold' ? 'diamond' : null;
-  const nextTier = nextTierId ? actualTierMap[nextTierId] : { label: 'Tối đa', minPoints: 1000000 };
+  // Dynamic next tier calculation sorted by minPoints from API
+  const sortedTiers = tierList.length > 0 ? [...tierList].sort((a, b) => (a.minPoints || 0) - (b.minPoints || 0)) : [];
+  const currentTierId = (user?.tier || 'bronze').toLowerCase();
+  const currentTierIndex = sortedTiers.findIndex(t => (t.id || '').toLowerCase() === currentTierId);
+  const currentTierObj = currentTierIndex >= 0 ? sortedTiers[currentTierIndex] : null;
+  const nextTierObj = (currentTierIndex >= 0 && currentTierIndex < sortedTiers.length - 1) ? sortedTiers[currentTierIndex + 1] : null;
 
-  const progress = user?.tier === 'diamond' ? 100 : Math.min(100, ((user?.lifetimePoints || 0) / nextTier.minPoints) * 100);
+  const currentMin = currentTierObj?.minPoints || 0;
+  const nextMin = nextTierObj?.minPoints || currentMin;
+  const progress = nextTierObj
+    ? Math.min(100, Math.max(0, (((user?.lifetimePoints || 0) - currentMin) / (nextMin - currentMin)) * 100))
+    : 100;
 
   return (
     <div className="aw-loyalty-container" style={{ padding: '24px' }}>
@@ -176,8 +184,8 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
           </div>
           <div className="progress-text">
             <span>Đã tích lũy: {formatCurrency(user?.lifetimePoints || 0)}</span>
-            {user?.tier !== 'diamond' && (
-              <span>Cần thêm {formatCurrency(nextTier.minPoints - (user?.lifetimePoints || 0))} để lên hạng {nextTier.label}</span>
+            {nextTierObj && (
+              <span>Cần thêm {formatCurrency((nextTierObj.minPoints || 0) - (user?.lifetimePoints || 0))} để lên hạng {nextTierObj.name || nextTierObj.label}</span>
             )}
           </div>
         </div>

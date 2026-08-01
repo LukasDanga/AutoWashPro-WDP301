@@ -472,7 +472,7 @@ export default function AdminRewardsConfig() {
 
       showToast.success('Đã lưu thành công cấu hình điểm thưởng & Hạng thành viên!');
       setShowConfirmModal(false);
-      navigate('/admin/rewards?tab=config');
+      setInitialForm(JSON.parse(JSON.stringify(form)));
     } catch (err) {
       setError(err.message || 'Lỗi khi lưu cấu hình');
       showToast.error(err.message || 'Không thể lưu cấu hình');
@@ -492,39 +492,10 @@ export default function AdminRewardsConfig() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16 animate-in fade-in duration-300">
-      {/* Top action bar */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 pb-4">
-        <button
-          onClick={() => navigate('/admin/rewards?tab=config')}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
-        >
-          <ArrowLeft size={16} /> Quay lại Quản lý Khuyến mãi
-        </button>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/rewards?tab=config')}
-            disabled={saving}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Hủy bỏ
-          </button>
-          <button
-            type="submit"
-            form="loyalty-page-form"
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-          >
-            {saving ? <Spinner size={15} /> : <FloppyDisk size={15} weight="bold" />}
-            Lưu thay đổi cấu hình
-          </button>
-        </div>
-      </div>
-
-      {/* Page Title & Intro */}
-      <div className="rounded-2xl p-6 shadow-sm border border-emerald-100" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdf4)' }}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md">
+      {/* Page Title & Intro Header Banner */}
+      <div className="rounded-2xl p-6 shadow-sm border border-emerald-100 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdf4)' }}>
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shrink-0">
             <Coin size={26} weight="duotone" />
           </div>
           <div>
@@ -534,6 +505,16 @@ export default function AdminRewardsConfig() {
             </p>
           </div>
         </div>
+
+        <button
+          type="submit"
+          form="loyalty-page-form"
+          disabled={saving}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 shrink-0 cursor-pointer"
+        >
+          {saving ? <Spinner size={16} /> : <FloppyDisk size={16} weight="bold" />}
+          Lưu thay đổi cấu hình
+        </button>
       </div>
 
       {error && (
@@ -757,6 +738,18 @@ export default function AdminRewardsConfig() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Bottom Save Action Bar */}
+        <div className="flex justify-end pt-4 border-t border-slate-200">
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
+          >
+            {saving ? <Spinner size={16} /> : <FloppyDisk size={16} weight="bold" />}
+            Lưu thay đổi cấu hình
+          </button>
         </div>
       </form>
 

@@ -21,7 +21,14 @@ export default function ManagerCustomers() {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
   const [customerDetail, setCustomerDetail] = useState(null);
+  const [tierList, setTierList] = useState([]);
   const debounce = useRef(null);
+
+  useEffect(() => {
+    api('/loyalty/tiers').then(r => r.json()).then(p => {
+      if (Array.isArray(p?.data)) setTierList(p.data);
+    }).catch(() => {});
+  }, []);
 
   const fetchCustomers = useCallback(async (q = search, tier = tierFilter, pg = 1) => {
     setLoading(true);
@@ -90,10 +97,9 @@ export default function ManagerCustomers() {
             onChange={(e) => handleTier(e.target.value)}
           >
             <option value="">Tất cả hạng</option>
-            <option value="bronze">Hạng Bronze</option>
-            <option value="silver">Hạng Silver</option>
-            <option value="gold">Hạng Gold</option>
-            <option value="diamond">Hạng Diamond</option>
+            {tierList.map(t => (
+              <option key={t.id} value={t.id}>Hạng {t.name}</option>
+            ))}
           </select>
           <button onClick={() => fetchCustomers(search, tierFilter, page)} disabled={loading}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors">

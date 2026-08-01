@@ -1889,7 +1889,7 @@ export default function AdminRewards() {
                 Cấu hình chương trình điểm thưởng
               </h3>
               <button
-                onClick={() => navigate('/admin/rewards/config')}
+                onClick={() => navigate('/admin/system-config?tab=loyalty')}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm"
               >
                 <PencilSimple size={14} /> Chỉnh sửa cấu hình

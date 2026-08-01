@@ -3,13 +3,6 @@ import { confirmDialog } from '@/lib/confirm';
 import useSSE from '@/hooks/useSSE';
 import { showToast } from '@/lib/toast';
 
-const TIER_META = {
-  bronze:  { icon: '🥉', label: 'Đồng',  color: '#cd7f32', bg: 'rgba(205,127,50,0.10)',  ring: 'rgba(205,127,50,0.25)' },
-  silver:  { icon: '🥈', label: 'Bạc',   color: '#6b7280', bg: 'rgba(107,114,128,0.10)', ring: 'rgba(107,114,128,0.25)' },
-  gold:    { icon: '🥇', label: 'Vàng',  color: '#d97706', bg: 'rgba(217,119,6,0.10)',   ring: 'rgba(217,119,6,0.25)' },
-  diamond: { icon: '💎', label: 'Kim Cương', color: '#0ea5e9', bg: 'rgba(14,165,233,0.10)',  ring: 'rgba(14,165,233,0.25)' },
-};
-
 function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
@@ -167,6 +160,17 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
   const [manualMsg, setManualMsg] = useState('');
   const [activeTab, setActiveTab] = useState('public');
   const [open, setOpen] = useState(!compact);
+  const [tierList, setTierList] = useState([]);
+
+  const loadTiers = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/loyalty/tiers`);
+      const json = await res.json();
+      if (Array.isArray(json?.data)) setTierList(json.data);
+    } catch (e) { /* keep fallback */ }
+  }, [apiBase]);
+
+  useEffect(() => { loadTiers(); }, [loadTiers]);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -234,7 +238,14 @@ export default function VoucherPicker({ apiBase, token, selected, onSelect, orde
 
   const userPoints = data?.user?.loyaltyPoints || 0;
   const userTier   = data?.user?.tier || 'bronze';
-  const tierMeta   = TIER_META[userTier] || TIER_META.bronze;
+  const tierObj    = tierList.find(t => (t.id || '').toLowerCase() === String(userTier).toLowerCase());
+  const tierMeta   = {
+    label: tierObj?.name || userTier || 'Thành viên',
+    icon: tierObj?.icon === 'Circle' ? '●' : (tierObj?.icon ? '◆' : '★'),
+    bg: tierObj?.bg || '#f1f5f9',
+    color: tierObj?.color || '#475569',
+    ring: tierObj?.border || '#e2e8f0',
+  };
   const tierCount  = (data?.tier_exclusive || []).length;
   const pubCount   = (data?.public || []).length;
   const ptsCount   = (data?.redeemable || []).length;

@@ -1,21 +1,24 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import LoyaltyConfigTab from './config-tabs/LoyaltyConfigTab';
 import SystemConfigGeneric from './config-tabs/SystemConfigGeneric';
 import { Gear, Money, Gift } from '@phosphor-icons/react';
 
 export default function AdminSystemConfig() {
-  const [activeTab, setActiveTab] = useState('operations');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam || 'operations');
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
 
   const tabs = [
     { id: 'operations', label: 'Vận hành & Booking', icon: Gear, categories: ['general', 'booking'] },
-    { id: 'payments', label: 'Thanh toán & Huỷ', icon: Money, categories: ['payment'] }, // Wait, what category is penalty in? Usually booking or general. Let's pass ['general'] or maybe just fetch all except loyalty.
+    { id: 'payments', label: 'Thanh toán & Huỷ', icon: Money, categories: ['payment'] },
     { id: 'loyalty', label: 'Hạng thành viên & Điểm', icon: Gift }
   ];
-
-  // Actually, I should probably just check what categories the backend uses.
-  // Wait, let's use:
-  // operations: ['general', 'booking']
-  // loyalty: custom component
 
   return (
     <div className="flex h-full w-full flex-col bg-slate-50">
@@ -28,7 +31,7 @@ export default function AdminSystemConfig() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-2 border-b-2 pb-3 px-1 text-sm font-semibold transition-colors ${
                   isActive ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 }`}

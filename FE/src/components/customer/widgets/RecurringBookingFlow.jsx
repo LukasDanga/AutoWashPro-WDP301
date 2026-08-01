@@ -25,8 +25,6 @@ const TIME_SLOTS = [
   '10:00','10:30','11:00','11:30','13:00','13:30',
   '14:00','14:30','15:00','15:30','16:00','16:30','17:00',
 ];
-const TIER_BADGE = { bronze: '🥉 Bronze', silver: '🥈 Silver', gold: '🥇 Gold', diamond: '💎 Diamond' };
-const TIER_COLOR = { bronze: '#cd7f32', silver: '#adb5bd', gold: '#f2b84b', diamond: '#3de0ff' };
 
 function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
@@ -49,7 +47,21 @@ function buildPreviewDates(weekdays, weeks) {
 export default function RecurringBookingFlow({ user, vehicles: userVehicles = [], apiBase, token }) {
   const [branches, setBranches] = useState([]);
   const [packages, setPackages] = useState([]);
+  const [loyaltyConfig, setLoyaltyConfig] = useState(null);
   const configs = useSystemConfig();
+
+  useEffect(() => {
+    async function loadLoyaltyConfig() {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const res = await fetch(`${apiBase}/loyalty/config`);
+        const payload = await res.json();
+        if (payload?.data) setLoyaltyConfig(payload.data);
+        else if (payload?.tiers) setLoyaltyConfig(payload);
+      } catch (e) { console.error(e); }
+    }
+    loadLoyaltyConfig();
+  }, []);
 
   // ─── Step state ──────────────────────────────────────────────────────────────
   const [selectedBranch, setSelectedBranch] = useState('');    // STEP 1 (must pick first)
@@ -182,12 +194,12 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
 
   const pricePerSession = Math.max(0, totalBase - discountPerSession);
 
-  let pointMultiplier = 1;
-  if (user?.tier === 'diamond') pointMultiplier = 2.0;
-  else if (user?.tier === 'gold') pointMultiplier = 1.5;
-  else if (user?.tier === 'silver') pointMultiplier = 1.2;
+  const userTierObj = (loyaltyConfig?.tiers || []).find(t => (t.id || '').toLowerCase() === (user?.tier || 'bronze').toLowerCase());
+  const pointMultiplier = userTierObj?.multiplier ?? 1.0;
 
-  const baseRate = configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0;
+  const baseRate = loyaltyConfig?.baseEarningRate 
+    ? (loyaltyConfig.baseEarningRate / 100) 
+    : (configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0.05);
   const pointsPerSession = Math.floor(pricePerSession * baseRate * pointMultiplier);
 
   function toggleWeekday(v) {
@@ -236,7 +248,13 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
     return <Car className="w-5 h-5" />;
   };
 
-  const tierColor = TIER_COLOR[user?.tier] || '#adb5bd';
+  // Resolve current user's tier info from API config
+  const userTierObj = (() => {
+    const tiers = loyaltyConfig?.tiers || [];
+    return tiers.find(t => (t.id || '').toLowerCase() === (user?.tier || 'bronze').toLowerCase());
+  })();
+  const tierColor = userTierObj?.color || '#adb5bd';
+  const tierLabel = userTierObj?.name || user?.tier || 'Bronze';
   const branchObj = branches.find(b => b.id === selectedBranch);
 
   return (
@@ -249,7 +267,7 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
           <p className="rb-sub">Chọn địa điểm → ngày trong tuần → khung giờ cố định. Hệ thống tự tạo tất cả lịch hẹn.</p>
         </div>
         <div className="rb-tier-badge" style={{ borderColor: tierColor, color: tierColor }}>
-          {TIER_BADGE[user?.tier] || '🥉 Bronze'}
+          {tierLabel}
           <small>Ưu tiên phục vụ</small>
         </div>
       </div>
