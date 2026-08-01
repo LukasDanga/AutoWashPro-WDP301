@@ -15,6 +15,7 @@ const PROMOTION_KEYS = [
 const OPERATIONS_CATEGORIES = ['general', 'booking'];
 const PAYMENT_CATEGORIES = ['payment', 'finance'];
 const PROMOTION_CATEGORIES = ['general', 'booking', 'promotion'];
+const OPERATIONS_EXCLUDE_KEYS = [...PROMOTION_KEYS, 'ADVANCE_BOOKING_LIMITS'];
 
 export default function AdminSystemConfig() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,7 +63,7 @@ export default function AdminSystemConfig() {
         {activeTab === 'operations' && (
           <SystemConfigGeneric
             categories={OPERATIONS_CATEGORIES}
-            excludeKeys={PROMOTION_KEYS}
+            excludeKeys={OPERATIONS_EXCLUDE_KEYS}
           />
         )}
         {activeTab === 'payments' && <SystemConfigGeneric categories={PAYMENT_CATEGORIES} />}
