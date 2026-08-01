@@ -112,6 +112,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
   const [myVouchers, setMyVouchers] = useState([]);
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [tierConfig, setTierConfig] = useState(null);
+  const [tierList, setTierList] = useState([]);
 
   const FALLBACK_TIER_MAP = {
     diamond: { label: 'Kim cương', color: '#0891b2', minPoints: 1000000 },
@@ -122,14 +123,11 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
 
   useEffect(() => {
     api('/loyalty/tiers').then(r => r.json()).then(payload => {
-      if (payload?.data) {
+      if (Array.isArray(payload?.data)) {
+        setTierList(payload.data);
         const map = {};
         payload.data.forEach(t => {
-          let hex = '#b45309';
-          if (t.id === 'diamond') hex = '#0891b2';
-          else if (t.id === 'silver') hex = '#64748b';
-          else if (t.id === 'gold') hex = '#b45309';
-          map[t.id] = { label: t.name, color: hex, minPoints: t.minPoints };
+          map[t.id] = { label: t.name, color: t.color || '#b45309', minPoints: t.minPoints, ...t };
         });
         setTierConfig(map);
       }
@@ -139,21 +137,20 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api(`/loyalty/my-history?page=${page}&limit=10`);
-      if (!res.ok) throw new Error(await readErr(res));
-      const json = await res.json();
-      const list = json?.data ?? [];
-      setHistory(Array.isArray(list) ? list : []);
-      if (json?.pagination) {
-        setPagination(json.pagination);
-        if (json.pagination.summary) setSummary(json.pagination.summary);
+      const res = await api('/loyalty/my-history?limit=50');
+      const data = await res.json();
+      if (data?.data) {
+        setHistory(data.data);
       }
-    } catch { } finally { setLoading(false); }
-  }, [page]);
+    } catch (e) { } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
-
-  useSSE(getStoredToken(), 'points_updated', () => { fetchHistory(); refreshUser?.(); });
+  useEffect(() => {
+    fetchHistory();
+    fetchVouchers();
+  }, [fetchHistory]);
 
   const fetchVouchers = async () => {
     try {
@@ -161,13 +158,12 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       const dataTpl = await resTpl.json();
       const allVouchers = dataTpl.data || [];
       setVouchers(allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0));
+
       const resMy = await api('/vouchers/me');
       const dataMy = await resMy.json();
       setMyVouchers(dataMy.data || []);
-    } catch { }
+    } catch (e) { }
   };
-
-  useEffect(() => { fetchVouchers(); }, []);
 
   const handleRedeem = async (templateId) => {
     if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
@@ -185,10 +181,18 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     } catch (err) { } finally { setRedeemLoading(false); }
   };
 
-  const actualTierMap = tierConfig || FALLBACK_TIER_MAP;
-  const nextTierId = user?.tier === 'bronze' ? 'silver' : user?.tier === 'silver' ? 'gold' : user?.tier === 'gold' ? 'diamond' : null;
-  const nextTier = nextTierId ? actualTierMap[nextTierId] : { label: 'Tối đa', minPoints: 1000000 };
-  const progress = user?.tier === 'diamond' ? 100 : Math.min(100, ((user?.lifetimePoints || 0) / nextTier.minPoints) * 100);
+  // Dynamic next tier calculation sorted by minPoints from API
+  const sortedTiers = tierList.length > 0 ? [...tierList].sort((a, b) => (a.minPoints || 0) - (b.minPoints || 0)) : [];
+  const currentTierId = (user?.tier || 'bronze').toLowerCase();
+  const currentTierIndex = sortedTiers.findIndex(t => (t.id || '').toLowerCase() === currentTierId);
+  const currentTierObj = currentTierIndex >= 0 ? sortedTiers[currentTierIndex] : null;
+  const nextTierObj = (currentTierIndex >= 0 && currentTierIndex < sortedTiers.length - 1) ? sortedTiers[currentTierIndex + 1] : null;
+
+  const currentMin = currentTierObj?.minPoints || 0;
+  const nextMin = nextTierObj?.minPoints || currentMin;
+  const progress = nextTierObj
+    ? Math.min(100, Math.max(0, (((user?.lifetimePoints || 0) - currentMin) / (nextMin - currentMin)) * 100))
+    : 100;
 
   const lifetimeHistory = history.filter(item => item.type === 'earned' || item.type === 'adjustment');
 
@@ -214,8 +218,8 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
             <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
           </div>
           <div className="flex justify-between mt-1 text-[11px] text-slate-500">
-            <span>Hạng hiện tại: {user?.tier || 'Bronze'}</span>
-            {nextTierId && <span>{formatCurrency(nextTier.minPoints - (user?.lifetimePoints || 0))} điểm để lên {nextTier.label}</span>}
+            <span>Hạng hiện tại: {currentTierObj?.name || user?.tier || 'Bronze'}</span>
+            {nextTierObj && <span>{formatCurrency((nextTierObj.minPoints || 0) - (user?.lifetimePoints || 0))} điểm để lên {nextTierObj.name || nextTierObj.id}</span>}
           </div>
         </div>
       </div>

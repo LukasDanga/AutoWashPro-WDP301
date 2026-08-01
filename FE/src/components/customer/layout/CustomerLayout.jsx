@@ -17,6 +17,8 @@ const HISTORY_SUB_TABS = [
   { key: 'slot_packs', label: '🎫 Gói lượt' },
 ];
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function CustomerLayout({
   children,
   user,
@@ -32,6 +34,14 @@ export default function CustomerLayout({
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [tierList, setTierList] = useState([]);
+
+  useEffect(() => {
+    fetch(`${apiBase || API_BASE}/loyalty/tiers`)
+      .then(r => r.json())
+      .then(p => { if (Array.isArray(p?.data)) setTierList(p.data); })
+      .catch(() => {});
+  }, [apiBase]);
 
   const currentPath = location.pathname;
   const isHistoryPage = currentPath === '/history' || currentPath.startsWith('/history/');
@@ -61,7 +71,13 @@ export default function CustomerLayout({
     { label: 'Kho quà & Tích điểm', to: '/rewards', icon: Award, badge: null },
   ];
 
-  const tierInfo = TIER_BADGES[user?.tier] || TIER_BADGES.bronze;
+  // Dynamic tier info: prefer API name, fallback to hardcoded map
+  const apiTier = tierList.find(t => (t.id || '').toLowerCase() === (user?.tier || 'bronze').toLowerCase());
+  const fallbackTier = TIER_BADGES[user?.tier] || TIER_BADGES.bronze;
+  const tierInfo = {
+    label: apiTier?.name || fallbackTier.label,
+    bg: fallbackTier.bg,
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">

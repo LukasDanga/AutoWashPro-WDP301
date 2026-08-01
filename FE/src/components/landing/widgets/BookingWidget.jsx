@@ -250,6 +250,23 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [slotsUpdateTick, setSlotsUpdateTick] = useState(0);
   useSSE(token, 'slots_updated', () => setSlotsUpdateTick(t => t + 1));
 
+  const [loyaltyConfig, setLoyaltyConfig] = useState(null);
+
+  // Load loyalty config (public)
+  useEffect(() => {
+    async function loadLoyaltyConfig() {
+      try {
+        const res = await fetch(`${API_BASE}/loyalty/config`);
+        const payload = await res.json();
+        if (payload?.data) setLoyaltyConfig(payload.data);
+        else if (payload?.tiers) setLoyaltyConfig(payload);
+      } catch (e) {
+        console.error('Failed to load loyalty config', e);
+      }
+    }
+    loadLoyaltyConfig();
+  }, []);
+
   // Load branches (public)
   useEffect(() => {
     async function loadBranches() {
@@ -1149,10 +1166,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }, [validPacks, selectedSlotPack]);
 
-  let pointMultiplier = 1;
-  if (user?.tier === 'diamond') pointMultiplier = 2.0;
-  else if (user?.tier === 'gold') pointMultiplier = 1.5;
-  else if (user?.tier === 'silver') pointMultiplier = 1.2;
+  const userTierObj = (loyaltyConfig?.tiers || []).find(t => (t.id || '').toLowerCase() === (user?.tier || 'bronze').toLowerCase());
+  const pointMultiplier = userTierObj?.multiplier ?? 1.0;
+  const baseEarningRate = (loyaltyConfig?.baseEarningRate ?? 5) / 100;
 
   const discount = appliedVoucher
     ? appliedVoucher.savings || (appliedVoucher.type === 'percentage' ? Math.floor(totalBase * appliedVoucher.value / 100) : appliedVoucher.value)
@@ -1160,7 +1176,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const isPayingWithPack = !!selectedSlotPack;
   const effectiveBase = isPayingWithPack ? extraPrice : totalBase;
   const total = Math.max(0, effectiveBase - discount);
-  const points = Math.floor((isPayingWithPack ? totalBase : total) * 0.05 * pointMultiplier);
+  const points = Math.floor((isPayingWithPack ? totalBase : total) * baseEarningRate * pointMultiplier);
 
   const vehicle = allVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
 

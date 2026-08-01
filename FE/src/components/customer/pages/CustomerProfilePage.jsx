@@ -46,6 +46,7 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [tierConfig, setTierConfig] = useState(null);
+  const [tierList, setTierList] = useState([]);
 
   useEffect(() => {
     setProfileForm({ name: user?.name || '', phone: user?.phone || '', avatar: user?.avatar || '' });
@@ -57,9 +58,12 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
         const res = await fetch(`${apiBase || API_BASE}/loyalty/tiers`);
         if (res.ok) {
           const payload = await res.json();
-          const map = {};
-          payload.data.forEach(t => map[t.id] = { label: t.name, color: t.color, bg: t.bg, minPoints: t.minPoints, benefits: t.benefits || [] });
-          setTierConfig(map);
+          if (Array.isArray(payload.data)) {
+            setTierList(payload.data);
+            const map = {};
+            payload.data.forEach(t => map[t.id] = { label: t.name, color: t.color, bg: t.bg, minPoints: t.minPoints, benefits: t.benefits || [], ...t });
+            setTierConfig(map);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch tiers', err);
@@ -349,9 +353,13 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
   const availableRewardPoints = user?.loyaltyPoints || 0;
   const spinCount = user?.spinCount || 0;
 
-  const tierOrder = ['bronze', 'silver', 'gold', 'diamond'];
-  const currentIndex = tierOrder.indexOf(currentTierId);
-  const nextTierId = currentIndex < tierOrder.length - 1 ? tierOrder[currentIndex + 1] : null;
+  // Dynamic tier ordering sorted by minPoints from API
+  const sortedTiers = tierList.length > 0
+    ? [...tierList].sort((a, b) => (a.minPoints || 0) - (b.minPoints || 0))
+    : [{ id: 'bronze' }, { id: 'silver' }, { id: 'gold' }, { id: 'diamond' }];
+  const currentIndex = sortedTiers.findIndex(t => (t.id || '').toLowerCase() === currentTierId);
+  const nextTierRaw = (currentIndex >= 0 && currentIndex < sortedTiers.length - 1) ? sortedTiers[currentIndex + 1] : null;
+  const nextTierId = nextTierRaw?.id || null;
   const nextTierObj = nextTierId ? (effectiveTierMap[nextTierId] || FALLBACK_TIER_MAP[nextTierId]) : null;
 
   const currentMin = currentTierObj?.minPoints || 0;

@@ -24,6 +24,33 @@ function Spinner({ size = 18 }) {
   );
 }
 
+function getConfigUnit(key, description = '') {
+  const k = (key || '').toUpperCase();
+  const d = (description || '').toLowerCase();
+
+  if (k === 'AUTO_CANCEL_GRACE_MINUTES') return 'phút';
+  if (k === 'GRACE_EXTENSION_STEP_MINUTES') return 'phút';
+  if (k === 'LATE_WARNING_OFFSET_MINUTES') return 'phút';
+  if (k === 'MAX_GRACE_EXTENSION_MINUTES') return 'phút';
+  if (k === 'MIN_ADVANCE_BOOKING_MINUTES') return 'phút';
+  if (k === 'BIRTHDAY_VOUCHER_MAX_AMOUNT') return 'VNĐ';
+  if (k === 'BIRTHDAY_VOUCHER_PERCENT') return '%';
+  if (k === 'DEFAULT_BRANCH_CAPACITY') return 'xe';
+  if (k === 'DEPOSIT_RATE') return '% (tỉ lệ)';
+  if (k === 'SYSTEM_CANCEL_BONUS_POINTS') return 'điểm';
+
+  if (k.includes('MINUTES') || d.includes('(phút)') || d.includes('số phút') || d.includes('thời gian')) return 'phút';
+  if (k.includes('PERCENT') || d.includes('phần trăm') || d.includes('tỷ lệ') || d.includes('tỉ lệ')) return '%';
+  if (k.includes('AMOUNT') || k.includes('PRICE') || k.includes('MONEY') || d.includes('số tiền') || d.includes('giá')) return 'VNĐ';
+  if (k.includes('POINTS') || d.includes('điểm')) return 'điểm';
+  if (k.includes('CAPACITY') || d.includes('sức chứa') || d.includes('số xe')) return 'xe';
+  if (k.includes('SLOTS') || k.includes('COUNT') || d.includes('số lần') || d.includes('lượt')) return 'lượt';
+  if (k.includes('HOURS') || d.includes('giờ')) return 'giờ';
+  if (k.includes('DAYS') || d.includes('ngày')) return 'ngày';
+
+  return null;
+}
+
 export default function SystemConfigGeneric({ categories = [] }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -154,48 +181,76 @@ export default function SystemConfigGeneric({ categories = [] }) {
         {configs.length === 0 ? (
           <p className="text-sm text-slate-500 py-10 text-center">Không có cấu hình nào trong danh mục này.</p>
         ) : (
-          configs.map(config => (
-            <div key={config.key} className="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-slate-800">{config.key}</label>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wider">{config.type}</span>
-              </div>
-              <p className="text-xs text-slate-500 mb-2">{config.description || 'Không có mô tả'}</p>
-              
-              {config.type === 'boolean' ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <input 
-                    type="checkbox" 
-                    checked={formValues[config.key] === true || formValues[config.key] === 'true'}
-                    onChange={(e) => handleChange(config.key, e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                  />
-                  <span className="text-sm font-medium text-slate-700">Kích hoạt</span>
+          configs.map(config => {
+            const unit = getConfigUnit(config.key, config.description);
+            return (
+              <div key={config.key} className="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-semibold text-slate-800">{config.key}</label>
+                    {unit && (
+                      <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                        Đơn vị: {unit}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wider">{config.type}</span>
                 </div>
-              ) : config.type === 'json' ? (
-                <textarea
-                  value={formValues[config.key] ?? ''}
-                  onChange={(e) => handleChange(config.key, e.target.value)}
-                  className="w-full max-w-2xl rounded-lg border-slate-200 text-sm font-mono outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2.5 bg-slate-50 min-h-[150px]"
-                />
-              ) : config.type === 'number' ? (
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formValues[config.key] ?? ''}
-                  onChange={(e) => handleChange(config.key, Number(e.target.value))}
-                  className="w-full max-w-sm rounded-lg border-slate-200 text-sm font-medium outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2.5 bg-slate-50"
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={formValues[config.key] ?? ''}
-                  onChange={(e) => handleChange(config.key, e.target.value)}
-                  className="w-full max-w-sm rounded-lg border-slate-200 text-sm font-medium outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2.5 bg-slate-50"
-                />
-              )}
-            </div>
-          ))
+                <p className="text-xs text-slate-500 mb-2">{config.description || 'Không có mô tả'}</p>
+                
+                {config.type === 'boolean' ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input 
+                      type="checkbox" 
+                      checked={formValues[config.key] === true || formValues[config.key] === 'true'}
+                      onChange={(e) => handleChange(config.key, e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Kích hoạt</span>
+                  </div>
+                ) : config.type === 'json' ? (
+                  <textarea
+                    value={formValues[config.key] ?? ''}
+                    onChange={(e) => handleChange(config.key, e.target.value)}
+                    className="w-full max-w-2xl rounded-lg border-slate-200 text-sm font-mono outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2.5 bg-slate-50 min-h-[150px]"
+                  />
+                ) : config.type === 'number' ? (
+                  <div className="relative flex items-center max-w-sm">
+                    <input
+                      type="number"
+                      step="any"
+                      value={formValues[config.key] ?? ''}
+                      onChange={(e) => handleChange(config.key, Number(e.target.value))}
+                      className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 ${
+                        unit ? 'pr-24' : 'pr-3.5'
+                      }`}
+                    />
+                    {unit && (
+                      <span className="absolute right-2.5 text-xs font-bold text-slate-600 bg-slate-200/80 px-2.5 py-1 rounded-lg pointer-events-none uppercase tracking-wider border border-slate-300/50">
+                        {unit}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative flex items-center max-w-sm">
+                    <input
+                      type="text"
+                      value={formValues[config.key] ?? ''}
+                      onChange={(e) => handleChange(config.key, e.target.value)}
+                      className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 ${
+                        unit ? 'pr-24' : 'pr-3.5'
+                      }`}
+                    />
+                    {unit && (
+                      <span className="absolute right-2.5 text-xs font-bold text-slate-600 bg-slate-200/80 px-2.5 py-1 rounded-lg pointer-events-none uppercase tracking-wider border border-slate-300/50">
+                        {unit}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 

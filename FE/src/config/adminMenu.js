@@ -127,6 +127,10 @@ export const ADMIN_PAGE_META = {
     title: 'Quản lý đặt lịch',
     description: 'Xem và quản lý toàn bộ đặt lịch trên tất cả chi nhánh.',
   },
+  'system-config': {
+    title: 'Cấu hình hệ thống',
+    description: 'Quản lý tập trung tất cả các quy tắc nghiệp vụ, chính sách booking, và điểm thưởng.',
+  },
   payments: {
     title: 'Quản lý thanh toán',
     description: 'Xem và quản lý toàn bộ giao dịch thanh toán trên hệ thống.',
