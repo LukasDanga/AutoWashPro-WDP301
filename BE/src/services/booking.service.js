@@ -45,8 +45,24 @@ const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress
 const getDepositRate = async (user) => await configService.get('DEPOSIT_RATE', {}, 0.3);
 
 const enforceAdvanceBookingLimit = async (userTier, bookingStr, todayStr) => {
-  const ADVANCE_BOOKING_DAYS = await configService.get('ADVANCE_BOOKING_LIMITS', {}, { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 });
-  const maxAdvanceDays = (ADVANCE_BOOKING_DAYS && ADVANCE_BOOKING_DAYS[userTier]) ? ADVANCE_BOOKING_DAYS[userTier] : 14;
+  // Ưu tiên advanceDays trong từng tier (cấu hình ở tab "Hạng thành viên & Điểm")
+  let maxAdvanceDays = null;
+  try {
+    const loyaltyConfig = await loyaltyService.getLoyaltyConfig();
+    const tierObj = (loyaltyConfig.tiers || []).find((t) => String(t.id) === String(userTier));
+    if (tierObj && Number.isFinite(Number(tierObj.advanceDays)) && Number(tierObj.advanceDays) >= 0) {
+      maxAdvanceDays = Number(tierObj.advanceDays);
+    }
+  } catch (err) {
+    maxAdvanceDays = null;
+  }
+
+  // Fallback: config ADVANCE_BOOKING_LIMITS cũ (dữ liệu cũ chưa có advanceDays trong tier)
+  if (maxAdvanceDays === null) {
+    const ADVANCE_BOOKING_DAYS = await configService.get('ADVANCE_BOOKING_LIMITS', {}, { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 });
+    maxAdvanceDays = (ADVANCE_BOOKING_DAYS && ADVANCE_BOOKING_DAYS[userTier]) ? ADVANCE_BOOKING_DAYS[userTier] : 14;
+  }
+
   const msPerDay = 1000 * 60 * 60 * 24;
   const daysAhead = Math.floor(
     (new Date(bookingStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / msPerDay
