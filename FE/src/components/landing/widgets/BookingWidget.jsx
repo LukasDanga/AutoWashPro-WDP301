@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
+const WEEKS_OPTIONS = [4, 8, 12, 16, 20, 24];
 
 const WEEKDAY_OPTIONS = [
   { label: 'T2', value: 1 },
@@ -106,6 +106,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [selectedTime, setSelectedTime] = useState(() => initialBookingState?.selectedTime || '');
   const [selectedDays, setSelectedDays] = useState(() => initialBookingState?.selectedDays || []);
   const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 4);
+  const [weeksInput, setWeeksInput] = useState(() => String(initialBookingState?.weeks || 4));
+  const [weeksError, setWeeksError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState(() => initialBookingState?.appliedVoucher || null);
   const [selectedSlotPack, setSelectedSlotPack] = useState(() => initialBookingState?.selectedSlotPack || null);
   const [guestVehicle, setGuestVehicle] = useState(() => initialBookingState?.guestVehicle?.licensePlate ? initialBookingState.guestVehicle : defaultGuestVehicle);
@@ -1198,13 +1200,44 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const actualRecurringSessions = useMemo(() => {
     if (tab !== 'recurring') return 0;
     if (conflictCheck.status === 'done' && conflictCheck.results.length > 0) {
-      return conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length;
+      return conflictCheck.results.filter(r => !r.conflict).length;
     }
     return previewDates.length;
   }, [tab, conflictCheck, previewDates]);
 
+  const recurringScheduleDates = useMemo(() => {
+    if (tab !== 'recurring') return [];
+    if (conflictCheck.status === 'done' && conflictCheck.results.length > 0) {
+      return conflictCheck.results
+        .filter(r => !r.conflict && r.date)
+        .map(r => new Date(r.date.includes('T') ? r.date : r.date + 'T00:00:00'));
+    }
+    return previewDates;
+  }, [tab, conflictCheck, previewDates]);
+
   const toggleDay = (value) => {
     setSelectedDays(prev => prev.includes(value) ? prev.filter(d => d !== value) : [...prev, value]);
+    setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
+  };
+
+  const selectWeek = (w) => {
+    setWeeks(w);
+    setWeeksInput(String(w));
+    setWeeksError('');
+    setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
+  };
+
+  const handleWeeksInput = (e) => {
+    const raw = e.target.value.replace(/[^0-9]/g, '');
+    setWeeksInput(raw);
+    const n = raw === '' ? 0 : parseInt(raw, 10);
+    if (raw === '' || !Number.isInteger(n) || n < 2) {
+      setWeeksError('Số tuần phải là số nguyên dương lớn hơn 1');
+      setWeeks(n);
+      return;
+    }
+    setWeeksError('');
+    setWeeks(n);
     setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
   };
 
@@ -1221,7 +1254,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
     if (step === 4) {
       if (tab === 'regular') return selectedDate && selectedTime;
-      return selectedDays.length > 0 && selectedTime;
+      const basicOk = selectedDays.length > 0 && selectedTime && Number.isInteger(weeks) && weeks >= 2;
+      if (!basicOk) return false;
+      if (conflictCheck.status === 'done') return actualRecurringSessions > 0;
+      return true;
     }
     return true;
   };
@@ -1294,6 +1330,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       setError('Vui lòng điền đầy đủ thông tin.');
       return;
     }
+    if (!Number.isInteger(weeks) || weeks < 2) {
+      setError('Số tuần lặp lại phải là số nguyên dương lớn hơn 1.');
+      return;
+    }
     if (isLoggedIn && !selectedVehicle) { setError('Vui lòng chọn xe.'); return; }
     setBookingLoading(true); setError(''); setResult(null); setShowSuccessModal(false);
 
@@ -1303,7 +1343,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       // Đảm bảo đã có thông tin check trùng lịch
       let totalValid = 0;
       if (conflictCheck.status === 'done' && conflictCheck.results.length > 0) {
-        totalValid = conflictCheck.results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length;
+        totalValid = conflictCheck.results.filter(r => !r.conflict).length;
       } else {
         const checkBody = {
           branchId, packageId: pkgId, vehicleId: vehicle?._id || vehicle?.id || '',
@@ -1317,11 +1357,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const checkData = await checkRes.json();
         if (!checkRes.ok) throw new Error(checkData.message || 'Lỗi kiểm tra lịch');
         const results = checkData.data || checkData || [];
-        totalValid = Array.isArray(results) ? results.filter(r => !r.conflict || (r.conflict && r.reason?.includes('có giờ thay thế'))).length : 0;
+        totalValid = Array.isArray(results) ? results.filter(r => !r.conflict).length : 0;
       }
 
       if (totalValid <= 0) {
-        throw new Error('Tất cả các buổi đều bị trùng lịch hoặc đã qua thời gian.');
+        throw new Error('Rất tiếc, tất cả các buổi dự kiến đều bị trùng lịch hoặc đã qua thời gian. Vui lòng chọn ngày/khung giờ khác nhé!');
       }
 
       const singlePrice = Math.max(0, totalBase - discount);
@@ -1391,6 +1431,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const checkRecurringConflicts = async () => {
     if (!token || !selectedBranch || !pkg || !vehicle?._id) return;
+    const reqId = ++conflictReqIdRef.current;
     setConflictCheck({ status: 'checking', results: [], totalConflicts: 0 });
     setError('');
     try {
@@ -1409,15 +1450,43 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      if (reqId !== conflictReqIdRef.current) return;
       if (!res.ok) throw new Error(data.message || 'Lỗi kiểm tra lịch');
       const results = data.data || data || [];
       const totalConflicts = Array.isArray(results) ? results.filter(r => r.conflict).length : 0;
       setConflictCheck({ status: 'done', results: Array.isArray(results) ? results : [], totalConflicts });
     } catch (err) {
+      if (reqId !== conflictReqIdRef.current) return;
       setError(err.message);
       setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
     }
   };
+
+  // ─── Auto-check lịch trống khi đổi số tuần/ngày/giờ (debounce) ───
+  const autoCheckTimer = useRef(null);
+  const conflictReqIdRef = useRef(0);
+  const checkRecurringRef = useRef(null);
+  checkRecurringRef.current = checkRecurringConflicts;
+
+  useEffect(() => {
+    if (tab !== 'recurring') return;
+    const canCheck = Boolean(token && selectedBranch && pkg && vehicle?._id)
+      && selectedDays.length > 0
+      && selectedTime
+      && Number.isInteger(weeks) && weeks >= 2;
+    if (autoCheckTimer.current) clearTimeout(autoCheckTimer.current);
+    if (!canCheck) {
+      if (conflictCheck.status === 'done') setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 });
+      return;
+    }
+    autoCheckTimer.current = setTimeout(() => {
+      checkRecurringRef.current();
+    }, 600);
+    return () => {
+      if (autoCheckTimer.current) clearTimeout(autoCheckTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, weeks, selectedDays, selectedTime, selectedBranch, pkg, vehicle, token, currentSubServices]);
 
   const reset = () => {
     sessionStorage.removeItem('aw_booking_state');
@@ -2254,7 +2323,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <button 
                             key={w} 
                             type="button"
-                            onClick={() => { setWeeks(w); setConflictCheck({ status: 'idle', results: [], totalConflicts: 0 }); }}
+                            onClick={() => selectWeek(w)}
 
                             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                               weeks === w 
@@ -2266,11 +2335,27 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           </button>
                         ))}
                       </div>
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Hoặc nhập số tuần:</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={weeksInput}
+                          onChange={handleWeeksInput}
+                          placeholder="> 1"
+                          className={`w-20 px-3 py-2.5 rounded-xl border text-sm font-semibold outline-none transition-colors focus:border-emerald-500 ${
+                            weeksError ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'
+                          }`}
+                        />
+                        {weeksError && <span className="text-xs font-semibold text-red-500">{weeksError}</span>}
+                      </div>
                       {previewDates.length > 0 && (
                         <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
                           <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 flex items-center justify-between">
                             <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">📋 Danh sách buổi dự kiến</p>
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">{previewDates.length} buổi</span>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                              {conflictCheck.status === 'done' ? `${actualRecurringSessions} buổi hợp lệ` : `${previewDates.length} buổi`}
+                            </span>
                           </div>
                           <div className="p-3 max-h-52 overflow-y-auto">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -2278,31 +2363,26 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 const conflictResult = conflictCheck.results.find(r => r.date === d.toLocaleDateString('en-CA'));
                                 const isChecked = conflictCheck.status === 'done';
                                 const hasConflict = conflictResult?.conflict;
-                                const conflictReason = conflictResult?.reason || '';
-                                const hasAlt = hasConflict && conflictReason.includes('thay thế');
-                                const noSlot = isChecked && hasConflict && !hasAlt;
+                                const noSlot = isChecked && hasConflict;
                                 const isValid = isChecked && !hasConflict;
                                 return (
                                   <div key={i} className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all ${
                                     noSlot
                                       ? 'bg-red-50 border-red-200 text-red-700'
-                                      : hasAlt
-                                        ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                        : isValid
-                                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                          : 'bg-slate-50 border-slate-100 text-slate-600'
+                                      : isValid
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                        : 'bg-slate-50 border-slate-100 text-slate-600'
                                   }`}>
                                     <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] shrink-0 ${
-                                      noSlot ? 'bg-red-100 text-red-600' : hasAlt ? 'bg-amber-100 text-amber-600' : isValid ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'
+                                      noSlot ? 'bg-red-100 text-red-600' : isValid ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'
                                     }`}>
-                                      {noSlot ? '✕' : hasAlt ? '⚠' : isValid ? '✓' : '-'}
+                                      {noSlot ? '✕' : isValid ? '✓' : '-'}
                                     </div>
                                     <div className="min-w-0">
                                       <div className="font-semibold truncate">
                                         {d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })}
                                       </div>
-                                      {noSlot && <div className="text-[9px] text-red-500 mt-0.5">Hết slot — bỏ qua</div>}
-                                      {hasAlt && <div className="text-[9px] text-amber-600 mt-0.5">Trùng giờ — đổi tự động</div>}
+                                      {noSlot && <div className="text-[9px] text-red-500 mt-0.5">Trùng giờ — không có chỗ</div>}
                                     </div>
                                   </div>
                                 );
@@ -2327,16 +2407,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               <span>Đang kiểm tra...</span>
                             </div>
                           )}
-                          {conflictCheck.totalConflicts > 0 && (
-                            <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-100 flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                                <span className="text-[10px] text-red-600 font-semibold">{conflictCheck.results.filter(r => r.conflict && !r.reason?.includes('thay thế')).length} buổi sẽ bị bỏ qua</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                                <span className="text-[10px] text-amber-600 font-semibold">{conflictCheck.results.filter(r => r.conflict && r.reason?.includes('thay thế')).length} buổi đổi giờ tự động</span>
-                              </div>
+                          {conflictCheck.status === 'done' && actualRecurringSessions === 0 && (
+                            <div className="px-4 py-3 bg-red-50 border-t border-red-100">
+                              <p className="text-xs font-semibold text-red-600">
+                                Rất tiếc, tất cả {previewDates.length} buổi dự kiến đều bị trùng lịch.
+                              </p>
+                              <p className="text-[11px] text-red-500 mt-1 leading-relaxed">
+                                Bạn vui lòng chọn ngày hoặc khung giờ khác nhé, để chúng tôi có thể phục vụ bạn tốt nhất. Xin cảm ơn bạn đã thông cảm!
+                              </p>
                             </div>
                           )}
                         </div>
@@ -2407,17 +2485,35 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           <Calendar className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
                             <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Thời gian</span>
-                            <span className="text-sm font-bold text-slate-700">
-                              {tab === 'regular'
-                                ? (() => {
+                            {tab === 'regular' ? (
+                              <span className="text-sm font-bold text-slate-700">
+                                {(() => {
                                     const dateFormatted = currentDate?.iso 
                                       ? new Date(currentDate.iso.includes('T') ? currentDate.iso : currentDate.iso + 'T00:00:00').toLocaleDateString('vi-VN')
                                       : '';
                                     return `${currentDate?.label || ''}${dateFormatted ? ` (${dateFormatted})` : ''} · ${selectedTime}`;
-                                  })()
-                                : `${selectedTime} (${selectedDays.map(dayLabel).join(', ')}) · ${weeks} tuần (${actualRecurringSessions} buổi)`
-                              }
-                            </span>
+                                  })()}
+                              </span>
+                            ) : (
+                              <div>
+                                <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-emerald-600" />
+                                  {selectedTime}
+                                  <span className="text-xs font-semibold text-slate-400">
+                                    {selectedDays.map(dayLabel).join(', ')}
+                                  </span>
+                                </span>
+                                {recurringScheduleDates.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {recurringScheduleDates.map((d, i) => (
+                                      <span key={i} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800">
+                                        {d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric' })}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2650,28 +2746,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center gap-2 text-sm text-emerald-700 font-semibold">
                           <CheckCircle2 className="w-5 h-5 shrink-0" />
                           <span>Tất cả {previewDates.length} buổi đều trống lịch ✓</span>
-                        </div>
-                      )}
-                      {conflictCheck.status === 'done' && conflictCheck.totalConflicts > 0 && (
-                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-amber-700 font-semibold">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
-                            <span>Có {conflictCheck.totalConflicts}/{previewDates.length} buổi bị trùng lịch</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {conflictCheck.results.filter(r => r.conflict).map(r => (
-                              <span key={r.date} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-medium" title={r.reason || ''}>
-                                <AlertCircle className="w-3 h-3" />
-                                {new Date(r.date + 'T00:00:00').toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })}
-                              </span>
-                            ))}
-                          </div>
-                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('thay thế')) && (
-                            <p className="text-xs text-amber-600">Một số ngày có giờ thay thế — hệ thống sẽ tự động đổi giờ nếu tạo.</p>
-                          )}
-                          {conflictCheck.results.some(r => r.conflict && r.reason?.includes('không có giờ thay thế')) && (
-                            <p className="text-xs text-rose-600">Một số ngày không còn slot trống — những ngày này sẽ bị bỏ qua.</p>
-                          )}
                         </div>
                       )}
                     </div>

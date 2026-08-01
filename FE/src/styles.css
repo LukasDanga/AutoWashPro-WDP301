@@ -1033,6 +1033,50 @@ body {
 	color: #fff;
 }
 
+.rb-weeks-manual {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.rb-weeks-manual-label {
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--muted);
+}
+
+.rb-weeks-manual-input {
+	width: 120px;
+	min-height: 44px;
+	padding: 8px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--line);
+	background: var(--panel);
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: var(--text);
+	outline: none;
+	transition: border-color 0.15s;
+}
+
+.rb-weeks-manual-input:focus {
+	border-color: var(--accent);
+}
+
+.rb-weeks-manual-input.error {
+	border-color: #ef4444;
+}
+
+.rb-weeks-manual-error {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: #ef4444;
+}
+
 .rb-preview {
 	margin-top: 16px;
 	padding: 14px;

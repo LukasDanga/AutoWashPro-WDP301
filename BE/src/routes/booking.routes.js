@@ -48,7 +48,7 @@ router.post('/recurring/check-conflicts', authenticate, authorize(ROLES.ADMIN, R
   body('weekdays').isArray({ min: 1 }).withMessage('weekdays must be a non-empty array'),
   body('weekdays.*').isInt({ min: 0, max: 6 }).withMessage('Each weekday must be 0-6'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
-  body('weeks').isInt({ min: 1, max: 12 }).withMessage('weeks must be between 1 and 12'),
+  body('weeks').isInt({ min: 1, max: 52 }).withMessage('weeks must be between 1 and 52'),
 ], validate, bookingController.checkRecurringConflicts);
 
 // POST /api/bookings/recurring — Tạo định kỳ
@@ -59,7 +59,7 @@ router.post('/recurring', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, RO
   body('weekdays').isArray({ min: 1 }).withMessage('weekdays must be a non-empty array'),
   body('weekdays.*').isInt({ min: 0, max: 6 }).withMessage('Each weekday must be 0-6'),
   body('startTime').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format (HH:mm)'),
-  body('weeks').isInt({ min: 1, max: 12 }).withMessage('weeks must be between 1 and 12'),
+  body('weeks').isInt({ min: 1, max: 52 }).withMessage('weeks must be between 1 and 52'),
   body('note').optional().trim().isLength({ max: 500 }),
   body('voucherCode').optional().trim().isLength({ max: 50 }),
 ], validate, bookingController.createRecurringBooking);

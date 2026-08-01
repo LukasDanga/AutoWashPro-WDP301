@@ -1886,8 +1886,8 @@ exports.createRecurringBooking = async (data) => {
   if (!Array.isArray(weekdays) || weekdays.length === 0) {
     throw Object.assign(new Error('At least one weekday must be selected'), { statusCode: 400, code: 'INVALID_WEEKDAYS' });
   }
-  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 12) {
-    throw Object.assign(new Error('Weeks must be between 1 and 12'), { statusCode: 400, code: 'INVALID_WEEKS' });
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 52) {
+    throw Object.assign(new Error('Weeks must be between 1 and 52'), { statusCode: 400, code: 'INVALID_WEEKS' });
   }
 
   // --- Sub-services ---
@@ -1948,12 +1948,7 @@ exports.createRecurringBooking = async (data) => {
       throw Object.assign(new Error('No valid dates to book for the selected weekdays and weeks'), { statusCode: 400, code: 'NO_DATES' });
     }
 
-    // ── Kiểm tra giới hạn đặt trước theo tier cho ngày xa nhất ──
-    const furthestDateStr = targetDates[targetDates.length - 1].toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0];
-    await enforceAdvanceBookingLimit(user.tier, furthestDateStr, todayStr);
-
-  // --- Đặt cọc cho cả nhóm định kỳ ---
+  // ── Đặt cọc cho cả nhóm định kỳ ──
   // Tính cọc cho TỪNG buổi (chia đều thay vì gộp hết vào buổi đầu)
   // để khi thanh toán phần còn lại, mỗi buổi được tính riêng rẽ.
   const depositPerSession = Math.round((computedFinalPrice * await getDepositRate(user)) / 1000) * 1000;
