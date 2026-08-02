@@ -469,6 +469,7 @@ const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'curr
 /* ── print receipt modal ── */
 function PrintReceiptModal({ booking, onClose }) {
   const formatDate = (dateString) => { const d = new Date(dateString); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
+  const formatDateTime = (dateString) => { const d = new Date(dateString); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
   const detailBooking = booking;
   const displayTotal = detailBooking.isGroup ? (detailBooking.groupTotalPrice || 0) : (detailBooking.totalAmount || detailBooking.finalPrice || 0);
@@ -523,7 +524,7 @@ function PrintReceiptModal({ booking, onClose }) {
                 <div className="font-semibold text-black">Mã biên lai</div>
                 <div className="text-black">{displayId}</div>
                 <div className="font-semibold text-black">Ngày thanh toán</div>
-                <div className="text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
+                <div className="text-black">{formatDateTime(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
               </div>
             </div>
             <div>

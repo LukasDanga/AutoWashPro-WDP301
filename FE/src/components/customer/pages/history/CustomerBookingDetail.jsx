@@ -20,6 +20,7 @@ const STATUS_MAP = {
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
 function formatDate(d) { return new Date(d).toLocaleDateString('vi-VN'); }
+function formatDateTime(d) { return new Date(d).toLocaleDateString('vi-VN') + ' ' + new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
 
 function StatusBadge({ status }) {
   const s = STATUS_MAP[status] || { label: status, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
@@ -1172,7 +1173,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                     <div className="font-semibold text-black">Mã biên lai</div>
                     <div className="text-black">{displayId}</div>
                     <div className="font-semibold text-black">Ngày thanh toán</div>
-                    <div className="text-black">{formatDate(b.updatedAt || b.bookingDate)}</div>
+                    <div className="text-black">{formatDateTime(b.updatedAt || b.bookingDate)}</div>
                   </div>
                 </div>
                 <div>
