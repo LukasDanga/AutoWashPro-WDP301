@@ -252,7 +252,7 @@ exports.confirmBookings = catchAsync(async (req, res) => {
 
 exports.confirmPayment = catchAsync(async (req, res) => {
   const { transactionId, method, gatewayTransactionId } = req.body;
-  const payment = await paymentService.confirmPayment(transactionId, method, gatewayTransactionId);
+  const payment = await paymentService.confirmPayment(transactionId, method, gatewayTransactionId, req.user.role, req.userId);
   success(res, payment, 'Xác nhận thanh toán thành công');
 });
 
@@ -262,7 +262,7 @@ exports.getPaymentByBooking = catchAsync(async (req, res) => {
 });
 
 exports.getPaymentById = catchAsync(async (req, res) => {
-  const payment = await paymentService.getPaymentById(req.params.id, req.userId, req.user.role);
+  const payment = await paymentService.getPaymentById(req.params.id, req.user.role, req.userId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
   
   const result = payment.toObject ? payment.toObject() : { ...payment };
@@ -290,7 +290,7 @@ exports.getMyPayments = catchAsync(async (req, res) => {
 });
 
 exports.markPaymentViewed = catchAsync(async (req, res) => {
-  const payment = await paymentService.markPaymentViewed(req.params.id, req.user.role);
+  const payment = await paymentService.markPaymentViewed(req.params.id, req.user.role, req.userId);
   success(res, payment, 'Đánh dấu thanh toán đã xem');
 });
 
@@ -301,7 +301,7 @@ exports.countUnviewedPayments = catchAsync(async (req, res) => {
 
 exports.refundPayment = catchAsync(async (req, res) => {
   const { bookingId } = req.body;
-  const payment = await paymentService.refundPayment(bookingId);
+  const payment = await paymentService.refundPayment(bookingId, req.user.role, req.userId);
   success(res, payment, 'Đã hoàn tiền');
 });
 

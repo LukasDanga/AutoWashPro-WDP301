@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
-const { Payment, Booking } = require('../models');
+const { Payment, Booking, Branch, SlotPack } = require('../models');
 const notificationService = require('./notification.service');
 const sseService = require('./sse.service');
 const voucherService = require('./voucher.service');
@@ -9,6 +9,39 @@ const loyaltyService = require('./loyalty.service');
 
 const generateTransactionId = () => `TXN${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 const VALID_METHODS = ['cash', 'bank', 'vnpay', 'momo', 'wallet'];
+
+// ── Helper: phạm vi chi nhánh cho manager ──────────────────────────────
+// Manager chỉ được xem/xử lý thanh toán thuộc chi nhánh mình quản lý.
+const getManagerBranch = async (userId) =>
+  Branch.findOne({ managerId: userId, isDeleted: { $ne: true } });
+
+const paymentVisibleToManager = async (payment, branch, session) => {
+  if (!branch) return false;
+  if (payment.bookingId) {
+    const bookingId = payment.bookingId?._id || payment.bookingId;
+    const booking = await Booking.findById(bookingId).select('branchId').session(session || null);
+    return !!booking && String(booking.branchId) === String(branch._id);
+  }
+  if (payment.slotPackId) {
+    const slotPackId = payment.slotPackId?._id || payment.slotPackId;
+    const sp = await SlotPack.findById(slotPackId).select('branchId').session(session || null);
+    return !!sp && String(sp.branchId) === String(branch._id);
+  }
+  return false;
+};
+
+// Trả về mảng điều kiện $or để lọc payment theo chi nhánh của manager.
+const buildManagerBranchQuery = async (branch) => {
+  if (!branch) return [{ bookingId: { $in: [] } }];
+  const [bookingIds, slotPackIds] = await Promise.all([
+    Booking.find({ branchId: branch._id, isDeleted: { $ne: true } }).distinct('_id'),
+    SlotPack.find({ branchId: branch._id }).distinct('_id'),
+  ]);
+  const conds = [];
+  if (bookingIds.length) conds.push({ bookingId: { $in: bookingIds } });
+  if (slotPackIds.length) conds.push({ slotPackId: { $in: slotPackIds } });
+  return conds.length ? conds : [{ bookingId: { $in: [] } }];
+};
 
 // Hàm này không còn tác dụng (Khách yêu cầu thanh toán lẻ từng đơn)
 const markRecurringSiblingsPaid = async (booking, paymentMethod, session) => {
@@ -334,7 +367,7 @@ exports.getPaymentBySlotPack = async (slotPackId) => {
   return payment;
 };
 
-exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => {
+exports.confirmPayment = async (transactionId, method, gatewayTransactionId, userRole, userId) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -347,6 +380,13 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId) => 
     if (payment.status === 'paid') {
       await session.commitTransaction();
       return payment;
+    }
+    if (userRole === 'manager') {
+      const branch = await getManagerBranch(userId);
+      if (!(await paymentVisibleToManager(payment, branch, session))) {
+        await session.abortTransaction();
+        throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
     }
 
     if (!payment.bookingId && !payment.slotPackId) {
@@ -659,12 +699,19 @@ exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   return payment;
 };
 
-exports.getPaymentById = async (id) => {
+exports.getPaymentById = async (id, userRole, userId) => {
   let payment = await Payment.findById(id)
     .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status branchId packageId finalPrice vehicleId bookingCode' })
     .populate({ path: 'slotPackId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }], select: 'packCode totalSlots remainingSlots status branchId packageId' })
     .populate('userId', 'name email phone tier');
   if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+  if (userRole === 'manager') {
+    const branch = await getManagerBranch(userId);
+    if (!(await paymentVisibleToManager(payment, branch))) {
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
 
   // Auto-poll SePay if pending & bank method
   if (payment.status !== 'paid' && payment.method === 'bank') {
@@ -681,12 +728,20 @@ exports.getPaymentById = async (id) => {
   return payment;
 };
 
-exports.markPaymentViewed = async (id, userRole) => {
+exports.markPaymentViewed = async (id, userRole, userId) => {
   if (userRole === 'customer') {
     throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
   }
-  const payment = await Payment.findByIdAndUpdate(id, { viewedAt: new Date() }, { new: true });
+  const payment = await Payment.findById(id);
   if (!payment) throw Object.assign(new Error('Thanh toán không tồn tại'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  if (userRole === 'manager') {
+    const branch = await getManagerBranch(userId);
+    if (!(await paymentVisibleToManager(payment, branch))) {
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
+  payment.viewedAt = new Date();
+  await payment.save();
   return payment;
 };
 
@@ -695,6 +750,10 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
   if (userRole === 'customer') {
     query.userId = userId;
   } else {
+    if (userRole === 'manager') {
+      const branch = await getManagerBranch(userId);
+      query.$or = await buildManagerBranchQuery(branch);
+    }
     if (filters.userId) query.userId = filters.userId;
     if (filters.status) {
       query.status = filters.status;
@@ -929,7 +988,7 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
   };
 };
 
-exports.refundPayment = async (bookingId) => {
+exports.refundPayment = async (bookingId, userRole, userId) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -938,6 +997,14 @@ exports.refundPayment = async (bookingId) => {
     if (!booking) {
       await session.abortTransaction();
       throw Object.assign(new Error('Booking not found'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+    }
+
+    if (userRole === 'manager') {
+      const branch = await getManagerBranch(userId);
+      if (!branch || String(booking.branchId) !== String(branch._id)) {
+        await session.abortTransaction();
+        throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
+      }
     }
 
     const payment = await Payment.findOneAndUpdate(

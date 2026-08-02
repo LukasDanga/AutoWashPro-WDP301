@@ -339,7 +339,7 @@ function RefundSuccessModal({ payment, onClose }) {
 }
 
 /* ─────────────────────────── Main ─────────────────────────── */
-export default function AdminPayments() {
+export default function AdminPayments({ showDelete = true } = {}) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -555,10 +555,12 @@ export default function AdminPayments() {
           className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50">
           <ArrowClockwise size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
         </button>
-        <button onClick={() => setShowDeleteModal(true)}
-          className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500">
-          <Trash size={12} /> Xóa giao dịch
-        </button>
+        {showDelete && (
+          <button onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500">
+            <Trash size={12} /> Xóa giao dịch
+          </button>
+        )}
       </div>
 
       {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600">{error}</div>}
