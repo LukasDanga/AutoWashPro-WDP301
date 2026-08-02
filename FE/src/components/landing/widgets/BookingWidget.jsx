@@ -595,23 +595,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         vehicleId = selectedVehicle || allVehicles[0]?._id || allVehicles[0]?.id || '';
       }
 
-      // Show payment modal first; booking is only created after user picks payment method.
-      // Với ĐỊNH KỲ: tổng tiền = giá 1 buổi × số buổi dự kiến (không phải 1 buổi).
+      // Show payment method first; booking is only created after user picks payment method.
+      // Với ĐỊNH KỲ: tổng tiền = giá 1 buổi × số buổi THỰC TẾ được tạo (sau khi loại trùng lịch).
+      // Không dùng số buổi dự kiến vì hệ thống bỏ qua các buổi xung đột slot.
       const perSession = totalBase || 0;
       let sessionCount = 1;
       if (pb.tab === 'recurring') {
-        const days = pb.selectedDays || [];
-        const wk = pb.weeks || 1;
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        let cnt = 0;
-        for (let w = 0; w < wk; w++) {
-          for (let d = 0; d < 7; d++) {
-            const c = new Date(today);
-            c.setDate(today.getDate() + w * 7 + d);
-            if (days.includes(c.getDay()) && c >= today) cnt++;
-          }
-        }
-        sessionCount = Math.max(1, cnt);
+        sessionCount = Math.max(1, actualRecurringSessions || previewDates.length || 1);
       }
       const estimatedTotal = perSession * sessionCount;
       const calculatedDeposit = Math.round((estimatedTotal * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;

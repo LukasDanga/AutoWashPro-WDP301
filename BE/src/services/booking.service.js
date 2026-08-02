@@ -1390,14 +1390,23 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       }
       const depositShare = Math.round(groupDepositAmount / recurringTotal);
 
-      if (cancelledBy !== 'customer') {
-        refundAmount = depositShare;
-      } else {
-        if (isLateCancel) {
-          refundAmount = 0;
+      // Nếu buổi này đã thanh toán đủ (nhóm trả hết 100% hoặc thanh toán lẻ từng buổi),
+      // hoàn theo đúng giá của buổi đó thay vì chia theo cọc.
+      const sessionPaidAmount = booking.paymentStatus === 'paid' ? (booking.depositAmount ?? booking.finalPrice ?? 0) : 0;
+
+      if (sessionPaidAmount > 0) {
+        if (cancelledBy !== 'customer') {
+          refundAmount = sessionPaidAmount;
+        } else if (isLateCancel) {
+          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          refundAmount = Math.round(sessionPaidAmount * Math.max(0, (100 - penaltyPercent) / 100));
         } else {
-          refundAmount = depositShare;
+          refundAmount = sessionPaidAmount;
         }
+      } else if (cancelledBy !== 'customer') {
+        refundAmount = depositShare;
+      } else if (!isLateCancel) {
+        refundAmount = depositShare;
       }
 
       if (booking.isRecurringFirst) {
@@ -1413,7 +1422,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
           // depositAmount nhiều lần.
           if (!nextBooking.isRecurringFirst) {
             nextBooking.isRecurringFirst = true;
-            nextBooking.depositAmount = Math.max(0, groupDepositAmount - depositShare);
+            if (sessionPaidAmount <= 0) {
+              nextBooking.depositAmount = Math.max(0, groupDepositAmount - depositShare);
+            }
             nextBooking.paymentStatus = booking.paymentStatus;
             await nextBooking.save({ session });
           }
@@ -1435,7 +1446,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
             }
           }
         }
-      } else {
+      } else if (sessionPaidAmount <= 0) {
         if (firstBooking && firstBooking._id.toString() !== id) {
           firstBooking.depositAmount = Math.max(0, firstBooking.depositAmount - depositShare);
           await firstBooking.save({ session });
@@ -2096,6 +2107,24 @@ exports.createRecurringBooking = async (data) => {
     );
   }
 
+  // Một số buổi dự kiến có thể bị bỏ qua do xung đột slot. Cập nhật lại
+  // recurringTotal cho TOÀN BỘ buổi trong nhóm về ĐÚNG số buổi đã tạo thành công,
+  // để mọi nơi hiển thị "Số buổi" (history, detail, manager) khớp thực tế.
+  if (created.length > 0) {
+    for (let ri = 0; ri < created.length; ri++) {
+      created[ri].recurringPosition = ri + 1;
+      created[ri].recurringTotal = created.length;
+    }
+    await Booking.bulkWrite(
+      created.map((b, ri) => ({
+        updateOne: {
+          filter: { _id: b._id },
+          update: { $set: { recurringPosition: ri + 1, recurringTotal: created.length } },
+        },
+      }))
+    );
+  }
+
   // Thông báo tổng kết
   notificationService.send(
     userId,
@@ -2281,13 +2310,22 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
       const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
       const isLateCancel = minutesBefore <= lateCancelThreshold;
 
+      // Nếu buổi đã thanh toán đủ (nhóm trả hết 100%) → hoàn đúng giá buổi đó.
+      // Nếu chỉ đóng cọc → hoàn theo phần cọc của buổi (depositShare).
+      const sessionPaidAmount = b.paymentStatus === 'paid' ? (b.depositAmount ?? b.finalPrice ?? 0) : 0;
+
       let refundAmountForThisBooking = 0;
-      if (cancelledBy !== 'customer') {
-        refundAmountForThisBooking = depositShare;
-      } else {
-        if (!isLateCancel) {
-          refundAmountForThisBooking = depositShare;
+      if (sessionPaidAmount > 0) {
+        if (cancelledBy !== 'customer') {
+          refundAmountForThisBooking = sessionPaidAmount;
+        } else if (isLateCancel) {
+          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          refundAmountForThisBooking = Math.round(sessionPaidAmount * Math.max(0, (100 - penaltyPercent) / 100));
+        } else {
+          refundAmountForThisBooking = sessionPaidAmount;
         }
+      } else if (cancelledBy !== 'customer' || !isLateCancel) {
+        refundAmountForThisBooking = depositShare;
       }
 
       totalRefundAmount += refundAmountForThisBooking;
