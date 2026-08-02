@@ -2013,6 +2013,7 @@ exports.createRecurringBooking = async (data) => {
         endTime,
         userId,
         userTier: user.tier,
+        strictLastSlot: true,
       }, session);
       
       const { hasConflict, conflictingBookings: conflicting } = capacityResult;

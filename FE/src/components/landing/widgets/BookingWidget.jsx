@@ -434,16 +434,20 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const formatRecurringDate = useCallback((dateIso, time) => {
     if (!dateIso) return time || '';
-    const parts = String(dateIso).split('T')[0].split('-');
+    const raw = String(dateIso);
     let weekday, day, month, year;
-    if (parts.length === 3) {
-      const [y, m, d] = parts.map(Number);
+    // Date-only "YYYY-MM-DD" (từ preview/conflictCheck) → giữ nguyên ngày.
+    // Ngược lại là ISO datetime (vd "2026-08-03T17:00:00.000Z") → parse bằng Date
+    // và lấy theo giờ ĐỊA PHƯƠNG, tránh bị lùi 1 ngày do UTC.
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+    if (isDateOnly) {
+      const [y, m, d] = raw.split('-').map(Number);
       const dObj = new Date(y, m - 1, d);
       weekday = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][dObj.getDay()];
       day = d; month = m; year = y;
     } else {
-      const d = new Date(dateIso);
-      if (isNaN(d.getTime())) return dateIso;
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return raw;
       weekday = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][d.getDay()];
       day = d.getDate(); month = d.getMonth() + 1; year = d.getFullYear();
     }

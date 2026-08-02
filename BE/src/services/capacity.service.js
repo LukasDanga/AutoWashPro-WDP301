@@ -25,7 +25,7 @@ const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in'];
  * 2. Đếm số lượng booking trùng giờ để xác minh.
  * Nếu dùng `session.withTransaction`, thao tác này sẽ an toàn trước concurrency (Race Condition).
  */
-exports.checkCapacity = async ({ branch, bookingStr, startTime, endTime, userId, userTier }, session) => {
+exports.checkCapacity = async ({ branch, bookingStr, startTime, endTime, userId, userTier, strictLastSlot = false }, session) => {
   if (!session) {
     throw new Error('checkCapacity requires a MongoDB session');
   }
@@ -67,8 +67,11 @@ exports.checkCapacity = async ({ branch, bookingStr, startTime, endTime, userId,
     const VIP_TIERS = ['gold', 'diamond', 'Ruby'];
     const hasVipInSlot = overlappingBookings.some(b => (b.priority || 1) >= 3);
     const isLastSlot = capacity > 1 && overlappingCount >= capacity - 1;
-    
-    if (isLastSlot && hasVipInSlot && !VIP_TIERS.includes(userTier)) {
+    const isVipUser = VIP_TIERS.includes(userTier);
+
+    // strictLastSlot: áp dụng cho luồng định kỳ — buổi đang giữ chỗ cuối thì tính là conflict
+    // cho mọi khách không phải VIP, đồng bộ với checkRecurringConflicts (màn xác nhận đặt lịch).
+    if (isLastSlot && !isVipUser && (strictLastSlot || hasVipInSlot)) {
       hasConflict = true;
       conflictReason = 'SLOT_FULL_VIP';
     }
