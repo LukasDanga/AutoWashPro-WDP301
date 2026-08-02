@@ -726,11 +726,11 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [busy, setBusy] = useState(false);
 
   const handleStartEditSubServices = () => {
-    const current = (booking.selectedSubServices || []).map(s => s.name || s);
-    const included = Array.isArray(booking.packageId?.subServices)
-      ? booking.packageId.subServices.filter(s => s.isOptional === false).map(s => s.name)
-      : [];
-    setEditedSubServiceNames([...new Set([...included, ...current])]);
+    const selected = (booking.selectedSubServices || []).map(s => s.name || s);
+    const pkgSubs = Array.isArray(booking.packageId?.subServices) ? booking.packageId.subServices : [];
+    const selectedIncluded = selected.filter(name => pkgSubs.some(s => s.name === name && s.isOptional === false));
+    const included = selectedIncluded.length > 0 ? selectedIncluded : pkgSubs.filter(s => s.isOptional === false).map(s => s.name);
+    setEditedSubServiceNames([...new Set([...included, ...selected])]);
     setEditingSubServices(true);
   };
 
@@ -1192,80 +1192,10 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             </div>
 
             {/* Included & Optional Sub-services */}
-            {editingSubServices ? (() => {
-              const pkgSubs = booking.packageId?.subServices || [];
-              const inc = pkgSubs.filter(s => s.isOptional === false);
-              const opt = pkgSubs.filter(s => s.isOptional !== false);
-              const prevOptNames = (booking.selectedSubServices || []).filter(s => s.isOptional !== false).map(s => s.name);
-              const calcTotal = pkgSubs.filter(s => editedSubServiceNames.includes(s.name)).reduce((sum, s) => sum + (s.price || 0), 0);
-              const deposit = booking.depositAmount || 0;
-              const calcRemaining = Math.max(0, calcTotal - (deposit > 0 ? deposit : 0));
-              return (
-                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  {inc.length > 0 && (
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Dịch vụ bao gồm trong gói <span className="font-normal text-slate-400">(Tích chọn/Hủy chọn)</span>:</label>
-                      <div className="space-y-1.5">
-                        {inc.map((sub, i) => {
-                          const checked = editedSubServiceNames.includes(sub.name);
-                          return (
-                            <label key={i} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${checked ? 'bg-white border-emerald-300 text-emerald-800' : 'bg-white/60 border-slate-200 text-slate-400 line-through'}`}>
-                              <input type="checkbox" checked={checked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
-                              <span>{sub.name}{sub.duration ? ` (${sub.duration} phút)` : ''}</span>
-                              <span className="ml-auto text-[11px] font-bold text-emerald-600">Đi kèm (0đ)</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {opt.length > 0 && (
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Dịch vụ chọn thêm <span className="font-normal text-slate-400">(Tích để chọn thêm)</span>:</label>
-                      <div className="space-y-1.5">
-                        {opt.map((sub, i) => {
-                          const checked = editedSubServiceNames.includes(sub.name);
-                          const wasPaid = prevOptNames.includes(sub.name) && sub.price > 0;
-                          return (
-                            <label key={i} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${checked ? 'bg-white border-indigo-300 text-indigo-800' : 'bg-white/60 border-slate-200 text-slate-500'}`}>
-                              <input type="checkbox" checked={checked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
-                              <span>{sub.name}{sub.duration ? ` (${sub.duration} phút)` : ''}</span>
-                              <span className="ml-auto text-[11px] font-bold text-indigo-600">{wasPaid && !checked ? `-${formatCurrency(sub.price)}` : `+${formatCurrency(sub.price)}`}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
-                    <div className="flex justify-between text-slate-700">
-                      <span className="font-medium">Tổng tiền dịch vụ mới:</span>
-                      <span className="font-bold text-slate-900 text-sm">{formatCurrency(calcTotal)}</span>
-                    </div>
-                    {deposit > 0 && (
-                      <div className="flex justify-between text-amber-800">
-                        <span>Tiền cọc:</span>
-                        <span className="font-semibold">-{formatCurrency(deposit)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-emerald-800 font-bold border-t border-amber-200/80 pt-1.5 mt-1 text-sm">
-                      <span>Cần thanh toán còn lại:</span>
-                      <span className="text-emerald-700 font-extrabold">{formatCurrency(calcRemaining)}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={handleSaveSubServices} disabled={savingSubServices}
-                      className="flex-1 py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
-                      {savingSubServices ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Đang lưu...</> : 'Lưu thay đổi dịch vụ'}
-                    </button>
-                    <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}
-                      className="py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors">Hủy</button>
-                  </div>
-                </div>
-              );
-            })() : (() => {
+            {(() => {
               const pkgSubs = booking.packageId?.subServices;
-              const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+              const selectedIncluded = (booking.selectedSubServices || []).filter(s => s.isOptional === false);
+              const included = selectedIncluded.length > 0 ? selectedIncluded : (Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : []);
               const extra = (booking.selectedSubServices || []).filter(s => s.isOptional !== false);
 
               return (
@@ -1575,6 +1505,96 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           </div>
         </div>
       )}
+
+      {/* Edit sub-services modal */}
+      {editingSubServices && (() => {
+        const pkgSubs = booking.packageId?.subServices || [];
+        const inc = pkgSubs.filter(s => s.isOptional === false);
+        const opt = pkgSubs.filter(s => s.isOptional !== false);
+        const prevOptNames = (booking.selectedSubServices || []).filter(s => s.isOptional !== false).map(s => s.name);
+        const calcTotal = pkgSubs.filter(s => editedSubServiceNames.includes(s.name)).reduce((sum, s) => sum + (s.price || 0), 0);
+        const deposit = booking.depositAmount || 0;
+        const depositActive = booking.depositPaid || booking.paymentStatus === 'deposit_paid' || booking.paymentStatus === 'paid';
+        const calcRemaining = Math.max(0, calcTotal - (depositActive && deposit > 0 ? deposit : 0));
+        return (
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditingSubServices(false)}>
+            <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-100/80 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <NotePencil size={18} weight="fill" className="text-violet-600" />
+                  <h3 className="text-base font-bold text-slate-800">Chỉnh sửa dịch vụ</h3>
+                </div>
+                <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {inc.length > 0 && (
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Dịch vụ bao gồm trong gói <span className="font-normal text-slate-400">(Tích chọn/Hủy chọn)</span>:</label>
+                    <div className="space-y-1.5">
+                      {inc.map((sub, i) => {
+                        const checked = editedSubServiceNames.includes(sub.name);
+                        return (
+                          <label key={i} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${checked ? 'bg-white border-emerald-300 text-emerald-800' : 'bg-white/60 border-slate-200 text-slate-400 line-through'}`}>
+                            <input type="checkbox" checked={checked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
+                            <span>{sub.name}{sub.duration ? ` (${sub.duration} phút)` : ''}</span>
+                            <span className="ml-auto text-[11px] font-bold text-emerald-600">Đi kèm (0đ)</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {opt.length > 0 && (
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Dịch vụ chọn thêm <span className="font-normal text-slate-400">(Tích để chọn thêm)</span>:</label>
+                    <div className="space-y-1.5">
+                      {opt.map((sub, i) => {
+                        const checked = editedSubServiceNames.includes(sub.name);
+                        const wasPaid = prevOptNames.includes(sub.name) && sub.price > 0;
+                        return (
+                          <label key={i} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${checked ? 'bg-white border-indigo-300 text-indigo-800' : 'bg-white/60 border-slate-200 text-slate-500'}`}>
+                            <input type="checkbox" checked={checked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                            <span>{sub.name}{sub.duration ? ` (${sub.duration} phút)` : ''}</span>
+                            <span className="ml-auto text-[11px] font-bold text-indigo-600">{wasPaid && !checked ? `-${formatCurrency(sub.price)}` : `+${formatCurrency(sub.price)}`}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
+                  <div className="flex justify-between text-slate-700">
+                    <span className="font-medium">Tổng tiền dịch vụ mới:</span>
+                    <span className="font-bold text-slate-900 text-sm">{formatCurrency(calcTotal)}</span>
+                  </div>
+                  {depositActive && deposit > 0 && (
+                    <div className="flex justify-between text-amber-800">
+                      <span>Tiền cọc:</span>
+                      <span className="font-semibold">-{formatCurrency(deposit)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-emerald-800 font-bold border-t border-amber-200/80 pt-1.5 mt-1 text-sm">
+                    <span>Cần thanh toán còn lại:</span>
+                    <span className="text-emerald-700 font-extrabold">{formatCurrency(calcRemaining)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 px-6 pb-6">
+                <button onClick={handleSaveSubServices} disabled={savingSubServices}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
+                  {savingSubServices ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Đang lưu...</> : 'Lưu thay đổi dịch vụ'}
+                </button>
+                <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}
+                  className="py-2.5 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors">Hủy</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Refund confirmation for edit flow */}
       {refundConfirmData && (
