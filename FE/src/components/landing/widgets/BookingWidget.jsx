@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const WEEKS_OPTIONS = [4, 8, 12, 16, 20, 24];
+const WEEKS_OPTIONS = [2, 4, 8, 12, 16, 20, 24];
 
 const WEEKDAY_OPTIONS = [
   { label: 'T2', value: 1 },
@@ -105,8 +105,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [selectedDate, setSelectedDate] = useState(() => initialBookingState?.selectedDate || bookingDates[1]?.id || bookingDates[0]?.id);
   const [selectedTime, setSelectedTime] = useState(() => initialBookingState?.selectedTime || '');
   const [selectedDays, setSelectedDays] = useState(() => initialBookingState?.selectedDays || []);
-  const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 4);
-  const [weeksInput, setWeeksInput] = useState(() => String(initialBookingState?.weeks || 4));
+  const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 2);
+  const [weeksInput, setWeeksInput] = useState(() => String(initialBookingState?.weeks || 2));
   const [weeksError, setWeeksError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState(() => initialBookingState?.appliedVoucher || null);
   const [selectedSlotPack, setSelectedSlotPack] = useState(() => initialBookingState?.selectedSlotPack || null);
@@ -1521,7 +1521,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
     setSelectedTime('');
     setSelectedDays([]);
-    setWeeks(4);
+    setWeeks(2);
     setAppliedVoucher(null);
     setSelectedSlotPack(null);
     setMessage('');

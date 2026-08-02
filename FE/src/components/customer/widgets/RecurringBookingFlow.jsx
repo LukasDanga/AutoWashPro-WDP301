@@ -19,7 +19,7 @@ const WEEKDAYS = [
   { value: 6, label: 'T7', full: 'Thứ 7' },
   { value: 0, label: 'CN', full: 'Chủ Nhật' },
 ];
-const WEEKS_OPTIONS = [4, 8, 12, 16, 20, 24];
+const WEEKS_OPTIONS = [2, 4, 8, 12, 16, 20, 24];
 const TIME_SLOTS = [
   '07:00','07:30','08:00','08:30','09:00','09:30',
   '10:00','10:30','11:00','11:30','13:00','13:30',
@@ -70,8 +70,8 @@ export default function RecurringBookingFlow({ user, vehicles: userVehicles = []
   const [selectedSubServices, setSelectedSubServices] = useState({});
   const [selectedWeekdays, setSelectedWeekdays] = useState([]);
   const [selectedTime, setSelectedTime] = useState('');
-  const [weeks, setWeeks] = useState(4);
-  const [weeksInput, setWeeksInput] = useState('4');
+  const [weeks, setWeeks] = useState(2);
+  const [weeksInput, setWeeksInput] = useState('2');
   const [weeksError, setWeeksError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState(null);
 
