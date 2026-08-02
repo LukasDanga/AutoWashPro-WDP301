@@ -39,7 +39,7 @@ export default function AdminPaymentsPage() {
 
       {/* Tab content */}
       {activeTab === 'refunds' ? (
-        <RefundRequests />
+        <RefundRequests detailPath="/admin/payments/refunds" />
       ) : (
         <AdminPayments showDelete detailPath="/admin/payments" urlSync />
       )}
