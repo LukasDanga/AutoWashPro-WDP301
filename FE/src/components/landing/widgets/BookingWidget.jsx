@@ -1178,6 +1178,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const isPayingWithPack = !!selectedSlotPack;
   const effectiveBase = isPayingWithPack ? extraPrice : totalBase;
   const total = Math.max(0, effectiveBase - discount);
+  const singleSessionPrice = Math.max(0, totalBase - discount);
   const points = Math.floor((isPayingWithPack ? totalBase : total) * baseEarningRate * pointMultiplier);
 
   const vehicle = allVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
@@ -2701,24 +2702,45 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           </div>
                         )}
 
-                        {tab === 'recurring' && pkg && actualRecurringSessions > 0 && (
-                          <div className="flex justify-between text-xs text-slate-400 border-t border-slate-100 pt-2.5">
-                            <span>Tổng số buổi định kỳ</span>
-                            <span>{actualRecurringSessions} buổi</span>
+                        {tab === 'recurring' && pkg && actualRecurringSessions > 0 ? (
+                          <div className="pt-3 mt-2 border-t border-slate-100 space-y-2">
+                            <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">CÁCH TÍNH TỔNG TIỀN</div>
+
+                            <div className="rounded-2xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-3">
+                              {/* Giá mỗi buổi sau khi giảm */}
+                              <div className="flex justify-between items-center text-sm">
+                                <div>
+                                  <div className="font-bold text-slate-700">Giá mỗi buổi (sau khi giảm)</div>
+                                  <div className="text-[11px] text-slate-400 mt-0.5">Đã trừ ưu đãi của bạn</div>
+                                </div>
+                                <span className="text-xl font-extrabold text-emerald-600">{formatCurrency(singleSessionPrice)}</span>
+                              </div>
+
+                              {/* Nhân với số buổi */}
+                              <div className="flex justify-between items-center text-sm">
+                                <div>
+                                  <div className="font-bold text-slate-700">Số buổi đặt định kỳ</div>
+                                  <div className="text-[11px] text-slate-400 mt-0.5">{selectedDays.length} ngày × {weeks} tuần (đã loại buổi trùng lịch)</div>
+                                </div>
+                                <span className="font-bold text-slate-700">× {actualRecurringSessions} buổi</span>
+                              </div>
+
+                              {/* Tổng dự kiến */}
+                              <div className="flex justify-between items-end pt-2.5 border-t border-emerald-100">
+                                <div>
+                                  <div className="font-bold text-slate-800">Tổng dự kiến</div>
+                                  <div className="text-[11px] text-slate-400 mt-0.5">{formatCurrency(singleSessionPrice)} × {actualRecurringSessions} buổi</div>
+                                </div>
+                                <span className="text-2xl font-black text-emerald-600">{formatCurrency(singleSessionPrice * actualRecurringSessions)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
+                            <span className="text-base font-bold text-slate-800">Thành tiền tổng cộng</span>
+                            <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(total)}</span>
                           </div>
                         )}
-                        
-                        <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
-                          <span className="text-base font-bold text-slate-800">
-                            {tab === 'recurring' ? 'Tổng dự kiến (tạm tính)' : 'Thành tiền tổng cộng'}
-                          </span>
-                          <span className="text-2xl font-extrabold text-emerald-600">
-                            {tab === 'recurring' 
-                              ? formatCurrency((totalBase - discount) * actualRecurringSessions) 
-                              : formatCurrency(total)
-                            }
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
