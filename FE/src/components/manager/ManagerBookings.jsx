@@ -1924,7 +1924,7 @@ export default function ManagerBookings() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState(() => getInitialValue('search', ''));
   const [statusFilter, setStatusFilter] = useState(() => getInitialValue('status', ''));
-  const [typeFilter, setTypeFilter] = useState(() => getInitialValue('type', ''));
+  const [typeFilter, setTypeFilter] = useState(() => getInitialValue('type', 'single'));
   const [todayOnly, setTodayOnly] = useState(() => getInitialValue('today', 'false') === 'true');
   const [dateFrom, setDateFrom] = useState(() => getInitialValue('dateFrom', ''));
   const [dateTo, setDateTo] = useState(() => getInitialValue('dateTo', ''));
@@ -1932,6 +1932,11 @@ export default function ManagerBookings() {
   const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [viewMode, setViewMode] = useState(() => getInitialValue('viewMode', 'table')); // 'table' | 'calendar'
+  const [bookingTypeTab, setBookingTypeTab] = useState(() => {
+    const saved = getInitialValue('type', '');
+    if (saved === 'recurring') return 'recurring';
+    return 'regular';
+  }); // 'all' | 'regular' | 'recurring'
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [qrBooking, setQrBooking] = useState(null);
@@ -2102,6 +2107,16 @@ export default function ManagerBookings() {
     }
   };
 
+  const handleBookingTypeTab = (tab) => {
+    setBookingTypeTab(tab);
+    let tf = '';
+    if (tab === 'regular') tf = 'single';
+    else if (tab === 'recurring') tf = 'recurring';
+    setTypeFilter(tf);
+    setPage(1);
+    fetch_(search, statusFilter, tf, todayOnly, dateFrom, dateTo, 1);
+  };
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* toolbar */}
@@ -2135,13 +2150,6 @@ export default function ManagerBookings() {
               <option value="in_progress">Đang thực hiện</option>
               <option value="completed">Hoàn thành</option>
               <option value="cancelled">Đã hủy</option>
-            </select>
-            <select id="booking-type-filter" value={typeFilter} onChange={(e) => handleTypeFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors">
-              <option value="">Tất cả loại đơn</option>
-              <option value="single">Đặt 1 lần</option>
-              <option value="recurring">Định kỳ</option>
-              <option value="slot_pack_usage">Gói lượt</option>
             </select>
             <div className="flex items-center gap-1.5">
               <input type="date" value={dateFrom} max={dateTo || undefined}
@@ -2177,6 +2185,35 @@ export default function ManagerBookings() {
         </button>
       </div>
 
+      {/* Booking type tabs — only shown in table mode */}
+      {viewMode === 'table' && (
+        <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
+          
+          <button
+            id="tab-regular-bookings"
+            onClick={() => handleBookingTypeTab('regular')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              bookingTypeTab === 'regular'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+            }`}
+          >
+            📅 Đặt lịch thường
+          </button>
+          <button
+            id="tab-recurring-bookings"
+            onClick={() => handleBookingTypeTab('recurring')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              bookingTypeTab === 'recurring'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+            }`}
+          >
+            🔄 Đặt lịch định kỳ
+          </button>
+        </div>
+      )}
+
       {viewMode === 'calendar' && (
         <WeekView
           onSelect={(b) => handleSelectBookingWithMark(b)}
@@ -2186,14 +2223,24 @@ export default function ManagerBookings() {
       )}
       {viewMode === 'table' && (<>
       {/* filter info */}
-      <p className="text-xs text-slate-400">
-        {todayOnly
-          ? `Lịch hôm nay (${new Date().toLocaleDateString('vi-VN')}) — `
-          : dateFrom || dateTo
-            ? `Từ ${dateFrom || '...'} đến ${dateTo || '...'} — `
-            : ''}
-        {total > 0 ? `${total} lịch hẹn` : ''}
-      </p>
+      <div className="flex items-center gap-3">
+        <p className="text-xs text-slate-400">
+          {todayOnly
+            ? `Lịch hôm nay (${new Date().toLocaleDateString('vi-VN')}) — `
+            : dateFrom || dateTo
+              ? `Từ ${dateFrom || '...'} đến ${dateTo || '...'} — `
+              : ''}
+          {total > 0 ? `${total} lịch hẹn` : ''}
+        </p>
+        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+            bookingTypeTab === 'recurring'
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }`}>
+            {bookingTypeTab === 'recurring' ? '🔄 Đang xem: Đặt lịch định kỳ' : '📅 Đang xem: Đặt lịch thường'}
+          </span>
+      </div>
+
 
       {/* table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

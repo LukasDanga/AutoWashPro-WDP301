@@ -12,8 +12,8 @@ const TIER_BADGES = {
 
 const HISTORY_SUB_TABS = [
   { key: 'calendar', label: '📅 Lịch tháng' },
-  { key: 'week', label: '📆 Lịch tuần' },
-  { key: 'list', label: '📋 Lịch sử' },
+  { key: 'week', label: '🔄 Đặt lịch định kỳ' },
+  { key: 'list', label: '📋 Đặt lịch thường' },
   { key: 'slot_packs', label: '🎫 Gói lượt' },
 ];
 

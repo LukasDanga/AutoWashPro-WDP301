@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Copy, Check, Sun, Sunset, X, AlertCircle, Clock } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
+import CustomerBookingDetail from './CustomerBookingDetail.jsx';
 import QuickBookModal from '../../widgets/QuickBookModal.jsx';
 import VoucherPicker from '../../../VoucherPicker.jsx';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
@@ -342,6 +343,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [selectedDate, setSelectedDate] = useState(null);
   const [detailBooking, setDetailBooking] = useState(null);
+  const [childBookingDetailId, setChildBookingDetailId] = useState(null);
 
   const [viewedBookingIds, setViewedBookingIds] = useState(() => {
     try {
@@ -594,7 +596,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
       const success = parsed?.success !== false && parsed?.data?.responseCode === '00';
       if (success) {
         showToastMsg('Thanh toán VNPay thành công!');
-        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       } else {
         showToastMsg(parsed?.message || 'Thanh toán VNPay thất bại', 'error');
       }
@@ -687,7 +689,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
   useEffect(() => {
     if (!token) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    const gbr = viewMode === 'list';
+    const gbr = (viewMode === 'list' || viewMode === 'week');
     debounceRef.current = setTimeout(() => {
       doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
     }, 400);
@@ -732,7 +734,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
   const [refreshSignal, setRefreshSignal] = useState(0);
 
   const handleSSEUpdate = useCallback(() => {
-    const gbr = viewMode === 'list';
+    const gbr = (viewMode === 'list' || viewMode === 'week');
     doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, gbr);
     setRefreshSignal(s => s + 1);
   }, [doFetch, keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode]);
@@ -851,7 +853,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         if (!res.ok) throw new Error(data.message || 'Thanh toán bằng ví thất bại');
         showToastMsg('Thanh toán thành công');
         setPayRemainingTarget(null);
-        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       } else if (payRemainingMethod === 'bank') {
         const res = await fetch(`${apiBase || API_BASE}/payments`, {
           method: 'POST',
@@ -876,7 +878,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         } else {
           showToastMsg('Khởi tạo thanh toán thành công');
           setPayRemainingTarget(null);
-          doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+          doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
         }
       }
     } catch (err) {
@@ -900,7 +902,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         showToastMsg('Thanh toán chuyển khoản thành công', 'success');
         setPayRemainingBankQR(null);
         setPayRemainingTarget(null);
-        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       } else {
         setQrPollCount(c => c + 1);
       }
@@ -959,7 +961,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
       showToastMsg(refundAmount > 0 ? `Đã hủy đơn thành công, hoàn ${refundAmount.toLocaleString('vi-VN')}đ vào ví` : 'Đã hủy đơn thành công');
       setShowCancelConfirm(false); setCancelTarget(null); setCancelReason(''); setCancelOtp(''); setCancelStep(1); setCancelPreview(null);
       refreshUserProfile();
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) { setCancelConfirmError(e.message); }
     finally { setCancelLoading(false); }
@@ -1041,7 +1043,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
         showToastMsg('Đặt lại thành công!');
         setShowRebookModal(false); setRebookTarget(null);
-        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
         if (showRecurringGroupModal) loadRecurringGroup();
         return;
       }
@@ -1190,7 +1192,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Đặt lại thất bại'); }
       showToastMsg('Đặt lại thành công!');
       setShowRebookModal(false); setRebookTarget(null);
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       if (showRecurringGroupModal) loadRecurringGroup();
     } catch (e) {
       setRebookFormError(e.message);
@@ -1384,7 +1386,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         showToastMsg('Đã đặt lịch từ gói lượt!');
         setShowQuickBookModal(false);
         fetchSlotPacks();
-        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       } catch (e) {
         setQbError(e.message);
       } finally {
@@ -1414,7 +1416,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         if (!res.ok) throw new Error(data.message || data.error || 'Đặt lịch thất bại');
         showToastMsg('Đặt lịch thành công!');
         setShowQuickBookModal(false);
-        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+        doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
       } catch (e) {
         setQbError(e.message);
       } finally {
@@ -1527,7 +1529,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         paymentMode: 'deposit',
       });
       setQbQrStep('success');
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
     } catch (e) {
       setQbError(e.message);
     } finally {
@@ -1605,7 +1607,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         throw new Error(errorData.message || 'Lỗi khi xóa dịch vụ');
       }
       showToast('Đã xóa dịch vụ thành công!', 'success');
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list'); // refresh
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week')); // refresh
       if (detailBooking && (detailBooking._id === bId || detailBooking.id === bId)) {
          setDetailBooking(null);
       }
@@ -1638,7 +1640,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
       setShowCancelRecurringConfirm(false); setCancelRecurringTarget(null);
       setShowRecurringGroupModal(false);
       refreshUserProfile();
-      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, viewMode === 'list');
+      doFetch(keyword, statusFilter, typeFilter, dateFrom, dateTo, page, sort, (viewMode === 'list' || viewMode === 'week'));
     } catch (e) { showToastMsg(e.message, 'error'); }
     finally { setCancelLoading(false); }
   }
@@ -1647,6 +1649,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
   const bookingsByDate = useMemo(() => {
     const map = {};
     bookings.forEach(b => {
+                    if (viewMode === 'week' && !b.isGroup) return;
       const key = localDateKey(b.bookingDate);
       if (!map[key]) map[key] = [];
       map[key].push(b);
@@ -1685,7 +1688,8 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
 
   const stats = useMemo(() => {
     const s = { total: 0, pending: 0, confirmed: 0, completed: 0, cancelled: 0 };
-    bookings.forEach(b => { 
+    bookings.forEach(b => {
+                    if (viewMode === 'week' && !b.isGroup) return; 
       const count = b.isGroup ? (b.groupCount || 1) : 1;
       s.total += count;
       if (s[b.status] !== undefined) s[b.status] += count; 
@@ -1921,90 +1925,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
         )}
 
         {/* ── WEEK VIEW ── */}
-        {viewMode === 'week' && (
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            {/* Week nav */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); }}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-lg font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
-                  ‹
-                </button>
-                <div className="text-sm font-bold text-slate-800 min-w-48 text-center">
-                  {(() => {
-                    const start = new Date(weekStart);
-                    const end = new Date(weekStart); end.setDate(end.getDate() + 6);
-                    return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} – ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
-                  })()}
-                </div>
-                <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); }}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-lg font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
-                  ›
-                </button>
-              </div>
-              <button onClick={() => {
-                const d = new Date(); const day = d.getDay();
-                d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-                d.setHours(0,0,0,0); setWeekStart(d);
-              }}
-                className="px-4 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-                Tuần này
-              </button>
-            </div>
-
-            {/* Week days */}
-            <div className="grid grid-cols-7 divide-x divide-slate-200">
-              {[0,1,2,3,4,5,6].map(offset => {
-                const day = new Date(weekStart);
-                day.setDate(day.getDate() + offset);
-                const ds = localDateKey(day);
-                const isToday = isSameDay(day, new Date());
-                const dayBks = (bookingsByDate[ds] || []).sort((a,b) => (a.startTime || '').localeCompare(b.startTime || ''));
-                const dow = ['T2','T3','T4','T5','T6','T7','CN'][offset];
-                return (
-                  <div key={ds} className={`min-h-[200px] ${isToday ? 'bg-blue-50/30' : ''}`}>
-                    <div className={`px-2 py-2.5 text-center border-b border-slate-100 ${isToday ? 'bg-blue-50' : 'bg-slate-50'}`}>
-                      <p className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-blue-500' : 'text-slate-400'}`}>{dow}</p>
-                      <p className={`text-xl font-bold leading-tight ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>{day.getDate()}</p>
-                      <p className="text-[10px] text-slate-400">{day.toLocaleDateString('vi-VN', { month: 'numeric' })}</p>
-                      {dayBks.length > 0 && (
-                        <span className="inline-block mt-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">{dayBks.length}</span>
-                      )}
-                    </div>
-                    <div className="p-1.5 space-y-1">
-                      {dayBks.length === 0 ? (
-                        <div className="flex items-center justify-center py-6">
-                          <span className="text-[10px] text-slate-300">—</span>
-                        </div>
-                      ) : dayBks.map(b => {
-                        const st = STATUS_MAP[b.status] || { label: b.status, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
-                        const colorMap = {
-                          pending: 'bg-amber-400 text-white border-amber-500',
-                          confirmed: 'bg-indigo-500 text-white border-indigo-600',
-                          checked_in: 'bg-cyan-500 text-white border-cyan-600',
-                          in_progress: 'bg-blue-500 text-white border-blue-600',
-                          completed: 'bg-emerald-500 text-white border-emerald-600',
-                          cancelled: 'bg-slate-300 text-slate-600 border-slate-400',
-                        };
-                        const colorCls = colorMap[b.status] || colorMap.pending;
-                        return (
-                          <div key={b._id || b.id} onClick={() => handleOpenViewBooking(b)}
-                            className={`relative rounded-lg border px-2 py-1.5 cursor-pointer transition-opacity hover:opacity-80 ${colorCls}`}>
-                            <p className="text-[10px] font-bold leading-tight opacity-75">{b.startTime}{b.endTime ? `-${b.endTime}` : ''}</p>
-                            <p className="text-[11px] font-semibold leading-tight truncate">{b.packageId?.name || b.packageName || '—'}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── LIST VIEW ── */}
-        {viewMode === 'list' && (
+        {(viewMode === 'list' || viewMode === 'week') && (
           <>
             {/* Filter Bar Panel */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -2080,7 +2001,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
               {/* Advanced filters: Type + Sort */}
               {showAdvancedFilters && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                  <div className="flex flex-col gap-1">
+                  {viewMode !== 'week' && <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Loại lịch</label>
                     <select
                       value={typeFilter}
@@ -2091,7 +2012,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                       <option value="single">Lịch thường</option>
                       <option value="recurring">Lịch định kỳ</option>
                     </select>
-                  </div>
+                  </div>}
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sắp xếp</label>
                     <select
@@ -2128,6 +2049,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                   today.setHours(0,0,0,0);
                   
                   bookings.forEach(b => {
+                    if (viewMode === 'week' && !b.isGroup) return;
                     const bDate = new Date(b.bookingDate);
                     bDate.setHours(0,0,0,0);
                     if (bDate >= today) upcoming.push(b);
@@ -2142,47 +2064,6 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                     const canReview = b.status === 'completed';
                     const hasReview = b.rating || b.feedback;
                     const isNewB = checkIsNew(b);
-                    
-                    if (b.isGroup) {
-                      return (
-                        <div key={bId} onClick={() => { markBookingAsViewed(bId || b.recurringGroupId); setRecurringGroupTarget(b); setShowRecurringGroupModal(true); }} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden group">
-                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
-                          <div className="flex items-start justify-between gap-4 pl-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-3 mb-1">
-                                <span className="text-base font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">{b.packageId?.name || b.packageName || 'Dịch vụ'}</span>
-                                <span className="inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap bg-indigo-50 text-indigo-600 border-indigo-200">
-                                  Định kỳ ({b.groupCount} buổi)
-                                </span>
-                                {isNewB && (
-                                  <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm animate-pulse">MỚI</span>
-                                )}
-                              </div>
-                              <p className="text-sm text-slate-500 font-medium">{b.branchId?.name || b.branchName || ''}</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-lg font-black text-slate-900">{formatCurrency(b.groupTotalPrice)}</p>
-                              {b.groupTotalDeposit > 0 && (
-                                <span className="inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-amber-50 text-amber-600 border-amber-200">
-                                  Cọc {formatCurrency(b.groupTotalDeposit)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="mt-4 pl-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
-                            {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="font-semibold text-slate-800">{b.vehicleId.licensePlate || ''}</span></span>}
-                            <span className="flex items-center gap-1.5"><svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">Cập nhật lần cuối: {formatDate(b.createdAt)}</span></span>
-                            {b.recurringGroupId && <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">#{(b.recurringGroupId || '').slice(-6).toUpperCase()}</span>}
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 pl-3">
-                            <button className="px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1.5">
-                              <span>Xem chi tiết {b.groupCount} đơn lẻ</span>
-                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }
                     
                     return (
                       <div key={bId} onClick={() => handleOpenViewBooking(b)} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden group">
@@ -2223,7 +2104,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                           {b.vehicleId && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 13v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg><span className="bg-slate-900 text-white font-mono font-bold text-xs px-2.5 py-0.5 rounded tracking-wider shadow-2xs">{b.vehicleId.licensePlate || ''}</span></span>}
                           {b.bookingDate && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg><span className="font-semibold text-slate-800">{formatDate(b.bookingDate)}</span></span>}
                           {b.startTime && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg><span className="font-semibold text-slate-800">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span></span>}
-                          {b.bookingCode && <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">#{b.bookingCode}</span>}
+                          {b.recurringGroupId && b.isGroup ? <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">#{String(b.recurringGroupId).slice(-6).toUpperCase()}</span> : b.bookingCode ? <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">#{b.bookingCode}</span> : null}
                           {b.recurringGroupId && <span className="text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/80 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
                         </div>
 
@@ -2307,9 +2188,93 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                               </button>
                             )}
                           </div>
+
+                            {/* NEW: Timeline Accordion for recurring groups */}
+                            {b.isGroup && (
+                              <>
+                                <div className="flex items-center justify-between gap-4 mt-2 pt-2 border-t border-slate-100 pl-3">
+                                   <div className="flex items-center gap-3 flex-1">
+                                      <button onClick={(e) => {
+                                          e.stopPropagation();
+                                          markBookingAsViewed(bId || b.recurringGroupId);
+                                          const isExpanded = recurringGroupTarget && (recurringGroupTarget._id === bId || recurringGroupTarget.id === bId) && showRecurringGroupModal;
+                                          if (isExpanded) {
+                                            setShowRecurringGroupModal(false);
+                                          } else {
+                                            setRecurringGroupTarget(b);
+                                            setShowRecurringGroupModal(true);
+                                          }
+                                      }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1.5">
+                                        <span>{(recurringGroupTarget && (recurringGroupTarget._id === bId || recurringGroupTarget.id === bId) && showRecurringGroupModal) ? 'Đóng danh sách' : 'Xem danh sách buổi'}</span>
+                                        <svg className={`w-3.5 h-3.5 transition-transform ${(recurringGroupTarget && (recurringGroupTarget._id === bId || recurringGroupTarget.id === bId) && showRecurringGroupModal) ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+                                      </button>
+                                   </div>
+                                </div>
+                                {(recurringGroupTarget && (recurringGroupTarget._id === bId || recurringGroupTarget.id === bId) && showRecurringGroupModal) && (
+                                  <div className="mt-4 pt-4 border-t border-slate-100 pl-3 pr-3 cursor-default" onClick={e => e.stopPropagation()}>
+                                    {recurringGroupLoading ? (
+                                      <div className="py-6 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                                        <RefreshCw className="w-5 h-5 animate-spin text-indigo-500" />
+                                        Đang tải dữ liệu các buổi...
+                                      </div>
+                                    ) : recurringGroupBookings.length === 0 ? (
+                                      <div className="py-6 text-center text-slate-400 text-sm">Không có dữ liệu</div>
+                                    ) : (
+                                      <div className="relative border-l-2 border-indigo-100 ml-3 pl-6 space-y-6 pb-2">
+                                        {recurringGroupBookings.map((rb, idx) => {
+                                          const rbId = rb._id || rb.id;
+                                          const isDone = rb.status === 'completed';
+                                          const isCancelled = rb.status === 'cancelled';
+                                          return (
+                                            <div key={rbId} className="relative">
+                                              <div className={`absolute -left-[31px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm ${isDone ? 'bg-emerald-500' : isCancelled ? 'bg-slate-300' : 'bg-indigo-400'}`} />
+                                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 hover:bg-white hover:border-indigo-200 transition-colors group/item">
+                                                <div>
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-xs font-bold text-slate-500">Buổi {idx + 1}</span>
+                                                    <span className="font-semibold text-slate-800 text-sm">{formatDate(rb.bookingDate)} · {rb.startTime}</span>
+                                                  </div>
+                                                  <StatusBadge status={rb.status} />
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <button onClick={() => setChildBookingDetailId(rbId)}
+                                                    className="px-2.5 py-1.5 rounded-md text-xs font-semibold text-indigo-700 bg-indigo-100/50 hover:bg-indigo-100 transition-colors whitespace-nowrap">
+                                                    Chi tiết
+                                                  </button>
+                                                  {(rb.status === 'pending' || rb.status === 'confirmed') && (
+                                                    <>
+                                                      <button onClick={() => handleShowQR(rb)}
+                                                        className="px-2.5 py-1.5 rounded-md text-xs font-semibold text-sky-700 bg-sky-100/50 hover:bg-sky-100 transition-colors whitespace-nowrap">
+                                                        Xem QR
+                                                      </button>
+                                                      <button onClick={() => handleCancel(rb)} disabled={cancelLoading}
+                                                        className="px-2.5 py-1.5 rounded-md text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors whitespace-nowrap">
+                                                        Hủy
+                                                      </button>
+                                                    </>
+                                                  )}
+                                                  {rb.status === 'completed' && (
+                                                    <button onClick={() => openReview(rb)}
+                                                      className="px-2.5 py-1.5 rounded-md text-xs font-semibold text-amber-700 bg-amber-100/50 hover:bg-amber-100 transition-colors whitespace-nowrap">
+                                                      Đánh giá
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            )}
                       </div>
                     );
+
                   };
+
 
                   return (
                     <>
@@ -3043,9 +3008,9 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
 
       {/* ── RECURRING GROUP MODAL ── */}
       {showRecurringGroupModal && (
-        <div className="fixed inset-0 z-[9900] bg-black/40 backdrop-blur-sm flex justify-end"
+        <div className="fixed inset-0 z-[9900] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
           onClick={() => { setShowRecurringGroupModal(false); setRecurringGroupTarget(null); setRecurringGroupBookings([]); }}>
-          <div className="bg-white w-full max-w-xl h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Chi tiết lịch định kỳ</h3>
@@ -3082,12 +3047,12 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                     const canReview = b.status === 'completed';
                     const hasReview = b.rating || b.feedback;
                     return (
-                      <div key={bId} onClick={() => handleOpenViewBooking(b)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
+                      <div key={bId} onClick={() => setChildBookingDetailId(b._id || b.id)} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-colors cursor-pointer">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-slate-800 text-sm">{formatDate(b.bookingDate)} · {b.startTime}</span>
-                              {b.bookingCode && <span className="font-mono text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">#{b.bookingCode}</span>}
+                              {b.recurringGroupId && b.isGroup ? <span className="font-mono text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">#{String(b.recurringGroupId).slice(-6).toUpperCase()}</span> : b.bookingCode ? <span className="font-mono text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">#{b.bookingCode}</span> : null}
                             </div>
                             <div className="text-xs text-slate-500 mt-1">{b.branchId?.name || b.branchName || ''}</div>
                           </div>
@@ -3286,6 +3251,20 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
           </div>
         </div>
       )}
+
+      {/* Child Booking Detail Modal */}
+      <AnimatePresence>
+        {childBookingDetailId && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm" onClick={() => setChildBookingDetailId(null)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.2 }}
+              className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col relative overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex-1 overflow-auto bg-slate-50 relative p-0 sm:p-2">
+                <CustomerBookingDetail apiBase={apiBase} token={token} user={user} onUserUpdate={onUserUpdate} bookingId={childBookingDetailId} onClose={() => setChildBookingDetailId(null)} />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

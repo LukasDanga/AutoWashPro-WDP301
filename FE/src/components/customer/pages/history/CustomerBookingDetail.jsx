@@ -80,10 +80,11 @@ function StarRating({ value, onChange }) {
   );
 }
 
-export default function CustomerBookingDetail({ apiBase, token, user, onUserUpdate }) {
+export default function CustomerBookingDetail({ apiBase, token, user, onUserUpdate, bookingId, onClose }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const id = decodeURIComponent(pathname.split('/').pop() || '');
+  const id = bookingId || decodeURIComponent(pathname.split('/').pop() || '');
+  const isModal = !!bookingId;
 
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -675,7 +676,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
     return (
       <div className="space-y-4 max-w-2xl mx-auto py-8">
         <button
-          onClick={() => navigate('/history')}
+          onClick={() => isModal && onClose ? onClose() : navigate('/history')}
           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
         >
           <ArrowLeft size={16} /> Quay lại lịch sử
@@ -817,7 +818,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/history')}
+            onClick={() => isModal && onClose ? onClose() : navigate('/history')}
             className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all shadow-sm cursor-pointer"
           >
             <ArrowLeft size={16} />
@@ -833,7 +834,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
       </div>
 
       {/* Booking info */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm relative">
         <div className="p-6 sm:p-7 space-y-6">
           <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 space-y-3 text-xs sm:text-sm">
             <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
@@ -1147,7 +1148,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
         </div>
 
         {/* Footer actions */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center gap-3">
+        <div className="sticky bottom-0 z-20 px-6 py-4 bg-white/95 backdrop-blur-md border-t border-slate-200 flex flex-wrap items-center gap-3 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] rounded-b-2xl">
           <button onClick={() => setShowReceipt(true)}
             className="flex-1 min-w-[120px] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer text-center">
             Xem hóa đơn
