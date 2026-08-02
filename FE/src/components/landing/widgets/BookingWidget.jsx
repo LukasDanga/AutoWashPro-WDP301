@@ -1179,7 +1179,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const effectiveBase = isPayingWithPack ? extraPrice : totalBase;
   const total = Math.max(0, effectiveBase - discount);
   const singleSessionPrice = Math.max(0, totalBase - discount);
-  const points = Math.floor((isPayingWithPack ? totalBase : total) * baseEarningRate * pointMultiplier);
+  const pointsBase = isPayingWithPack ? totalBase : total;
+  const tierLabel = userTierObj?.name || (user?.tier ? user.tier.charAt(0).toUpperCase() + user.tier.slice(1) : 'Thành viên');
+  const pointsPct = Math.round(baseEarningRate * 100);
+  const points = Math.floor(pointsBase * baseEarningRate * pointMultiplier);
 
   const vehicle = allVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
 
@@ -2696,9 +2699,16 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         )}
 
                         {isLoggedIn && points > 0 && (
-                          <div className="flex justify-between text-xs text-amber-600 font-semibold">
-                            <span>Thưởng tích điểm thành viên</span>
-                            <span>+{points} điểm</span>
+                          <div className="rounded-xl bg-amber-50/70 border border-amber-100 p-3 space-y-1">
+                            <div className="flex justify-between items-center text-xs text-amber-700 font-semibold">
+                              <span className="flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Thưởng tích điểm thành viên
+                              </span>
+                              <span className="font-extrabold">+{points} điểm</span>
+                            </div>
+                            <div className="text-[11px] text-amber-600/80 leading-snug">
+                              {formatCurrency(pointsBase)} × {pointsPct}% (tỷ lệ tích điểm) × {pointMultiplier} (hạng {tierLabel})
+                            </div>
                           </div>
                         )}
 
