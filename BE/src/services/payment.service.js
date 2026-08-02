@@ -1091,6 +1091,21 @@ exports.getMyPaymentHistory = async (userId, filters = {}) => {
   };
 };
 
+exports.getBookingPaymentHistory = async (bookingId, userRole, userId) => {
+  const booking = await Booking.findById(bookingId).select('userId branchId');
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+  if (userRole === 'customer' && String(booking.userId) !== String(userId)) {
+    throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+  if (userRole === 'manager') {
+    const branch = await getManagerBranch(userId);
+    if (!branch || String(booking.branchId) !== String(branch._id)) {
+      throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
+    }
+  }
+  return Payment.find({ bookingId, status: 'paid' }).sort({ paidAt: 1, createdAt: 1 });
+};
+
 exports.refundPayment = async (bookingId, userRole, userId) => {
   const session = await mongoose.startSession();
   session.startTransaction();

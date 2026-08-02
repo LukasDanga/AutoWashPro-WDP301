@@ -39,6 +39,8 @@ router.get('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingCont
  */
 router.get('/my', authenticate, bookingController.getMyPayments);
 
+router.get('/booking/:bookingId/history', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.getBookingPaymentHistory);
+
 /**
  * @swagger
  * /api/payments/booking/{bookingId}:
