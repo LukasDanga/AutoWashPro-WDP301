@@ -920,6 +920,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             const s = pkg?.subServices?.find(x => x.name === n);
             return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
           }),
+          recurringCount: (pendingDeposit.tab === 'recurring') ? (bk?.totalCreated || 0) : undefined,
+          recurringBookings: (pendingDeposit.tab === 'recurring') ? (bk?.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
           depositAmount: pendingDeposit.depositAmount || 0,
           depositPaid: true,
           paymentMode,
@@ -3011,10 +3013,10 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       {lastBooking.recurringBookings?.length ? `Lịch định kỳ (${lastBooking.recurringBookings.length} buổi)` : 'Thời gian hẹn'}
                     </span>
                     <span className="font-bold text-slate-700 text-sm">
-                      {lastBooking.currentDate
-                        ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
-                        : lastBooking.recurringBookings?.length
-                          ? `${lastBooking.selectedTime}`
+                      {lastBooking.recurringBookings?.length
+                        ? `${lastBooking.selectedTime}`
+                        : lastBooking.currentDate
+                          ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
                           : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
                     </span>
                   </div>
