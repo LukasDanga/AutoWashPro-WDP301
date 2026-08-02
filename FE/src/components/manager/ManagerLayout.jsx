@@ -11,13 +11,21 @@ function api(path) {
   return fetch(`${getApiBaseUrl()}${path}`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
 }
 
-function resolvePageMeta(pathname) {
+function resolvePageMeta(pathname, search = '') {
   if (pathname === '/manager' || pathname === '/manager/') return MANAGER_PAGE_META.overview;
   if (pathname.startsWith('/manager/bookings')) return MANAGER_PAGE_META.bookings;
   if (pathname.startsWith('/manager/schedule')) return MANAGER_PAGE_META.schedule;
   if (pathname.startsWith('/manager/branch')) return MANAGER_PAGE_META.branch;
   if (pathname.startsWith('/manager/vouchers')) return MANAGER_PAGE_META.vouchers;
   if (pathname.startsWith('/manager/rewards/history/')) return { title: 'Chi tiết Giao dịch Điểm thưởng', description: 'Xem chi tiết lý do, công thức và đơn hàng tích điểm của khách hàng.' };
+  if (pathname.startsWith('/manager/payments/')) {
+    return { title: 'Chi tiết thanh toán', description: 'Xem chi tiết giao dịch và thực hiện xác nhận hoặc hoàn tiền.' };
+  }
+  if (pathname.startsWith('/manager/payments')) {
+    const tab = new URLSearchParams(search).get('tab');
+    if (tab === 'refunds') return MANAGER_PAGE_META['refund-requests'];
+    return MANAGER_PAGE_META.payments;
+  }
   if (pathname.startsWith('/manager/refund-requests')) return MANAGER_PAGE_META['refund-requests'];
   if (pathname.startsWith('/manager/customers')) return MANAGER_PAGE_META.customers;
   if (pathname.startsWith('/manager/feedbacks')) return MANAGER_PAGE_META.feedbacks;
@@ -31,25 +39,27 @@ function resolvePageMeta(pathname) {
 export default function ManagerLayout({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const meta = resolvePageMeta(location.pathname);
+  const meta = resolvePageMeta(location.pathname, location.search);
   const [badges, setBadges] = useState({});
   const token = getStoredToken();
 
   const loadCounts = useCallback(async () => {
     try {
       const bId = user?.branchId;
-      const [bRes, fRes, cRes, spRes, rRes] = await Promise.all([
+      const [bRes, fRes, cRes, spRes, rRes, pRes] = await Promise.all([
         api('/bookings?status=pending&limit=1&groupByRecurring=true'),
         api('/bookings/feedbacks?replied=false&limit=1'),
         api('/bookings/customers?limit=100'),
         bId ? api(`/slot-packs?branchId=${bId}&limit=100`) : Promise.resolve(null),
         api('/refund-requests?limit=100'),
+        api('/payments?status=paid&limit=100'),
       ]);
       const bData = await bRes.json().catch(() => ({}));
       const fData = await fRes.json().catch(() => ({}));
       const cData = await cRes.json().catch(() => ({}));
       const spData = spRes ? await spRes.json().catch(() => ({})) : {};
       const rData = await rRes.json().catch(() => ({}));
+      const pData = await pRes.json().catch(() => ({}));
 
       const pendingBookings = bData?.data?.pagination?.total ?? bData?.data?.total ?? 0;
       const unrepliedFeedbacks = fData?.data?.total ?? 0;
@@ -78,13 +88,18 @@ export default function ManagerLayout({ user, onLogout }) {
         r => !viewedRefundIds.includes(r._id) && new Date(r.createdAt).toDateString() === new Date().toDateString()
       ).length;
 
+      // Unviewed payments scoped theo branch (server tự lọc theo managerId)
+      const paymentList = pData?.data?.payments ?? (Array.isArray(pData?.data) ? pData.data : []);
+      const unviewedPayments = (Array.isArray(paymentList) ? paymentList : [])
+        .filter((p) => !p.viewedAt && p.status === 'paid').length;
+
       setBadges({
         bookings: pendingBookings,
         schedule: pendingBookings,
         feedbacks: unrepliedFeedbacks,
         customers: newCustomers,
         'slot-packs': newSlotPacks,
-        'refund-requests': unviewedRefunds,
+        payments: unviewedPayments + unviewedRefunds,
       });
     } catch { /* silent */ }
   }, [user?.branchId]);
