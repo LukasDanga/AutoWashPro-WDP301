@@ -2709,6 +2709,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <div className="text-[11px] text-amber-600/80 leading-snug">
                               {formatCurrency(pointsBase)} × {pointsPct}% (tỷ lệ tích điểm) × {pointMultiplier} (hạng {tierLabel})
                             </div>
+                            <div className="text-[11px] text-amber-600/80 leading-snug mt-1">* Sẽ được cộng sau khi đơn hàng của bạn hoàn thành.</div>
                           </div>
                         )}
 
@@ -2965,8 +2966,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <Sparkles className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
-                      <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
+                      <p className="text-sm font-bold text-amber-900 leading-tight">Đủ điều kiện nhận 1 vòng quay may mắn!</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Vòng quay sẽ được cấp sau khi đơn hàng của bạn hoàn thành.</p>
                     </div>
                   </div>
                 )}
