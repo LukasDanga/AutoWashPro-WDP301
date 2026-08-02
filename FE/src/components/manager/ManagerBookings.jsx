@@ -783,9 +783,25 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       return sum + price;
     }, 0);
 
-    const actualRefundAmount = Math.min(refundAmountPreview, currentPaid);
+    // Khách chỉ được hoàn tiền khi tổng tiền dịch vụ mới THẤP HƠN số tiền đã trả (khớp BE: refund = paid - newFinalPrice)
+    const pkgPrice = booking.packagePrice ?? booking.packageId?.price ?? 0;
+    const basePrice = booking.bookingType === 'slot_pack_usage' ? 0 : pkgPrice;
+    const allSubs = [...(booking.packageId?.subServices || []), ...prevSubServices];
+    const newExtraPrice = editedSubServiceNames.reduce((sum, name) => {
+      const sub = allSubs.find(s => (s.name || s) === name);
+      if (sub && typeof sub === 'object' && sub.isOptional !== false) {
+        return sum + (sub.price || 0);
+      }
+      return sum;
+    }, 0);
+    const newTotal = Math.max(0, basePrice + newExtraPrice - (booking.discountAmount || 0));
 
-    if (currentPaid > 0 && actualRefundAmount > 0) {
+    let actualRefundAmount = 0;
+    if (currentPaid > newTotal) {
+      actualRefundAmount = Math.min(currentPaid - newTotal, refundAmountPreview);
+    }
+
+    if (actualRefundAmount > 0) {
       setRefundConfirmData({
         refundAmount: actualRefundAmount,
         canceledNames: removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name),
@@ -1513,9 +1529,6 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         const opt = pkgSubs.filter(s => s.isOptional !== false);
         const prevOptNames = (booking.selectedSubServices || []).filter(s => s.isOptional !== false).map(s => s.name);
         const calcTotal = pkgSubs.filter(s => editedSubServiceNames.includes(s.name)).reduce((sum, s) => sum + (s.price || 0), 0);
-        const deposit = booking.depositAmount || 0;
-        const depositActive = booking.depositPaid || booking.paymentStatus === 'deposit_paid' || booking.paymentStatus === 'paid';
-        const calcRemaining = Math.max(0, calcTotal - (depositActive && deposit > 0 ? deposit : 0));
         return (
           <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditingSubServices(false)}>
             <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-100/80 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -1569,16 +1582,6 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                   <div className="flex justify-between text-slate-700">
                     <span className="font-medium">Tổng tiền dịch vụ mới:</span>
                     <span className="font-bold text-slate-900 text-sm">{formatCurrency(calcTotal)}</span>
-                  </div>
-                  {depositActive && deposit > 0 && (
-                    <div className="flex justify-between text-amber-800">
-                      <span>Tiền cọc:</span>
-                      <span className="font-semibold">-{formatCurrency(deposit)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-emerald-800 font-bold border-t border-amber-200/80 pt-1.5 mt-1 text-sm">
-                    <span>Cần thanh toán còn lại:</span>
-                    <span className="text-emerald-700 font-extrabold">{formatCurrency(calcRemaining)}</span>
                   </div>
                 </div>
               </div>
