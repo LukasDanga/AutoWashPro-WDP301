@@ -1795,7 +1795,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   </div>
 
                   {/* Sub-services below packages */}
-                  {selectedPackage && selectedPackage.subServices && selectedPackage.subServices.length > 0 && (
+                  {false && selectedPackage && selectedPackage.subServices && selectedPackage.subServices.length > 0 && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }} 
                       animate={{ opacity: 1, y: 0 }}
