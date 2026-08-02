@@ -39,7 +39,7 @@ export default function ManagerPayments() {
 
       {/* Tab content */}
       {activeTab === 'refunds' ? (
-        <RefundRequests />
+        <RefundRequests detailPath="/manager/payments/refunds" />
       ) : (
         <AdminPayments showDelete={false} detailPath="/manager/payments" />
       )}

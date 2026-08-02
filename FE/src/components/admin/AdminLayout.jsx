@@ -41,6 +41,9 @@ function resolvePageMeta(pathname, search = '') {
   }
   if (pathname.startsWith('/admin/activity')) return ADMIN_PAGE_META.activity;
   if (pathname.startsWith('/admin/bookings')) return ADMIN_PAGE_META.bookings;
+  if (pathname.startsWith('/admin/payments/refunds/')) {
+    return { title: 'Chi tiết Yêu cầu hoàn tiền', description: 'Xem chi tiết và duyệt yêu cầu hoàn tiền của khách hàng.' };
+  }
   if (pathname.startsWith('/admin/payments/')) {
     return { title: 'Chi tiết thanh toán', description: 'Xem chi tiết giao dịch và thực hiện xác nhận hoặc hoàn tiền.' };
   }
