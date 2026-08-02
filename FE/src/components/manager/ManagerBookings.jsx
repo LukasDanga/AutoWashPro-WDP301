@@ -47,6 +47,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import ManagerQuickCheckin from '@/components/manager/ManagerQuickCheckin';
+import ManagerQRScanner from '@/components/manager/ManagerQRScanner';
 
 /* ── helpers ── */
 function api(path, opts = {}) {
@@ -1929,6 +1930,7 @@ export default function ManagerBookings() {
   const [dateFrom, setDateFrom] = useState(() => getInitialValue('dateFrom', ''));
   const [dateTo, setDateTo] = useState(() => getInitialValue('dateTo', ''));
   const [showCheckin, setShowCheckin] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [viewMode, setViewMode] = useState(() => getInitialValue('viewMode', 'table')); // 'table' | 'calendar'
@@ -2187,7 +2189,8 @@ export default function ManagerBookings() {
 
       {/* Booking type tabs — only shown in table mode */}
       {viewMode === 'table' && (
-        <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
           
           <button
             id="tab-regular-bookings"
@@ -2212,6 +2215,12 @@ export default function ManagerBookings() {
             🔄 Đặt lịch định kỳ
           </button>
         </div>
+
+        <button onClick={() => setShowQRScanner(true)}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+          <QrCode size={18} weight="bold" className="text-slate-700" /> Mã QR
+        </button>
+      </div>
       )}
 
       {viewMode === 'calendar' && (
@@ -2296,7 +2305,7 @@ export default function ManagerBookings() {
                           <p className="text-[11px] text-slate-400 pl-6">{b.userId?.phone ?? ''}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-mono text-xs font-bold text-slate-400">#{(b.groupId || '').slice(-6).toUpperCase()}</span>
+                          <span className="font-mono text-xs font-bold text-slate-400">#{b.bookingCode || (b.groupId || '').slice(-6).toUpperCase()}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
@@ -2518,6 +2527,16 @@ export default function ManagerBookings() {
       </>)}
 
       {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
+
+      {showQRScanner && (
+        <ManagerQRScanner
+          onClose={() => setShowQRScanner(false)}
+          onCheckedIn={(b) => {
+            setShowQRScanner(false);
+            navigate(`/manager/bookings/${b._id || b.id}`);
+          }}
+        />
+      )}
 
       {showCheckin && (
         <ManagerQuickCheckin
