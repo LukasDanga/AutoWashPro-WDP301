@@ -137,6 +137,21 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
   // Receipt (biên lai)
   const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptPayments, setReceiptPayments] = useState(null);
+
+  const loadReceiptPayments = useCallback(async () => {
+    if (!booking || !booking._id) return;
+    try {
+      const res = await fetch(`${apiBase || API_BASE}/payments/booking/${booking._id}/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Không thể tải lịch sử thanh toán');
+      const payload = await res.json();
+      setReceiptPayments(Array.isArray(payload?.data) ? payload.data : null);
+    } catch (e) { setReceiptPayments(null); }
+  }, [booking, apiBase, token]);
+
+  useEffect(() => { if (showReceipt) loadReceiptPayments(); }, [showReceipt, loadReceiptPayments]);
 
   // Recurring group
   const [recurringGroupBookings, setRecurringGroupBookings] = useState([]);
@@ -1212,15 +1227,51 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
         const displayInvoiceNumber = String(displayId).slice(-8).toUpperCase();
 
         return (
-        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 no-print-bg"
           onClick={() => setShowReceipt(false)}>
-          <div className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] font-sans text-slate-900 relative" onClick={e => e.stopPropagation()}>
+          <style>{`
+            @media print {
+              @page { size: A4; margin: 10mm; }
+              body * { visibility: hidden; }
+              #receipt-printable-area, #receipt-printable-area * { visibility: visible; }
+              #receipt-printable-area {
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                display: block !important;
+              }
+              #receipt-printable-area .receipt-body {
+                overflow: visible !important;
+                max-height: none !important;
+                height: auto !important;
+                padding: 4mm 6mm !important;
+              }
+              #receipt-printable-area h2 { font-size: 20px !important; margin-bottom: 2mm !important; }
+              #receipt-printable-area h3 { font-size: 16px !important; }
+              #receipt-printable-area .text-4xl { font-size: 22px !important; }
+              #receipt-printable-area .mb-12 { margin-bottom: 4mm !important; }
+              #receipt-printable-area .mb-10 { margin-bottom: 3mm !important; }
+              #receipt-printable-area .mb-14 { margin-bottom: 4mm !important; }
+              #receipt-printable-area table { font-size: 11.5px !important; }
+              .no-print { display: none !important; }
+              .no-print-bg { background: transparent !important; }
+            }
+          `}</style>
+          <div id="receipt-printable-area" className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] font-sans text-slate-900 relative" onClick={e => e.stopPropagation()}>
 
-            <button onClick={() => setShowReceipt(false)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer">
+            <button onClick={() => setShowReceipt(false)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer no-print">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
 
-            <div className="px-10 py-12 overflow-y-auto flex-1 selection:bg-slate-200">
+            <div className="receipt-body px-10 py-12 overflow-y-auto flex-1 selection:bg-slate-200">
 
               <div className="flex justify-between items-start mb-12">
                 <div>
@@ -1231,7 +1282,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                     <div className="font-semibold text-black">Mã biên lai</div>
                     <div className="text-black">{displayId}</div>
                     <div className="font-semibold text-black">Ngày thanh toán</div>
-                    <div className="text-black">{formatDateTime(b.updatedAt || b.bookingDate)}</div>
+                    <div className="text-black">{formatDateTime(b.paidAt || b.updatedAt || b.bookingDate)}</div>
                   </div>
                 </div>
                 <div>
@@ -1252,7 +1303,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold text-black mb-1">Khách hàng</div>
+                  <div className="font-semibold text-black mb-1">Người thanh toán</div>
                   <div className="text-black">
                     {b.userId?.name || 'Khách hàng'} {b.userId?.phone || ''}<br/>
                     Biển số: {b.vehiclePlate || b.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
@@ -1266,15 +1317,15 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                   {formatCurrency(displayTotal)} {b.paymentStatus === 'paid' ? `đã thanh toán vào ${formatDate(b.updatedAt || b.bookingDate)}` : `cần thanh toán vào ${formatDate(b.bookingDate)}`}
                 </h3>
                 <p className="text-[13px] text-black max-w-xl leading-relaxed">
-                  Cảm ơn quý khách đã sử dụng dịch vụ của AutoWash Pro.<br/>
-                  Quý khách có thể thanh toán bằng tiền mặt, chuyển khoản hoặc sử dụng thẻ thành viên.<br/>
+                  Nếu quý khách chọn chuyển khoản ngân hàng,<br/>
+                  vui lòng chuyển tới tài khoản dưới đây thay vì thanh toán tiền mặt.<br/>
                   --------------------------------<br/>
-                  ĐỊA CHỈ THANH TOÁN:<br/>
+                  THÔNG TIN THANH TOÁN:<br/>
                   AutoWash Pro<br/>
-                  Hồ Chí Minh, Việt Nam
+                  Hồ Chí Minh, Vietnam
                 </p>
                 <p className="text-[13px] text-black mt-4">
-                  Giá đã bao gồm 10% VAT.
+                  VAT được tính trên tổng giá trị hóa đơn (10%)
                 </p>
               </div>
 
@@ -1320,6 +1371,22 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                       <td className="py-3 text-right text-black align-top">{formatCurrency(b.bookingType === 'slot_pack_usage' ? 0 : (b.packagePrice || b.packageId?.price || b.finalPrice || b.totalAmount))}</td>
                     </tr>
 
+                    {(() => {
+                      const pkgSubs = b.packageId?.subServices;
+                      const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+                      return included.map((sub, i) => (
+                        <tr key={`inc-${i}`} className="border-b border-slate-100">
+                          <td className="py-2 text-left text-black pl-4 text-emerald-600">
+                            {sub.name} <span className="text-[10px] text-emerald-400 font-normal">(có sẵn)</span>
+                          </td>
+                          <td className="py-2 text-right text-black">—</td>
+                          <td className="py-2 text-right text-black">—</td>
+                          <td className="py-2 text-right text-black">—</td>
+                          <td className="py-2 text-right text-black">—</td>
+                        </tr>
+                      ));
+                    })()}
+
                     {b.selectedSubServices && b.selectedSubServices.filter(s => s.isOptional !== false).map((sub, i) => (
                       <tr key={`sub-${i}`} className="border-b border-slate-100">
                         <td className="py-2 text-left text-black pl-4 text-indigo-600">+ {sub.name} <span className="text-[10px] text-indigo-400 font-normal">(thêm)</span></td>
@@ -1334,24 +1401,12 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
                 <div className="flex justify-end mt-6">
                   <div className="w-[300px] text-[13px]">
-                    <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Tạm tính</span>
-                      <span className="text-black">{formatCurrency(displayTotal + (b.discountAmount || 0))}</span>
-                    </div>
                     {b.voucherCode && (
                       <div className="flex justify-between py-1 border-b border-slate-200">
                         <span className="text-emerald-600 font-medium">Voucher ({b.voucherCode})</span>
                         <span className="text-emerald-600 font-medium">-{formatCurrency(b.discountAmount || 0)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Tổng tiền (chưa VAT)</span>
-                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Thuế VAT (10%)</span>
-                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
-                    </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="font-normal text-black">Tổng cộng</span>
                       <span className="font-normal text-black">{formatCurrency(displayTotal)}</span>
@@ -1373,6 +1428,12 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         }
                       </span>
                     </div>
+                    {b.paymentStatus === 'paid' && b.paidAt && (
+                      <div className="flex justify-between py-1 border-b border-slate-200">
+                        <span className="font-normal text-black">Ngày thanh toán</span>
+                        <span className="font-normal text-black">{formatDateTime(b.paidAt)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1384,111 +1445,51 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                     <tr className="border-b border-black">
                       <th className="py-2 text-left font-normal text-black">Phương thức</th>
                       <th className="py-2 text-left font-normal text-black">Ngày</th>
-                      <th className="py-2 text-left font-normal text-black">Mã đơn</th>
-                      <th className="py-2 text-right font-normal text-black">Số tiền</th>
+                      <th className="py-2 text-right font-normal text-black">Đã trả</th>
                       <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-slate-200">
-                      <td className="py-3 text-left text-black">
-                        {b.paymentStatus === 'paid' ? 'Chuyển khoản' : (b.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
-                      </td>
-                      <td className="py-3 text-left text-black">{formatDate(b.updatedAt || b.bookingDate)}</td>
-                      <td className="py-3 text-left font-mono font-bold text-emerald-700">#{b.bookingCode || ''}</td>
-                      <td className="py-3 text-right text-black">
-                        {b.paymentStatus === 'paid'
-                          ? formatCurrency(displayTotal)
-                          : (b.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
-                      </td>
-                      <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
-                    </tr>
+                    {receiptPayments === null ? (
+                      <tr className="border-b border-slate-200">
+                        <td className="py-3 text-left text-black">
+                          {b.paymentStatus === 'paid' ? 'Thanh toán' : (b.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                        </td>
+                        <td className="py-3 text-left text-black">{formatDate(b.paidAt || b.updatedAt || b.bookingDate)}</td>
+                        <td className="py-3 text-right text-black">
+                          {b.paymentStatus === 'paid'
+                            ? formatCurrency(displayTotal)
+                            : (b.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
+                        </td>
+                        <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
+                      </tr>
+                    ) : receiptPayments.length === 0 ? (
+                      <tr className="border-b border-slate-200">
+                        <td colSpan={4} className="py-3 text-center text-black">Chưa có giao dịch thanh toán</td>
+                      </tr>
+                    ) : (receiptPayments || []).map((p, i) => (
+                      <tr key={p._id || p.transactionId || i} className="border-b border-slate-200">
+                        <td className="py-3 text-left text-black">
+                          {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : (p.method || '—')}
+                          {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
+                        </td>
+                        <td className="py-3 text-left text-black">{formatDate(p.paidAt || p.createdAt || b.bookingDate)}</td>
+                        <td className="py-3 text-right text-black">{formatCurrency(p.amount)}</td>
+                        <td className="py-3 text-right text-black">AWP-{String(p.transactionId || p._id || displayId).slice(-8).toUpperCase()}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
 
-              <div className="mt-12 flex items-center justify-between border-t border-slate-200 pt-8">
-                <div className="flex items-center gap-4">
-                  <span className="text-[13px] font-semibold text-black">Trạng thái:</span>
-                  <StatusBadge status={b.status} />
-                </div>
-                {b.feedback && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-black">Rating:</span>
-                    <div className="flex gap-0.5">
-                      {[1,2,3,4,5].map((s) => (
-                        <span key={s} className={`text-base leading-none ${s <= (b.rating || 0) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              {b.feedback && (
-                <div className="mt-2 text-[13px] text-slate-600 italic">"{b.feedback}"</div>
-              )}
-              {b.managerNote && (
-                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="text-[12px] font-semibold text-amber-800 mb-1">Ghi chú từ quản lý:</div>
-                  <div className="text-[13px] text-amber-900">{b.managerNote}</div>
-                </div>
-              )}
-
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
-              {(!b.isGroup && (b.status === 'pending' || b.status === 'confirmed')) && (
-                <>
-                  <button onClick={() => { setShowReceipt(false); handleCancel(b); }} disabled={cancelLoading}
-                    className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 text-center cursor-pointer">
-                    Hủy đơn
-                  </button>
-                  <button onClick={() => { setShowReceipt(false); handleShowQR(b); }}
-                    className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center cursor-pointer">
-                    Mã QR
-                  </button>
-                </>
-              )}
-              {(b.isGroup && recurringGroupBookings.some(rb => rb.status === 'pending' || rb.status === 'confirmed')) && (
-                <>
-                  <button onClick={() => { setShowReceipt(false); handleCancelRecurring(b); }} disabled={cancelLoading}
-                    className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 text-center cursor-pointer">
-                    Hủy lịch trình định kỳ
-                  </button>
-                  <button onClick={() => { setShowReceipt(false); handleShowQR(b); }}
-                    className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center cursor-pointer">
-                    Mã QR
-                  </button>
-                </>
-              )}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 no-print">
               {b.status === 'completed' && (
-                <>
-                  <button onClick={() => { setShowReceipt(false); handleRebook(b); }} disabled={cancelLoading}
-                    className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-black text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 text-center cursor-pointer">
-                    Đặt lại
-                  </button>
-                  {['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
-                    const existing = findRefundRequest(b._id || b.id);
-                    if (existing?.status === 'pending') {
-                      return (
-                        <div className="flex-1 px-4 py-2.5 rounded-lg bg-amber-50 text-amber-700 text-sm font-semibold border border-amber-200 text-center cursor-default">
-                          Đang chờ hoàn tiền
-                        </div>
-                      );
-                    }
-                    return (
-                      <button onClick={() => { setShowReceipt(false); openRefundRequest(b); }}
-                        className="flex-1 px-4 py-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition-colors text-center cursor-pointer">
-                        Yêu cầu hoàn tiền
-                      </button>
-                    );
-                  })()}
-                  {!b.isGroup && b.status === 'completed' && (
-                    <button onClick={() => { setShowReceipt(false); openReview(b); }}
-                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors text-center cursor-pointer ${b.rating ? 'border border-slate-300 bg-white text-black hover:bg-slate-50' : 'bg-black text-white hover:bg-slate-800'}`}>
-                      {b.rating ? 'Sửa đánh giá' : 'Đánh giá'}
-                    </button>
-                  )}
-                </>
+                <button onClick={() => window.print()}
+                  className="w-full px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center cursor-pointer">
+                  In hóa đơn
+                </button>
               )}
             </div>
 

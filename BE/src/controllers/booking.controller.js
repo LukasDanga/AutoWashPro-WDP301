@@ -261,6 +261,11 @@ exports.getPaymentByBooking = catchAsync(async (req, res) => {
   success(res, payment, 'Đã lấy thông tin thanh toán');
 });
 
+exports.getBookingPaymentHistory = catchAsync(async (req, res) => {
+  const payments = await paymentService.getBookingPaymentHistory(req.params.bookingId, req.user.role, req.userId);
+  success(res, payments, 'Đã lấy lịch sử thanh toán');
+});
+
 exports.getPaymentById = catchAsync(async (req, res) => {
   const payment = await paymentService.getPaymentById(req.params.id, req.user.role, req.userId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });

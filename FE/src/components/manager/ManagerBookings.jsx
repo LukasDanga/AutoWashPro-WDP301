@@ -478,6 +478,23 @@ function PrintReceiptModal({ booking, onClose }) {
   const displayInvoiceNumber = String(displayId).slice(-8).toUpperCase();
   const recurringGroupBookings = detailBooking.children || [];
 
+  const [receiptPayments, setReceiptPayments] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api(`/payments/booking/${booking._id}/history`);
+        if (!res.ok) throw new Error('Không thể tải lịch sử thanh toán');
+        const payload = await res.json();
+        if (!cancelled) setReceiptPayments(Array.isArray(payload?.data) ? payload.data : null);
+      } catch (e) {
+        if (!cancelled) setReceiptPayments(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [booking._id]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -488,17 +505,35 @@ function PrintReceiptModal({ booking, onClose }) {
       
       <style>{`
         @media print {
+          @page { size: A4; margin: 10mm; }
           body * { visibility: hidden; }
           #receipt-printable-area, #receipt-printable-area * { visibility: visible; }
-          #receipt-printable-area { 
-            position: absolute !important; 
-            left: 0 !important; 
-            top: 0 !important; 
+          #receipt-printable-area {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
+            border-radius: 0 !important;
+            display: block !important;
           }
+          #receipt-printable-area .receipt-body {
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+            padding: 4mm 6mm !important;
+          }
+          #receipt-printable-area .receipt-body .mb-12,
+          #receipt-printable-area .receipt-body .mb-10,
+          #receipt-printable-area .receipt-body .mb-14,
+          #receipt-printable-area .receipt-body .mb-8,
+          #receipt-printable-area .receipt-body .mb-4 { margin-bottom: 3mm !important; }
+          #receipt-printable-area table { font-size: 11.5px !important; }
           .no-print { display: none !important; }
           .no-print-bg { background: transparent !important; }
         }
@@ -512,7 +547,7 @@ function PrintReceiptModal({ booking, onClose }) {
         </button>
 
         {/* Receipt Body */}
-        <div className="px-10 py-12 overflow-y-auto flex-1 selection:bg-slate-200">
+        <div className="receipt-body px-10 py-12 overflow-y-auto flex-1 selection:bg-slate-200">
           
           {/* Header */}
           <div className="flex justify-between items-start mb-12">
@@ -644,18 +679,12 @@ function PrintReceiptModal({ booking, onClose }) {
             {/* Summary */}
             <div className="flex justify-end mt-6">
               <div className="w-[300px] text-[13px]">
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-black">Tạm tính</span>
-                  <span className="text-black">{formatCurrency(displayTotal)}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-black">Tổng chưa thuế</span>
-                  <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-black">VAT - Vietnam (10% của {formatCurrency(Math.round((displayTotal) * 0.9))})</span>
-                  <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
-                </div>
+                {detailBooking.voucherCode && (
+                  <div className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="text-emerald-600 font-medium">Voucher ({detailBooking.voucherCode})</span>
+                    <span className="text-emerald-600 font-medium">-{formatCurrency(detailBooking.discountAmount || 0)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between py-1 border-b border-slate-200">
                   <span className="font-normal text-black">Tổng cộng</span>
                   <span className="font-normal text-black">{formatCurrency(displayTotal)}</span>
@@ -694,18 +723,34 @@ function PrintReceiptModal({ booking, onClose }) {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-slate-200">
-                  <td className="py-3 text-left text-black">
-                    {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
-                  </td>
-                  <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
-                  <td className="py-3 text-right text-black">
-                    {detailBooking.paymentStatus === 'paid' 
-                      ? formatCurrency(displayTotal) 
-                      : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
-                  </td>
-                  <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
-                </tr>
+                {receiptPayments === null ? (
+                  <tr className="border-b border-slate-200">
+                    <td className="py-3 text-left text-black">
+                      {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                    </td>
+                    <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
+                    <td className="py-3 text-right text-black">
+                      {detailBooking.paymentStatus === 'paid'
+                        ? formatCurrency(displayTotal)
+                        : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
+                    </td>
+                    <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
+                  </tr>
+                ) : receiptPayments.length === 0 ? (
+                  <tr className="border-b border-slate-200">
+                    <td colSpan={4} className="py-3 text-center text-black">Chưa có giao dịch thanh toán</td>
+                  </tr>
+                ) : receiptPayments.map((p, i) => (
+                  <tr key={i} className="border-b border-slate-200">
+                    <td className="py-3 text-left text-black">
+                      {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : p.method || '—'}
+                      {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
+                    </td>
+                    <td className="py-3 text-left text-black">{formatDate(p.paidAt || p.createdAt || detailBooking.bookingDate)}</td>
+                    <td className="py-3 text-right text-black">{formatCurrency(p.amount)}</td>
+                    <td className="py-3 text-right text-black">AWP-{String(p.transactionId || p._id || displayId).slice(-8).toUpperCase()}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1254,6 +1299,52 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             </div>
           </div>
         </div>
+
+        {/* CARD 3: THU TIỀN KHÁCH */}
+        {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                <CurrencyCircleDollar size={16} className="text-emerald-600" /> Thu tiền khách
+              </h3>
+              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                booking.depositPaid ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+              }`}>
+                {booking.depositPaid ? 'Đã đặt cọc' : 'Chưa đặt cọc'}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500 font-medium">Còn lại phải thu</span>
+                <span className="font-black text-slate-900">{formatCurrency(Math.max(0, (booking.finalPrice || booking.totalAmount || 0) - (booking.depositPaid ? (booking.depositAmount || 0) : 0)))}</span>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
+                    <button key={m.id} type="button"
+                      onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
+                      className={`flex flex-col items-center justify-center text-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
+                        managerPayMethod === m.id
+                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      }`}>
+                      {m.icon}{m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button disabled={busy} onClick={handlePaymentClick}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                <CurrencyCircleDollar size={15} weight="fill" />
+                {managerPayMethod === 'bank' ? 'Tạo mã QR ngân hàng (SePay)' : managerPayMethod === 'vnpay' ? 'Thanh toán qua VNPAY' : (booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── INVOICE (full width, outside grid) ── */}
@@ -1350,6 +1441,26 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                       {Number(totalValue).toLocaleString('vi-VN')}đ
                     </span>
                   </div>
+                  {booking.voucherCode && booking.discountAmount > 0 && (
+                    <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
+                      <span className="flex items-center gap-2 text-[13px] font-semibold text-emerald-600">
+                        <Tag size={14} weight="fill" className="text-emerald-500 shrink-0" />
+                        Voucher ({booking.voucherCode})
+                      </span>
+                      <span className="text-[13px] font-bold text-emerald-600">
+                        -{Number(booking.discountAmount).toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between py-2.5 gap-2">
+                    <span className="flex items-center gap-2 text-[13px] font-black text-slate-800">
+                      <Receipt size={14} weight="fill" className="text-emerald-600 shrink-0" />
+                      Thành tiền
+                    </span>
+                    <span className="text-[13px] font-black text-slate-900">
+                      {Number(booking.finalPrice ?? (totalValue - (booking.discountAmount || 0))).toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
                 </>;
               })()}
 
@@ -1400,43 +1511,12 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 </div>
               )}
 
-              <div className="pt-3 space-y-2">
-                {/* Payment method selection for manager (only when not yet paid) */}
-                {booking.paymentStatus !== 'paid' && booking.status !== 'cancelled' && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chọn phương thức</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[{id:'cash',icon:<Wallet size={16}/>,label:'Tiền mặt'},{id:'bank',icon:<Bank size={16}/>,label:'Ngân hàng'},{id:'wallet',icon:<CreditCard size={16}/>,label:'Ví'}].map(m => (
-                        <button key={m.id} type="button"
-                          onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
-                          className={`flex flex-col items-center justify-center text-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${
-                            managerPayMethod === m.id
-                              ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                          }`}>
-                          {m.icon}{m.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {booking.paymentStatus !== 'paid' && (
-                  <button disabled={busy} onClick={handlePaymentClick}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                    <CurrencyCircleDollar size={15} weight="fill" />
-                    {managerPayMethod === 'bank' ? 'Tạo mã QR ngân hàng (SePay)' : managerPayMethod === 'vnpay' ? 'Thanh toán qua VNPAY' : (booking.depositPaid ? 'Thu phần còn lại' : 'Xác nhận thu tiền')}
-                  </button>
-                )}
-
-                {/* Invoice action buttons */}
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => setShowPrint(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
-                    <Printer size={15} />
-                    In hóa đơn
-                  </button>
-                </div>
+              <div className="pt-3">
+                <button onClick={() => setShowPrint(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors">
+                  <Printer size={15} />
+                  In hóa đơn
+                </button>
               </div>
             </div>
           </div>
