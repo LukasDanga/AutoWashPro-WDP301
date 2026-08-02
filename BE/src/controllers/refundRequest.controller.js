@@ -25,7 +25,7 @@ exports.getRequestById = catchAsync(async (req, res) => {
 
 exports.reviewRequest = catchAsync(async (req, res) => {
   const { decision, reviewNote } = req.body;
-  const request = await refundRequestService.reviewRequest(req.params.id, req.userId, decision, reviewNote);
+  const request = await refundRequestService.reviewRequest(req.params.id, req.userId, req.user.role, decision, reviewNote);
   success(res, request, 'Đã duyệt yêu cầu hoàn tiền');
 });
 

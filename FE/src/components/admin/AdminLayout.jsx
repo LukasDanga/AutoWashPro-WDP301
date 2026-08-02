@@ -41,8 +41,17 @@ function resolvePageMeta(pathname, search = '') {
   }
   if (pathname.startsWith('/admin/activity')) return ADMIN_PAGE_META.activity;
   if (pathname.startsWith('/admin/bookings')) return ADMIN_PAGE_META.bookings;
-  if (pathname.startsWith('/admin/payments')) return ADMIN_PAGE_META.payments;
-  if (pathname.startsWith('/admin/refund-requests')) return ADMIN_PAGE_META['refund-requests'];
+  if (pathname.startsWith('/admin/payments/refunds/')) {
+    return { title: 'Chi tiết Yêu cầu hoàn tiền', description: 'Xem chi tiết và duyệt yêu cầu hoàn tiền của khách hàng.' };
+  }
+  if (pathname.startsWith('/admin/payments/')) {
+    return { title: 'Chi tiết thanh toán', description: 'Xem chi tiết giao dịch và thực hiện xác nhận hoặc hoàn tiền.' };
+  }
+  if (pathname.startsWith('/admin/payments')) {
+    const tab = new URLSearchParams(search).get('tab');
+    if (tab === 'refunds') return ADMIN_PAGE_META['payments-refunds'];
+    return ADMIN_PAGE_META.payments;
+  }
   if (pathname.startsWith('/admin/slot-packs')) return ADMIN_PAGE_META['slot-packs'];
   if (pathname.startsWith('/admin/profile')) return ADMIN_PAGE_META.profile;
   return ADMIN_PAGE_META.overview;
@@ -92,8 +101,7 @@ export default function AdminLayout({ user, onLogout }) {
       setBadges({
         bookings: pendingBookings,
         reviews: unrepliedReviews,
-        payments: unviewedPayments,
-        'refund-requests': unviewedRefunds,
+        payments: unviewedPayments + unviewedRefunds,
         'slot-packs': unviewedSlotPacks,
       });
     } catch { /* silent */ }

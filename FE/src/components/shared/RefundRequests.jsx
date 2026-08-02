@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
@@ -10,10 +11,6 @@ import {
   Clock,
   XCircle,
   Eye,
-  X,
-  User,
-  Buildings,
-  CalendarBlank,
   Trash,
   Spinner,
   MagnifyingGlass,
@@ -28,11 +25,11 @@ function api(path, opts = {}) {
   });
 }
 
-function formatCurrency(v) {
+export function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
 
-function formatDateTime(d) {
+export function formatDateTime(d) {
   if (!d) return '—';
   return new Date(d).toLocaleString('vi-VN');
 }
@@ -45,178 +42,14 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
-const STATUS_MAP = {
+export const STATUS_MAP = {
   pending: { label: 'Chờ duyệt', cls: 'bg-amber-50 text-amber-700 border border-amber-200/80', icon: Clock },
   approved: { label: 'Đã hoàn tiền', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80', icon: CheckCircle },
   rejected: { label: 'Đã từ chối', cls: 'bg-red-50 text-red-600 border border-red-200/80', icon: XCircle },
 };
 
-function Modal({ title, onClose, children }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(3px)' }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-[15px] font-semibold text-slate-800">{title}</h2>
-          <button
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="max-h-[78vh] overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function RequestDetail({ request, onClose, onReview, reviewing }) {
-  const [reviewNote, setReviewNote] = useState('');
-  const st = STATUS_MAP[request.status] || { label: request.status, cls: 'bg-slate-100 text-slate-500' };
-  const booking = request.bookingId || {};
-  const isDepositOnly = booking.paymentStatus === 'deposit_paid' || (booking.depositPaid && booking.paymentStatus !== 'paid');
-  const actualDeposit = booking.depositAmount || booking.deposit;
-  const refundAmount = isDepositOnly && actualDeposit ? actualDeposit : (booking.finalPrice ?? request.amount ?? request.refundAmount);
-
-  return (
-    <Modal title="Chi tiết yêu cầu hoàn tiền" onClose={onClose}>
-      <div className="space-y-5 text-sm text-slate-600">
-        <div className="flex items-center gap-4 rounded-xl bg-slate-50 p-4 border border-slate-100">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-600 border-2 border-white shadow-sm">
-            <ArrowUUpLeft size={28} weight="duotone" />
-          </div>
-          <div>
-            <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              {formatCurrency(refundAmount)}
-              <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
-            </h4>
-            <p className="text-xs text-slate-500 mt-0.5">Gửi lúc {formatDateTime(request.createdAt)}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 border-t border-b border-slate-100 py-4">
-          <div>
-            <span className="block text-xs text-slate-400 font-medium">Khách hàng</span>
-            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-              <User size={14} className="text-slate-400" />
-              {request.userId?.name || '—'}
-            </span>
-          </div>
-          <div>
-            <span className="block text-xs text-slate-400 font-medium">Email / SĐT</span>
-            <span className="font-semibold text-slate-700 mt-0.5">{request.userId?.email || request.userId?.phone || '—'}</span>
-          </div>
-          <div>
-            <span className="block text-xs text-slate-400 font-medium">Chi nhánh</span>
-            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-              <Buildings size={14} className="text-slate-400" />
-              {booking.branchId?.name || '—'}
-            </span>
-          </div>
-          <div>
-            <span className="block text-xs text-slate-400 font-medium">Ngày đặt</span>
-            <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-              <CalendarBlank size={14} className="text-slate-400" />
-              {booking.bookingDate ? formatDateTime(booking.bookingDate) : '—'}
-            </span>
-          </div>
-          <div>
-            <span className="block text-xs text-slate-400 font-medium">Trạng thái booking</span>
-            <span className="font-semibold text-slate-700 mt-0.5">
-              {
-                booking.status === 'confirmed' ? 'Đã xác nhận' :
-                booking.status === 'pending' ? 'Chờ xác nhận' :
-                booking.status === 'checked_in' ? 'Đã check-in' :
-                booking.status === 'in_progress' ? 'Đang thực hiện' :
-                booking.status === 'awaiting_payment' ? 'Chờ thanh toán' :
-                booking.status === 'completed' ? 'Hoàn thành' :
-                booking.status === 'cancelled' ? 'Đã hủy' : booking.status || '—'
-              }
-            </span>
-          </div>
-          <div>
-            <span className="block text-xs text-slate-400 font-medium">Thanh toán</span>
-            <span className="font-semibold text-slate-700 mt-0.5">
-              {
-                booking.paymentStatus === 'paid' ? 'Đã thanh toán' :
-                booking.paymentStatus === 'deposit_paid' ? 'Đã cọc' :
-                booking.paymentStatus === 'refunded' ? 'Đã hoàn tiền' :
-                booking.paymentStatus === 'failed' ? 'Thất bại' :
-                booking.paymentStatus === 'unpaid' ? 'Chưa thanh toán' : booking.paymentStatus || 'Chưa thanh toán'
-              }
-            </span>
-          </div>
-        </div>
-
-        <div>
-          <span className="block text-xs text-slate-400 font-medium mb-1">Lý do khách yêu cầu</span>
-          <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700">{request.reason}</p>
-        </div>
-
-        {request.status !== 'pending' && (
-          <div>
-            <span className="block text-xs text-slate-400 font-medium mb-1">Ghi chú của người duyệt</span>
-            <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700">
-              {request.reviewNote || '—'}
-              <span className="block mt-1 text-xs text-slate-400">
-                {request.reviewedBy?.name ? `Bởi ${request.reviewedBy.name} · ` : ''}{formatDateTime(request.reviewedAt)}
-              </span>
-            </p>
-          </div>
-        )}
-
-        {request.status === 'pending' && (
-          <>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Ghi chú (tuỳ chọn)</label>
-              <textarea
-                rows={3}
-                value={reviewNote}
-                onChange={(e) => setReviewNote(e.target.value)}
-                placeholder="Ghi chú khi duyệt/từ chối..."
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors resize-none"
-              />
-            </div>
-            <div className="flex gap-2 border-t border-slate-100 pt-4">
-              <button
-                onClick={() => onReview('rejected', reviewNote)}
-                disabled={reviewing}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors cursor-pointer"
-              >
-                <XCircle size={14} />
-                Từ chối
-              </button>
-              <button
-                onClick={() => onReview('approved', reviewNote)}
-                disabled={reviewing}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors cursor-pointer"
-              >
-                {reviewing ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <CheckCircle size={14} />}
-                {reviewing ? 'Đang xử lý…' : 'Phê duyệt & hoàn tiền'}
-              </button>
-            </div>
-          </>
-        )}
-        {request.status !== 'pending' && (
-          <div className="border-t border-slate-100 pt-4">
-            <button
-              onClick={onClose}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              Đóng
-            </button>
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-export default function RefundRequests() {
+export default function RefundRequests({ detailPath = '/admin/payments/refunds' }) {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -226,10 +59,7 @@ export default function RefundRequests() {
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalItems: 0, totalPages: 1 });
-  
-  const [detail, setDetail] = useState(null);
-  const [reviewing, setReviewing] = useState(false);
-  
+
   const [viewedRequests, setViewedRequests] = useState(() => {
     return JSON.parse(localStorage.getItem('viewed_refund_requests') || '[]');
   });
@@ -328,31 +158,13 @@ export default function RefundRequests() {
       localStorage.setItem('viewed_refund_requests', JSON.stringify(next));
       window.dispatchEvent(new Event('refund-request-viewed'));
     }
-    setDetail(r);
+    navigate(`${detailPath}/${r._id}`);
   };
 
   const token = getStoredToken();
   useSSE(token, 'refund_request_new', () => load(page, search, statusFilter, startDate, endDate));
   useSSE(token, 'refund_request_updated', () => load(page, search, statusFilter, startDate, endDate));
   useSSE(token, 'refund_requests_updated', () => load(page, search, statusFilter, startDate, endDate));
-
-  async function handleReview(decision, reviewNote) {
-    if (!detail) return;
-    setReviewing(true);
-    try {
-      const res = await api(`/refund-requests/${detail._id}/review`, {
-        method: 'POST',
-        body: JSON.stringify({ decision, reviewNote }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Không thể xử lý yêu cầu');
-      setRequests(prev => prev.map(r => r._id === detail._id ? { ...r, status: decision, reviewedAt: new Date().toISOString() } : r));
-      setDetail(null);
-      showToast(decision === 'approved' ? 'Đã phê duyệt và hoàn tiền cho khách hàng!' : 'Đã từ chối yêu cầu hoàn tiền.', 'success');
-      load(page, search, statusFilter, startDate, endDate);
-    } catch (e) { showToast(e.message, 'error'); }
-    finally { setReviewing(false); }
-  }
 
   async function handleDeleteSingle(r) {
     if (!(await confirmDialog({ title: 'Xác nhận xóa', message: 'Bạn có chắc chắn muốn xóa yêu cầu hoàn tiền này? Hành động này không thể hoàn tác!', danger: true }))) return;
@@ -361,7 +173,6 @@ export default function RefundRequests() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Xóa yêu cầu hoàn tiền thất bại');
       setRequests(prev => prev.filter(item => item._id !== r._id));
-      if (detail && detail._id === r._id) setDetail(null);
       showToast('Đã xóa yêu cầu hoàn tiền thành công', 'success');
       load(page, search, statusFilter, startDate, endDate);
     } catch (e) { showToast(e.message, 'error'); }
@@ -616,15 +427,6 @@ export default function RefundRequests() {
             )}
           </div>
         </div>
-      )}
-
-      {detail && (
-        <RequestDetail
-          request={detail}
-          onClose={() => setDetail(null)}
-          onReview={handleReview}
-          reviewing={reviewing}
-        />
       )}
 
       {/* Delete by date range modal */}

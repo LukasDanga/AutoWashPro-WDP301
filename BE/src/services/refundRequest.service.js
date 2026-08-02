@@ -167,6 +167,17 @@ exports.getAll = async (filters = {}, userRole, userId) => {
   };
 };
 
+// Kiểm tra yêu cầu hoàn tiền có thuộc chi nhánh manager đang quản lý không
+const assertManagerOwnsRequest = async (request, userId) => {
+  const branch = await Branch.findOne({ managerId: userId });
+  if (!branch) return;
+  const branchBookingIds = await Booking.find({ branchId: branch._id }).distinct('_id');
+  const bookingId = request.bookingId?._id || request.bookingId;
+  if (!bookingId || !branchBookingIds.some((b) => String(b) === String(bookingId))) {
+    throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
+  }
+};
+
 exports.getById = async (id, userRole, userId) => {
   const request = await RefundRequest.findById(id)
     .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' } })
@@ -176,10 +187,13 @@ exports.getById = async (id, userRole, userId) => {
   if (userRole === 'customer' && String(request.userId?._id || request.userId) !== String(userId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
+  if (userRole === 'manager') {
+    await assertManagerOwnsRequest(request, userId);
+  }
   return request;
 };
 
-exports.reviewRequest = async (id, reviewerId, decision, reviewNote) => {
+exports.reviewRequest = async (id, reviewerId, userRole, decision, reviewNote) => {
   if (!['approved', 'rejected'].includes(decision)) {
     throw Object.assign(new Error('Invalid decision'), { statusCode: 400, code: 'INVALID_DECISION' });
   }
@@ -188,6 +202,9 @@ exports.reviewRequest = async (id, reviewerId, decision, reviewNote) => {
   if (!request) throw Object.assign(new Error('Refund request not found'), { statusCode: 404, code: 'NOT_FOUND' });
   if (request.status !== 'pending') {
     throw Object.assign(new Error('Yêu cầu này đã được xử lý'), { statusCode: 409, code: 'ALREADY_REVIEWED' });
+  }
+  if (userRole === 'manager') {
+    await assertManagerOwnsRequest(request, reviewerId);
   }
 
   const booking = request.bookingId;

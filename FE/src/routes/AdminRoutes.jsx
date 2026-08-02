@@ -13,8 +13,9 @@ import AdminReviews from '@/components/admin/AdminReviews';
 import AdminBookings from '@/components/admin/AdminBookings';
 import AdminActivity from '@/components/admin/AdminActivity';
 import AdminSlotPacks from '@/components/admin/AdminSlotPacks';
-import AdminPayments from '@/components/admin/AdminPayments';
-import RefundRequests from '@/components/shared/RefundRequests';
+import AdminPaymentsPage from '@/components/admin/AdminPaymentsPage';
+import PaymentDetailPage from '@/components/admin/PaymentDetailPage';
+import RefundDetailPage from '@/components/shared/RefundDetailPage';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -116,8 +117,11 @@ export default function AdminRoutes() {
         />
         <Route path="activity" element={<AdminActivity />} />
         <Route path="bookings" element={<AdminBookings />} />
-        <Route path="payments" element={<AdminPayments />} />
-        <Route path="refund-requests" element={<RefundRequests />} />
+        <Route path="payments" element={<AdminPaymentsPage />} />
+        <Route path="payments/refunds" element={<Navigate to="/admin/payments?tab=refunds" replace />} />
+        <Route path="payments/refunds/:id" element={<RefundDetailPage basePath="/admin/payments?tab=refunds" />} />
+        <Route path="payments/:id" element={<PaymentDetailPage basePath="/admin/payments" />} />
+        <Route path="refund-requests" element={<Navigate to="/admin/payments?tab=refunds" replace />} />
         <Route path="slot-packs" element={<AdminSlotPacks />} />
         <Route path="profile" element={<AdminProfile user={user} />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />

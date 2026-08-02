@@ -11,7 +11,7 @@ import {
   Package,
   Ticket,
   CalendarBlank,
-  ArrowUUpLeft,
+  CurrencyDollar,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -59,10 +59,10 @@ export const MANAGER_MENU_ITEMS = [
     icon: Tag,
   },
   {
-    id: 'refund-requests',
-    label: 'Yêu cầu hoàn tiền',
-    to: '/manager/refund-requests',
-    icon: ArrowUUpLeft,
+    id: 'payments',
+    label: 'Quản lý thanh toán',
+    to: '/manager/payments',
+    icon: CurrencyDollar,
   },
   {
     id: 'customers',
@@ -118,9 +118,13 @@ export const MANAGER_PAGE_META = {
     title: 'Khuyến mãi & Quà tặng',
     description: 'Quản lý voucher giảm giá, lịch sử điểm thưởng, vòng quay may mắn.',
   },
+  payments: {
+    title: 'Quản lý thanh toán',
+    description: 'Theo dõi và quản lý các giao dịch thanh toán tại chi nhánh của bạn.',
+  },
   'refund-requests': {
-    title: 'Yêu cầu hoàn tiền',
-    description: 'Xem xét và duyệt các yêu cầu hoàn tiền do khách hàng gửi.',
+    title: 'Quản lý thanh toán — Yêu cầu hoàn tiền',
+    description: 'Xem xét và duyệt các yêu cầu hoàn tiền do khách hàng gửi tại chi nhánh của bạn.',
   },
   customers: {
     title: 'Quản lý khách hàng',

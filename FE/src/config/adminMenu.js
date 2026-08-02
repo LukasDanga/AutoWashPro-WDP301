@@ -9,7 +9,6 @@ import {
   CalendarBlank,
   Ticket,
   CurrencyDollar,
-  ArrowUUpLeft,
   Gear,
 } from '@phosphor-icons/react';
 
@@ -75,12 +74,6 @@ export const ADMIN_MENU_ITEMS = [
     icon: CurrencyDollar,
   },
   {
-    id: 'refund-requests',
-    label: 'Yêu cầu hoàn tiền',
-    to: '/admin/refund-requests',
-    icon: ArrowUUpLeft,
-  },
-  {
     id: 'slot-packs',
     label: 'Gói lượt',
     to: '/admin/slot-packs',
@@ -133,10 +126,10 @@ export const ADMIN_PAGE_META = {
   },
   payments: {
     title: 'Quản lý thanh toán',
-    description: 'Xem và quản lý toàn bộ giao dịch thanh toán trên hệ thống.',
+    description: 'Xem và quản lý toàn bộ giao dịch thanh toán và yêu cầu hoàn tiền trên hệ thống.',
   },
-  'refund-requests': {
-    title: 'Yêu cầu hoàn tiền',
+  'payments-refunds': {
+    title: 'Quản lý thanh toán — Yêu cầu hoàn tiền',
     description: 'Xem xét và duyệt các yêu cầu hoàn tiền do khách hàng gửi trên toàn hệ thống.',
   },
   'slot-packs': {
