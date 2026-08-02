@@ -21,6 +21,15 @@ const STATUS_MAP = {
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
 function formatDate(d) { return new Date(d).toLocaleDateString('vi-VN'); }
 
+// Tìm thông tin đầy đủ (price/duration/isOptional) của sub-service trong catalog, có fallback từ selectedSubServices
+const findSubInfo = (b, catalog, name) => {
+  const s = (catalog || []).find(x => (x.name || x) === name);
+  if (s) return (typeof s === 'object' ? s : { name, price: 0, isOptional: false });
+  const sel = (b.selectedSubServices || []).find(x => (x.name || x) === name);
+  if (sel && typeof sel === 'object') return sel;
+  return { name, price: 0, isOptional: false };
+};
+
 function StatusBadge({ status }) {
   const s = STATUS_MAP[status] || { label: status, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
   return <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${s.cls}`}>{s.label}</span>;
@@ -351,37 +360,50 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
     const pkgSubs = Array.isArray(pkgObj?.subServices) ? pkgObj.subServices : [];
     const basePrice = b.bookingType === 'slot_pack_usage' ? 0 : (b.packagePrice || pkgObj?.price || b.packageId?.price || 0);
+    const catalogSubs = [...pkgSubs, ...(Array.isArray(b.selectedSubServices) ? b.selectedSubServices : [])];
+
+    // Dịch vụ thêm đã có sẵn trong đơn (snapshot) — xác định theo catalog (isOptional/price đầy đủ)
+    const prevExtraNames = (b.selectedSubServices || [])
+      .map(s => (typeof s === 'string' ? s : s?.name))
+      .filter(name => name && findSubInfo(b, catalogSubs, name).isOptional !== false);
 
     let editedExtraPrice = 0;
     editedSubServiceNames.forEach(name => {
-      const foundPkgSub = pkgSubs.find(s => (s.name || s) === name);
-      const foundSelectedSub = Array.isArray(b.selectedSubServices) ? b.selectedSubServices.find(s => (s.name || s) === name) : null;
-      const subObj = foundPkgSub || foundSelectedSub;
-
-      const isOpt = typeof subObj === 'object' ? subObj?.isOptional !== false : true;
-      const price = typeof subObj === 'object' ? (subObj?.price || 0) : 0;
-
-      if (isOpt && price > 0) {
-        editedExtraPrice += price;
+      if (prevExtraNames.includes(name)) return; // đã có sẵn trong đơn, không tính là dịch vụ mới
+      const subInfo = findSubInfo(b, catalogSubs, name);
+      if (subInfo.isOptional !== false && (subInfo.price || 0) > 0) {
+        editedExtraPrice += subInfo.price;
       }
     });
 
     const newFinalPrice = Math.max(0, basePrice + editedExtraPrice - (b.discountAmount || 0));
     const actualRefundAmount = Math.max(0, currentPaid - newFinalPrice);
 
+    // Các dịch vụ thêm bị bỏ chọn (đang có trong đơn nhưng không còn tích trong modal)
     const prevSubServices = Array.isArray(b.selectedSubServices) ? b.selectedSubServices : [];
     const removedOptionalSubs = prevSubServices.filter(s => {
       const name = typeof s === 'string' ? s : s?.name;
       const isOpt = typeof s === 'object' ? s.isOptional !== false : true;
       return isOpt && !editedSubServiceNames.includes(name);
     });
+    const removedNames = removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name);
+    const normName = (s) => String(typeof s === 'string' ? s : s?.name || '').replace(/^\+\s*/, '');
+    const perServiceRefund = {};
+    let remainingRefund = actualRefundAmount;
+    removedNames.forEach(name => {
+      const prevItem = (b.selectedSubServices || []).find(s => normName(s) === normName(name));
+      const price = typeof prevItem === 'object' ? (prevItem.price || 0) : 0;
+      const amt = Math.min(price, remainingRefund);
+      if (amt > 0) perServiceRefund[normName(name)] = amt;
+      remainingRefund -= amt;
+    });
 
     if (currentPaid > 0 && actualRefundAmount > 0 && removedOptionalSubs.length > 0) {
-      const canceledNames = removedOptionalSubs.map(s => typeof s === 'string' ? s : s?.name);
       setRefundConfirmData({
         booking: b,
         refundAmount: actualRefundAmount,
-        canceledNames,
+        canceledNames: removedNames,
+        perServiceRefund,
         targetSubServices: editedSubServiceNames
       });
       return;
@@ -748,41 +770,45 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
     });
   }
 
-  const allAvailableSubs = [];
-  if (pkgSubs.length > 0) {
-    pkgSubs.forEach(s => {
-      const sName = typeof s === 'string' ? s : s?.name;
-      if (sName && !allAvailableSubs.some(x => (x.name || x) === sName)) {
-        allAvailableSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
-      }
-    });
-  }
-  if (Array.isArray(b.selectedSubServices)) {
-    b.selectedSubServices.forEach(s => {
-      const sName = typeof s === 'string' ? s : s?.name;
-      if (sName && !allAvailableSubs.some(x => (x.name || x) === sName)) {
-        allAvailableSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: true });
-      }
-    });
-  }
+  // Chỉ hiển thị sub-services của gói dịch vụ đã đặt + các dịch vụ thêm đang chọn (để khách bỏ chọn được)
+  const catalogSubs = [];
+  const pushSub = (s) => {
+    const sName = typeof s === 'string' ? s : s?.name;
+    if (sName && !catalogSubs.some(x => (x.name || x) === sName)) {
+      catalogSubs.push(typeof s === 'object' ? s : { name: sName, price: 0, isOptional: false });
+    }
+  };
+  (pkgObj?.subServices || []).forEach(pushSub);
+  (b.selectedSubServices || []).forEach(pushSub);
 
-  const editIncludedSubs = allAvailableSubs.filter(s => s.isOptional === false || (!s.isOptional && (s.price === 0 || !s.price)));
-  const editExtraSubs = allAvailableSubs.filter(s => s.isOptional !== false && s.price > 0);
+  const editIncludedSubs = catalogSubs.filter(s => {
+    const sOpt = typeof s === 'object' ? s?.isOptional : false;
+    const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
+    return sOpt === false || sOpt === undefined || sPrice === 0;
+  });
+  const editExtraSubs = catalogSubs.filter(s => {
+    const sOpt = typeof s === 'object' ? s?.isOptional : false;
+    const sPrice = typeof s === 'object' ? (s?.price || 0) : 0;
+    return sOpt !== false && sPrice > 0;
+  });
 
+  // Dịch vụ thêm đã có sẵn trong đơn (snapshot) — để loại khỏi "dịch vụ mới" khi khách chưa tích thêm gì
+  // Xác định theo catalog (isOptional/price đầy đủ), không dựa vào snapshot có thể thiếu price
+  const prevExtraNames = (b.selectedSubServices || [])
+    .map(s => (typeof s === 'string' ? s : s?.name))
+    .filter(name => name && findSubInfo(b, catalogSubs, name).isOptional !== false);
+
+  // "Tổng tiền dịch vụ mới" (modal) = CHỈ tổng các dịch vụ thêm mới được tích (chưa có trong đơn)
   let editedExtraPrice = 0;
   editedSubServiceNames.forEach(name => {
-    const foundSub = allAvailableSubs.find(s => s.name === name);
-    if (foundSub && foundSub.isOptional !== false && foundSub.price > 0) {
-      editedExtraPrice += foundSub.price;
+    if (prevExtraNames.includes(name)) return; // đã có sẵn trong đơn, không tính là dịch vụ mới
+    const subInfo = findSubInfo(b, catalogSubs, name);
+    if (subInfo.isOptional !== false && (subInfo.price || 0) > 0) {
+      editedExtraPrice += subInfo.price;
     }
   });
 
   const basePrice = b.bookingType === 'slot_pack_usage' ? 0 : (b.packagePrice || pkgObj?.price || b.packageId?.price || 0);
-  const discount = b.discountAmount || 0;
-  const calcTotal = Math.max(0, basePrice + editedExtraPrice - discount);
-  const deposit = b.depositAmount || 0;
-  const depositPaidOrActive = b.depositPaid || b.paymentStatus === 'deposit_paid' || b.paymentStatus === 'paid';
-  const calcRemaining = Math.max(0, calcTotal - (depositPaidOrActive ? deposit : 0));
 
   return (
     <div className="space-y-6">
@@ -853,11 +879,17 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
               </div>
 
               {extraList.length > 0 && (
-                <div className="flex justify-between items-center text-slate-600">
-                  <span>Dịch vụ bổ sung chọn thêm ({extraList.length} dịch vụ):</span>
-                  <span className="font-mono font-bold text-amber-700">
-                    +{formatCurrency(extraList.reduce((sum, item) => sum + (item.price || 0), 0))}
-                  </span>
+                <div className="space-y-1.5">
+                  {extraList.map((item, i) => {
+                    const sName = item.name || item;
+                    const sPrice = findSubInfo(b, catalogSubs, sName).price || item.price || 0;
+                    return (
+                      <div key={i} className="flex justify-between items-center text-slate-600">
+                        <span>Dịch vụ bổ sung chọn thêm: {sName}</span>
+                        <span className="font-mono font-bold text-amber-700">+{formatCurrency(sPrice)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -885,7 +917,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
             </div>
             <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center">
               <div className="text-xs sm:text-sm font-bold text-amber-700 flex items-center gap-1">
-                🔥 Tiền còn lại
+                🔥 Tiền còn lại cần thanh toán
                 <span className="text-xs font-normal text-slate-400">(Tổng tiền - Tiền đã thanh toán)</span>:
               </div>
               <span className={`text-base sm:text-xl font-black ${remainingVal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
@@ -967,82 +999,107 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 )}
               </div>
             ) : (
-              <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                {editIncludedSubs.length > 0 && (
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-2">
-                      Dịch vụ bao gồm trong gói <span className="font-normal text-slate-500">(Tích chọn/Hủy chọn)</span>:
-                    </label>
-                    <div className="space-y-2">
-                      {editIncludedSubs.map((sub, i) => {
-                        const isChecked = editedSubServiceNames.includes(sub.name);
-                        return (
-                          <label key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${isChecked ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900' : 'bg-white border-slate-200 text-slate-500 line-through'}`}>
-                            <input type="checkbox" checked={isChecked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
-                            <span>{sub.name} {sub.duration ? `(${sub.duration} phút)` : ''}</span>
-                            <span className="ml-auto text-[11px] font-bold text-emerald-600">Đi kèm (0đ)</span>
-                          </label>
-                        );
-                      })}
+              <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditingSubServices(false)}>
+                <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-100/80 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">✏️</span>
+                      <h3 className="text-base font-bold text-slate-800">Chỉnh sửa dịch vụ</h3>
                     </div>
+                    <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer">
+                      <span className="text-xl leading-none">×</span>
+                    </button>
                   </div>
-                )}
 
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-2">
-                    Dịch vụ chọn thêm <span className="font-normal text-slate-500">(Tích để chọn thêm)</span>:
-                  </label>
-                  {editExtraSubs.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">Không có dịch vụ thêm nào cho gói này.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {editExtraSubs.map((sub, i) => {
-                        const isChecked = editedSubServiceNames.includes(sub.name);
-                        return (
-                          <label key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${isChecked ? 'bg-indigo-50/90 border-indigo-300 text-indigo-900' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                            <input type="checkbox" checked={isChecked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
-                            <span>{sub.name} {sub.duration ? `(${sub.duration} phút)` : ''}</span>
-                            <span className="ml-auto text-[11px] font-bold text-indigo-600">+{formatCurrency(sub.price || 0)}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
-                  <div className="flex justify-between items-center text-slate-700">
-                    <span className="font-medium">Tổng tiền dịch vụ mới:</span>
-                    <span className="font-bold text-slate-900 text-sm">{formatCurrency(calcTotal)}</span>
-                  </div>
-                  {deposit > 0 && (
-                    <div className="flex justify-between items-center text-amber-800">
-                      <span>Tiền cọc:</span>
-                      <span className="font-semibold">-{formatCurrency(deposit)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center text-emerald-800 font-bold border-t border-amber-200/80 pt-1.5 mt-1 text-sm">
-                    <span>Số tiền cần thanh toán còn lại:</span>
-                    <span className="text-emerald-700 font-extrabold">{formatCurrency(calcRemaining)}</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => handleSaveSubServices(b)} disabled={savingSubServices}
-                    className="flex-1 py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer">
-                    {savingSubServices ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Đang lưu...
-                      </>
-                    ) : (
-                      'Lưu thay đổi dịch vụ'
+                  <div className="p-6 space-y-4">
+                    {editIncludedSubs.length > 0 && (
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-2">
+                          Dịch vụ bao gồm trong gói <span className="font-normal text-slate-500">(Tích chọn/Hủy chọn)</span>:
+                        </label>
+                        <div className="space-y-2">
+                          {editIncludedSubs.map((sub, i) => {
+                            const isChecked = editedSubServiceNames.includes(sub.name);
+                            return (
+                              <label key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${isChecked ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900' : 'bg-white border-slate-200 text-slate-500 line-through'}`}>
+                                <input type="checkbox" checked={isChecked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
+                                <span>{sub.name} {sub.duration ? `(${sub.duration} phút)` : ''}</span>
+                                <span className="ml-auto text-[11px] font-bold text-emerald-600">Đi kèm (0đ)</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
-                  </button>
-                  <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}
-                    className="py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer">
-                    Hủy
-                  </button>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-2">
+                        Dịch vụ chọn thêm <span className="font-normal text-slate-500">(Tích để chọn thêm)</span>:
+                      </label>
+                      {editExtraSubs.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">Không có dịch vụ thêm nào cho gói này.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {editExtraSubs.map((sub, i) => {
+                            const isChecked = editedSubServiceNames.includes(sub.name);
+                            const sInfo = findSubInfo(b, catalogSubs, sub.name);
+                            const isAlreadyInBooking = prevExtraNames.includes(sub.name);
+                            return (
+                              <label key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${isChecked ? 'bg-indigo-50/90 border-indigo-300 text-indigo-900' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                                <input type="checkbox" checked={isChecked} onChange={() => handleToggleSubService(sub.name)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                                <span>{sub.name} {sub.duration ? `(${sub.duration} phút)` : ''}</span>
+                                <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                                  {isAlreadyInBooking && (
+                                    <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">Đã thêm</span>
+                                  )}
+                                  <span className="text-[11px] font-bold text-indigo-600">+{formatCurrency(sInfo.price || sub.price || 0)}</span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {editedExtraPrice > 0 && (
+                      <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
+                        {editedSubServiceNames
+                          .filter(name => !prevExtraNames.includes(name))
+                          .map((name, i) => {
+                            const sInfo = findSubInfo(b, catalogSubs, name);
+                            if (sInfo.isOptional === false || (sInfo.price || 0) <= 0) return null;
+                            return (
+                              <div key={i} className="flex justify-between items-center text-slate-600">
+                                <span>{String(name).replace(/^\+\s*/, '')}</span>
+                                <span className="font-bold text-indigo-700">+{formatCurrency(sInfo.price || 0)}</span>
+                              </div>
+                            );
+                          })}
+                        <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-amber-200/70">
+                          <span className="font-medium">Tổng tiền dịch vụ mới:</span>
+                          <span className="font-bold text-slate-900 text-sm">{formatCurrency(editedExtraPrice)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => handleSaveSubServices(b)} disabled={savingSubServices}
+                        className="flex-1 py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer">
+                        {savingSubServices ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Đang lưu...
+                          </>
+                        ) : (
+                          'Lưu thay đổi dịch vụ'
+                        )}
+                      </button>
+                      <button onClick={() => setEditingSubServices(false)} disabled={savingSubServices}
+                        className="py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer">
+                        Hủy
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1784,11 +1841,19 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
             </h3>
             <p className="text-xs text-slate-500 text-center mb-4">
               Mã đơn: <span className="font-bold text-slate-700">#{refundConfirmData.booking.bookingCode || refundConfirmData.booking._id?.slice(-6).toUpperCase()}</span>
+              {refundConfirmData.booking.paymentStatus === 'paid' && (
+                <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold">
+                  Đã thanh toán
+                </span>
+              )}
             </p>
 
             <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-4 mb-4 space-y-2 text-xs">
               <div className="text-slate-600 font-medium">
                 Bạn đã bỏ chọn dịch vụ chọn thêm:
+              </div>
+              <div className="text-[10px] text-emerald-700 font-semibold">
+                Chỉ hoàn lại số tiền bạn đã thanh toán cho các dịch vụ này.
               </div>
               <div className="font-bold text-emerald-800 bg-white/90 p-2.5 rounded-lg border border-emerald-100/80 space-y-1.5">
                 {refundConfirmData.canceledNames.map((n, idx) => (
@@ -1798,6 +1863,16 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                   </div>
                 ))}
               </div>
+              {refundConfirmData.perServiceRefund && Object.keys(refundConfirmData.perServiceRefund).length > 0 && (
+                <div className="space-y-1.5 bg-white/90 rounded-lg border border-emerald-100/80 p-2.5 mt-2">
+                  {Object.entries(refundConfirmData.perServiceRefund).map(([name, amount]) => (
+                    <div key={name} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-600 font-medium">{String(name).replace(/^\+\s*/, '')}</span>
+                      <span className="font-bold text-emerald-700">+{formatCurrency(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-sm">
                 <span className="font-medium text-slate-700">Số tiền hoàn về Ví:</span>
                 <span className="font-black text-emerald-600 text-base">
