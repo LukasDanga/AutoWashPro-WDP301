@@ -432,6 +432,14 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return { id: dateIso, label: dateIso, day: dateIso, month: '', iso: dateIso };
   }, [bookingDates]);
 
+  const formatRecurringDate = useCallback((dateIso) => {
+    if (!dateIso) return '';
+    const d = getDateObj(dateIso);
+    const day = String(d.day ?? '').padStart(2, '0');
+    const month = String(d.month ?? '').padStart(2, '0');
+    return `${d.label || ''} ${day}/${month}`.trim();
+  }, [getDateObj]);
+
   // Fetch available slots
   const currentDate = useMemo(() => getDateObj(selectedDate), [selectedDate, getDateObj]);
   useEffect(() => {
@@ -632,7 +640,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           currentDate: pb.selectedDate ? getDateObj(pb.selectedDate) : null,
           selectedTime: pb.selectedTime, total: estimatedTotal, discount: 0, points: 0, isPayingWithPack: false, bookingCode: code,
           subServices: (pb.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
-          recurringCount: isRec ? bk?.totalCreated || 0 : undefined, depositAmount: 0, depositPaid: false,
+          recurringCount: isRec ? bk?.totalCreated || 0 : undefined,
+          recurringBookings: isRec ? (bk?.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
+          depositAmount: 0, depositPaid: false,
         });
         setShowSuccessModal(true);
         onSetPendingBooking(null);
@@ -1061,6 +1071,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         bookingCode: newCode,
         subServices: (draft.selectedSubServices || []).map(n => ({ name: n, price: subPrices[n] || 0 })),
         recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
+        recurringBookings: isRec ? (newBk.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
         depositAmount: draft.depositAmount || 0,
         depositPaid: true,
         paymentMode: draft.paymentMode,
@@ -2995,13 +3006,31 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
                   <div className="flex justify-between py-3">
-                    <span className="text-slate-400 text-xs font-semibold">Thời gian hẹn</span>
+                    <span className="text-slate-400 text-xs font-semibold">
+                      {lastBooking.recurringBookings?.length ? `Lịch định kỳ (${lastBooking.recurringBookings.length} buổi)` : 'Thời gian hẹn'}
+                    </span>
                     <span className="font-bold text-slate-700 text-sm">
                       {lastBooking.currentDate
                         ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
-                        : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
+                        : lastBooking.recurringBookings?.length
+                          ? `${lastBooking.selectedTime}`
+                          : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
                     </span>
                   </div>
+
+                  {lastBooking.recurringBookings?.length > 0 && (
+                    <div className="py-2">
+                      <div className="text-slate-400 text-xs font-semibold mb-2">Danh sách các buổi</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {lastBooking.recurringBookings.map((rb, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-semibold">
+                            <Calendar className="w-3 h-3" />
+                            {formatRecurringDate(rb.date)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Bill Section */}
                   <div className="bg-slate-50/60 -mx-6 px-6 py-4 space-y-2.5 mt-2">
