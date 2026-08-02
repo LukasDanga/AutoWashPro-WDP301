@@ -1181,7 +1181,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const singleSessionPrice = Math.max(0, totalBase - discount);
   const pointsBase = isPayingWithPack ? totalBase : total;
   const tierLabel = userTierObj?.name || (user?.tier ? user.tier.charAt(0).toUpperCase() + user.tier.slice(1) : 'Thành viên');
-  const pointsPct = Math.round(baseEarningRate * 100);
+  const pointsPct = Number((baseEarningRate * 100).toFixed(2));
   const points = Math.floor(pointsBase * baseEarningRate * pointMultiplier);
 
   const vehicle = allVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
