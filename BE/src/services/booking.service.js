@@ -2023,46 +2023,9 @@ exports.createRecurringBooking = async (data) => {
       let finalNote = note || '';
 
       if (hasConflict) {
-        const slots = buildSlots(totalDuration, branch.openingTime || '07:00', branch.closingTime || '20:00');
-        let bestSlot = null;
-        let minDiff = Infinity;
-        
-        for (const slot of slots) {
-          const sns = parseTime(slot.startTime);
-          const sne = parseTime(slot.endTime);
-          
-          if (bookingStr === todayStr) {
-            const now = new Date();
-            const currentMinutes = now.getHours() * 60 + now.getMinutes();
-            if (sns <= currentMinutes + 30) continue;
-          }
-          
-          const slotOverlapCount = conflicting.filter((b) => {
-            const bs = parseTime(b.startTime);
-            const be = parseTime(b.endTime);
-            return bs !== null && be !== null && isSlotOverlap(sns, sne, bs, be);
-          }).length;
-          
-          let isConflicting = false;
-          if (slotOverlapCount >= capacity) isConflicting = true;
-          if (capacity > 1 && slotOverlapCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') isConflicting = true;
-          
-          if (!isConflicting) {
-            const diff = Math.abs(sns - ns);
-            if (diff <= 120 && diff < minDiff) {
-              minDiff = diff;
-              bestSlot = slot;
-            }
-          }
-        }
-
-        if (bestSlot) {
-          finalStartTime = bestSlot.startTime;
-          finalEndTime = bestSlot.endTime;
-          finalNote = finalNote ? `${finalNote}\n(Hệ thống tự động đổi giờ sang ${finalStartTime} do trùng slot)` : `(Hệ thống tự động đổi giờ sang ${finalStartTime} do trùng slot)`;
-        } else {
-          throw new Error('Slot không còn trống và không có giờ thay thế phù hợp');
-        }
+        // Không tự động đổi giờ. Buổi bị trùng slot sẽ được BỎ QUA (đưa vào failed)
+        // để đồng bộ với danh sách "buổi hợp lệ" mà khách thấy ở màn xác nhận đặt lịch.
+        throw new Error('Slot bị trùng lịch — buổi này được bỏ qua');
       }
 
       const booking = new Booking({
