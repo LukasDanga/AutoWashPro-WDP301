@@ -358,7 +358,7 @@ export default function CustomerWallet({ apiBase, token, user, refreshUser }) {
             <div className="divide-y divide-slate-100">
               {transactions.map(tx => {
                 const isCredit = tx.type === 'credit';
-                const Icon = isCredit ? ArrowDownCircle : ArrowUpCircle;
+                const Icon = isCredit ? ArrowUpCircle : ArrowDownCircle;
                 const bookingObj = typeof tx.bookingId === 'object' ? tx.bookingId : null;
                 
                 let bookingCode = bookingObj?.bookingCode;
