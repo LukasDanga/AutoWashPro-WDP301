@@ -281,7 +281,7 @@ exports.getPaymentById = catchAsync(async (req, res) => {
 
 exports.getAllPayments = catchAsync(async (req, res) => {
   const result = await paymentService.getAllPayments(req.query, req.user.role, req.userId);
-  success(res, result.data, 'Đã lấy danh sách thanh toán', 200, result.pagination);
+  success(res, result, 'Đã lấy danh sách thanh toán');
 });
 
 exports.getMyPayments = catchAsync(async (req, res) => {
@@ -317,6 +317,11 @@ exports.deletePaymentsByDateRange = catchAsync(async (req, res) => {
     result = await paymentService.deletePaymentsByDateRange(dateFrom, dateTo);
   }
   success(res, result, `Đã xóa ${result.deletedCount} giao dịch`);
+});
+
+exports.deletePaymentById = catchAsync(async (req, res) => {
+  const result = await paymentService.deletePaymentById(req.params.id);
+  success(res, result, 'Đã xóa giao dịch');
 });
 
 

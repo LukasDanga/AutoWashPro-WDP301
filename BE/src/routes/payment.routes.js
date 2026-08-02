@@ -107,6 +107,17 @@ router.delete('/range', authenticate, authorize(ROLES.ADMIN), bookingController.
 
 /**
  * @swagger
+ * /api/payments/{id}:
+ *   delete:
+ *     summary: Delete a single payment by ID (admin only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/:id', authenticate, authorize(ROLES.ADMIN), bookingController.deletePaymentById);
+
+/**
+ * @swagger
  * /api/payments/{id}/viewed:
  *   patch:
  *     summary: Mark payment as viewed (admin/manager)

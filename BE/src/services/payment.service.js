@@ -745,6 +745,71 @@ exports.markPaymentViewed = async (id, userRole, userId) => {
   return payment;
 };
 
+/* ─────────────────── Stats helpers ─────────────────── */
+// Query thống kê 6 ô: scoping chi nhánh (manager) + bộ lọc method/ngày.
+// Không áp dụng bộ lọc status vì các ô thống kê là phân rã theo trạng thái.
+const buildStatsQuery = async (filters = {}, userRole, userId) => {
+  const query = {};
+  if (userRole === 'manager') {
+    const branch = await getManagerBranch(userId);
+    query.$or = await buildManagerBranchQuery(branch);
+  }
+  if (filters.method) query.method = filters.method;
+  if (filters.dateFrom || filters.dateTo) {
+    const dateQuery = {};
+    if (filters.dateFrom) {
+      const from = new Date(filters.dateFrom);
+      from.setHours(0, 0, 0, 0);
+      if (!isNaN(from.getTime())) dateQuery.$gte = from;
+    }
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
+      if (!isNaN(to.getTime())) dateQuery.$lte = to;
+    }
+    if (Object.keys(dateQuery).length) query.createdAt = dateQuery;
+  } else if (filters.today === 'true' || filters.today === true) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    query.createdAt = { $gte: start, $lte: end };
+  } else if (filters.date) {
+    const day = new Date(filters.date);
+    const start = new Date(day);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(day);
+    end.setHours(23, 59, 59, 999);
+    query.createdAt = { $gte: start, $lte: end };
+  }
+  return query;
+};
+
+const runPaymentStats = async (query) => {
+  const [rows] = await Payment.aggregate([
+    { $match: query },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: 1 },
+        revenue: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+        paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, 1, 0] } },
+        pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+        failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+        refunded: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } },
+      },
+    },
+  ]);
+  return {
+    revenue: rows?.revenue || 0,
+    total: rows?.total || 0,
+    paid: rows?.paid || 0,
+    pending: rows?.pending || 0,
+    failed: rows?.failed || 0,
+    refunded: rows?.refunded || 0,
+  };
+};
+
 exports.getAllPayments = async (filters = {}, userRole, userId) => {
   const query = {};
   if (userRole === 'customer') {
@@ -833,6 +898,13 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
     }));
   }
 
+  // Thống kê 6 ô theo cùng bộ lọc method/ngày (không lọc status) — gộp chung với list API
+  let summaryStats = null;
+  if (userRole !== 'customer') {
+    const statsQuery = await buildStatsQuery(filters, userRole, userId);
+    summaryStats = await runPaymentStats(statsQuery);
+  }
+
   return {
     data: (filters.withStats === 'true' || filters.withStats === true) ? { payments: data, stats } : data,
     pagination: {
@@ -841,7 +913,8 @@ exports.getAllPayments = async (filters = {}, userRole, userId) => {
       total,
       totalPages: Math.ceil(total / limit),
       hasNextPage: page * limit < total,
-    }
+    },
+    stats: summaryStats,
   };
 };
 
@@ -1086,6 +1159,14 @@ exports.deletePaymentsByDateRange = async (dateFrom, dateTo) => {
     createdAt: { $gte: from, $lte: to },
   });
   return { deletedCount: result.deletedCount };
+};
+
+exports.deletePaymentById = async (id) => {
+  const payment = await Payment.findByIdAndDelete(id);
+  if (!payment) {
+    throw Object.assign(new Error('Không tìm thấy thanh toán'), { statusCode: 404 });
+  }
+  return { deletedCount: 1 };
 };
 
 exports.deleteAllPayments = async () => {

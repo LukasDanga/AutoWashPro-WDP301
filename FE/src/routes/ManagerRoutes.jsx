@@ -14,6 +14,7 @@ import ManagerPackages from '@/components/manager/ManagerPackages';
 import ManagerSlotPacks from '@/components/manager/ManagerSlotPacks';
 import ManagerSchedule from '@/components/manager/ManagerSchedule';
 import ManagerPayments from '@/components/manager/ManagerPayments';
+import PaymentDetailPage from '@/components/admin/PaymentDetailPage';
 import AdminPointHistoryDetail from '@/components/admin/AdminPointHistoryDetail';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -89,6 +90,7 @@ export default function ManagerRoutes() {
         <Route path="vouchers" element={<ManagerPromotions user={user} />} />
         <Route path="rewards/history/:id" element={<AdminPointHistoryDetail />} />
         <Route path="payments" element={<ManagerPayments />} />
+        <Route path="payments/:id" element={<PaymentDetailPage basePath="/manager/payments" />} />
         <Route path="refund-requests" element={<Navigate to="/manager/payments?tab=refunds" replace />} />
         <Route path="revenue" element={<ManagerRevenue user={user} />} />
         <Route path="customers" element={<ManagerCustomers user={user} />} />

@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CurrencyDollar, ArrowUUpLeft } from '@phosphor-icons/react';
 import AdminPayments from '@/components/admin/AdminPayments';
@@ -9,15 +8,16 @@ const TABS = [
   { key: 'refunds', label: 'Yêu cầu hoàn tiền', icon: ArrowUUpLeft, activeColor: 'border-emerald-600 text-emerald-600' },
 ];
 
-export default function ManagerPayments() {
+export default function AdminPaymentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'payments');
+  const activeTab = searchParams.get('tab') === 'refunds' ? 'refunds' : 'payments';
 
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && tab !== activeTab) setActiveTab(tab);
-    if (!tab && activeTab !== 'payments') setActiveTab('payments');
-  }, [searchParams]); // eslint-disable-line
+  function onTabChange(key) {
+    const params = new URLSearchParams(searchParams);
+    if (key === 'payments') params.delete('tab');
+    else params.set('tab', key);
+    setSearchParams(params);
+  }
 
   return (
     <div className="space-y-5">
@@ -26,7 +26,7 @@ export default function ManagerPayments() {
         {TABS.map(({ key, label, icon: Icon, activeColor }) => (
           <button
             key={key}
-            onClick={() => setSearchParams(key === 'payments' ? {} : { tab: key })}
+            onClick={() => onTabChange(key)}
             className={`inline-flex items-center gap-2 pb-3 px-4 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
               activeTab === key ? activeColor : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
@@ -41,7 +41,7 @@ export default function ManagerPayments() {
       {activeTab === 'refunds' ? (
         <RefundRequests />
       ) : (
-        <AdminPayments showDelete={false} detailPath="/manager/payments" />
+        <AdminPayments showDelete detailPath="/admin/payments" urlSync />
       )}
     </div>
   );
