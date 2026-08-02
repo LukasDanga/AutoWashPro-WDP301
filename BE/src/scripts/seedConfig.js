@@ -7,7 +7,7 @@ require('dotenv').config({ path: __dirname + '/../../.env' });
 const INITIAL_CONFIGS = [
   {
     key: 'ADVANCE_BOOKING_LIMITS',
-    value: { bronze: 14, silver: 14, gold: 30, diamond: 60, VIP: 60 },
+    value: { bronze: 14, silver: 14, gold: 30, diamond: 60, Ruby: 60 },
     type: 'json',
     category: 'booking',
     isPublic: true,

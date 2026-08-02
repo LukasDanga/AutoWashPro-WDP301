@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     loyaltyPoints: { type: Number, default: 0 },
     lifetimePoints: { type: Number, default: 0 },
-    tier: { type: String, enum: ['bronze', 'silver', 'gold', 'diamond', 'VIP'], default: 'bronze' },
+    tier: { type: String, default: 'bronze' },
     pointsExpiresAt: { type: Date },
     // Số lần bị hệ thống tự hủy do no-show (chưa đến quá giờ). Giảm dần khi hoàn thành booking thành công.
     noShowCount: { type: Number, default: 0, min: 0 },

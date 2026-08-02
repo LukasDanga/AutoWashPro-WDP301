@@ -139,6 +139,7 @@ function computeDiff(initialForm, form) {
       if (Number(initT.minPoints) !== Number(t.minPoints))
         changes.push(`Mốc thăng hạng: ${Number(initT.minPoints).toLocaleString('vi-VN')} điểm → ${Number(t.minPoints).toLocaleString('vi-VN')} điểm`);
       if (Number(initT.multiplier) !== Number(t.multiplier)) changes.push(`Hệ số nhân: x${initT.multiplier} → x${t.multiplier}`);
+      if (Number(initT.advanceDays) !== Number(t.advanceDays)) changes.push(`Đặt trước tối đa: ${initT.advanceDays} ngày → ${t.advanceDays} ngày`);
       if (initT.icon !== t.icon) changes.push(`Icon biểu tượng: ${initT.icon} → ${t.icon}`);
       if (initT.colorTheme !== t.colorTheme) changes.push(`Màu sắc: ${initT.colorTheme} → ${t.colorTheme}`);
       if ((initT.benefitsText || '').trim() !== (t.benefitsText || '').trim()) changes.push(`Danh sách đặc quyền đã điều chỉnh`);
@@ -376,6 +377,7 @@ export default function LoyaltyConfigTab() {
               name: t.name || '',
               minPoints: t.minPoints ?? 0,
               multiplier: t.multiplier ?? 1.0,
+              advanceDays: t.advanceDays ?? 14,
               icon: getTierIcon(t),
               colorTheme: t.colorTheme || t.id || 'bronze',
               benefitsText: Array.isArray(t.benefits) ? t.benefits.join('\n') : '',
@@ -444,6 +446,7 @@ export default function LoyaltyConfigTab() {
         name: t.name.trim(),
         minPoints: Number(t.minPoints) || 0,
         multiplier: Number(t.multiplier) || 1,
+        advanceDays: Number(t.advanceDays) || 14,
         icon: t.icon || 'Circle',
         colorTheme: paletteTheme.id,
         bg: paletteTheme.bg,
@@ -689,6 +692,21 @@ export default function LoyaltyConfigTab() {
                       onChange={(e) => handleTierChange(idx, 'multiplier', e.target.value)}
                       className="w-full rounded-xl border border-emerald-200 bg-emerald-50/30 px-3 py-2 text-xs font-extrabold text-emerald-700 focus:border-emerald-400 focus:outline-none"
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Đặt Trước Tối Đa <span className="font-normal text-slate-400">(ngày)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={tier.advanceDays}
+                      onChange={(e) => handleTierChange(idx, 'advanceDays', e.target.value)}
+                      className="w-full rounded-xl border border-sky-200 bg-sky-50/30 px-3 py-2 text-xs font-extrabold text-sky-700 focus:border-sky-400 focus:outline-none"
+                      title="Số ngày tối đa hạng này được đặt lịch trước"
                     />
                   </div>
                 </div>

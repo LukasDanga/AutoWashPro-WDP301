@@ -64,7 +64,7 @@ exports.checkCapacity = async ({ branch, bookingStr, startTime, endTime, userId,
     hasConflict = true;
     conflictReason = 'SLOT_FULL';
   } else {
-    const VIP_TIERS = ['gold', 'diamond', 'VIP'];
+    const VIP_TIERS = ['gold', 'diamond', 'Ruby'];
     const hasVipInSlot = overlappingBookings.some(b => (b.priority || 1) >= 3);
     const isLastSlot = capacity > 1 && overlappingCount >= capacity - 1;
     

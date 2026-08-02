@@ -9,6 +9,7 @@ const DEFAULT_TIERS = [
     name: 'Đồng',
     minPoints: 0,
     multiplier: 1.0,
+    advanceDays: 14,
     color: 'text-orange-600',
     bg: 'bg-orange-50 border-orange-200',
     icon: 'Circle',
@@ -19,6 +20,7 @@ const DEFAULT_TIERS = [
     name: 'Bạc',
     minPoints: 100000,
     multiplier: 1.2,
+    advanceDays: 14,
     color: 'text-slate-600',
     bg: 'bg-slate-100 border-slate-300',
     icon: 'Medal',
@@ -29,6 +31,7 @@ const DEFAULT_TIERS = [
     name: 'Vàng',
     minPoints: 500000,
     multiplier: 1.5,
+    advanceDays: 30,
     color: 'text-yellow-600',
     bg: 'bg-yellow-50 border-yellow-200',
     icon: 'Crown',
@@ -39,6 +42,7 @@ const DEFAULT_TIERS = [
     name: 'Kim cương',
     minPoints: 1000000,
     multiplier: 2.0,
+    advanceDays: 60,
     color: 'text-blue-600',
     bg: 'bg-blue-50 border-blue-200',
     icon: 'Diamond',
@@ -69,11 +73,17 @@ const PRESET_TIER_ICONS = {
 };
 
 function normalizeTiers(tiers = []) {
+  const defaultTierById = new Map(DEFAULT_TIERS.map((t) => [String(t.id).toLowerCase(), t]));
   return tiers.map((t) => {
     const tierObj = typeof t.toObject === 'function' ? t.toObject() : { ...t };
     const idLower = (tierObj.id || '').toLowerCase();
     if (!tierObj.icon || (tierObj.icon === 'Circle' && idLower !== 'bronze')) {
       tierObj.icon = PRESET_TIER_ICONS[idLower] || 'Star';
+    }
+    // Điền advanceDays từ default theo id nếu thiếu (dữ liệu cũ chưa có field này)
+    const defaultTier = defaultTierById.get(idLower);
+    if (!Number.isFinite(Number(tierObj.advanceDays)) && defaultTier) {
+      tierObj.advanceDays = defaultTier.advanceDays;
     }
     return tierObj;
   });
@@ -110,19 +120,32 @@ exports.updateLoyaltyConfig = async (data) => {
     await configService.set({ key: 'LOYALTY_EXPIRATION_MONTHS', value: Number(data.pointExpirationMonths), type: 'number', category: 'loyalty' });
   }
   if (Array.isArray(data.tiers)) {
-    const newTiers = data.tiers.map((t) => ({
-      id: String(t.id || '').trim(),
-      name: String(t.name || '').trim(),
-      minPoints: Number(t.minPoints || 0),
-      multiplier: Number(t.multiplier || 1.0),
-      color: t.color || '',
-      bg: t.bg || '',
-      border: t.border || '',
-      colorTheme: t.colorTheme || t.id || 'bronze',
-      icon: t.icon || 'Circle',
-      benefits: Array.isArray(t.benefits) ? t.benefits.map((b) => String(b).trim()) : [],
-    }));
+    const newTiers = data.tiers.map((t) => {
+      const defaultTier = DEFAULT_TIERS.find((d) => String(d.id).toLowerCase() === String(t.id || '').toLowerCase());
+      return {
+        id: String(t.id || '').trim(),
+        name: String(t.name || '').trim(),
+        minPoints: Number(t.minPoints || 0),
+        multiplier: Number(t.multiplier || 1.0),
+        advanceDays: Number.isFinite(Number(t.advanceDays)) ? Number(t.advanceDays) : (defaultTier ? defaultTier.advanceDays : 14),
+        color: t.color || '',
+        bg: t.bg || '',
+        border: t.border || '',
+        colorTheme: t.colorTheme || t.id || 'bronze',
+        icon: t.icon || 'Circle',
+        benefits: Array.isArray(t.benefits) ? t.benefits.map((b) => String(b).trim()) : [],
+      };
+    });
     await configService.set({ key: 'LOYALTY_TIERS', value: newTiers, type: 'json', category: 'loyalty', isPublic: true });
+
+    // Đồng bộ ADVANCE_BOOKING_LIMITS từ các hạng thực tế (giữ cho config cũ luôn khớp hạng mới từ FE)
+    const advanceBookingLimits = {};
+    for (const t of newTiers) {
+      if (Number.isFinite(Number(t.advanceDays))) {
+        advanceBookingLimits[t.id] = Number(t.advanceDays);
+      }
+    }
+    await configService.set({ key: 'ADVANCE_BOOKING_LIMITS', value: advanceBookingLimits, type: 'json', category: 'booking', description: 'Giới hạn đặt trước tối đa theo hạng thành viên (đồng bộ tự động từ LOYALTY_TIERS)' });
   }
   return await exports.getLoyaltyConfig();
 };

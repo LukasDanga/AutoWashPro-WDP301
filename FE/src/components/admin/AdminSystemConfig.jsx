@@ -2,7 +2,20 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoyaltyConfigTab from './config-tabs/LoyaltyConfigTab';
 import SystemConfigGeneric from './config-tabs/SystemConfigGeneric';
-import { Gear, Money, Gift } from '@phosphor-icons/react';
+import { Gear, Money, Gift, Tag } from '@phosphor-icons/react';
+
+const PROMOTION_KEYS = [
+  'SLOT_PACK_DISCOUNTS',
+  'SLOT_PACK_VIP_BONUS_DISCOUNTS',
+  'BIRTHDAY_VOUCHER_PERCENT',
+  'BIRTHDAY_VOUCHER_MAX_AMOUNT',
+  'BIRTHDAY_VOUCHER_VALIDITY_DAYS',
+];
+
+const OPERATIONS_CATEGORIES = ['general', 'booking'];
+const PAYMENT_CATEGORIES = ['payment', 'finance'];
+const PROMOTION_CATEGORIES = ['general', 'booking', 'promotion'];
+const OPERATIONS_EXCLUDE_KEYS = [...PROMOTION_KEYS, 'ADVANCE_BOOKING_LIMITS'];
 
 export default function AdminSystemConfig() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -15,8 +28,9 @@ export default function AdminSystemConfig() {
   };
 
   const tabs = [
-    { id: 'operations', label: 'Vận hành & Booking', icon: Gear, categories: ['general', 'booking'] },
-    { id: 'payments', label: 'Thanh toán & Huỷ', icon: Money, categories: ['payment'] },
+    { id: 'operations', label: 'Vận hành & Booking', icon: Gear, categories: OPERATIONS_CATEGORIES },
+    { id: 'payments', label: 'Thanh toán & Huỷ', icon: Money, categories: PAYMENT_CATEGORIES },
+    { id: 'promotion', label: 'Khuyến mãi & Ưu đãi', icon: Tag, keys: PROMOTION_KEYS },
     { id: 'loyalty', label: 'Hạng thành viên & Điểm', icon: Gift }
   ];
 
@@ -46,9 +60,14 @@ export default function AdminSystemConfig() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'operations' && <SystemConfigGeneric categories={['general', 'booking']} />}
-        {activeTab === 'payments' && <SystemConfigGeneric categories={['payment', 'finance']} />} 
-        {/* Wait, the backend categories for payment penalties were 'booking' or not set. I will fix the categories later or just show all for operations. Let's fix backend seed categories later if needed. For now I'll just pass 'booking' and 'general' to operations. And maybe 'payment' to payments. */}
+        {activeTab === 'operations' && (
+          <SystemConfigGeneric
+            categories={OPERATIONS_CATEGORIES}
+            excludeKeys={OPERATIONS_EXCLUDE_KEYS}
+          />
+        )}
+        {activeTab === 'payments' && <SystemConfigGeneric categories={PAYMENT_CATEGORIES} />}
+        {activeTab === 'promotion' && <SystemConfigGeneric categories={PROMOTION_CATEGORIES} keys={PROMOTION_KEYS} />}
         {activeTab === 'loyalty' && <LoyaltyConfigTab />}
       </div>
     </div>
