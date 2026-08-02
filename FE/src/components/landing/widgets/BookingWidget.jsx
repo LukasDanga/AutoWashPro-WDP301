@@ -1429,6 +1429,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
             }),
             recurringCount: resultData.totalCreated,
+            recurringBookings: (resultData.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })),
             depositAmount: 0,
             depositPaid: true,
             totalRemaining: totalPrice,
