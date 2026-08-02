@@ -20,6 +20,7 @@ const STATUS_MAP = {
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
 function formatDate(d) { return new Date(d).toLocaleDateString('vi-VN'); }
+function formatDateTime(d) { return new Date(d).toLocaleDateString('vi-VN') + ' ' + new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
 
 // Tìm thông tin đầy đủ (price/duration/isOptional) của sub-service trong catalog, có fallback từ selectedSubServices
 const findSubInfo = (b, catalog, name) => {
@@ -1229,7 +1230,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                     <div className="font-semibold text-black">Mã biên lai</div>
                     <div className="text-black">{displayId}</div>
                     <div className="font-semibold text-black">Ngày thanh toán</div>
-                    <div className="text-black">{formatDate(b.updatedAt || b.bookingDate)}</div>
+                    <div className="text-black">{formatDateTime(b.updatedAt || b.bookingDate)}</div>
                   </div>
                 </div>
                 <div>
@@ -1252,7 +1253,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 <div>
                   <div className="font-semibold text-black mb-1">Khách hàng</div>
                   <div className="text-black">
-                    {b.userId?.name || 'Khách hàng'} ({b.userId?.phone || ''})<br/>
+                    {b.userId?.name || 'Khách hàng'} {b.userId?.phone || ''}<br/>
                     Biển số: {b.vehiclePlate || b.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
                     {b.userId?.email || ''}
                   </div>

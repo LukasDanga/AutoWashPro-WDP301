@@ -43,9 +43,23 @@ const buildManagerBranchQuery = async (branch) => {
   return conds.length ? conds : [{ bookingId: { $in: [] } }];
 };
 
-// Hàm này không còn tác dụng (Khách yêu cầu thanh toán lẻ từng đơn)
+// Khi thanh toán 100% (paymentType = 'full') cho nhóm định kỳ, đánh dấu tất cả
+// các buổi còn hiệu lực trong nhóm là đã thanh toán để khớp với tổng tiền đã thu.
 const markRecurringSiblingsPaid = async (booking, paymentMethod, session) => {
-  return;
+  if (booking.bookingType !== 'recurring' || !booking.recurringGroupId) return;
+  const siblings = await Booking.find({
+    recurringGroupId: booking.recurringGroupId,
+    _id: { $ne: booking._id },
+    status: { $ne: 'cancelled' },
+  }).session(session || null);
+  for (const sib of siblings) {
+    sib.paymentStatus = 'paid';
+    sib.paidAt = new Date();
+    sib.paymentMethod = paymentMethod;
+    sib.depositPaid = true;
+    sib.depositAmount = sib.finalPrice ?? sib.packagePrice ?? 0;
+    await sib.save({ session });
+  }
 };
 
 // Khi đóng cọc, hệ thống thu cọc gộp trên booking đầu tiên
@@ -127,9 +141,19 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
     throw Object.assign(new Error('Lịch hẹn đã được thanh toán'), { statusCode: 409, code: 'ALREADY_PAID' });
   }
 
-  // Trươc đây thu cả nhóm, nay khách yêu cầu thanh toán ĐƠN NÀO THU ĐƠN ĐÓ
-  // nên chỉ lấy đúng finalPrice của đơn hiện tại.
   let fullPrice = booking.finalPrice ?? booking.packagePrice ?? booking.packageId?.price;
+
+  // Trả hết (paymentType = 'full') cho nhóm định kỳ: thu tổng toàn bộ các buổi còn
+  // hiệu lực trong nhóm, khớp với số tiền FE hiển thị (giá 1 buổi × số buổi).
+  // Thanh toán lẻ ('remaining') vẫn chỉ tính riêng cho đơn hiện tại.
+  if (paymentType === 'full' && booking.bookingType === 'recurring' && booking.recurringGroupId) {
+    const siblings = await Booking.find({
+      recurringGroupId: booking.recurringGroupId,
+      status: { $ne: 'cancelled' },
+    }).select('finalPrice packagePrice');
+    const groupTotal = siblings.reduce((sum, b) => sum + (b.finalPrice ?? b.packagePrice ?? 0), 0);
+    if (groupTotal > 0) fullPrice = groupTotal;
+  }
 
   const deposit = booking.depositAmount || 0;
 
@@ -233,7 +257,9 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
             updateData,
             { session }
           );
-          await markRecurringSiblingsPaid(booking, method, session);
+          if (paymentType === 'full') {
+            await markRecurringSiblingsPaid(booking, method, session);
+          }
           // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
             const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
@@ -442,7 +468,9 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId, use
         updateData.checkOutTime = new Date();
       }
       await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
-      await markRecurringSiblingsPaid(booking, payment.method, session);
+      if (payment.paymentType === 'full') {
+        await markRecurringSiblingsPaid(booking, payment.method, session);
+      }
       // Award points here when payment completes the booking (bypasses updateBookingStatus)
       if (['awaiting_payment', 'completed'].includes(booking.status)) {
         const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'
@@ -605,7 +633,9 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
             updateData.checkOutTime = new Date();
           }
           await Booking.findByIdAndUpdate(booking._id, updateData).session(session);
-          await markRecurringSiblingsPaid(booking, payment.method, session);
+          if (payment.paymentType === 'full') {
+            await markRecurringSiblingsPaid(booking, payment.method, session);
+          }
           // Award points here when payment completes the booking (bypasses updateBookingStatus)
           if (['awaiting_payment', 'completed'].includes(booking.status)) {
             const pointsBaseAmount = booking.bookingType === 'slot_pack_usage'

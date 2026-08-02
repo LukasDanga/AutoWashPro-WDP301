@@ -1390,14 +1390,23 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       }
       const depositShare = Math.round(groupDepositAmount / recurringTotal);
 
-      if (cancelledBy !== 'customer') {
-        refundAmount = depositShare;
-      } else {
-        if (isLateCancel) {
-          refundAmount = 0;
+      // Nếu buổi này đã thanh toán đủ (nhóm trả hết 100% hoặc thanh toán lẻ từng buổi),
+      // hoàn theo đúng giá của buổi đó thay vì chia theo cọc.
+      const sessionPaidAmount = booking.paymentStatus === 'paid' ? (booking.depositAmount ?? booking.finalPrice ?? 0) : 0;
+
+      if (sessionPaidAmount > 0) {
+        if (cancelledBy !== 'customer') {
+          refundAmount = sessionPaidAmount;
+        } else if (isLateCancel) {
+          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          refundAmount = Math.round(sessionPaidAmount * Math.max(0, (100 - penaltyPercent) / 100));
         } else {
-          refundAmount = depositShare;
+          refundAmount = sessionPaidAmount;
         }
+      } else if (cancelledBy !== 'customer') {
+        refundAmount = depositShare;
+      } else if (!isLateCancel) {
+        refundAmount = depositShare;
       }
 
       if (booking.isRecurringFirst) {
@@ -1413,7 +1422,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
           // depositAmount nhiều lần.
           if (!nextBooking.isRecurringFirst) {
             nextBooking.isRecurringFirst = true;
-            nextBooking.depositAmount = Math.max(0, groupDepositAmount - depositShare);
+            if (sessionPaidAmount <= 0) {
+              nextBooking.depositAmount = Math.max(0, groupDepositAmount - depositShare);
+            }
             nextBooking.paymentStatus = booking.paymentStatus;
             await nextBooking.save({ session });
           }
@@ -1435,7 +1446,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
             }
           }
         }
-      } else {
+      } else if (sessionPaidAmount <= 0) {
         if (firstBooking && firstBooking._id.toString() !== id) {
           firstBooking.depositAmount = Math.max(0, firstBooking.depositAmount - depositShare);
           await firstBooking.save({ session });
@@ -2002,6 +2013,7 @@ exports.createRecurringBooking = async (data) => {
         endTime,
         userId,
         userTier: user.tier,
+        strictLastSlot: true,
       }, session);
       
       const { hasConflict, conflictingBookings: conflicting } = capacityResult;
@@ -2012,46 +2024,9 @@ exports.createRecurringBooking = async (data) => {
       let finalNote = note || '';
 
       if (hasConflict) {
-        const slots = buildSlots(totalDuration, branch.openingTime || '07:00', branch.closingTime || '20:00');
-        let bestSlot = null;
-        let minDiff = Infinity;
-        
-        for (const slot of slots) {
-          const sns = parseTime(slot.startTime);
-          const sne = parseTime(slot.endTime);
-          
-          if (bookingStr === todayStr) {
-            const now = new Date();
-            const currentMinutes = now.getHours() * 60 + now.getMinutes();
-            if (sns <= currentMinutes + 30) continue;
-          }
-          
-          const slotOverlapCount = conflicting.filter((b) => {
-            const bs = parseTime(b.startTime);
-            const be = parseTime(b.endTime);
-            return bs !== null && be !== null && isSlotOverlap(sns, sne, bs, be);
-          }).length;
-          
-          let isConflicting = false;
-          if (slotOverlapCount >= capacity) isConflicting = true;
-          if (capacity > 1 && slotOverlapCount >= capacity - 1 && user.tier !== 'gold' && user.tier !== 'diamond') isConflicting = true;
-          
-          if (!isConflicting) {
-            const diff = Math.abs(sns - ns);
-            if (diff <= 120 && diff < minDiff) {
-              minDiff = diff;
-              bestSlot = slot;
-            }
-          }
-        }
-
-        if (bestSlot) {
-          finalStartTime = bestSlot.startTime;
-          finalEndTime = bestSlot.endTime;
-          finalNote = finalNote ? `${finalNote}\n(Hệ thống tự động đổi giờ sang ${finalStartTime} do trùng slot)` : `(Hệ thống tự động đổi giờ sang ${finalStartTime} do trùng slot)`;
-        } else {
-          throw new Error('Slot không còn trống và không có giờ thay thế phù hợp');
-        }
+        // Không tự động đổi giờ. Buổi bị trùng slot sẽ được BỎ QUA (đưa vào failed)
+        // để đồng bộ với danh sách "buổi hợp lệ" mà khách thấy ở màn xác nhận đặt lịch.
+        throw new Error('Slot bị trùng lịch — buổi này được bỏ qua');
       }
 
       const booking = new Booking({
@@ -2093,6 +2068,24 @@ exports.createRecurringBooking = async (data) => {
     throw Object.assign(
       new Error(`Không thể tạo bất kỳ booking nào. Lý do: ${reason}`),
       { statusCode: 409, code: 'ALL_SLOTS_TAKEN', failed }
+    );
+  }
+
+  // Một số buổi dự kiến có thể bị bỏ qua do xung đột slot. Cập nhật lại
+  // recurringTotal cho TOÀN BỘ buổi trong nhóm về ĐÚNG số buổi đã tạo thành công,
+  // để mọi nơi hiển thị "Số buổi" (history, detail, manager) khớp thực tế.
+  if (created.length > 0) {
+    for (let ri = 0; ri < created.length; ri++) {
+      created[ri].recurringPosition = ri + 1;
+      created[ri].recurringTotal = created.length;
+    }
+    await Booking.bulkWrite(
+      created.map((b, ri) => ({
+        updateOne: {
+          filter: { _id: b._id },
+          update: { $set: { recurringPosition: ri + 1, recurringTotal: created.length } },
+        },
+      }))
     );
   }
 
@@ -2281,13 +2274,22 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
       const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
       const isLateCancel = minutesBefore <= lateCancelThreshold;
 
+      // Nếu buổi đã thanh toán đủ (nhóm trả hết 100%) → hoàn đúng giá buổi đó.
+      // Nếu chỉ đóng cọc → hoàn theo phần cọc của buổi (depositShare).
+      const sessionPaidAmount = b.paymentStatus === 'paid' ? (b.depositAmount ?? b.finalPrice ?? 0) : 0;
+
       let refundAmountForThisBooking = 0;
-      if (cancelledBy !== 'customer') {
-        refundAmountForThisBooking = depositShare;
-      } else {
-        if (!isLateCancel) {
-          refundAmountForThisBooking = depositShare;
+      if (sessionPaidAmount > 0) {
+        if (cancelledBy !== 'customer') {
+          refundAmountForThisBooking = sessionPaidAmount;
+        } else if (isLateCancel) {
+          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          refundAmountForThisBooking = Math.round(sessionPaidAmount * Math.max(0, (100 - penaltyPercent) / 100));
+        } else {
+          refundAmountForThisBooking = sessionPaidAmount;
         }
+      } else if (cancelledBy !== 'customer' || !isLateCancel) {
+        refundAmountForThisBooking = depositShare;
       }
 
       totalRefundAmount += refundAmountForThisBooking;

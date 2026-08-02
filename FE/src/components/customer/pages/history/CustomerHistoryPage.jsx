@@ -35,6 +35,7 @@ const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', '
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
 function formatDate(d) { return new Date(d).toLocaleDateString('vi-VN'); }
+function formatDateTime(d) { return new Date(d).toLocaleDateString('vi-VN') + ' ' + new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
 
 function isSameDay(d1, d2) {
   const a = new Date(d1), b = new Date(d2);
@@ -2449,7 +2450,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                     <div className="font-semibold text-black">Mã biên lai</div>
                     <div className="text-black">{displayId}</div>
                     <div className="font-semibold text-black">Ngày thanh toán</div>
-                    <div className="text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
+                    <div className="text-black">{formatDateTime(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
                   </div>
                 </div>
                 <div>
@@ -2474,9 +2475,9 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                 <div>
                   <div className="font-semibold text-black mb-1">Khách hàng</div>
                   <div className="text-black">
-                    {detailBooking.userId?.name || 'Khách hàng'} ({detailBooking.userId?.phone || ''})<br/>
-                    Biển số: {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
-                    {detailBooking.userId?.email || ''}
+                    {detailBooking.userId?.name || 'Khách hàng'} {detailBooking.userId?.phone || ''}<br/>
+                    Biển số xe: {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
+                    Email: {detailBooking.userId?.email || ''}
                   </div>
                 </div>
               </div>

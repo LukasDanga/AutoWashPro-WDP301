@@ -92,7 +92,7 @@ export default function CustomerWalletDetailPage({ apiBase, token, user }) {
   }
 
   const isCredit = tx.type === 'credit';
-  const Icon = isCredit ? ArrowDownCircle : ArrowUpCircle;
+  const Icon = isCredit ? ArrowUpCircle : ArrowDownCircle;
   const bookingObj = typeof tx.bookingId === 'object' ? tx.bookingId : null;
   
   let bookingCode = bookingObj?.bookingCode;

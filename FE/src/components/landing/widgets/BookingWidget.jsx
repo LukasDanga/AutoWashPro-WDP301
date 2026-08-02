@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const WEEKS_OPTIONS = [4, 8, 12, 16, 20, 24];
+const WEEKS_OPTIONS = [2, 4, 8, 12, 16, 20, 24];
 
 const WEEKDAY_OPTIONS = [
   { label: 'T2', value: 1 },
@@ -105,8 +105,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [selectedDate, setSelectedDate] = useState(() => initialBookingState?.selectedDate || bookingDates[1]?.id || bookingDates[0]?.id);
   const [selectedTime, setSelectedTime] = useState(() => initialBookingState?.selectedTime || '');
   const [selectedDays, setSelectedDays] = useState(() => initialBookingState?.selectedDays || []);
-  const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 4);
-  const [weeksInput, setWeeksInput] = useState(() => String(initialBookingState?.weeks || 4));
+  const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 2);
+  const [weeksInput, setWeeksInput] = useState(() => String(initialBookingState?.weeks || 2));
   const [weeksError, setWeeksError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState(() => initialBookingState?.appliedVoucher || null);
   const [selectedSlotPack, setSelectedSlotPack] = useState(() => initialBookingState?.selectedSlotPack || null);
@@ -432,6 +432,29 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return { id: dateIso, label: dateIso, day: dateIso, month: '', iso: dateIso };
   }, [bookingDates]);
 
+  const formatRecurringDate = useCallback((dateIso, time) => {
+    if (!dateIso) return time || '';
+    const raw = String(dateIso);
+    let weekday, day, month, year;
+    // Date-only "YYYY-MM-DD" (từ preview/conflictCheck) → giữ nguyên ngày.
+    // Ngược lại là ISO datetime (vd "2026-08-03T17:00:00.000Z") → parse bằng Date
+    // và lấy theo giờ ĐỊA PHƯƠNG, tránh bị lùi 1 ngày do UTC.
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+    if (isDateOnly) {
+      const [y, m, d] = raw.split('-').map(Number);
+      const dObj = new Date(y, m - 1, d);
+      weekday = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][dObj.getDay()];
+      day = d; month = m; year = y;
+    } else {
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return raw;
+      weekday = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][d.getDay()];
+      day = d.getDate(); month = d.getMonth() + 1; year = d.getFullYear();
+    }
+    const dateLabel = `${weekday}, (${day}/${month}/${year})`;
+    return time ? `${dateLabel} · ${time}` : dateLabel;
+  }, []);
+
   // Fetch available slots
   const currentDate = useMemo(() => getDateObj(selectedDate), [selectedDate, getDateObj]);
   useEffect(() => {
@@ -576,23 +599,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         vehicleId = selectedVehicle || allVehicles[0]?._id || allVehicles[0]?.id || '';
       }
 
-      // Show payment modal first; booking is only created after user picks payment method.
-      // Với ĐỊNH KỲ: tổng tiền = giá 1 buổi × số buổi dự kiến (không phải 1 buổi).
+      // Show payment method first; booking is only created after user picks payment method.
+      // Với ĐỊNH KỲ: tổng tiền = giá 1 buổi × số buổi THỰC TẾ được tạo (sau khi loại trùng lịch).
+      // Không dùng số buổi dự kiến vì hệ thống bỏ qua các buổi xung đột slot.
       const perSession = totalBase || 0;
       let sessionCount = 1;
       if (pb.tab === 'recurring') {
-        const days = pb.selectedDays || [];
-        const wk = pb.weeks || 1;
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        let cnt = 0;
-        for (let w = 0; w < wk; w++) {
-          for (let d = 0; d < 7; d++) {
-            const c = new Date(today);
-            c.setDate(today.getDate() + w * 7 + d);
-            if (days.includes(c.getDay()) && c >= today) cnt++;
-          }
-        }
-        sessionCount = Math.max(1, cnt);
+        sessionCount = Math.max(1, actualRecurringSessions || previewDates.length || 1);
       }
       const estimatedTotal = perSession * sessionCount;
       const calculatedDeposit = Math.round((estimatedTotal * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
@@ -632,7 +645,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           currentDate: pb.selectedDate ? getDateObj(pb.selectedDate) : null,
           selectedTime: pb.selectedTime, total: estimatedTotal, discount: 0, points: 0, isPayingWithPack: false, bookingCode: code,
           subServices: (pb.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
-          recurringCount: isRec ? bk?.totalCreated || 0 : undefined, depositAmount: 0, depositPaid: false,
+          recurringCount: isRec ? bk?.totalCreated || 0 : undefined,
+          recurringBookings: isRec ? (bk?.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
+          depositAmount: 0, depositPaid: false,
         });
         setShowSuccessModal(true);
         onSetPendingBooking(null);
@@ -910,6 +925,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
             const s = pkg?.subServices?.find(x => x.name === n);
             return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
           }),
+          recurringCount: (pendingDeposit.tab === 'recurring') ? (bk?.totalCreated || 0) : undefined,
+          recurringBookings: (pendingDeposit.tab === 'recurring') ? (bk?.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
           depositAmount: pendingDeposit.depositAmount || 0,
           depositPaid: true,
           paymentMode,
@@ -1061,6 +1078,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         bookingCode: newCode,
         subServices: (draft.selectedSubServices || []).map(n => ({ name: n, price: subPrices[n] || 0 })),
         recurringCount: isRec ? (newBk.totalCreated || 1) : undefined,
+        recurringBookings: isRec ? (newBk.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
         depositAmount: draft.depositAmount || 0,
         depositPaid: true,
         paymentMode: draft.paymentMode,
@@ -1178,7 +1196,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const isPayingWithPack = !!selectedSlotPack;
   const effectiveBase = isPayingWithPack ? extraPrice : totalBase;
   const total = Math.max(0, effectiveBase - discount);
-  const points = Math.floor((isPayingWithPack ? totalBase : total) * baseEarningRate * pointMultiplier);
+  const singleSessionPrice = Math.max(0, totalBase - discount);
+  const pointsBase = isPayingWithPack ? totalBase : total;
+  const tierLabel = userTierObj?.name || (user?.tier ? user.tier.charAt(0).toUpperCase() + user.tier.slice(1) : 'Thành viên');
+  const pointsPct = Number((baseEarningRate * 100).toFixed(2));
+  const points = Math.floor(pointsBase * baseEarningRate * pointMultiplier);
 
   const vehicle = allVehicles.find(v => (v._id || v.id) === selectedVehicle) || null;
 
@@ -1414,6 +1436,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
               return s ? { name: s.name, price: s.price } : { name: n, price: 0 };
             }),
             recurringCount: resultData.totalCreated,
+            recurringBookings: (resultData.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })),
             depositAmount: 0,
             depositPaid: true,
             totalRemaining: totalPrice,
@@ -1498,7 +1521,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
     setSelectedTime('');
     setSelectedDays([]);
-    setWeeks(4);
+    setWeeks(2);
     setAppliedVoucher(null);
     setSelectedSlotPack(null);
     setMessage('');
@@ -2695,30 +2718,59 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         )}
 
                         {isLoggedIn && points > 0 && (
-                          <div className="flex justify-between text-xs text-amber-600 font-semibold">
-                            <span>Thưởng tích điểm thành viên</span>
-                            <span>+{points} điểm</span>
+                          <div className="rounded-xl bg-amber-50/70 border border-amber-100 p-3 space-y-1">
+                            <div className="flex justify-between items-center text-xs text-amber-700 font-semibold">
+                              <span className="flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Thưởng tích điểm thành viên
+                              </span>
+                              <span className="font-extrabold">+{points} điểm</span>
+                            </div>
+                            <div className="text-[11px] text-amber-600/80 leading-snug">
+                              {formatCurrency(pointsBase)} × {pointsPct}% (tỷ lệ tích điểm) × {pointMultiplier} (hạng {tierLabel})
+                            </div>
+                            <div className="text-[11px] text-amber-600/80 leading-snug mt-1">* Sẽ được cộng sau khi đơn hàng của bạn hoàn thành.</div>
                           </div>
                         )}
 
-                        {tab === 'recurring' && pkg && actualRecurringSessions > 0 && (
-                          <div className="flex justify-between text-xs text-slate-400 border-t border-slate-100 pt-2.5">
-                            <span>Tổng số buổi định kỳ</span>
-                            <span>{actualRecurringSessions} buổi</span>
+                        {tab === 'recurring' && pkg && actualRecurringSessions > 0 ? (
+                          <div className="pt-3 mt-2 border-t border-slate-100 space-y-2">
+                            <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">CÁCH TÍNH TỔNG TIỀN</div>
+
+                            <div className="rounded-2xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-3">
+                              {/* Giá mỗi buổi sau khi giảm */}
+                              <div className="flex justify-between items-center text-sm">
+                                <div>
+                                  <div className="font-bold text-slate-700">Giá mỗi buổi (sau khi giảm)</div>
+                                  <div className="text-[11px] text-slate-400 mt-0.5">Đã trừ ưu đãi của bạn</div>
+                                </div>
+                                <span className="text-xl font-extrabold text-emerald-600">{formatCurrency(singleSessionPrice)}</span>
+                              </div>
+
+                              {/* Nhân với số buổi */}
+                              <div className="flex justify-between items-center text-sm">
+                                <div>
+                                  <div className="font-bold text-slate-700">Số buổi đặt định kỳ</div>
+                                  <div className="text-[11px] text-slate-400 mt-0.5">{selectedDays.length} ngày × {weeks} tuần (đã loại buổi trùng lịch)</div>
+                                </div>
+                                <span className="font-bold text-slate-700">× {actualRecurringSessions} buổi</span>
+                              </div>
+
+                              {/* Tổng dự kiến */}
+                              <div className="flex justify-between items-end pt-2.5 border-t border-emerald-100">
+                                <div>
+                                  <div className="font-bold text-slate-800">Tổng dự kiến</div>
+                                  <div className="text-[11px] text-slate-400 mt-0.5">{formatCurrency(singleSessionPrice)} × {actualRecurringSessions} buổi</div>
+                                </div>
+                                <span className="text-2xl font-black text-emerald-600">{formatCurrency(singleSessionPrice * actualRecurringSessions)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
+                            <span className="text-base font-bold text-slate-800">Thành tiền tổng cộng</span>
+                            <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(total)}</span>
                           </div>
                         )}
-                        
-                        <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
-                          <span className="text-base font-bold text-slate-800">
-                            {tab === 'recurring' ? 'Tổng dự kiến (tạm tính)' : 'Thành tiền tổng cộng'}
-                          </span>
-                          <span className="text-2xl font-extrabold text-emerald-600">
-                            {tab === 'recurring' 
-                              ? formatCurrency((totalBase - discount) * actualRecurringSessions) 
-                              : formatCurrency(total)
-                            }
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -2933,8 +2985,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       <Sparkles className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-amber-900 leading-tight">Bạn nhận được 1 vòng quay may mắn!</p>
-                      <p className="text-xs text-amber-700 mt-0.5">Vào trang <a href="/gifts" className="underline font-bold text-orange-600 hover:text-orange-700">Quà tặng</a> để quay ngay.</p>
+                      <p className="text-sm font-bold text-amber-900 leading-tight">Đủ điều kiện nhận 1 vòng quay may mắn!</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Vòng quay sẽ được cấp sau khi đơn hàng của bạn hoàn thành.</p>
                     </div>
                   </div>
                 )}
@@ -2962,13 +3014,31 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </div>
                   )}
                   <div className="flex justify-between py-3">
-                    <span className="text-slate-400 text-xs font-semibold">Thời gian hẹn</span>
+                    <span className="text-slate-400 text-xs font-semibold">
+                      {lastBooking.recurringBookings?.length ? `Lịch định kỳ (${lastBooking.recurringBookings.length} buổi)` : 'Thời gian hẹn'}
+                    </span>
                     <span className="font-bold text-slate-700 text-sm">
-                      {lastBooking.currentDate
-                        ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
-                        : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
+                      {lastBooking.recurringBookings?.length
+                        ? `${formatRecurringDate(lastBooking.recurringBookings[0].date, lastBooking.recurringBookings[0].time || lastBooking.selectedTime)}`
+                        : lastBooking.currentDate
+                          ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
+                          : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
                     </span>
                   </div>
+
+                  {lastBooking.recurringBookings?.length > 0 && (
+                    <div className="py-2">
+                      <div className="text-slate-400 text-xs font-semibold mb-2">Danh sách các buổi</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {lastBooking.recurringBookings.map((rb, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-semibold">
+                            <Calendar className="w-3 h-3" />
+                            {formatRecurringDate(rb.date, rb.time)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Bill Section */}
                   <div className="bg-slate-50/60 -mx-6 px-6 py-4 space-y-2.5 mt-2">
