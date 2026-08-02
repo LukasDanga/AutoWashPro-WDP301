@@ -1196,7 +1196,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 <div>
                   <div className="font-semibold text-black mb-1">Khách hàng</div>
                   <div className="text-black">
-                    {b.userId?.name || 'Khách hàng'} ({b.userId?.phone || ''})<br/>
+                    {b.userId?.name || 'Khách hàng'} {b.userId?.phone || ''}<br/>
                     Biển số: {b.vehiclePlate || b.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
                     {b.userId?.email || ''}
                   </div>

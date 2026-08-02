@@ -548,7 +548,7 @@ function PrintReceiptModal({ booking, onClose }) {
             <div>
               <div className="font-semibold text-black mb-1">Người thanh toán</div>
               <div className="text-black">
-                {detailBooking.userId?.name || 'Khách hàng'} ({detailBooking.userId?.phone || ''})<br/>
+                {detailBooking.userId?.name || 'Khách hàng'} {detailBooking.userId?.phone || ''}<br/>
                 Biển số: {detailBooking.vehiclePlate || detailBooking.vehicleId?.licensePlate || 'Chưa cập nhật'}<br/>
                 {detailBooking.userId?.email || ''}
               </div>
