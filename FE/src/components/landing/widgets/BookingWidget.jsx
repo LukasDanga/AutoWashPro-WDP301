@@ -432,13 +432,24 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return { id: dateIso, label: dateIso, day: dateIso, month: '', iso: dateIso };
   }, [bookingDates]);
 
-  const formatRecurringDate = useCallback((dateIso) => {
-    if (!dateIso) return '';
-    const d = getDateObj(dateIso);
-    const day = String(d.day ?? '').padStart(2, '0');
-    const month = String(d.month ?? '').padStart(2, '0');
-    return `${d.label || ''} ${day}/${month}`.trim();
-  }, [getDateObj]);
+  const formatRecurringDate = useCallback((dateIso, time) => {
+    if (!dateIso) return time || '';
+    const parts = String(dateIso).split('T')[0].split('-');
+    let weekday, day, month, year;
+    if (parts.length === 3) {
+      const [y, m, d] = parts.map(Number);
+      const dObj = new Date(y, m - 1, d);
+      weekday = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][dObj.getDay()];
+      day = d; month = m; year = y;
+    } else {
+      const d = new Date(dateIso);
+      if (isNaN(d.getTime())) return dateIso;
+      weekday = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][d.getDay()];
+      day = d.getDate(); month = d.getMonth() + 1; year = d.getFullYear();
+    }
+    const dateLabel = `${weekday}, (${day}/${month}/${year})`;
+    return time ? `${dateLabel} · ${time}` : dateLabel;
+  }, []);
 
   // Fetch available slots
   const currentDate = useMemo(() => getDateObj(selectedDate), [selectedDate, getDateObj]);
@@ -3014,7 +3025,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                     </span>
                     <span className="font-bold text-slate-700 text-sm">
                       {lastBooking.recurringBookings?.length
-                        ? `${lastBooking.selectedTime}`
+                        ? `${formatRecurringDate(lastBooking.recurringBookings[0].date, lastBooking.recurringBookings[0].time || lastBooking.selectedTime)}`
                         : lastBooking.currentDate
                           ? `${lastBooking.currentDate.label} ${lastBooking.selectedTime}`
                           : `${lastBooking.selectedTime} · ${lastBooking.recurringCount || 0} buổi định kỳ`}
@@ -3028,7 +3039,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         {lastBooking.recurringBookings.map((rb, i) => (
                           <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-semibold">
                             <Calendar className="w-3 h-3" />
-                            {formatRecurringDate(rb.date)}
+                            {formatRecurringDate(rb.date, rb.time)}
                           </span>
                         ))}
                       </div>
