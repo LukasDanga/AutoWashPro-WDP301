@@ -169,6 +169,8 @@ router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUS
  */
 router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
 
+router.post('/:id/customer-scan-checkin', authenticate, authorize(ROLES.CUSTOMER), bookingController.customerScanCheckin);
+
 /**
  * @swagger
  * /api/bookings/{id}/sub-services:
