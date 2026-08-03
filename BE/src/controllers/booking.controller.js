@@ -114,6 +114,14 @@ exports.customerScanCheckin = catchAsync(async (req, res) => {
   const { branchId } = req.body;
   if (!branchId) throw Object.assign(new Error('Thiếu thông tin branchId từ mã QR'), { statusCode: 400 });
 
+  const Booking = require('../models/booking.schema');
+  const existingBooking = await Booking.findById(req.params.id);
+  if (!existingBooking) throw Object.assign(new Error('Đơn hàng không tồn tại'), { statusCode: 404 });
+  
+  if (existingBooking.branchId.toString() !== branchId) {
+     throw Object.assign(new Error('Mã QR không thuộc chi nhánh của đơn hàng này!'), { statusCode: 400 });
+  }
+
   // Manager updates are normally staffId=req.userId, but here it's customer
   const updateData = { staffId: null, checkinMethod: 'qr_scan_customer' }; 
 
@@ -126,11 +134,6 @@ exports.customerScanCheckin = catchAsync(async (req, res) => {
     null, // userBranchId not needed for customer
     req.userId
   );
-  
-  if (booking.branchId.toString() !== branchId) {
-     // Revert if mismatched branch
-     throw Object.assign(new Error('Mã QR không thuộc chi nhánh của đơn hàng này!'), { statusCode: 400 });
-  }
 
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
