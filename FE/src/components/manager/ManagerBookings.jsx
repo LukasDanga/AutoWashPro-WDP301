@@ -504,6 +504,10 @@ function PrintReceiptModal({ booking, onClose }) {
     document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
       if (l.href) cssLinks += `<link rel="stylesheet" href="${l.href}">`;
     });
+    // Giữ đúng layout gốc: nạp cả các <style> do CSS modules/CSS-in-JS nhét vào DOM
+    document.querySelectorAll('style').forEach((s) => {
+      cssLinks += s.outerHTML;
+    });
     const w = window.open('', '_blank');
     if (!w) return;
     w.document.write(`<html><head><title>Biên lai</title>
