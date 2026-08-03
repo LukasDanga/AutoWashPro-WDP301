@@ -229,10 +229,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
   }, [apiBase, token]);
 
   useEffect(() => {
-    if (refreshSignal > 0 && booking?.recurringGroupId) {
+    if (booking?.recurringGroupId) {
       loadRecurringGroup(booking);
     }
-  }, [refreshSignal, booking?.recurringGroupId, loadRecurringGroup]);
+  }, [booking?.recurringGroupId, refreshSignal, loadRecurringGroup]);
 
   // SSE refresh
   const silentRefresh = useCallback(() => fetchDetail({ silent: true }), [fetchDetail]);

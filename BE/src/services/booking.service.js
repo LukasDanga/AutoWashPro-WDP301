@@ -597,11 +597,23 @@ exports.getBookingsByVehicle = async (vehicleId, startDate, endDate) => {
 };
 
 exports.getBookingById = async (id, userRole, userId, userBranchId) => {
-  const booking = await Booking.findById(id)
-    .populate('userId', 'name email phone tier walletBalance')
-    .populate('branchId', 'name address phone')
-    .populate('packageId', 'name price duration subServices')
-    .populate('vehicleId', 'licensePlate vehicleType brand color');
+  const isObjectId = mongoose.Types.ObjectId.isValid(id) && String(new mongoose.Types.ObjectId(id)) === String(id);
+  let booking = isObjectId
+    ? await Booking.findById(id)
+        .populate('userId', 'name email phone tier walletBalance')
+        .populate('branchId', 'name address phone')
+        .populate('packageId', 'name price duration subServices')
+        .populate('vehicleId', 'licensePlate vehicleType brand color')
+    : null;
+
+  // id có thể là recurringGroupId (UUID) khi mở chi tiết từ danh sách đã gộp lịch định kỳ
+  if (!booking) {
+    booking = await Booking.findOne({ recurringGroupId: String(id) })
+      .populate('userId', 'name email phone tier walletBalance')
+      .populate('branchId', 'name address phone')
+      .populate('packageId', 'name price duration subServices')
+      .populate('vehicleId', 'licensePlate vehicleType brand color');
+  }
   if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   // H-5: nếu booking đã soft-delete, customer/manager không truy cập được, admin thì có (?includeDeleted=true qua getAllBookings)
   if (booking.isDeleted && userRole !== 'admin') {
