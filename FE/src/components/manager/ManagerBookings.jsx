@@ -509,7 +509,7 @@ function PrintReceiptModal({ booking, onClose }) {
           body * { visibility: hidden; }
           #receipt-printable-area, #receipt-printable-area * { visibility: visible; }
           #receipt-printable-area {
-            position: fixed !important;
+            position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
@@ -526,14 +526,38 @@ function PrintReceiptModal({ booking, onClose }) {
             overflow: visible !important;
             max-height: none !important;
             height: auto !important;
-            padding: 4mm 6mm !important;
+            padding: 3mm 4mm !important;
+          }
+          #receipt-printable-area .receipt-body * {
+            font-size: 11px !important;
+          }
+          #receipt-printable-area h2 {
+            font-size: 20px !important;
+            margin-bottom: 2mm !important;
+          }
+          #receipt-printable-area h3 {
+            font-size: 13px !important;
+            margin-bottom: 1mm !important;
+          }
+          #receipt-printable-area .text-4xl {
+            font-size: 24px !important;
+          }
+          #receipt-printable-area table th,
+          #receipt-printable-area table td {
+            padding-top: 1px !important;
+            padding-bottom: 1px !important;
           }
           #receipt-printable-area .receipt-body .mb-12,
           #receipt-printable-area .receipt-body .mb-10,
           #receipt-printable-area .receipt-body .mb-14,
           #receipt-printable-area .receipt-body .mb-8,
-          #receipt-printable-area .receipt-body .mb-4 { margin-bottom: 3mm !important; }
-          #receipt-printable-area table { font-size: 11.5px !important; }
+          #receipt-printable-area .receipt-body .mb-4 { margin-bottom: 2mm !important; }
+          #receipt-printable-area .receipt-body .mt-6,
+          #receipt-printable-area .receipt-body .mt-4 { margin-top: 1.5mm !important; }
+          #receipt-printable-area .receipt-body .mt-2 { margin-top: 1mm !important; }
+          #receipt-printable-area .receipt-body .space-y-1 > * + * { margin-top: 1px !important; }
+          #receipt-printable-area .receipt-body .grid { row-gap: 1px !important; }
+          #receipt-printable-area table { font-size: 11px !important; }
           .no-print { display: none !important; }
           .no-print-bg { background: transparent !important; }
         }
@@ -2145,7 +2169,16 @@ export default function ManagerBookings() {
   const handlePageChange = (pg) => { setPage(pg); fetch_(search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, pg); };
 
   const handleUpdated = (updated) => {
-    setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
+    setBookings((p) => p.map((b) => {
+      if (b._id !== updated._id) return b;
+      // updated từ các API (extend-grace, đổi trạng thái…) không populate dân/xe/gói =>
+      // giữ lại các ref đã populate trong list để không mất tên khách/dịch vụ.
+      const merged = { ...b, ...updated };
+      ['userId', 'packageId', 'vehicleId', 'branchId'].forEach((k) => {
+        if (typeof updated[k] === 'string' || updated[k] == null) merged[k] = b[k];
+      });
+      return merged;
+    }));
     notify('Đã cập nhật trạng thái đặt lịch');
   };
 
@@ -2158,7 +2191,14 @@ export default function ManagerBookings() {
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const updated = p?.data ?? p;
-      setBookings((prev) => prev.map((b) => b._id === updated._id ? updated : b));
+      setBookings((prev) => prev.map((b) => {
+        if (b._id !== updated._id) return b;
+        const merged = { ...b, ...updated };
+        ['userId', 'packageId', 'vehicleId', 'branchId'].forEach((k) => {
+          if (typeof updated[k] === 'string' || updated[k] == null) merged[k] = b[k];
+        });
+        return merged;
+      }));
       notify('Đã hủy lịch');
     } catch (err) { notify(err.message || 'Hủy thất bại', 'error'); }
   };
