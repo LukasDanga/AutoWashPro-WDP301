@@ -559,7 +559,7 @@ function PrintReceiptModal({ booking, onClose }) {
           #receipt-printable-area .receipt-body .grid { row-gap: 1px !important; }
           #receipt-printable-area table { font-size: 11px !important; }
           .no-print { display: none !important; }
-          .no-print-bg { background: transparent !important; }
+          .no-print-bg { background: transparent !important; position: static !important; inset: auto !important; height: auto !important; width: auto !important; display: block !important; }
         }
       `}</style>
       
