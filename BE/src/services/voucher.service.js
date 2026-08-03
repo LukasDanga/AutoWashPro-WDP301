@@ -506,10 +506,34 @@ exports.getVoucherUsageReport = async (filters = {}) => {
 };
 
 exports.getUserVouchers = async (userId) => {
-  return VoucherUsage.find({ userId })
+  const usageVouchers = await VoucherUsage.find({ userId })
     .populate('voucherId')
     .populate('bookingId', 'bookingDate startTime status')
     .sort({ usedAt: -1 });
+
+  // Gộp các voucher được gán riêng cho user (trúng vòng quay / đổi điểm) chưa nằm trong VoucherUsage
+  const assignedVouchers = await Voucher.find({
+    assignedTo: userId,
+    isDeleted: { $ne: true },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const usageVoucherIds = new Set(
+    usageVouchers
+      .map((u) => (u.voucherId ? String(u.voucherId._id || u.voucherId) : null))
+      .filter(Boolean)
+  );
+
+  const assignedExtras = assignedVouchers
+    .filter((v) => !usageVoucherIds.has(String(v._id)))
+    .map((v) => ({
+      _id: v._id,
+      voucherId: v,
+      usedAt: v.createdAt,
+    }));
+
+  return [...assignedExtras, ...usageVouchers];
 };
 
 /**
