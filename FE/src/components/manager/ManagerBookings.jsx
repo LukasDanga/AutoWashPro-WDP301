@@ -496,7 +496,36 @@ function PrintReceiptModal({ booking, onClose }) {
   }, [booking._id]);
 
   const handlePrint = () => {
-    window.print();
+    const el = document.getElementById('receipt-printable-area');
+    if (!el) return;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.no-print').forEach((n) => n.remove());
+    let cssLinks = '';
+    document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+      if (l.href) cssLinks += `<link rel="stylesheet" href="${l.href}">`;
+    });
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<html><head><title>Biên lai</title>
+      ${cssLinks}
+      <style>
+        @page { size: A4; margin: 10mm; }
+        html, body { margin: 0; padding: 0; background: #fff; font-family: system-ui, -Apple-System, 'Segoe UI', sans-serif; }
+        #receipt-printable-area {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: relative !important;
+        }
+        #receipt-printable-area .receipt-body {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+      </style>
+      </head><body>${clone.outerHTML}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 300);
   };
 
   return (
