@@ -3,6 +3,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import CustomLuckyWheel from '../widgets/CustomLuckyWheel.jsx';
 import { storageKeys } from '../../../lib/authStorage.js';
 import { showToast } from '@/lib/toast';
+import { confirmDialog } from '@/lib/confirm';
 import { Trophy, CheckCircle, Warning, ClockCounterClockwise } from '@phosphor-icons/react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -17,7 +18,7 @@ function formatDate(dStr) {
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function VoucherCard({ voucher, index }) {
+function VoucherCard({ voucher, index, onRedeem, redeeming }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-40px' });
   const [copied, setCopied] = useState(false);
@@ -84,8 +85,12 @@ function VoucherCard({ voucher, index }) {
                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                {voucher.requiredPoints} Điểm
             </div>
-            <button className="px-6 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-white hover:bg-slate-700 transition-colors">
-              Đổi ngay
+            <button
+              onClick={() => onRedeem(voucher)}
+              disabled={redeeming}
+              className="px-6 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-white hover:bg-slate-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {redeeming ? 'Đang xử lý...' : 'Đổi ngay'}
             </button>
           </div>
         ) : (
@@ -129,6 +134,7 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   
   const [spinHistory, setSpinHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [redeemingId, setRedeemingId] = useState(null);
 
   const wheelRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
@@ -186,46 +192,78 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
     }
   }, [user, activeTab, fetchSpinHistory]);
 
-  useEffect(() => {
-    async function loadVouchers() {
-      if (!user) return;
-      setLoading(true);
-      try {
-        const token = localStorage.getItem(storageKeys.accessToken);
-        const resProfile = await fetch(`${API_BASE}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
-        if (resProfile.ok) {
-           const prof = await resProfile.json();
-           if (prof.data) {
-             setSpinCount(prof.data.spinCount || 0);
-             setUserPoints(prof.data.loyaltyPoints || 0);
-           }
-        }
-
-        const resV = await fetch(`${API_BASE}/vouchers/available?type=${filterType}&page=${page}&limit=6`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (resV.ok) {
-           const payload = await resV.json();
-           const { data, pagination, user: uData } = payload?.data || {};
-           
-           if (data) {
-             setVouchers(data);
-           }
-           if (pagination) {
-             setTotalPages(pagination.totalPages || 1);
-           }
-           if (uData) {
-             setUserPoints(uData.loyaltyPoints || 0);
-           }
-        }
-      } catch (e) {
-        console.error('Failed to load store data:', e);
-      } finally {
-        setLoading(false);
+  const loadVouchers = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem(storageKeys.accessToken);
+      const resProfile = await fetch(`${API_BASE}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
+      if (resProfile.ok) {
+         const prof = await resProfile.json();
+         if (prof.data) {
+           setSpinCount(prof.data.spinCount || 0);
+           setUserPoints(prof.data.loyaltyPoints || 0);
+         }
       }
+
+      const resV = await fetch(`${API_BASE}/vouchers/available?type=${filterType}&page=${page}&limit=6`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (resV.ok) {
+         const payload = await resV.json();
+         const { data, pagination, user: uData } = payload?.data || {};
+         
+         if (data) {
+           setVouchers(data);
+         }
+         if (pagination) {
+           setTotalPages(pagination.totalPages || 1);
+         }
+         if (uData) {
+           setUserPoints(uData.loyaltyPoints || 0);
+         }
+      }
+    } catch (e) {
+      console.error('Failed to load store data:', e);
+    } finally {
+      setLoading(false);
     }
-    loadVouchers();
   }, [user, filterType, page]);
+
+  useEffect(() => { loadVouchers(); }, [loadVouchers]);
+
+  const handleRedeem = async (voucher) => {
+    if (!user) return onOpenAuth();
+    if (redeemingId) return;
+    if ((userPoints || 0) < (voucher.requiredPoints || 0)) {
+      showToast('Bạn không đủ điểm để đổi voucher này.', 'error');
+      return;
+    }
+    const ok = await confirmDialog({
+      title: 'Đổi điểm lấy voucher',
+      message: `Bạn có chắc chắn muốn dùng ${voucher.requiredPoints} điểm để đổi lấy "${voucher.name}"?`,
+      confirmLabel: 'Đổi điểm',
+    });
+    if (!ok) return;
+
+    setRedeemingId(voucher._id);
+    try {
+      const token = localStorage.getItem(storageKeys.accessToken);
+      const res = await fetch(`${API_BASE}/vouchers/redeem-points`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ templateId: voucher._id }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || 'Lỗi đổi điểm');
+      showToast('Đổi voucher thành công!');
+      await loadVouchers();
+    } catch (err) {
+      showToast(err.message || 'Lỗi đổi điểm', 'error');
+    } finally {
+      setRedeemingId(null);
+    }
+  };
 
   const handleSpinClick = async () => {
     if (!user) return onOpenAuth();
@@ -382,7 +420,7 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
                 {vouchers.map((voucher, i) => (
-                  <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} />
+                  <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} onRedeem={handleRedeem} redeeming={redeemingId === voucher._id} />
                 ))}
               </div>
             )}
