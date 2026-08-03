@@ -50,7 +50,7 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
       const resTpl = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
       const dataTpl = await resTpl.json();
       const tplPayload = dataTpl.data || [];
-      const tplArray = Array.isArray(tplPayload) ? tplPayload : [...(tplPayload.public || []), ...(tplPayload.tier_exclusive || [])];
+      const tplArray = Array.isArray(tplPayload) ? tplPayload : (tplPayload.redeemable || []);
       setVouchers(tplArray.filter(v => v.isTemplate && v.requiredPoints > 0));
       const resMy = await fetch(`${apiBase}/vouchers/me`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
       const dataMy = await resMy.json();

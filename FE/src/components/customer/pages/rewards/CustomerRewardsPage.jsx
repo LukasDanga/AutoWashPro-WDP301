@@ -162,7 +162,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       const resTpl = await api('/vouchers/available');
       const dataTpl = await resTpl.json();
       const tplPayload = dataTpl.data || [];
-      const tplArray = Array.isArray(tplPayload) ? tplPayload : [...(tplPayload.public || []), ...(tplPayload.tier_exclusive || [])];
+      const tplArray = Array.isArray(tplPayload) ? tplPayload : (tplPayload.redeemable || []);
       setVouchers(tplArray.filter(v => v.isTemplate && v.requiredPoints > 0));
     } catch (e) { }
 
