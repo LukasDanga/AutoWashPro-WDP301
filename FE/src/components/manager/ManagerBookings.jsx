@@ -518,7 +518,7 @@ function PrintReceiptModal({ booking, onClose }) {
     doc.write(`<html><head><title>Biên lai</title>
       ${headCSS}
       <style>
-        @page { size: A4; margin: 10mm; }
+        @page { size: A4; margin: 8mm; }
         html, body { margin: 0; padding: 0; background: #fff; font-family: system-ui, -Apple-System, 'Segoe UI', sans-serif; }
         #receipt-printable-area {
           box-shadow: none !important;
@@ -531,6 +531,16 @@ function PrintReceiptModal({ booking, onClose }) {
           max-height: none !important;
           overflow: visible !important;
         }
+        /* Phóng to nội dung để in đầy 1 sheet A4 */
+        #receipt-printable-area .receipt-body { padding: 5mm 10mm !important; }
+        #receipt-printable-area h2 { font-size: 36px !important; margin-bottom: 5mm !important; }
+        #receipt-printable-area h3 { font-size: 22px !important; margin-bottom: 4mm !important; }
+        #receipt-printable-area .text-4xl { font-size: 44px !important; }
+        #receipt-printable-area table { font-size: 15px !important; border-collapse: collapse !important; }
+        #receipt-printable-area th, #receipt-printable-area td { padding: 6px 2px !important; }
+        #receipt-printable-area .text-\[13px\],
+        #receipt-printable-area .text-\[10px\],
+        #receipt-printable-area .text-xs { font-size: 15px !important; }
       </style>
       </head><body>${clone.outerHTML}</body></html>`);
     doc.close();
@@ -549,77 +559,7 @@ function PrintReceiptModal({ booking, onClose }) {
     <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 no-print-bg"
       onClick={onClose}>
       
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 10mm; }
-          body * { visibility: hidden; }
-          #receipt-printable-area, #receipt-printable-area * { visibility: visible; }
-          #receipt-printable-area {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            max-height: none !important;
-            overflow: visible !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            display: block !important;
-          }
-          #receipt-printable-area .receipt-body {
-            overflow: visible !important;
-            max-height: none !important;
-            height: auto !important;
-            padding: 3mm 4mm !important;
-          }
-          #receipt-printable-area .receipt-body * {
-            font-size: 11px !important;
-          }
-          #receipt-printable-area h2 {
-            font-size: 20px !important;
-            margin-bottom: 2mm !important;
-          }
-          #receipt-printable-area h3 {
-            font-size: 13px !important;
-            margin-bottom: 1mm !important;
-          }
-          #receipt-printable-area .text-4xl {
-            font-size: 24px !important;
-          }
-          #receipt-printable-area table th,
-          #receipt-printable-area table td {
-            padding-top: 1px !important;
-            padding-bottom: 1px !important;
-          }
-          #receipt-printable-area .receipt-body .mb-12,
-          #receipt-printable-area .receipt-body .mb-10,
-          #receipt-printable-area .receipt-body .mb-14,
-          #receipt-printable-area .receipt-body .mb-8,
-          #receipt-printable-area .receipt-body .mb-4 { margin-bottom: 2mm !important; }
-          #receipt-printable-area .receipt-body .mt-6,
-          #receipt-printable-area .receipt-body .mt-4 { margin-top: 1.5mm !important; }
-          #receipt-printable-area .receipt-body .mt-2 { margin-top: 1mm !important; }
-          #receipt-printable-area .receipt-body .space-y-1 > * + * { margin-top: 1px !important; }
-          #receipt-printable-area .receipt-body .grid { row-gap: 1px !important; }
-          #receipt-printable-area table { font-size: 11px !important; }
-          .no-print { display: none !important; }
-          .no-print-bg {
-            background: transparent !important;
-            position: static !important;
-            inset: auto !important;
-            height: auto !important;
-            width: auto !important;
-            overflow: visible !important;
-            display: block !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-            filter: none !important;
-            transform: none !important;
-          }
-        }
-      `}</style>
+      <style>{''}</style>
       
       <div id="receipt-printable-area" className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] font-sans text-slate-900 relative" onClick={e => e.stopPropagation()}>
         
