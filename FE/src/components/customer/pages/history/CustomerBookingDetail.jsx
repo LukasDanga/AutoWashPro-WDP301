@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, ArrowLeft } from 'lucide-react';
+import { RefreshCw, ArrowLeft, QrCode } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
+import CustomerQRScanner from '@/components/customer/CustomerQRScanner';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -126,6 +127,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
   // QR
   const [showQR, setShowQR] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const [qrData, setQrData] = useState('');
   const [qrLoading, setQrLoading] = useState(false);
 
@@ -828,7 +830,8 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
   const basePrice = b.bookingType === 'slot_pack_usage' ? 0 : (b.packagePrice || pkgObj?.price || b.packageId?.price || 0);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full relative">
+      <div className="space-y-6 pb-24 sm:pb-6 flex-1">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -1162,8 +1165,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
           )}
         </div>
 
-        {/* Footer actions */}
-        <div className="sticky bottom-0 z-20 px-6 py-4 bg-white/95 backdrop-blur-md border-t border-slate-200 flex flex-wrap items-center gap-3 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] rounded-b-2xl">
+      </div>
+
+      {/* Footer actions */}
+      <div className={`z-40 px-6 py-4 bg-white/95 backdrop-blur-md border-t border-slate-200 flex flex-wrap items-center gap-3 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] ${isModal ? 'sticky bottom-0 rounded-b-2xl -mx-0 sm:-mx-0' : 'fixed bottom-0 left-0 w-full md:w-[calc(100%-18rem)] lg:w-[calc(100%-20rem)] md:left-72 lg:left-80'}`}>
           <button onClick={() => setShowReceipt(true)}
             className="flex-1 min-w-[120px] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer text-center">
             Xem hóa đơn
@@ -1176,6 +1181,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
           )}
           {!b.recurringGroupId && (b.status === 'pending' || b.status === 'confirmed') && (
             <>
+              <button onClick={() => setShowQRScanner(true)}
+                className="flex-1 min-w-[120px] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer text-center flex items-center justify-center gap-1.5">
+                <QrCode size={16} /> Check-in bằng QR
+              </button>
               <button onClick={() => handleShowQR(b)}
                 className="flex-1 min-w-[120px] py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer text-center">
                 Mã QR
@@ -1932,6 +1941,17 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
             </div>
           </div>
         </div>
+      )}
+
+      {showQRScanner && (
+        <CustomerQRScanner
+          bookingId={b._id || b.id}
+          onClose={() => setShowQRScanner(false)}
+          onCheckedIn={() => {
+            setShowQRScanner(false);
+            fetchBookingDetail(); // refresh booking detail
+          }}
+        />
       )}
     </div>
   );

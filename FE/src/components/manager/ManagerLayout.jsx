@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Drop } from '@phosphor-icons/react';
+import { Drop, QrCode } from '@phosphor-icons/react';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { MANAGER_BRAND, MANAGER_MENU_ITEMS, MANAGER_PAGE_META } from '@/config/managerMenu';
 import { clearSession, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import NotificationBell from '@/components/ui/NotificationBell';
 import useSSE from '@/hooks/useSSE';
+import ManagerQRScanner from '@/components/manager/ManagerQRScanner';
 
 function api(path) {
   return fetch(`${getApiBaseUrl()}${path}`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
@@ -44,6 +45,7 @@ export default function ManagerLayout({ user, onLogout }) {
   const navigate = useNavigate();
   const meta = resolvePageMeta(location.pathname, location.search);
   const [badges, setBadges] = useState({});
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const token = getStoredToken();
 
   const loadCounts = useCallback(async () => {
@@ -159,11 +161,30 @@ export default function ManagerLayout({ user, onLogout }) {
             <h1 className="text-xl font-semibold tracking-tight text-foreground">{meta.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
           </div>
-          <NotificationBell />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowQRScanner(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+              title="Quét mã QR"
+            >
+              <QrCode size={20} weight="bold" />
+            </button>
+            <NotificationBell />
+          </div>
         </div>
       }
     >
       <Outlet context={{ user }} />
+      
+      {showQRScanner && (
+        <ManagerQRScanner
+          onClose={() => setShowQRScanner(false)}
+          onCheckedIn={(b) => {
+            setShowQRScanner(false);
+            if (b?._id) navigate(`/manager/bookings/${b._id}`);
+          }}
+        />
+      )}
     </DashboardShell>
   );
 }
