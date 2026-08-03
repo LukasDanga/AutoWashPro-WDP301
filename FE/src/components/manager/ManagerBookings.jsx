@@ -500,18 +500,23 @@ function PrintReceiptModal({ booking, onClose }) {
     if (!el) return;
     const clone = el.cloneNode(true);
     clone.querySelectorAll('.no-print').forEach((n) => n.remove());
-    let cssLinks = '';
+    // Giữ đúng layout gốc: nạp cả <link> lẫn các <style> do CSS modules/CSS-in-JS nhét vào DOM
+    let headCSS = '';
     document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
-      if (l.href) cssLinks += `<link rel="stylesheet" href="${l.href}">`;
+      if (l.href) headCSS += `<link rel="stylesheet" href="${l.href}">`;
     });
-    // Giữ đúng layout gốc: nạp cả các <style> do CSS modules/CSS-in-JS nhét vào DOM
     document.querySelectorAll('style').forEach((s) => {
-      cssLinks += s.outerHTML;
+      headCSS += s.outerHTML;
     });
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(`<html><head><title>Biên lai</title>
-      ${cssLinks}
+    // In qua iframe ẩn cùng tab (không mở tab mới), đúng 1 sheet, layout giữ nguyên
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('id', 'receipt-print-frame');
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    doc.open();
+    doc.write(`<html><head><title>Biên lai</title>
+      ${headCSS}
       <style>
         @page { size: A4; margin: 10mm; }
         html, body { margin: 0; padding: 0; background: #fff; font-family: system-ui, -Apple-System, 'Segoe UI', sans-serif; }
@@ -528,8 +533,16 @@ function PrintReceiptModal({ booking, onClose }) {
         }
       </style>
       </head><body>${clone.outerHTML}</body></html>`);
-    w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 300);
+    doc.close();
+    const doPrint = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => { iframe.remove(); }, 1500);
+      }, 300);
+    };
+    if (doc.readyState === 'complete') doPrint();
+    else iframe.addEventListener('load', doPrint);
   };
 
   return (
