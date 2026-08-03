@@ -142,12 +142,16 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       if (data?.data) {
         setHistory(data.data);
       }
+      if (data?.meta?.summary) {
+        setSummary(data.meta.summary);
+      }
     } catch (e) { } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (refreshUser) refreshUser();
     fetchHistory();
     fetchVouchers();
   }, [fetchHistory]);
