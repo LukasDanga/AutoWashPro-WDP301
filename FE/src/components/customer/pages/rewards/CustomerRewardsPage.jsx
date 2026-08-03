@@ -161,9 +161,12 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     try {
       const resTpl = await api('/vouchers/available');
       const dataTpl = await resTpl.json();
-      const allVouchers = dataTpl.data || [];
-      setVouchers(allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0));
+      const tplPayload = dataTpl.data || [];
+      const tplArray = Array.isArray(tplPayload) ? tplPayload : [...(tplPayload.public || []), ...(tplPayload.tier_exclusive || [])];
+      setVouchers(tplArray.filter(v => v.isTemplate && v.requiredPoints > 0));
+    } catch (e) { }
 
+    try {
       const resMy = await api('/vouchers/me');
       const dataMy = await resMy.json();
       setMyVouchers(dataMy.data || []);

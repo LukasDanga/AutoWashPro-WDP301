@@ -49,9 +49,9 @@ export default function LoyaltyGifts({ apiBase, token, user, refreshUser }) {
     try {
       const resTpl = await fetch(`${apiBase}/vouchers/available`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
       const dataTpl = await resTpl.json();
-      const allVouchers = dataTpl.data || [];
-      const templates = allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0);
-      setVouchers(templates);
+      const tplPayload = dataTpl.data || [];
+      const tplArray = Array.isArray(tplPayload) ? tplPayload : [...(tplPayload.public || []), ...(tplPayload.tier_exclusive || [])];
+      setVouchers(tplArray.filter(v => v.isTemplate && v.requiredPoints > 0));
       const resMy = await fetch(`${apiBase}/vouchers/me`, { headers: { Authorization: `Bearer ${getStoredToken()}` } });
       const dataMy = await resMy.json();
       setMyVouchers(dataMy.data || []);
