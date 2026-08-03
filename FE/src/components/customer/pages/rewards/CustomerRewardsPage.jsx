@@ -142,8 +142,9 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       if (data?.data) {
         setHistory(data.data);
       }
-      if (data?.meta?.summary) {
-        setSummary(data.meta.summary);
+      const summaryData = data?.pagination?.summary || data?.meta?.summary;
+      if (summaryData) {
+        setSummary(summaryData);
       }
     } catch (e) { } finally {
       setLoading(false);
