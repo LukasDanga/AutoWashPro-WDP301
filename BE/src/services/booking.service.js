@@ -1215,7 +1215,50 @@ exports.getCancelPreview = async (id, userId) => {
   let penaltyPercent = 0;
   let policy = '';
 
-  if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
+  if (booking.bookingType === 'recurring') {
+    // Lịch định kỳ: hoàn đúng theo từng buổi (không phải cả lịch)
+    let groupDepositAmount = 0;
+    let recurringTotal = booking.recurringTotal || 1;
+    const firstBooking = booking.isRecurringFirst
+      ? booking
+      : await Booking.findOne({ recurringGroupId: booking.recurringGroupId, isRecurringFirst: true });
+    if (firstBooking) {
+      groupDepositAmount = firstBooking.depositAmount;
+      recurringTotal = firstBooking.recurringTotal || 1;
+    }
+    const depositShare = Math.round(groupDepositAmount / recurringTotal);
+    const sessionPaidAmount = booking.paymentStatus === 'paid' ? (booking.depositAmount ?? booking.finalPrice ?? 0) : 0;
+
+    if (sessionPaidAmount > 0) {
+      totalPaid = sessionPaidAmount;
+      if (isLateCancel) {
+        // Đã thanh toán đủ buổi này → mất % theo SystemConfig
+        penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+        penaltyAmount = Math.round(sessionPaidAmount * penaltyPercent / 100);
+        refundAmount = sessionPaidAmount - penaltyAmount;
+        policy = `Hủy trong vòng ${Math.round(lateCancelThreshold)} phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
+      } else {
+        // Hủy sớm → hoàn 100% giá buổi này
+        refundAmount = sessionPaidAmount;
+        penaltyAmount = 0;
+        policy = `Hoàn lại 100% (${sessionPaidAmount.toLocaleString('vi-VN')}₫) vào ví.`;
+      }
+    } else if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
+      // Chỉ đặt cọc cả lịch → hoàn theo phần cọc của buổi này
+      totalPaid = depositShare;
+      if (isLateCancel) {
+        const depositPenalty = await configService.get('LATE_CANCEL_PENALTY_DEPOSIT_PERCENT', {}, 100);
+        penaltyAmount = Math.round(depositShare * depositPenalty / 100);
+        refundAmount = Math.max(0, depositShare - penaltyAmount);
+        policy = `Hủy trong vòng ${Math.round(lateCancelThreshold)} phút trước giờ hẹn: mất ${depositPenalty}% tiền cọc (${penaltyAmount.toLocaleString('vi-VN')}₫).`;
+      } else {
+        // Hủy sớm → hoàn 100% phần cọc buổi này
+        refundAmount = depositShare;
+        penaltyAmount = 0;
+        policy = `Hoàn lại 100% (${depositShare.toLocaleString('vi-VN')}₫) vào ví.`;
+      }
+    }
+  } else if (['paid', 'deposit_paid'].includes(booking.paymentStatus)) {
     const paidPayment = await Payment.findOne({ bookingId: id, status: 'paid' });
     if (paidPayment) {
       totalPaid = paidPayment.amount;

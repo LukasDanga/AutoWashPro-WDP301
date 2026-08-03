@@ -372,7 +372,7 @@ export default function CustomerWalletDetailPage({ apiBase, token, user }) {
 
                   <div className="flex justify-between border-t border-emerald-200/70 pt-2 font-bold text-xs bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200">
                     <span className="text-emerald-800">Thanh toán qua ví (Giao dịch này):</span>
-                    <span className="font-mono text-emerald-700 text-sm">-{formatCurrency(tx.amount)}</span>
+                    <span className="font-mono text-emerald-700 text-sm">{isCredit ? '+' : '-'}{formatCurrency(tx.amount)}</span>
                   </div>
                 </div>
               </div>
