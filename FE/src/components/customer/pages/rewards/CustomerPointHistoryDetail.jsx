@@ -134,12 +134,13 @@ export default function CustomerPointHistoryDetail() {
   const discountAmount = snap.discountAmount || refBooking.discountAmount || 0;
 
   let orderAmount = snap.orderAmount || refBooking.finalPrice || 0;
-  if (!orderAmount && data.points && effectiveRate > 0) {
+  // Chỉ truy ngược số tiền đơn hàng cho giao dịch TÍCH điểm — giao dịch đổi/điều chỉnh không có đơn hàng
+  if (!orderAmount && isEarned && data.points && effectiveRate > 0) {
     orderAmount = Math.round((Math.abs(data.points) * 100) / effectiveRate);
   }
-  if (!orderAmount) orderAmount = pkgPrice || 0;
+  if (!orderAmount && isEarned) orderAmount = pkgPrice || 0;
 
-  const displayPoints = (orderAmount > 0 && effectiveRate > 0)
+  const displayPoints = (isEarned && orderAmount > 0 && effectiveRate > 0)
     ? Math.floor((orderAmount * effectiveRate) / 100)
     : Math.abs(data.points);
 
@@ -214,7 +215,7 @@ export default function CustomerPointHistoryDetail() {
             <FileText size={18} className="text-amber-500" weight="fill" /> Chi tiết & Lý do (Snapshot)
           </h2>
           <p className="text-sm font-bold text-slate-800 leading-relaxed">{data.description}</p>
-          {orderAmount > 0 && (
+          {isEarned && orderAmount > 0 && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-slate-50 p-2.5 text-[11px] text-slate-600 border border-slate-100">
               <div><span className="text-slate-400">Đơn hàng:</span> <strong className="text-slate-800">{formatCurrency(orderAmount)}₫</strong></div>
               <div><span className="text-slate-400">Tỷ lệ tích:</span> <strong className="text-blue-600">{effectiveRate}%</strong> <span className="text-slate-400 text-[10px]">(Cơ bản {baseRate}% x{multiplier})</span></div>
@@ -316,7 +317,7 @@ export default function CustomerPointHistoryDetail() {
         </div>
       )}
 
-      {orderAmount > 0 && (
+      {isEarned && orderAmount > 0 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
