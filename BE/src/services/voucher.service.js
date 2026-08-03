@@ -519,21 +519,36 @@ exports.getUserVouchers = async (userId) => {
     .sort({ createdAt: -1 })
     .lean();
 
+  const now = new Date();
+
+  // Chỉ giữ voucher còn dùng được (chưa dùng hết, chưa hết hạn) — ẩn voucher đã dùng/hết hạn khỏi "Quà tặng của tôi"
+  const isUsable = (voucherId) => {
+    if (!voucherId) return false;
+    const v = voucherId.remaining !== undefined ? voucherId : (voucherId._doc || voucherId);
+    return v.remaining > 0
+      && v.status !== 'used'
+      && v.status !== 'expired'
+      && (!v.endDate || new Date(v.endDate) >= now);
+  };
+
   const usageVoucherIds = new Set(
     usageVouchers
       .map((u) => (u.voucherId ? String(u.voucherId._id || u.voucherId) : null))
       .filter(Boolean)
   );
 
+  const usableUsage = usageVouchers.filter((u) => isUsable(u.voucherId));
+
   const assignedExtras = assignedVouchers
     .filter((v) => !usageVoucherIds.has(String(v._id)))
+    .filter(isUsable)
     .map((v) => ({
       _id: v._id,
       voucherId: v,
       usedAt: v.createdAt,
     }));
 
-  return [...assignedExtras, ...usageVouchers];
+  return [...assignedExtras, ...usableUsage];
 };
 
 /**
