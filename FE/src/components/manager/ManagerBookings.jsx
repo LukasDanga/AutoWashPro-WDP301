@@ -47,7 +47,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import ManagerQuickCheckin from '@/components/manager/ManagerQuickCheckin';
-import ManagerQRScanner from '@/components/manager/ManagerQRScanner';
+import ManagerGenericQRDisplay from '@/components/manager/ManagerGenericQRDisplay';
 
 /* ── helpers ── */
 function api(path, opts = {}) {
@@ -2529,12 +2529,9 @@ export default function ManagerBookings() {
       {qrBooking && <QRDisplayModal booking={qrBooking} onClose={() => setQrBooking(null)} />}
 
       {showQRScanner && (
-        <ManagerQRScanner
+        <ManagerGenericQRDisplay
+          branchId={user?.branchId}
           onClose={() => setShowQRScanner(false)}
-          onCheckedIn={(b) => {
-            setShowQRScanner(false);
-            navigate(`/manager/bookings/${b._id || b.id}`);
-          }}
         />
       )}
 
