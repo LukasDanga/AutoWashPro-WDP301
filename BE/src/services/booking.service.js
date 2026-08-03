@@ -733,13 +733,14 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   // (depositAmount > 0) mà chưa cọc thì từ chối. Áp dụng cho single booking.
   // Recurring: chỉ buổi đầu (`isRecurringFirst`) mới có depositAmount > 0; các
   // buổi sau trong nhóm đã được cọc gộp ở buổi đầu nên cho confirm bình thường.
-  if (status === 'confirmed') {
+  // Đồng thời áp dụng khi chuyển trực tiếp từ 'pending' sang 'checked_in'.
+  if (status === 'confirmed' || (status === 'checked_in' && currentBooking.status === 'pending')) {
     const requiresDeposit = (currentBooking.depositAmount || 0) > 0;
     const isPaid = currentBooking.depositPaid ||
       ['deposit_paid', 'paid'].includes(currentBooking.paymentStatus);
     if (requiresDeposit && !isPaid) {
       throw Object.assign(
-        new Error('Chưa đặt cọc — không thể xác nhận lịch hẹn'),
+        new Error('Chưa đặt cọc — không thể xác nhận / check-in lịch hẹn'),
         { statusCode: 400, code: 'DEPOSIT_REQUIRED' },
       );
     }
@@ -767,6 +768,9 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   if (status === 'confirmed') update.confirmedAt = new Date();
   if (status === 'checked_in') {
     update.checkInTime = new Date();
+    if (!currentBooking.confirmedAt) {
+      update.confirmedAt = new Date();
+    }
     // H-3 SAFETY: xóa các cờ warning / grace khi manager xác nhận hoặc check-in.
     // Tránh trường hợp cron tick kế tiếp xét lại booking đã check-in và cancel nhầm.
     update.lateWarningSentAt = undefined;
