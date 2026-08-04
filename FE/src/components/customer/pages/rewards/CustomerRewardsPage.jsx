@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Gift, Coins, Star, Ticket, Tag, CheckCircle, CaretRight, ArrowUp, ArrowDown, Eye } from '@phosphor-icons/react';
+import { Gift, Coins, Star, Ticket, Tag, CheckCircle, CaretRight, ArrowUp, ArrowDown, Eye, Lightbulb, Medal, Info, Warning } from '@phosphor-icons/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TierBadge from '@/components/ui/TierBadge';
 import { confirmDialog } from '@/lib/confirm';
@@ -113,6 +113,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [tierConfig, setTierConfig] = useState(null);
   const [tierList, setTierList] = useState([]);
+  const [loyaltyConfig, setLoyaltyConfig] = useState(null);
 
   const FALLBACK_TIER_MAP = {
     diamond: { label: 'Kim cương', color: '#0891b2', minPoints: 1000000 },
@@ -132,6 +133,10 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
         setTierConfig(map);
       }
     }).catch(() => {});
+
+    api('/loyalty/config').then(r => r.json()).then(payload => {
+      if (payload?.data) setLoyaltyConfig(payload.data);
+    }).catch(() => {});
   }, []);
 
   const fetchHistory = useCallback(async () => {
@@ -142,12 +147,17 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       if (data?.data) {
         setHistory(data.data);
       }
+      const summaryData = data?.pagination?.summary || data?.meta?.summary;
+      if (summaryData) {
+        setSummary(summaryData);
+      }
     } catch (e) { } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (refreshUser) refreshUser();
     fetchHistory();
     fetchVouchers();
   }, [fetchHistory]);
@@ -156,9 +166,12 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     try {
       const resTpl = await api('/vouchers/available');
       const dataTpl = await resTpl.json();
-      const allVouchers = dataTpl.data || [];
-      setVouchers(allVouchers.filter(v => v.isTemplate && v.requiredPoints > 0));
+      const tplPayload = dataTpl.data || [];
+      const tplArray = Array.isArray(tplPayload) ? tplPayload : (tplPayload.redeemable || []);
+      setVouchers(tplArray.filter(v => v.isTemplate && v.requiredPoints > 0));
+    } catch (e) { }
 
+    try {
       const resMy = await api('/vouchers/me');
       const dataMy = await resMy.json();
       setMyVouchers(dataMy.data || []);
@@ -226,12 +239,12 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        {['reward', 'lifetime', 'exchange', 'my-vouchers'].map(tab => (
+        {['reward', 'lifetime', 'exchange', 'rules', 'my-vouchers'].map(tab => (
           <button key={tab} onClick={() => { setActiveTab(tab); setSearchParams({ tab }, { replace: true }); }}
             className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
               ? (tab === 'lifetime' ? 'border-blue-600 text-blue-600' : 'border-emerald-600 text-emerald-600')
               : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-            {tab === 'reward' ? 'Điểm thưởng' : tab === 'lifetime' ? 'Điểm tích lũy' : tab === 'exchange' ? 'Đổi điểm lấy quà' : 'Quà tặng của tôi'}
+            {tab === 'reward' ? 'Điểm thưởng' : tab === 'lifetime' ? 'Điểm tích lũy' : tab === 'exchange' ? 'Đổi điểm lấy quà' : tab === 'rules' ? 'Cách tính điểm' : 'Quà tặng của tôi'}
           </button>
         ))}
       </div>
@@ -261,6 +274,80 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
             <p className="text-lg font-extrabold text-blue-700">{formatCurrency(user?.lifetimePoints || 0)}</p>
           </div>
           <PointHistoryTable items={lifetimeHistory} loading={loading} page={page} pagination={pagination} setPage={setPage} navigate={navigate} emptyMsg="Chưa có lịch sử điểm tích lũy" activeTab={activeTab} />
+        </div>
+      )}
+
+      {/* Tab: Cách tính điểm */}
+      {activeTab === 'rules' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/60 to-white p-6">
+            <h3 className="text-base font-extrabold text-slate-800 mb-1 flex items-center gap-2">
+              <Lightbulb weight="fill" className="text-emerald-600" /> Cách tính điểm thưởng
+            </h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Mỗi khi đơn hàng được thanh toán thành công, bạn sẽ được cộng điểm thưởng theo công thức:
+            </p>
+            <div className="bg-white rounded-xl border border-emerald-200 p-4 font-mono text-sm text-slate-700 text-center">
+              Điểm = (Giá trị đơn hàng đã thanh toán ×{' '}
+              <span className="font-bold text-emerald-600">Tỷ lệ cơ bản {loyaltyConfig?.baseEarningRate ?? 5}%</span>) ×{' '}
+              <span className="font-bold text-emerald-600">Hệ số hạng</span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                <Medal weight="fill" className="text-amber-500" /> Hạng thành viên & Hệ số nhân điểm
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">Tích đủ điểm (điểm tích lũy trọn đời) sẽ được thăng hạng và hệ số nhân tăng theo hạng</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-3 text-left">Hạng</th>
+                    <th className="px-6 py-3 text-left">Điểm tích lũy tối thiểu</th>
+                    <th className="px-6 py-3 text-left">Hệ số nhân</th>
+                    <th className="px-6 py-3 text-left">Quyền lợi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sortedTiers.map(t => (
+                    <tr key={t.id} className={currentTierId === String(t.id || '').toLowerCase() ? 'bg-emerald-50/50' : ''}>
+                      <td className="px-6 py-3 font-bold text-slate-800">
+                        <span className="flex items-center gap-2">
+                          <TierBadge tier={t.id} />
+                          {t.name}
+                          {currentTierId === String(t.id || '').toLowerCase() && (
+                            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide bg-emerald-100 rounded-full px-2 py-0.5">Hạng hiện tại</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{formatCurrency(t.minPoints || 0)} điểm</td>
+                      <td className="px-6 py-3 font-extrabold text-emerald-600 whitespace-nowrap">x{Number(t.multiplier ?? 1).toLocaleString('vi-VN')}</td>
+                      <td className="px-6 py-3 text-xs text-slate-500">
+                        <ul className="space-y-0.5 list-disc list-inside">
+                          {(t.benefits || []).map((b, bi) => <li key={bi}>{b}</li>)}
+                        </ul>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 className="text-base font-extrabold text-slate-800 mb-3 flex items-center gap-2">
+              <Info weight="fill" className="text-blue-500" /> Quy định điểm thưởng
+            </h3>
+            <ul className="space-y-2 text-sm text-slate-600">
+              <li className="flex items-start gap-2"><CheckCircle className="text-emerald-500 shrink-0 mt-0.5" size={16} /> Điểm được cộng khi đơn hàng thanh toán thành công và bị trừ khi hủy đơn / hoàn tiền.</li>
+              <li className="flex items-start gap-2"><CheckCircle className="text-emerald-500 shrink-0 mt-0.5" size={16} /> Điểm thưởng có hiệu lực trong {loyaltyConfig?.pointExpirationMonths ?? 6} tháng kể từ lần tích điểm gần nhất.</li>
+              <li className="flex items-start gap-2"><CheckCircle className="text-emerald-500 shrink-0 mt-0.5" size={16} /> Điểm dùng để đổi voucher tại mục "Đổi điểm lấy quà".</li>
+              <li className="flex items-start gap-2"><Warning className="text-amber-500 shrink-0 mt-0.5" size={16} /> Chỉ tính trên phần tiền đã thanh toán, không tính trên phần được giảm giá / voucher.</li>
+            </ul>
+          </div>
         </div>
       )}
 

@@ -506,10 +506,49 @@ exports.getVoucherUsageReport = async (filters = {}) => {
 };
 
 exports.getUserVouchers = async (userId) => {
-  return VoucherUsage.find({ userId })
+  const usageVouchers = await VoucherUsage.find({ userId })
     .populate('voucherId')
     .populate('bookingId', 'bookingDate startTime status')
     .sort({ usedAt: -1 });
+
+  // Gộp các voucher được gán riêng cho user (trúng vòng quay / đổi điểm) chưa nằm trong VoucherUsage
+  const assignedVouchers = await Voucher.find({
+    assignedTo: userId,
+    isDeleted: { $ne: true },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const now = new Date();
+
+  // Chỉ giữ voucher còn dùng được (chưa dùng hết, chưa hết hạn) — ẩn voucher đã dùng/hết hạn khỏi "Quà tặng của tôi"
+  const isUsable = (voucherId) => {
+    if (!voucherId) return false;
+    const v = voucherId.remaining !== undefined ? voucherId : (voucherId._doc || voucherId);
+    return v.remaining > 0
+      && v.status !== 'used'
+      && v.status !== 'expired'
+      && (!v.endDate || new Date(v.endDate) >= now);
+  };
+
+  const usageVoucherIds = new Set(
+    usageVouchers
+      .map((u) => (u.voucherId ? String(u.voucherId._id || u.voucherId) : null))
+      .filter(Boolean)
+  );
+
+  const usableUsage = usageVouchers.filter((u) => isUsable(u.voucherId));
+
+  const assignedExtras = assignedVouchers
+    .filter((v) => !usageVoucherIds.has(String(v._id)))
+    .filter(isUsable)
+    .map((v) => ({
+      _id: v._id,
+      voucherId: v,
+      usedAt: v.createdAt,
+    }));
+
+  return [...assignedExtras, ...usableUsage];
 };
 
 /**
