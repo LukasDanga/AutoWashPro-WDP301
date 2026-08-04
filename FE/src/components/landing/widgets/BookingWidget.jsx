@@ -1151,8 +1151,8 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     const pId = pkg?._id || pkg?.id;
     if (!pId) return defaultIncluded;
     const selectedForPkg = selectedSubServices[pId];
-    if (selectedForPkg === undefined) return defaultIncluded;
-    return selectedForPkg;
+    if (selectedForPkg !== undefined) return selectedForPkg;
+    return defaultIncluded;
   }, [pkg, selectedSubServices, defaultIncluded]);
   let extraDuration = 0, extraPrice = 0;
   if (pkg && pkg.subServices) {
@@ -1795,7 +1795,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   </div>
 
                   {/* Sub-services below packages */}
-                  {false && selectedPackage && selectedPackage.subServices && selectedPackage.subServices.length > 0 && (
+                  {selectedPackage && selectedPackage.subServices && selectedPackage.subServices.length > 0 && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }} 
                       animate={{ opacity: 1, y: 0 }}
@@ -1816,6 +1816,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 <button
                                   type="button"
                                   key={sub.name}
+                                  disabled={tab === 'recurring'}
                                   onClick={() => {
                                     setSelectedSubServices(prev => {
                                       const current = prev[pId] !== undefined ? prev[pId] : (selectedPackage?.subServices || []).filter(s => s.isOptional === false || (s.isOptional === undefined && (s.price === 0 || !s.price))).map(s => s.name);
@@ -1829,7 +1830,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     checked
                                       ? 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium'
                                       : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                                  } cursor-pointer`}
+                                  } ${tab === 'recurring' ? 'cursor-default' : 'cursor-pointer'}`}
                                 >
                                   <div className="flex items-center gap-3">
                                     <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
@@ -1852,7 +1853,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       )}
 
                       {/* Optional extra services */}
-                      {selectedPackage.subServices.filter(sub => sub.isOptional === true).length > 0 && (
+                      {tab === 'regular' && selectedPackage.subServices.filter(sub => sub.isOptional === true).length > 0 && (
                         <div>
                           <div className="flex items-center gap-2 mb-4">
                             <Sparkles className="w-4 h-4 text-indigo-600" />

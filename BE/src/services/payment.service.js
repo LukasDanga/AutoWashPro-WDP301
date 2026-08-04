@@ -1125,12 +1125,9 @@ exports.refundPayment = async (bookingId, userRole, userId) => {
       }
     }
 
-    const payment = await Payment.findOneAndUpdate(
-      { bookingId, status: 'paid' },
-      { status: 'refunded', refundedAt: new Date() },
-      { new: true, session }
-    );
-    if (!payment) {
+    // Tổng tất cả thanh toán đã thu của booking để hoàn đủ số tiền khách đã trả
+    const paidPayments = await Payment.find({ bookingId, status: 'paid' }).session(session);
+    if (!paidPayments.length) {
       await session.abortTransaction();
       throw Object.assign(new Error('Chỉ có thể hoàn tiền cho thanh toán đã được thanh toán'), { statusCode: 400, code: 'INVALID_REFUND' });
     }
@@ -1140,22 +1137,30 @@ exports.refundPayment = async (bookingId, userRole, userId) => {
       throw Object.assign(new Error('Không thể hoàn tiền cho lịch hẹn đang thực hiện'), { statusCode: 400, code: 'BOOKING_IN_PROGRESS' });
     }
 
+    const totalRefund = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    await Payment.updateMany(
+      { bookingId, status: 'paid' },
+      { status: 'refunded', refundedAt: new Date() },
+      { session }
+    );
+
     await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled', paymentStatus: 'refunded' }).session(session);
 
     if (booking.voucherCode) {
-      await voucherService.rollbackVoucher(booking.voucherCode, payment.userId, bookingId, session);
+      await voucherService.rollbackVoucher(booking.voucherCode, paidPayments[0].userId, bookingId, session);
     }
 
     // Tự động hoàn tiền vào Ví AutoWash của khách hàng
-    const user = await mongoose.model('User').findById(payment.userId).session(session);
+    const user = await mongoose.model('User').findById(paidPayments[0].userId).session(session);
     if (user) {
-      user.walletBalance = (user.walletBalance || 0) + payment.amount;
+      user.walletBalance = (user.walletBalance || 0) + totalRefund;
       await user.save({ session });
       
       const shortBookingCode = String(bookingId).slice(-6).toUpperCase();
       await mongoose.model('WalletTransaction').create([{
         userId: user._id,
-        amount: payment.amount,
+        amount: totalRefund,
         type: 'credit',
         reason: `Hoàn tiền cho đơn đặt lịch #${shortBookingCode}`,
         bookingId: booking._id
@@ -1165,23 +1170,23 @@ exports.refundPayment = async (bookingId, userRole, userId) => {
     await session.commitTransaction();
 
     notificationService.send(
-      payment.userId,
+      paidPayments[0].userId,
       'Hoàn tiền thành công',
-      `Yêu cầu hoàn tiền ${payment.amount.toLocaleString('vi-VN')}đ đã được xử lý.`,
+      `Yêu cầu hoàn tiền ${totalRefund.toLocaleString('vi-VN')}đ đã được xử lý.`,
       'refund',
-      { bookingId, paymentId: payment._id }
+      { bookingId, paymentId: paidPayments[0]._id }
     ).catch(() => {});
 
     // Notify admin + manager
     notificationService.sendToAdminAndManager(
       booking.branchId,
       'Hoàn tiền',
-      `Đã hoàn tiền ${payment.amount.toLocaleString('vi-VN')}đ cho khách hàng.`,
+      `Đã hoàn tiền ${totalRefund.toLocaleString('vi-VN')}đ cho khách hàng.`,
       'refund',
       { bookingId, branchId: booking.branchId }
     ).catch(() => {});
 
-    return payment;
+    return paidPayments[0];
   } catch (err) {
     if (session.inTransaction()) {
       await session.abortTransaction();
