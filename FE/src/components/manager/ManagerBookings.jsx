@@ -497,48 +497,70 @@ function PrintReceiptModal({ booking, onClose }) {
   }, [booking._id]);
 
   const handlePrint = () => {
-    window.print();
+    const el = document.getElementById('receipt-printable-area');
+    if (!el) return;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.no-print').forEach((n) => n.remove());
+    // Giữ đúng layout gốc: nạp cả <link> lẫn các <style> do CSS modules/CSS-in-JS nhét vào DOM
+    let headCSS = '';
+    document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+      if (l.href) headCSS += `<link rel="stylesheet" href="${l.href}">`;
+    });
+    document.querySelectorAll('style').forEach((s) => {
+      headCSS += s.outerHTML;
+    });
+    // In qua iframe ẩn cùng tab (không mở tab mới), đúng 1 sheet, layout giữ nguyên
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('id', 'receipt-print-frame');
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    doc.open();
+    doc.write(`<html><head><title>Biên lai</title>
+      ${headCSS}
+      <style>
+        @page { size: A4; margin: 8mm; }
+        html, body { margin: 0; padding: 0; background: #fff; font-family: system-ui, -Apple-System, 'Segoe UI', sans-serif; }
+        #receipt-printable-area {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: relative !important;
+        }
+        #receipt-printable-area .receipt-body {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        /* Phóng to nội dung để in đầy 1 sheet A4 */
+        #receipt-printable-area .receipt-body { padding: 5mm 10mm !important; }
+        #receipt-printable-area h2 { font-size: 36px !important; margin-bottom: 5mm !important; }
+        #receipt-printable-area h3 { font-size: 22px !important; margin-bottom: 4mm !important; }
+        #receipt-printable-area .text-4xl { font-size: 44px !important; }
+        #receipt-printable-area table { font-size: 15px !important; border-collapse: collapse !important; }
+        #receipt-printable-area th, #receipt-printable-area td { padding: 6px 2px !important; }
+        #receipt-printable-area .text-\[13px\],
+        #receipt-printable-area .text-\[10px\],
+        #receipt-printable-area .text-xs { font-size: 15px !important; }
+      </style>
+      </head><body>${clone.outerHTML}</body></html>`);
+    doc.close();
+    const doPrint = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => { iframe.remove(); }, 1500);
+      }, 300);
+    };
+    if (doc.readyState === 'complete') doPrint();
+    else iframe.addEventListener('load', doPrint);
   };
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 no-print-bg"
       onClick={onClose}>
       
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 10mm; }
-          body * { visibility: hidden; }
-          #receipt-printable-area, #receipt-printable-area * { visibility: visible; }
-          #receipt-printable-area {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            max-height: none !important;
-            overflow: visible !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            display: block !important;
-          }
-          #receipt-printable-area .receipt-body {
-            overflow: visible !important;
-            max-height: none !important;
-            height: auto !important;
-            padding: 4mm 6mm !important;
-          }
-          #receipt-printable-area .receipt-body .mb-12,
-          #receipt-printable-area .receipt-body .mb-10,
-          #receipt-printable-area .receipt-body .mb-14,
-          #receipt-printable-area .receipt-body .mb-8,
-          #receipt-printable-area .receipt-body .mb-4 { margin-bottom: 3mm !important; }
-          #receipt-printable-area table { font-size: 11.5px !important; }
-          .no-print { display: none !important; }
-          .no-print-bg { background: transparent !important; }
-        }
-      `}</style>
+      <style>{''}</style>
       
       <div id="receipt-printable-area" className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] font-sans text-slate-900 relative" onClick={e => e.stopPropagation()}>
         
@@ -2147,7 +2169,16 @@ export default function ManagerBookings() {
   const handlePageChange = (pg) => { setPage(pg); fetch_(search, statusFilter, typeFilter, todayOnly, dateFrom, dateTo, pg); };
 
   const handleUpdated = (updated) => {
-    setBookings((p) => p.map((b) => b._id === updated._id ? updated : b));
+    setBookings((p) => p.map((b) => {
+      if (b._id !== updated._id) return b;
+      // updated từ các API (extend-grace, đổi trạng thái…) không populate dân/xe/gói =>
+      // giữ lại các ref đã populate trong list để không mất tên khách/dịch vụ.
+      const merged = { ...b, ...updated };
+      ['userId', 'packageId', 'vehicleId', 'branchId'].forEach((k) => {
+        if (typeof updated[k] === 'string' || updated[k] == null) merged[k] = b[k];
+      });
+      return merged;
+    }));
     notify('Đã cập nhật trạng thái đặt lịch');
   };
 
@@ -2160,7 +2191,14 @@ export default function ManagerBookings() {
       if (!res.ok) throw new Error(await readErr(res));
       const p = await res.json();
       const updated = p?.data ?? p;
-      setBookings((prev) => prev.map((b) => b._id === updated._id ? updated : b));
+      setBookings((prev) => prev.map((b) => {
+        if (b._id !== updated._id) return b;
+        const merged = { ...b, ...updated };
+        ['userId', 'packageId', 'vehicleId', 'branchId'].forEach((k) => {
+          if (typeof updated[k] === 'string' || updated[k] == null) merged[k] = b[k];
+        });
+        return merged;
+      }));
       notify('Đã hủy lịch');
     } catch (err) { notify(err.message || 'Hủy thất bại', 'error'); }
   };
