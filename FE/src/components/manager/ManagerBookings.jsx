@@ -40,7 +40,7 @@ import {
   ArrowRight,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, useOutletContext } from 'react-router-dom';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import TierBadge from '@/components/ui/TierBadge';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -1938,8 +1938,25 @@ function WeekView({ onSelect, onConfirmAll, onQR, refreshSignal }) {
               const ds = calDateStr(day);
               const isToday = ds === todayStr;
               const dayBookings = [...(byDay[ds] || [])].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+              
+              const slotCounts = {};
+              dayBookings.forEach(b => {
+                if (b.status !== 'completed' && b.status !== 'cancelled' && b.startTime) {
+                  slotCounts[b.startTime] = (slotCounts[b.startTime] || 0) + 1;
+                }
+              });
+
               return (
                 <div key={ds} className={`border-r border-slate-100 last:border-0 p-1.5 space-y-1 min-h-[160px] ${isToday ? 'bg-blue-50/30' : ''}`}>
+                  {Object.keys(slotCounts).length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1 justify-center pb-2 border-b border-slate-100">
+                      {Object.entries(slotCounts).sort(([s1], [s2]) => s1.localeCompare(s2)).map(([slot, c]) => (
+                        <span key={slot} className="text-[9px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0.5 rounded" title={`${c} lịch đang hoạt động`}>
+                          {slot} ({c})
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {dayBookings.length === 0 ? (
                     <div className="flex min-h-[140px] items-center justify-center">
                       <p className="text-[10px] text-slate-200">—</p>
@@ -2000,6 +2017,7 @@ export default function ManagerBookings() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useOutletContext() || {};
 
   const getInitialValue = (paramKey, defaultValue) => {
     if (searchParams.has(paramKey)) {
