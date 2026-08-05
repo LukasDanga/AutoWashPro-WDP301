@@ -2167,6 +2167,12 @@ export default function ManagerBookings() {
   }, [fetch_]);
   useSSE(token, 'slots_updated', triggerRefresh);
   useSSE(token, 'payment_new', triggerRefresh);
+  useSSE(token, 'customer_checked_in_via_qr', (data) => {
+    triggerRefresh();
+    if (data?.bookingId) {
+      navigate(`/manager/bookings/${data.bookingId}`);
+    }
+  });
 
   const handleSearch = (v) => {
     setSearch(v);

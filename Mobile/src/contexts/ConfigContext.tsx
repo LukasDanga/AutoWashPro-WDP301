@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import api from '../api/axiosClient';
+import api from '../api/client';
 import { SOCKET_EVENTS } from '../utils/socketEvents';
 import { sseService } from '../services/sse';
 

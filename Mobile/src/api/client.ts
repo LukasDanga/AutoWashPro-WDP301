@@ -34,7 +34,7 @@ const REFRESH_TOKEN_KEY = 'aw_refreshToken';
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -202,6 +202,7 @@ apiClient.interceptors.response.use(
 
 // Export api client
 export { apiClient };
+export default apiClient;
 
 // Helper function to get full image URL
 export const getImageUrl = (path?: string): string | undefined => {
@@ -212,3 +213,4 @@ export const getImageUrl = (path?: string): string | undefined => {
 
 // Export API base URL for use in components
 export { API_BASE_URL };
+

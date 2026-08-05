@@ -855,6 +855,23 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     ).catch(() => {});
   }
 
+  if (status === 'checked_in') {
+    const sseService = require('./sse.service');
+    sseService.broadcastToAll('customer_checked_in_via_qr', {
+      bookingId: id,
+      bookingCode: booking.bookingCode,
+      branchId: String(booking.branchId?._id || booking.branchId),
+      status: 'checked_in',
+    });
+    notificationService.send(
+      booking.userId?._id || currentBooking.userId,
+      'Check-in thành công',
+      `Bạn đã check-in thành công cho xe ${booking.vehicleId?.licensePlate || ''} tại ${booking.branchName || booking.branchId?.name || 'Chi nhánh'}.`,
+      'booking_checked_in',
+      { bookingId: id }
+    ).catch(() => {});
+  }
+
   // Post-completion side effects (async, non-blocking)
   if (status === 'awaiting_payment') {
     setImmediate(async () => {
