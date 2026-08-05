@@ -108,6 +108,28 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
   // Pay remaining
   const [payRemainingTarget, setPayRemainingTarget] = useState(null);
+  const [earnedPointRecord, setEarnedPointRecord] = useState(null);
+
+  useEffect(() => {
+    if (!token || !booking || booking.status !== 'completed') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase || API_BASE}/loyalty/my-history?limit=100`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const items = Array.isArray(payload?.data) ? payload.data : (payload?.items || []);
+        const bookingId = String(booking._id || booking.id);
+        const matched = items.find(ph => String(ph.referenceId?._id || ph.referenceId) === bookingId);
+        if (!cancelled && matched) {
+          setEarnedPointRecord(matched);
+        }
+      } catch (e) {}
+    })();
+    return () => { cancelled = true; };
+  }, [apiBase, token, booking?._id, booking?.status]);
 
   const handlePrint = () => {
     const el = document.getElementById('receipt-printable-area');
@@ -210,7 +232,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
     } catch (e) { setReceiptPayments(null); }
   }, [booking, apiBase, token]);
 
-  useEffect(() => { if (showReceipt) loadReceiptPayments(); }, [showReceipt, loadReceiptPayments]);
+  useEffect(() => { loadReceiptPayments(); }, [loadReceiptPayments]);
 
   // Recurring group
   const [recurringGroupBookings, setRecurringGroupBookings] = useState([]);
@@ -992,6 +1014,12 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
               </span>
               <span className="font-bold text-slate-800 text-sm sm:text-base">{formatCurrency(paidVal)}</span>
             </div>
+            {b.depositAmount > 0 && !isDepositPaid && !isFullyPaid && (
+              <div className="text-[11px] font-medium text-amber-700 bg-amber-50/80 px-3 py-1.5 rounded-lg border border-amber-200/80 flex items-center justify-between">
+                <span>Số tiền đặt cọc cần trả:</span>
+                <span className="font-extrabold">{formatCurrency(b.depositAmount)} (Chưa cọc)</span>
+              </div>
+            )}
             <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center">
               <div className="text-xs sm:text-sm font-bold text-amber-700 flex items-center gap-1">
                 🔥 Tiền còn lại cần thanh toán
@@ -1222,8 +1250,59 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
           )}
         </div>
 
+        {/* Điểm thưởng đơn hàng */}
+        {(() => {
+          const isRefunded = b.status === 'refunded' || b.paymentStatus === 'refunded';
+          if (isRefunded) return null; // Ẩn điểm thưởng hoàn toàn đối với đơn đã hoàn tiền
+
+          const estPoints = Math.floor(((b.finalPrice || b.totalAmount || 0) * 5) / 100);
+
+          if (b.status === 'completed') {
+            return (
+              <div className="mt-6 mb-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 rounded-2xl p-5 text-white shadow-md flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/30 shadow-xs">
+                    <span className="text-xl">🏆</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider block">Điểm thưởng tích lũy từ đơn này</span>
+                    <strong className="text-lg font-black text-white">
+                      +{earnedPointRecord ? Number(earnedPointRecord.points).toLocaleString('vi-VN') : estPoints.toLocaleString('vi-VN')} điểm
+                    </strong>
+                  </div>
+                </div>
+                {earnedPointRecord && (
+                  <button
+                    onClick={() => navigate(`/rewards/history/${earnedPointRecord._id}?tab=reward`)}
+                    className="px-4 py-2.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-extrabold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Xem chi tiết điểm thưởng</span>
+                    <ArrowLeft size={14} className="rotate-180" />
+                  </button>
+                )}
+              </div>
+            );
+          }
+
+          if (b.status !== 'cancelled' && estPoints > 0) {
+            return (
+              <div className="mt-6 mb-2 bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 shadow-2xs flex items-center gap-3 text-amber-900">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-base">
+                  🎁
+                </div>
+                <div className="text-xs font-medium leading-relaxed">
+                  <span className="text-slate-500 block font-semibold text-[11px] uppercase tracking-wider">Dự kiến tích lũy điểm thưởng</span>
+                  Bạn sẽ nhận được <strong className="font-extrabold text-amber-700">+{estPoints.toLocaleString('vi-VN')} điểm</strong> sau khi hoàn thành đơn hàng này.
+                </div>
+              </div>
+            );
+          }
+
+          return null;
+        })()}
+
         {/* Lịch sử thanh toán */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="mt-5 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <span>💳</span> Lịch sử thanh toán
           </h3>
@@ -1231,17 +1310,23 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
+                  <th className="py-2.5 px-3">Loại thanh toán</th>
                   <th className="py-2.5 px-3">Phương thức</th>
-                  <th className="py-2.5 px-3">Ngày</th>
+                  <th className="py-2.5 px-3">Ngày thanh toán</th>
                   <th className="py-2.5 px-3 text-right">Đã trả</th>
-                  <th className="py-2.5 px-3 text-right">Mã biên lai</th>
+                  <th className="py-2.5 px-3 text-right">Mã giao dịch</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {receiptPayments === null ? (
                   <tr>
+                    <td className="py-3 px-3 font-semibold text-slate-800">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${b.paymentStatus === 'deposit_paid' ? 'bg-amber-50 text-amber-700 border border-amber-200' : b.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                        {b.paymentStatus === 'paid' ? 'Toàn bộ' : (b.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                      </span>
+                    </td>
                     <td className="py-3 px-3 font-medium text-slate-700">
-                      {b.paymentStatus === 'paid' ? 'Thanh toán' : (b.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                      {b.paymentMethod === 'wallet' ? 'Ví AutoWash' : b.paymentMethod === 'cash' ? 'Tiền mặt' : b.paymentMethod === 'vnpay' ? 'VNPay' : b.paymentMethod === 'bank' ? 'Chuyển khoản' : 'Ví AutoWash'}
                     </td>
                     <td className="py-3 px-3 text-slate-600">{formatDate(b.paidAt || b.updatedAt || b.bookingDate)}</td>
                     <td className="py-3 px-3 text-right font-bold text-emerald-600">
@@ -1249,21 +1334,25 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         ? formatCurrency(b.isGroup ? (b.groupTotalPrice || 0) : (b.totalAmount || b.finalPrice || 0))
                         : (b.paymentStatus === 'deposit_paid' ? formatCurrency(b.isGroup ? (b.groupTotalDeposit || 0) : (b.depositAmount || 0)) : '0đ')}
                     </td>
-                    <td className="py-3 px-3 text-right font-mono text-slate-500">AWP-{String(b._id).slice(-8).toUpperCase()}</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500 font-semibold">TXN-{String(b._id).slice(-8).toUpperCase()}</td>
                   </tr>
                 ) : receiptPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-3 px-3 text-center text-slate-400 italic">Chưa có giao dịch thanh toán</td>
+                    <td colSpan={5} className="py-3 px-3 text-center text-slate-400 italic">Chưa có giao dịch thanh toán</td>
                   </tr>
                 ) : (receiptPayments || []).map((p, i) => (
                   <tr key={p._id || p.transactionId || i}>
+                    <td className="py-3 px-3 font-semibold text-slate-800">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${p.paymentType === 'deposit' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                        {p.paymentType === 'deposit' ? 'Đặt cọc' : p.paymentType === 'remaining' ? 'Phần còn lại' : p.paymentType === 'full' ? 'Toàn bộ' : 'Thanh toán'}
+                      </span>
+                    </td>
                     <td className="py-3 px-3 font-medium text-slate-700">
                       {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : (p.method || '—')}
-                      {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
                     </td>
                     <td className="py-3 px-3 text-slate-600">{formatDate(p.paidAt || p.createdAt || b.bookingDate)}</td>
                     <td className="py-3 px-3 text-right font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
-                    <td className="py-3 px-3 text-right font-mono text-slate-500">AWP-{String(p.transactionId || p._id || b._id).slice(-8).toUpperCase()}</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500 font-semibold">{p.transactionId ? String(p.transactionId).toUpperCase() : `TXN-${String(p._id || b._id).slice(-8).toUpperCase()}`}</td>
                   </tr>
                 ))}
               </tbody>
