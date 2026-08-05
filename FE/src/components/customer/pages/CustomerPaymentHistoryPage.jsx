@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CurrencyCircleDollar, TrendUp, TrendDown } from '@phosphor-icons/react';
@@ -32,8 +33,7 @@ export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
   const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 30;
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [detailPayment, setDetailPayment] = useState(null);
-  const [showDetail, setShowDetail] = useState(false);
+  const navigate = useNavigate();
   
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -75,26 +75,8 @@ export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
 
   useEffect(() => { loadPayments(); }, [apiBase, token, filterDateFrom, filterDateTo, page]);
 
-  async function openDetail(payment) {
-    setDetailPayment(null);
-    setShowDetail(true);
-    try {
-      if (payment.bookingData) {
-        setDetailPayment({ ...payment, bookingId: payment.bookingData });
-        return;
-      }
-      const pid = payment._id || payment.id;
-      const res = await fetch(`${apiBase || API_BASE}/payments/${pid}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Không thể tải chi tiết');
-      const payload = await res.json();
-      setDetailPayment(payload?.data || payload);
-      loadPayments();
-    } catch (e) {
-      showToast(e.message, 'error');
-      setShowDetail(false);
-    }
+  function openDetail(payment) {
+    navigate(`/payments/${payment._id || payment.id}`);
   }
 
   return (
@@ -301,92 +283,6 @@ export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
         )}
       </main>
 
-      {showDetail && (
-        <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
-          onClick={() => { setShowDetail(false); setDetailPayment(null); }}>
-          <div className="bg-white rounded-[1.5rem] w-full max-w-md p-8 shadow-xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Chi tiết thanh toán</h3>
-            {detailPayment ? (
-              <div className="space-y-4 mt-6">
-                <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-xs text-slate-500">Trạng thái</span>
-                  <StatusBadge status={detailPayment.status} />
-                </div>
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-xs text-slate-500">Số tiền</span>
-                  <span className="text-sm font-bold text-slate-800">{formatCurrency(detailPayment.amount)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-xs text-slate-500">Phương thức</span>
-                  <span className="text-sm text-slate-700">{METHOD_MAP[detailPayment.method] || detailPayment.method}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-xs text-slate-500">Loại</span>
-                  <span className="text-sm text-slate-700">{detailPayment.paymentType === 'deposit' ? 'Đặt cọc' : detailPayment.paymentType === 'remaining' ? 'Còn lại' : 'Toàn bộ'}</span>
-                </div>
-                {detailPayment.paidAt && (
-                  <div className="flex justify-between py-2 border-b border-slate-100">
-                    <span className="text-xs text-slate-500">Ngày thanh toán</span>
-                    <span className="text-sm text-slate-700">{formatDateTime(detailPayment.paidAt)}</span>
-                  </div>
-                )}
-                {detailPayment.transactionId && (
-                  <div className="flex justify-between py-2 border-b border-slate-100">
-                    <span className="text-xs text-slate-500">Mã giao dịch</span>
-                    <span className="text-sm font-mono text-slate-700">{detailPayment.transactionId}</span>
-                  </div>
-                )}
-                {detailPayment.failureReason && (
-                  <div className="p-3 rounded-xl bg-red-50 border border-red-200">
-                    <p className="text-xs font-semibold text-red-600 mb-1">Lý do thất bại</p>
-                    <p className="text-sm text-red-700">{detailPayment.failureReason}</p>
-                  </div>
-                )}
-                {detailPayment.bookingId && (
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <p className="text-xs font-semibold text-slate-500 mb-2">THÔNG TIN ĐẶT LỊCH</p>
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-xs text-slate-500">Dịch vụ</span>
-                      <span className="text-sm text-slate-700 text-right">
-                        {detailPayment.packageName || detailPayment.bookingId.packageName || detailPayment.bookingId.packageId?.name || '—'}
-                        {(detailPayment.packagePrice || detailPayment.bookingId.packagePrice || detailPayment.bookingId.packageId?.price) && <span className="text-xs text-slate-400 ml-1">({formatCurrency(detailPayment.packagePrice || detailPayment.bookingId.packagePrice || detailPayment.bookingId.packageId?.price)})</span>}
-                      </span>
-                    </div>
-                    {(detailPayment.bookingId.vehicleId?.licensePlate || detailPayment.bookingId.vehicleId?.brand) && (
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-xs text-slate-500">Xe</span>
-                        <span className="text-sm text-slate-700">{detailPayment.bookingId.vehicleId.licensePlate}{detailPayment.bookingId.vehicleId.brand ? ` · ${detailPayment.bookingId.vehicleId.brand}` : ''}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-xs text-slate-500">Mã đơn</span>
-                      <span className="text-sm font-mono font-bold text-emerald-700">#{detailPayment.bookingId.bookingCode || '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-xs text-slate-500">Ngày</span>
-                      <span className="text-sm text-slate-700">{detailPayment.bookingId.bookingDate ? formatDate(detailPayment.bookingId.bookingDate) : '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-xs text-slate-500">Giờ</span>
-                      <span className="text-sm text-slate-700">{detailPayment.bookingId.startTime || '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-xs text-slate-500">Chi nhánh</span>
-                      <span className="text-sm text-slate-700">{detailPayment.bookingId.branchId?.name || detailPayment.bookingId.branchName || '—'}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="py-12 text-center text-slate-400 text-sm">Đang tải...</div>
-            )}
-            <button onClick={() => { setShowDetail(false); setDetailPayment(null); }}
-              className="mt-6 w-full px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-semibold hover:bg-slate-200 transition-colors">
-              Đóng
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
