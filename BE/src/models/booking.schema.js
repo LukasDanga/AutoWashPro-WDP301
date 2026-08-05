@@ -5,6 +5,15 @@ const bookingSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     bookingCode: { type: String, unique: true, sparse: true },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', required: true },
+    // Snapshot thông tin chi nhánh tại thời điểm đặt lịch — tránh bị đổi tên/địa chỉ khi admin cập nhật chi nhánh
+    branchName: { type: String },
+    branchAddress: { type: String },
+    branchPhone: { type: String },
+    branchSnapshot: {
+      name: { type: String },
+      address: { type: String },
+      phone: { type: String },
+    },
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', required: true },
     packageName: { type: String },
     packageDuration: { type: Number },

@@ -1852,8 +1852,8 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                         <div key={bId} onClick={() => handleOpenViewBooking(b)} className="bg-white rounded-xl p-4 border border-slate-200 cursor-pointer transition-all hover:border-blue-400 hover:shadow-sm">
                           <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-semibold text-slate-800">{b.packageId?.name || b.packageName || 'Dịch vụ'}</div>
-                              <div className="text-xs text-slate-400 mt-0.5">{b.branchId?.name || b.branchName || '—'} · {b.startTime || ''}</div>
+                              <div className="text-sm font-semibold text-slate-800">{b.packageName || b.packageSnapshot?.name || b.packageId?.name || 'Dịch vụ'}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">{b.branchName || b.branchSnapshot?.name || b.branchId?.name || '—'} · {b.startTime || ''}</div>
                             </div>
                             <StatusBadge status={b.status} />
                           </div>
@@ -2092,13 +2092,13 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                         <div className="flex items-start justify-between gap-4 pl-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-3 mb-1">
-                              <span className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">{b.packageId?.name || b.packageName || 'Dịch vụ'}</span>
+                              <span className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">{b.packageName || b.packageSnapshot?.name || b.packageId?.name || 'Dịch vụ'}</span>
                               <StatusBadge status={b.status} />
                               {isNewB && (
                                 <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm animate-pulse">MỚI</span>
                               )}
                             </div>
-                            <p className="text-sm text-slate-500 font-medium">{b.branchId?.name || b.branchName || ''}</p>
+                            <p className="text-sm text-slate-500 font-medium">{b.branchName || b.branchSnapshot?.name || b.branchId?.name || ''}</p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-lg font-black text-slate-900">{formatCurrency(b.finalPrice)}</p>
