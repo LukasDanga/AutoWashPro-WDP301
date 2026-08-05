@@ -2054,6 +2054,8 @@ export default function ManagerBookings() {
   const [bookingTypeTab, setBookingTypeTab] = useState(() => {
     const saved = getInitialValue('type', '');
     if (saved === 'recurring') return 'recurring';
+    if (saved === 'single') return 'regular';
+    if (saved === '') return 'all';
     return 'regular';
   }); // 'all' | 'regular' | 'recurring'
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
@@ -2247,9 +2249,22 @@ export default function ManagerBookings() {
     let tf = '';
     if (tab === 'regular') tf = 'single';
     else if (tab === 'recurring') tf = 'recurring';
+    else if (tab === 'all') tf = '';
     setTypeFilter(tf);
     setPage(1);
     fetch_(search, statusFilter, tf, todayOnly, dateFrom, dateTo, 1);
+  };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setTodayOnly(false);
+    setBookingTypeTab('all');
+    setTypeFilter('');
+    setPage(1);
+    fetch_('', '', '', false, '', '', 1);
   };
 
   return (
@@ -2305,6 +2320,12 @@ export default function ManagerBookings() {
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors">
               <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
             </button>
+            {(search || statusFilter || dateFrom || dateTo || todayOnly || bookingTypeTab !== 'all') && (
+              <button onClick={handleClearFilters}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+                <XCircle size={14} /> Xóa bộ lọc
+              </button>
+            )}
             {pendingInView.length > 0 && (
               <button onClick={() => setConfirmAllOpen(true)} disabled={confirmingAll}
                 className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
@@ -2325,6 +2346,17 @@ export default function ManagerBookings() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
           
+          <button
+            id="tab-all-bookings"
+            onClick={() => handleBookingTypeTab('all')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              bookingTypeTab === 'all'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+            }`}
+          >
+            📋 Tất cả
+          </button>
           <button
             id="tab-regular-bookings"
             onClick={() => handleBookingTypeTab('regular')}
@@ -2377,9 +2409,11 @@ export default function ManagerBookings() {
         <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
             bookingTypeTab === 'recurring'
               ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : bookingTypeTab === 'regular'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-blue-50 text-blue-700 border-blue-200'
           }`}>
-            {bookingTypeTab === 'recurring' ? '🔄 Đang xem: Đặt lịch định kỳ' : '📅 Đang xem: Đặt lịch thường'}
+            {bookingTypeTab === 'recurring' ? '🔄 Đang xem: Đặt lịch định kỳ' : bookingTypeTab === 'regular' ? '📅 Đang xem: Đặt lịch thường' : '📋 Đang xem: Tất cả'}
           </span>
       </div>
 

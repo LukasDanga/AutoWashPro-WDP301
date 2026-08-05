@@ -295,8 +295,16 @@ export default function ManagerFeedbacks() {
           <span className="text-xs font-medium text-slate-400">{displayed.length} / {total} đánh giá</span>
         )}
 
-        <button onClick={() => { setSearch(''); setStarFilter(''); load('', 1); }} disabled={loading}
-          className="ml-auto flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer">
+        {(search || starFilter) && (
+          <button
+            onClick={() => { setSearch(''); setStarFilter(''); load('', 1); }}
+            className="ml-auto flex h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer"
+          >
+            <XCircle size={14} /> Xóa bộ lọc
+          </button>
+        )}
+        <button onClick={() => load(starFilter, page)} disabled={loading}
+          className={`flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer ${!(search || starFilter) ? 'ml-auto' : ''}`}>
           <ArrowClockwise size={13} className={loading ? 'animate-spin' : ''} />
           Làm mới
         </button>

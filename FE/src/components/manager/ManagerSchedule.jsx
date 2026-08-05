@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { CaretLeft, CaretRight, ArrowClockwise, CalendarBlank, Clock, User, Car } from '@phosphor-icons/react';
+import { CaretLeft, CaretRight, ArrowClockwise, CalendarBlank, Clock, User, Car, XCircle } from '@phosphor-icons/react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 
 function api(path, opts = {}) {
@@ -181,6 +181,12 @@ export default function ManagerSchedule() {
           }`}>
           Hôm nay
         </button>
+        {!isToday && (
+          <button onClick={goToday}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+            <XCircle size={14} /> Xóa bộ lọc
+          </button>
+        )}
         <input type="date" value={toDateStr(date)}
           onChange={(e) => { if (e.target.value) handleDateChange(new Date(e.target.value + 'T00:00:00')); }}
           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm" />

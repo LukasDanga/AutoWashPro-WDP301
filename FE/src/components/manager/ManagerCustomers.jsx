@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
-import { Users, MagnifyingGlass, ArrowClockwise, Car, CurrencyCircleDollar } from '@phosphor-icons/react';
+import { Users, MagnifyingGlass, ArrowClockwise, Car, CurrencyCircleDollar, XCircle } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 
 function api(path) {
@@ -62,6 +62,7 @@ export default function ManagerCustomers() {
 
   const handleTier = (v) => { setTierFilter(v); setPage(1); fetchCustomers(search, v, 1); };
   const handlePage = (pg) => { setPage(pg); fetchCustomers(search, tierFilter, pg); };
+  const handleClearFilters = () => { setSearch(''); setTierFilter(''); setPage(1); fetchCustomers('', '', 1); };
 
   const [viewedCustomers, setViewedCustomers] = useState(() => {
     return JSON.parse(localStorage.getItem('viewed_manager_customers') || '[]');
@@ -105,6 +106,12 @@ export default function ManagerCustomers() {
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors">
             <ArrowClockwise size={15} className={loading ? 'animate-spin' : ''} />
           </button>
+          {(search || tierFilter) && (
+            <button onClick={handleClearFilters}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-border bg-background text-sm font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+              <XCircle size={15} /> Xóa bộ lọc
+            </button>
+          )}
         </div>
         <div className="text-sm text-muted-foreground font-medium">
           {total > 0 ? `${total} khách hàng` : ''}

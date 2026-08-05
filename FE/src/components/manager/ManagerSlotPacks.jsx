@@ -170,6 +170,14 @@ export default function ManagerSlotPacks({ user }) {
     setPage(1);
   };
 
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setPage(1);
+    if (debounceSearch.current) clearTimeout(debounceSearch.current);
+    loadPacks(branchId, 1, '', '');
+  };
+
   const handleOpenDetail = (pack) => {
     if (pack._id && !viewedSlotPacks.includes(pack._id)) {
       const next = [...viewedSlotPacks, pack._id];
@@ -337,10 +345,18 @@ export default function ManagerSlotPacks({ user }) {
             ))}
           </div>
 
+          {(search || statusFilter) && (
+            <button
+              onClick={handleClearFilters}
+              className="flex h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer ml-auto"
+            >
+              <XCircle size={14} /> Xóa bộ lọc
+            </button>
+          )}
           <button
             onClick={() => loadPacks(branchId, page, search, statusFilter)}
             disabled={loading}
-            className="flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer ml-auto"
+            className={`flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer ${!(search || statusFilter) ? 'ml-auto' : ''}`}
           >
             <ArrowClockwise size={13} className={loading ? 'animate-spin' : ''} />
             <span>Làm mới</span>
