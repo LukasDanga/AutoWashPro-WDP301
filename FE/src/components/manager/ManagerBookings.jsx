@@ -846,6 +846,22 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [savingSubServices, setSavingSubServices] = useState(false);
   const [qrPaymentStatus, setQrPaymentStatus] = useState('loading');
   const [qrPollCount, setQrPollCount] = useState(0);
+  const [receiptPayments, setReceiptPayments] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api(`/payments/booking/${booking._id}/history`);
+        if (!res.ok) throw new Error('Không thể tải lịch sử thanh toán');
+        const payload = await res.json();
+        if (!cancelled) setReceiptPayments(Array.isArray(payload?.data) ? payload.data : null);
+      } catch (e) {
+        if (!cancelled) setReceiptPayments(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [booking._id]);
   const needsPayment = booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'refunded' && (booking.finalPrice || 0) > 0;
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
