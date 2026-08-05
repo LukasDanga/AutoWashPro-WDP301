@@ -14,6 +14,7 @@ import CustomerWalletDetailPage from './components/customer/pages/wallet/Custome
 import CustomerHistoryPage from './components/customer/pages/history/CustomerHistoryPage.jsx';
 import CustomerBookingDetail from './components/customer/pages/history/CustomerBookingDetail.jsx';
 import CustomerPaymentHistoryPage from './components/customer/pages/CustomerPaymentHistoryPage.jsx';
+import CustomerPaymentDetailPage from './components/customer/pages/CustomerPaymentDetailPage.jsx';
 import CustomerNotificationsPage from './components/customer/pages/CustomerNotificationsPage.jsx';
 import CustomerLayout from './components/customer/layout/CustomerLayout.jsx';
 import CustomerRewardsPage from './components/customer/pages/rewards/CustomerRewardsPage.jsx';
@@ -329,10 +330,14 @@ export default function App() {
     }
   };
 
-  if (path === '/payments' && token && user) {
+  if ((path === '/payments' || path.startsWith('/payments/')) && token && user) {
+    const isDetail = path !== '/payments';
     return (
       <CustomerLayout {...customerNavProps}>
-        <CustomerPaymentHistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
+        {isDetail
+          ? <CustomerPaymentDetailPage />
+          : <CustomerPaymentHistoryPage onBack={() => navigate('/')} apiBase={apiBase} token={token} />
+        }
       </CustomerLayout>
     );
   }

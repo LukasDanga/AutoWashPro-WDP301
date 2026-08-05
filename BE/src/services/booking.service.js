@@ -1679,6 +1679,7 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
     const deadline = new Date(startDateTime.getTime() + effectiveGrace * 60 * 1000);
     const warningOffset = await configService.get('LATE_WARNING_OFFSET_MINUTES', {}, 5);
     const warnAt = new Date(deadline.getTime() - warningOffset * 60 * 1000);
+    const graceConfig = await configService.get('AUTO_CANCEL_GRACE_MINUTES', {}, 15);
 
     if (now < warnAt) continue; // còn sớm, chưa cần quan tâm đơn này
 
@@ -1750,7 +1751,7 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
     notificationService.send(
       b.userId,
       'Lịch hẹn đã bị hủy tự động',
-      `Lịch hẹn lúc ${b.startTime} đã bị hủy do bạn không đến đúng giờ. Tiền cọc (nếu có) sẽ không được hoàn lại.`
+      `Lịch hẹn lúc ${b.startTime} đã bị hủy tự động do bạn đến muộn quá ${graceConfig} phút (quy định hệ thống). Tiền cọc (nếu có) sẽ không được hoàn lại.`
         + (suggested ? ` Bạn có thể đặt lại vào khung giờ ${suggested.startTime} còn trống hôm nay.` : ''),
       'booking_cancelled',
       { bookingId: b._id, suggestedSlotStartTime: suggested?.startTime }
@@ -1759,7 +1760,7 @@ exports.autoCancelNoShows = async (graceMinutes = 30) => {
     notificationService.sendToAdminAndManager(
       b.branchId,
       'Đơn bị hủy tự động (no-show)',
-      `Một lịch hẹn lúc ${b.startTime} đã bị hệ thống tự hủy do khách không đến.`,
+      `Một lịch hẹn lúc ${b.startTime} đã bị hệ thống tự hủy do khách không đến sau ${graceConfig} phút.`,
       'booking_cancelled',
       { bookingId: b._id, branchId: b.branchId }
     ).catch(() => {});
