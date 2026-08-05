@@ -169,6 +169,8 @@ router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUS
  */
 router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.updateStatus, validate, bookingController.updateBookingStatus);
 
+router.post('/:id/request-checkin', authenticate, authorize(ROLES.CUSTOMER, ROLES.MANAGER, ROLES.ADMIN), bookingController.requestCheckin);
+router.post('/:id/reject-checkin', authenticate, authorize(ROLES.MANAGER, ROLES.ADMIN), bookingController.rejectCheckin);
 router.post('/:id/customer-scan-checkin', authenticate, authorize(ROLES.CUSTOMER), bookingController.customerScanCheckin);
 
 /**

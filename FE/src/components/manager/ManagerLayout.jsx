@@ -42,13 +42,22 @@ function resolvePageMeta(pathname, search = '') {
   return MANAGER_PAGE_META.overview;
 }
 
+import ManagerCheckInConfirmModal from '@/components/manager/ManagerCheckInConfirmModal';
+
 export default function ManagerLayout({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const meta = resolvePageMeta(location.pathname, location.search);
   const [badges, setBadges] = useState({});
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [pendingCheckinBooking, setPendingCheckinBooking] = useState(null);
   const token = getStoredToken();
+
+  useSSE(token, 'customer_checkin_request', (data) => {
+    if (data?.booking) {
+      setPendingCheckinBooking(data.booking);
+    }
+  });
 
   const loadCounts = useCallback(async () => {
     try {
@@ -184,6 +193,17 @@ export default function ManagerLayout({ user, onLogout }) {
           onCheckedIn={(b) => {
             setShowQRScanner(false);
             if (b?._id) navigate(`/manager/bookings/${b._id}`);
+          }}
+        />
+      )}
+
+      {pendingCheckinBooking && (
+        <ManagerCheckInConfirmModal
+          booking={pendingCheckinBooking}
+          onClose={() => setPendingCheckinBooking(null)}
+          onConfirmed={(bookingId) => {
+            setPendingCheckinBooking(null);
+            navigate(`/manager/bookings/${bookingId}`);
           }}
         />
       )}
