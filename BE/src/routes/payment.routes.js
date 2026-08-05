@@ -136,6 +136,9 @@ router.post('/sepay/webhook', bookingController.sepayWebhook);
 // Giả lập thanh toán (dành cho nút test ở localhost)
 router.post('/simulate', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.simulatePayment);
 
+// Liên kết provisional payment với booking (sau khi FE tạo booking từ VNPay return)
+router.post('/link-provisional', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.linkProvisionalPayment);
+
 // Tạo provisional bank payment (không cần bookingId, có QR)
 router.post('/bank-provisional', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingController.createBankProvisional);
 

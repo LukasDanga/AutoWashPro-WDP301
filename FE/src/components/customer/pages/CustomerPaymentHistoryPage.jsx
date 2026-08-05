@@ -29,7 +29,7 @@ function StatusBadge({ status }) {
 
 export default function CustomerPaymentHistoryPage({ onBack, apiBase, token }) {
   const configs = useSystemConfig();
-  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 30;
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 30;
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailPayment, setDetailPayment] = useState(null);

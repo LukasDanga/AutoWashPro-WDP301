@@ -15,9 +15,9 @@ const INITIAL_CONFIGS = [
   },
   {
     key: 'DEPOSIT_RATE',
-    value: 0.3,
+    value: 30,
     type: 'number',
-    category: 'booking',
+    category: 'payment',
     isPublic: true,
     description: 'Tỉ lệ đặt cọc mặc định cho các dịch vụ rửa xe (30%)'
   },
@@ -33,7 +33,7 @@ const INITIAL_CONFIGS = [
     key: 'DEFAULT_BRANCH_CAPACITY',
     value: 2,
     type: 'number',
-    category: 'general',
+    category: 'booking',
     isPublic: false,
     description: 'Sức chứa mặc định (số xe rửa cùng lúc) nếu chi nhánh không cấu hình'
   },
@@ -41,6 +41,7 @@ const INITIAL_CONFIGS = [
     key: 'LATE_WARNING_OFFSET_MINUTES',
     value: 5,
     type: 'number',
+    category: 'booking',
     isPublic: false,
     description: 'Thời gian gửi cảnh báo trước khi tự động hủy lịch (phút)'
   },
@@ -48,20 +49,25 @@ const INITIAL_CONFIGS = [
     key: 'GRACE_EXTENSION_STEP_MINUTES',
     value: 5,
     type: 'number',
-    isPublic: false,
+    category: 'booking',
+    // Manager UI hiển thị số phút này trên nút gia hạn nên FE phải đọc được qua /configs/public
+    isPublic: true,
     description: 'Số phút gia hạn thêm mỗi lần quản lý thao tác'
   },
   {
     key: 'MAX_GRACE_EXTENSION_MINUTES',
     value: 15,
     type: 'number',
-    isPublic: false,
+    category: 'booking',
+    // Manager UI dùng để ẩn nút khi đơn đã gia hạn tối đa nên FE phải đọc được
+    isPublic: true,
     description: 'Tổng số phút tối đa quản lý có thể gia hạn chờ khách'
   },
   {
     key: 'AUTO_CANCEL_GRACE_MINUTES',
     value: 15,
     type: 'number',
+    category: 'booking',
     isPublic: true,
     description: 'Thời gian chờ khách tự động hủy (phút kể từ giờ bắt đầu)'
   },
@@ -69,6 +75,7 @@ const INITIAL_CONFIGS = [
     key: 'LATE_CANCEL_THRESHOLD_MINUTES',
     value: 60,
     type: 'number',
+    category: 'payment',
     isPublic: true,
     description: 'Mốc thời gian hủy muộn bị phạt (phút trước giờ bắt đầu)'
   },
@@ -76,6 +83,7 @@ const INITIAL_CONFIGS = [
     key: 'LATE_CANCEL_PENALTY_FULL_PERCENT',
     value: 30,
     type: 'number',
+    category: 'payment',
     isPublic: true,
     description: 'Phần trăm phạt trên tổng tiền nếu hủy muộn (đã thanh toán full)'
   },
@@ -83,6 +91,7 @@ const INITIAL_CONFIGS = [
     key: 'LATE_CANCEL_PENALTY_DEPOSIT_PERCENT',
     value: 100,
     type: 'number',
+    category: 'payment',
     isPublic: true,
     description: 'Phần trăm phạt trên tiền cọc nếu hủy muộn (chỉ đặt cọc)'
   },
@@ -90,6 +99,7 @@ const INITIAL_CONFIGS = [
     key: 'SYSTEM_CANCEL_BONUS_POINTS',
     value: 500,
     type: 'number',
+    category: 'booking',
     isPublic: false,
     description: 'Số điểm đền bù khi hệ thống tự động hủy đơn gói lượt'
   },

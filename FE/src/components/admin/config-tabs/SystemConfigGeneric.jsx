@@ -43,6 +43,28 @@ const CATEGORY_LABELS = {
   loyalty: 'Hạng thành viên & Điểm',
 };
 
+// Config keys that represent percentages (0–100)
+const PERCENT_KEYS = new Set([
+  'DEPOSIT_RATE',
+  'LATE_CANCEL_PENALTY_FULL_PERCENT',
+  'LATE_CANCEL_PENALTY_DEPOSIT_PERCENT',
+  'LOYALTY_BASE_EARNING_RATE',
+  'SLOT_PACK_VIP_BONUS_DISCOUNTS',
+  'BIRTHDAY_VOUCHER_PERCENT',
+  'SLOT_PACK_DISCOUNTS',
+]);
+
+function clampPercent(key, rawValue) {
+  if (PERCENT_KEYS.has(key)) {
+    const v = Number(rawValue);
+    if (isNaN(v)) return '';
+    return Math.max(0, Math.min(100, Math.round(v)));
+  }
+  const v = Number(rawValue);
+  if (isNaN(v)) return '';
+  return Math.max(0, Math.round(v));
+}
+
 function getConfigUnit(key, description = '') {
   const k = (key || '').toUpperCase();
   const d = (description || '').toLowerCase();
@@ -493,7 +515,7 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
                       type="number"
                       step="any"
                       value={formValues[config.key] ?? ''}
-                      onChange={(e) => handleChange(config.key, Number(e.target.value))}
+                      onChange={(e) => handleChange(config.key, clampPercent(config.key, e.target.value))}
                       className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 ${
                         unit ? 'pr-24' : 'pr-3.5'
                       }`}

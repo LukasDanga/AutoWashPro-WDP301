@@ -705,6 +705,35 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
   }
 };
 
+exports.linkProvisionalPayment = async (transactionId, bookingId, paymentType = 'full') => {
+  const payment = await Payment.findOne({ transactionId });
+  if (!payment) throw Object.assign(new Error('Không tìm thấy thanh toán tạm tính'), { statusCode: 404, code: 'NOT_FOUND' });
+  if (payment.bookingId) throw Object.assign(new Error('Thanh toán này đã được liên kết'), { statusCode: 400, code: 'ALREADY_LINKED' });
+
+  const booking = await Booking.findById(bookingId);
+  if (!booking) throw Object.assign(new Error('Không tìm thấy lịch hẹn'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
+
+  payment.bookingId = booking._id;
+  payment.paymentType = paymentType;
+  await payment.save();
+
+  if (payment.status === 'paid') {
+    if (paymentType === 'deposit') {
+      await Booking.findByIdAndUpdate(booking._id, { paymentStatus: 'deposit_paid', depositPaid: true, depositPaidAt: new Date(), paymentMethod: payment.method });
+    } else {
+      const updateData = { paymentStatus: 'paid', paidAt: new Date(), paymentMethod: payment.method, depositPaid: true, depositAmount: booking.finalPrice };
+      if (booking.status === 'awaiting_payment') {
+        updateData.status = 'completed';
+        updateData.checkOutTime = new Date();
+      }
+      await Booking.findByIdAndUpdate(booking._id, updateData);
+    }
+    sseService.broadcastToManagers(booking.branchId, 'payment_new', { paymentId: payment._id, bookingId: booking._id });
+  }
+
+  return payment;
+};
+
 exports.getPaymentByBooking = async (bookingId, userId, userRole) => {
   let payment = await Payment.findOne({ bookingId })
     .populate({ path: 'bookingId', populate: [{ path: 'branchId', select: 'name' }, { path: 'packageId', select: 'name price' }, { path: 'vehicleId', select: 'licensePlate brand model vehicleType' }], select: 'bookingDate startTime status userId branchId packageId finalPrice vehicleId bookingCode' })

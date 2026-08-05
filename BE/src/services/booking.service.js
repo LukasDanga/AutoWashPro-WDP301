@@ -42,7 +42,7 @@ const MAX_GRACE_EXTENSION_MINUTES = 15;
 // Các trạng thái còn "giữ slot" — dùng để kiểm tra trùng khung giờ
 const ACTIVE_SLOT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'awaiting_payment'];
 
-const getDepositRate = async (user) => await configService.get('DEPOSIT_RATE', {}, 0.3);
+const getDepositRate = async (user) => await configService.get('DEPOSIT_RATE', {}, 30);
 
 const enforceAdvanceBookingLimit = async (userTier, bookingStr, todayStr) => {
   // Ưu tiên advanceDays trong từng tier (cấu hình ở tab "Hạng thành viên & Điểm")
@@ -123,6 +123,13 @@ const getDayBounds = (dateStr) => ({
 });
 
 /**
+ * Sức chứa hiệu lực của chi nhánh: ưu tiên cấu hình riêng của branch,
+ * nếu không có thì lấy DEFAULT_BRANCH_CAPACITY từ cấu hình hệ thống.
+ */
+const resolveBranchCapacity = async (branch) =>
+  branch.capacity || (await configService.get('DEFAULT_BRANCH_CAPACITY', { branchId: branch._id }, 2));
+
+/**
  * Tìm slot trống gần nhất (cùng ngày, cùng chi nhánh) sau mốc afterMinutes, dùng để gợi ý
  * đổi giờ cho khách khi booking sắp/đã bị auto-cancel thay vì chỉ hủy suông.
  */
@@ -138,7 +145,7 @@ const findNearestAvailableSlot = async ({ branchId, bookingDateStr, duration, af
     status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime');
 
-  const capacity = branch.capacity || 2;
+  const capacity = await resolveBranchCapacity(branch);
   const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
 
   for (const slot of slots) {
@@ -314,7 +321,7 @@ exports.createBooking = async (data) => {
     // Đặt cọc cho đơn lẻ (gói lượt đã trả trước toàn bộ → không cọc).
     const depositAmount = bookingType === 'slot_pack_usage'
       ? 0
-      : Math.round((computedFinalPrice * (await getDepositRate(user))) / 1000) * 1000;
+      : Math.round((computedFinalPrice * (await getDepositRate(user)) / 100) / 1000) * 1000;
 
     const packageSubServicesSnapshot = Array.isArray(pkg.subServices)
       ? pkg.subServices.map(s => ({
@@ -1249,7 +1256,7 @@ exports.getCancelPreview = async (id, userId) => {
       totalPaid = sessionPaidAmount;
       if (isLateCancel) {
         // Đã thanh toán đủ buổi này → mất % theo SystemConfig
-        penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+        penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 30);
         penaltyAmount = Math.round(sessionPaidAmount * penaltyPercent / 100);
         refundAmount = sessionPaidAmount - penaltyAmount;
         policy = `Hủy trong vòng ${Math.round(lateCancelThreshold)} phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
@@ -1283,7 +1290,7 @@ exports.getCancelPreview = async (id, userId) => {
       if (isLateCancel) {
         if (booking.paymentStatus === 'paid') {
           // Thanh toán full → mất % theo SystemConfig
-          penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 30);
           penaltyAmount = Math.round(totalPaid * penaltyPercent / 100);
           refundAmount = totalPaid - penaltyAmount;
           policy = `Hủy trong vòng ${Math.round(lateCancelThreshold)} phút trước giờ hẹn: mất ${penaltyPercent}% (${penaltyAmount.toLocaleString('vi-VN')}₫). Hoàn lại ${refundAmount.toLocaleString('vi-VN')}₫ vào ví.`;
@@ -1388,7 +1395,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
       const hoursBefore = minutesBefore / 60;
       let shouldRefundSlot = false;
       const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
-      const systemCancelBonus = await configService.get('SYSTEM_CANCEL_BONUS_POINTS', {}, 50);
+      const systemCancelBonus = await configService.get('SYSTEM_CANCEL_BONUS_POINTS', {}, 500);
       
       if (cancelledBy === 'customer') {
         // Hủy sớm >= threshold -> hoàn 1 lượt. Sát giờ < threshold -> mất lượt.
@@ -1457,7 +1464,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
         if (cancelledBy !== 'customer') {
           refundAmount = sessionPaidAmount;
         } else if (isLateCancel) {
-          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 30);
           refundAmount = Math.round(sessionPaidAmount * Math.max(0, (100 - penaltyPercent) / 100));
         } else {
           refundAmount = sessionPaidAmount;
@@ -1520,7 +1527,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
 
         if (isLateCancel) {
           if (booking.paymentStatus === 'paid') {
-            const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+            const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 30);
             const refundRate = Math.max(0, (100 - penaltyPercent) / 100);
             refundAmount = Math.round(totalPaid * refundRate);
           } else {
@@ -1884,11 +1891,11 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
   }).select('startTime endTime priority');
 
   const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+  const capacity = await resolveBranchCapacity(branch);
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
 
   return slots.map((s) => {
-    const capacity = branch.capacity || 2;
     const overlappingBookings = existing.filter((b) => {
       const bs = parseTime(b.startTime);
       const be = parseTime(b.endTime);
@@ -2037,7 +2044,7 @@ exports.createRecurringBooking = async (data) => {
   // ── Đặt cọc cho cả nhóm định kỳ ──
   // Tính cọc cho TỪNG buổi (chia đều thay vì gộp hết vào buổi đầu)
   // để khi thanh toán phần còn lại, mỗi buổi được tính riêng rẽ.
-  const depositPerSession = Math.round((computedFinalPrice * await getDepositRate(user)) / 1000) * 1000;
+  const depositPerSession = Math.round((computedFinalPrice * await getDepositRate(user) / 100) / 1000) * 1000;
 
   // --- Tạo booking lần lượt, bỏ qua ngày conflict ---
   const created = [];
@@ -2253,7 +2260,7 @@ exports.checkRecurringConflicts = async (data) => {
 
     const ns = parseTime(startTime);
     const ne = parseTime(endTime);
-    const capacity = branch.capacity || 2;
+    const capacity = await resolveBranchCapacity(branch);
     const overlappingCount = conflicting.filter((b) => {
       const bs = parseTime(b.startTime);
       const be = parseTime(b.endTime);
@@ -2342,7 +2349,7 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
         if (cancelledBy !== 'customer') {
           refundAmountForThisBooking = sessionPaidAmount;
         } else if (isLateCancel) {
-          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 50);
+          const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 30);
           refundAmountForThisBooking = Math.round(sessionPaidAmount * Math.max(0, (100 - penaltyPercent) / 100));
         } else {
           refundAmountForThisBooking = sessionPaidAmount;
@@ -2733,7 +2740,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     discountAmount: computedDiscount,
     depositAmount: src.bookingType === 'slot_pack_usage'
       ? 0
-      : Math.round(((computedFinalPrice || 0) * (await getDepositRate(user))) / 1000) * 1000,
+      : Math.round(((computedFinalPrice || 0) * (await getDepositRate(user)) / 100) / 1000) * 1000,
     voucherCode: validatedVoucherCode,
     paymentStatus: 'unpaid',
   });

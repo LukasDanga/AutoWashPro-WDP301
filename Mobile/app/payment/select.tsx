@@ -115,7 +115,7 @@ const TYPE_DESCRIPTION: Record<PayableType, string> = {
 
 export default function PaymentSelectScreen() {
   const configs = useSystemConfig();
-  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 0;
   const router = useRouter();
   const params = useLocalSearchParams();
   const { isAuthenticated, user, fetchUser } = useAuth();
