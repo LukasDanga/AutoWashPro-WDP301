@@ -107,6 +107,11 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
+  if (req.body.status === 'checked_in' && booking) {
+    const targetBranchId = booking.branchId?._id || booking.branchId;
+    if (targetBranchId) sseService.broadcastToManagers(targetBranchId, 'customer_checked_in_via_qr', { bookingId: booking._id });
+    sseService.broadcastToAll('customer_checked_in_via_qr', { bookingId: booking._id });
+  }
   success(res, booking, 'Cập nhật trạng thái đặt lịch thành công');
 });
 

@@ -1,23 +1,65 @@
+import { useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { XCircle } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import useSSE from '@/hooks/useSSE';
-import { getStoredToken } from '@/lib/authStorage';
+import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
 export default function ManagerGenericQRDisplay({ branchId, onClose }) {
   const navigate = useNavigate();
   const token = getStoredToken();
-  // Payload sent to customer when they scan
-  const qrPayload = JSON.stringify({
-    action: 'manager_checkin_qr',
-    branchId: branchId,
-  });
+  const initialTimeRef = useRef(Date.now() - 15000);
+
+  const handleRedirect = (bookingId) => {
+    if (!bookingId) return;
+    onClose();
+    navigate(`/manager/bookings/${bookingId}`);
+  };
 
   useSSE(token, 'customer_checked_in_via_qr', (data) => {
     if (data?.bookingId) {
-      onClose();
-      navigate(`/manager/bookings/${data.bookingId}`);
+      handleRedirect(data.bookingId);
     }
+  });
+
+  useSSE(token, 'slots_updated', () => {
+    checkLatestCheckin();
+  });
+
+  const checkLatestCheckin = async () => {
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/bookings?status=checked_in&limit=5&page=1`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const list = json?.data?.bookings || json?.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+          const latest = list.sort((a, b) => new Date(b.updatedAt || b.checkInTime || b.createdAt).getTime() - new Date(a.updatedAt || a.checkInTime || a.createdAt).getTime())[0];
+          if (latest) {
+            const checkTime = new Date(latest.updatedAt || latest.checkInTime || latest.createdAt).getTime();
+            if (checkTime >= initialTimeRef.current) {
+              handleRedirect(latest._id);
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore poll errors
+    }
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      checkLatestCheckin();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [token]);
+
+  const qrPayload = JSON.stringify({
+    action: 'manager_checkin_qr',
+    branchId: branchId,
   });
 
   return (

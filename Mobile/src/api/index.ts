@@ -3,7 +3,7 @@
  * Export all API service modules
  */
 
-export { apiClient, getImageUrl, API_BASE_URL } from './client';
+export { apiClient, getImageUrl, API_BASE_URL, default as axiosClient } from './client';
 export { authApi } from './auth';
 export { vehicleApi } from './vehicle';
 export { branchApi } from './branch';

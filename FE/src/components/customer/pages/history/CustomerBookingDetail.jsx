@@ -936,16 +936,16 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
           <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 space-y-3 text-xs sm:text-sm">
             <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">🏢 Chi nhánh:</span>
-              <span className="text-slate-900 font-bold text-right max-w-[65%]">{b.branchId?.name || b.branchName || '—'}</span>
+              <span className="text-slate-900 font-bold text-right max-w-[65%]">{b.branchName || b.branchSnapshot?.name || b.branchId?.name || '—'}</span>
             </div>
             <div className="flex justify-between items-start py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">📍 Địa chỉ:</span>
-              <span className="text-slate-700 text-right max-w-[65%]">{b.branchId?.address || '—'}</span>
+              <span className="text-slate-700 text-right max-w-[65%]">{b.branchAddress || b.branchSnapshot?.address || b.branchId?.address || '—'}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">📦 Gói dịch vụ:</span>
               <div className="text-right">
-                <span className="text-slate-900 font-extrabold text-sm sm:text-base">{b.packageId?.name || b.packageName || '—'}</span>
+                <span className="text-slate-900 font-extrabold text-sm sm:text-base">{b.packageName || b.packageSnapshot?.name || b.packageId?.name || '—'}</span>
                 {basePrice > 0 && (
                   <span className="ml-2 font-mono font-bold text-xs text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-md">
                     {formatCurrency(basePrice)}
@@ -1500,8 +1500,8 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 <div>
                   <div className="font-semibold text-black mb-1">AutoWash Pro</div>
                   <div className="text-black">
-                    {b.branchName || b.branchId?.name || 'Chi nhánh trung tâm'}<br/>
-                    {b.branchId?.address || '123 Đường Rửa Xe'}<br/>
+                    {b.branchName || b.branchSnapshot?.name || b.branchId?.name || 'Chi nhánh trung tâm'}<br/>
+                    {b.branchAddress || b.branchSnapshot?.address || b.branchId?.address || '123 Đường Rửa Xe'}<br/>
                     Hồ Chí Minh, Việt Nam<br/>
                     support@autowashpro.com
                   </div>
@@ -1573,8 +1573,11 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                     </tr>
 
                     {(() => {
-                      const pkgSubs = b.packageId?.subServices;
-                      const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+                      const included = Array.isArray(b.includedSubServices) && b.includedSubServices.length > 0
+                        ? b.includedSubServices
+                        : (Array.isArray(b.packageSnapshot?.subServices)
+                            ? b.packageSnapshot.subServices.filter(s => s.isOptional === false)
+                            : (Array.isArray(b.packageId?.subServices) ? b.packageId.subServices.filter(s => s.isOptional === false) : []));
                       return included.map((sub, i) => (
                         <tr key={`inc-${i}`} className="border-b border-slate-100/60">
                           <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
