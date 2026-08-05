@@ -574,12 +574,12 @@ function PrintReceiptModal({ booking, onClose }) {
             <div>
               <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Biên lai</h2>
               <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
-                <div className="font-semibold text-black">Mã hóa đơn</div>
-                <div className="text-black">AWP-{displayInvoiceNumber}</div>
-                <div className="font-semibold text-black">Mã biên lai</div>
-                <div className="text-black">{displayId}</div>
+                <div className="font-semibold text-black">Mã đơn đặt lịch</div>
+                <div className="text-black">#{detailBooking.bookingCode || `AWP-${displayInvoiceNumber}`}</div>
+                <div className="font-semibold text-black">Mã giao dịch</div>
+                <div className="text-black">TXN-{displayInvoiceNumber}</div>
                 <div className="font-semibold text-black">Ngày thanh toán</div>
-                <div className="text-black">{formatDateTime(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
+                <div className="text-black">{formatDateTime(detailBooking.paidAt || detailBooking.updatedAt || detailBooking.bookingDate)}</div>
               </div>
             </div>
             <div>
@@ -622,9 +622,6 @@ function PrintReceiptModal({ booking, onClose }) {
               THÔNG TIN THANH TOÁN:<br/>
               AutoWash Pro<br/>
               Hồ Chí Minh, Vietnam
-            </p>
-            <p className="text-[13px] text-black font-semibold mt-4">
-              * Giá đã bao gồm VAT 10%
             </p>
           </div>
 
@@ -672,14 +669,10 @@ function PrintReceiptModal({ booking, onClose }) {
                   const pkgSubs = detailBooking.packageId?.subServices;
                   const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
                   return included.map((sub, i) => (
-                    <tr key={`inc-${i}`} className="border-b border-slate-100">
-                      <td className="py-2 text-left text-black pl-4 text-emerald-600">
-                        {sub.name} <span className="text-[10px] text-emerald-400 font-normal">(có sẵn)</span>
+                    <tr key={`inc-${i}`} className="border-b border-slate-100/60">
+                      <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
+                        ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
                       </td>
-                      <td className="py-2 text-right text-black">—</td>
-                      <td className="py-2 text-right text-black">—</td>
-                      <td className="py-2 text-right text-black">—</td>
-                      <td className="py-2 text-right text-black">—</td>
                     </tr>
                   ));
                 })()}

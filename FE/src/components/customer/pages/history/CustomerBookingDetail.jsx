@@ -108,6 +108,63 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
   // Pay remaining
   const [payRemainingTarget, setPayRemainingTarget] = useState(null);
+
+  const handlePrint = () => {
+    const el = document.getElementById('receipt-printable-area');
+    if (!el) return;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.no-print').forEach((n) => n.remove());
+    let headCSS = '';
+    document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+      if (l.href) headCSS += `<link rel="stylesheet" href="${l.href}">`;
+    });
+    document.querySelectorAll('style').forEach((s) => {
+      headCSS += s.outerHTML;
+    });
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('id', 'receipt-print-frame');
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    doc.open();
+    doc.write(`<html><head><title>Biên lai</title>
+      ${headCSS}
+      <style>
+        @page { size: A4; margin: 8mm; }
+        html, body { margin: 0; padding: 0; background: #fff; font-family: system-ui, -Apple-System, 'Segoe UI', sans-serif; }
+        #receipt-printable-area {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: relative !important;
+        }
+        #receipt-printable-area .receipt-body {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        #receipt-printable-area .receipt-body { padding: 5mm 10mm !important; }
+        #receipt-printable-area h2 { font-size: 36px !important; margin-bottom: 5mm !important; }
+        #receipt-printable-area h3 { font-size: 22px !important; margin-bottom: 4mm !important; }
+        #receipt-printable-area .text-4xl { font-size: 44px !important; }
+        #receipt-printable-area table { font-size: 15px !important; border-collapse: collapse !important; }
+        #receipt-printable-area th, #receipt-printable-area td { padding: 6px 2px !important; }
+        #receipt-printable-area .text-\[13px\],
+        #receipt-printable-area .text-\[10px\],
+        #receipt-printable-area .text-xs { font-size: 15px !important; }
+      </style>
+      </head><body>${clone.outerHTML}</body></html>`);
+    doc.close();
+    const doPrint = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => { iframe.remove(); }, 1500);
+      }, 300);
+    };
+    if (doc.readyState === 'complete') doPrint();
+    else iframe.addEventListener('load', doPrint);
+  };
   const [payRemainingMethod, setPayRemainingMethod] = useState('vnpay');
   const [payRemainingLoading, setPayRemainingLoading] = useState(false);
   const [payRemainingBankQR, setPayRemainingBankQR] = useState(null);
@@ -1335,10 +1392,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 <div>
                   <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Biên lai</h2>
                   <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
-                    <div className="font-semibold text-black">Mã hóa đơn</div>
-                    <div className="text-black">AWP-{displayInvoiceNumber}</div>
-                    <div className="font-semibold text-black">Mã biên lai</div>
-                    <div className="text-black">{displayId}</div>
+                    <div className="font-semibold text-black">Mã đơn đặt lịch</div>
+                    <div className="text-black">#{b.bookingCode || `AWP-${displayInvoiceNumber}`}</div>
+                    <div className="font-semibold text-black">Mã giao dịch</div>
+                    <div className="text-black">TXN-{displayInvoiceNumber}</div>
                     <div className="font-semibold text-black">Ngày thanh toán</div>
                     <div className="text-black">{formatDateTime(b.paidAt || b.updatedAt || b.bookingDate)}</div>
                   </div>
@@ -1381,9 +1438,6 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                   THÔNG TIN THANH TOÁN:<br/>
                   AutoWash Pro<br/>
                   Hồ Chí Minh, Vietnam
-                </p>
-                <p className="text-[13px] text-black mt-4">
-                  VAT được tính trên tổng giá trị hóa đơn (10%)
                 </p>
               </div>
 
@@ -1433,14 +1487,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                       const pkgSubs = b.packageId?.subServices;
                       const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
                       return included.map((sub, i) => (
-                        <tr key={`inc-${i}`} className="border-b border-slate-100">
-                          <td className="py-2 text-left text-black pl-4 text-emerald-600">
-                            {sub.name} <span className="text-[10px] text-emerald-400 font-normal">(có sẵn)</span>
+                        <tr key={`inc-${i}`} className="border-b border-slate-100/60">
+                          <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
+                            ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
                           </td>
-                          <td className="py-2 text-right text-black">—</td>
-                          <td className="py-2 text-right text-black">—</td>
-                          <td className="py-2 text-right text-black">—</td>
-                          <td className="py-2 text-right text-black">—</td>
                         </tr>
                       ));
                     })()}
@@ -1487,19 +1537,13 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
-                    {b.paymentStatus === 'paid' && b.paidAt && (
-                      <div className="flex justify-between py-1 border-b border-slate-200">
-                        <span className="font-normal text-black">Ngày thanh toán</span>
-                        <span className="font-normal text-black">{formatDateTime(b.paidAt)}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>            </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 no-print">
               {b.status === 'completed' && (
-                <button onClick={() => window.print()}
+                <button onClick={handlePrint}
                   className="w-full px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center cursor-pointer">
                   In hóa đơn
                 </button>
