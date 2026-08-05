@@ -203,6 +203,7 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [redeemingId, setRedeemingId] = useState(null);
   const [rewards, setRewards] = useState([]);
   const [rewardLoading, setRewardLoading] = useState(false);
+  const [myRewards, setMyRewards] = useState([]);
 
   const wheelRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
@@ -298,6 +299,14 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
       if (resR.ok) {
         const payload = await resR.json();
         setRewards(Array.isArray(payload?.data) ? payload.data : []);
+      }
+
+      const resMyR = await fetch(`${API_BASE}/rewards/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (resMyR.ok) {
+        const payload = await resMyR.json();
+        setMyRewards(Array.isArray(payload?.data) ? payload.data : []);
       }
     } catch (e) {
       console.error('Failed to load store data:', e);
@@ -605,6 +614,56 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                   {rewards.map((reward, i) => (
                     <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} />
                   ))}
+                </div>
+              </div>
+            )}
+
+            {filterType === 'mine' && myRewards.length > 0 && (
+              <div className="mt-12">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Phần Thưởng Đã Đổi</h3>
+                    <p className="text-xs text-slate-500 font-medium">Các phần quà vật lý bạn đã dùng điểm để đổi. Xuất trình mã tại quầy để nhận quà.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {myRewards.map(rd => {
+                    const snap = rd.rewardSnapshot || {};
+                    const cancelled = rd.status === 'cancelled';
+                    return (
+                      <div key={rd._id} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                          {snap.imageUrl ? (
+                            <img src={snap.imageUrl} alt={snap.name || 'Phần thưởng'} loading="lazy"
+                              className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-4xl">🎁</div>
+                          )}
+                          <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
+                            ⭐ {rd.pointsSpent} Điểm
+                          </div>
+                        </div>
+                        <div className="p-5 flex-1 flex flex-col">
+                          <h4 className="text-base font-bold text-slate-800 mb-1 line-clamp-1">{snap.name}</h4>
+                          <p className="text-[11px] text-slate-400 mb-3">Đổi ngày {formatDate(rd.createdAt)}</p>
+                          <div className={`rounded-lg px-3 py-2 border flex items-center justify-between mb-3 ${cancelled ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50 border-emerald-100'}`}>
+                            <span className="text-xs font-semibold text-slate-500">Mã đổi thưởng</span>
+                            <span className={`font-mono font-extrabold tracking-wider ${cancelled ? 'text-slate-400 line-through' : 'text-emerald-700'}`}>{rd.code}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-3">
+                            {cancelled
+                              ? <span className="text-rose-500 font-bold">Đã hủy</span>
+                              : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
+                          </div>
+                          <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
+                            className="mt-auto w-full py-2.5 rounded-xl font-bold text-sm bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all">
+                            Copy mã đổi thưởng
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
