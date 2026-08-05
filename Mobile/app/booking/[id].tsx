@@ -79,7 +79,7 @@ interface RefundRequest {
 
 export default function BookingDetailScreen() {
   const configs = useSystemConfig();
-  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 0;
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { i18n } = useTranslation();

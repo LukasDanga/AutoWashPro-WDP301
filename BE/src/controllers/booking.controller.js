@@ -255,6 +255,12 @@ exports.getAvailableSlots = catchAsync(async (req, res) => {
   success(res, slots, 'Đã lấy danh sách khung giờ trống');
 });
 
+exports.linkProvisionalPayment = catchAsync(async (req, res) => {
+  const { transactionId, bookingId, paymentType } = req.body;
+  const payment = await paymentService.linkProvisionalPayment(transactionId, bookingId, paymentType);
+  success(res, payment, 'Liên kết thanh toán tạm tính thành công');
+});
+
 exports.createPayment = catchAsync(async (req, res) => {
   const { bookingId, method, paymentType, amount } = req.body;
   const payment = await paymentService.createPayment(bookingId, req.userId, req.user.role, method, paymentType || 'full', amount);
@@ -582,7 +588,7 @@ exports.handleVnpayReturn = catchAsync(async (req, res) => {
   console.log('VNPay Return query:', JSON.stringify(req.query));
   const result = vnpayService.verifyReturnUrl(req.query);
 
-  const feUrl = process.env.FE_URL || 'http://localhost:5173';
+  const feUrl = process.env.NODE_ENV === 'production' ? (process.env.FE_URL || 'http://localhost:5173') : 'http://localhost:5173';
   const resultJson = JSON.stringify(result);
   const encoded = encodeURIComponent(resultJson);
 

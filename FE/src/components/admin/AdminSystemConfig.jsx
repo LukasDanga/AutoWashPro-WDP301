@@ -13,7 +13,7 @@ const PROMOTION_KEYS = [
 ];
 
 const OPERATIONS_CATEGORIES = ['general', 'booking'];
-const PAYMENT_CATEGORIES = ['payment', 'finance'];
+const PAYMENT_CATEGORIES = ['payment'];
 const PROMOTION_CATEGORIES = ['general', 'booking', 'promotion'];
 const OPERATIONS_EXCLUDE_KEYS = [...PROMOTION_KEYS, 'ADVANCE_BOOKING_LIMITS'];
 

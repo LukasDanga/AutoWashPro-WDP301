@@ -1298,7 +1298,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
     const base = getQbBasePrice();
     const discounted = Math.max(0, base - qbVoucherDiscount);
     if (quickBookPack) return 0; // slot pack → đã thanh toán 100%
-    return Math.round((discounted * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+    return Math.round((discounted * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
   }
 
   async function applyQbVoucher() {

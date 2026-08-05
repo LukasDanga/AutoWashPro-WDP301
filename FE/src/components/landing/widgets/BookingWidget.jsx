@@ -63,7 +63,7 @@ function authHeader(token) {
 
 export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate, initialBranchId, initialTab, rebookData }) {
   const configs = useSystemConfig();
-  const depositPercent = Math.round((configs?.DEPOSIT_RATE ?? 0) * 100);
+  const depositPercent = Math.round(configs?.DEPOSIT_RATE ?? 0);
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -175,7 +175,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   // Real-time: recalculate deposit when DEPOSIT_RATE config changes
   useEffect(() => {
     if (pendingDeposit && pendingDeposit.finalPrice > 0) {
-      const newDeposit = Math.round((pendingDeposit.finalPrice * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      const newDeposit = Math.round((pendingDeposit.finalPrice * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
       if (newDeposit !== pendingDeposit.depositAmount) {
         setPendingDeposit(prev => ({ ...prev, depositAmount: newDeposit }));
       }
@@ -185,7 +185,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   // Real-time: recalculate recurring deposit when DEPOSIT_RATE config changes
   useEffect(() => {
     if (pendingDeposit && pendingDeposit.tab === 'recurring' && pendingDeposit.finalPrice > 0) {
-      const newDeposit = Math.round((pendingDeposit.finalPrice * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      const newDeposit = Math.round((pendingDeposit.finalPrice * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
       if (newDeposit !== pendingDeposit.depositAmount) {
         setPendingDeposit(prev => ({ ...prev, depositAmount: newDeposit }));
       }
@@ -608,7 +608,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         sessionCount = Math.max(1, actualRecurringSessions || previewDates.length || 1);
       }
       const estimatedTotal = perSession * sessionCount;
-      const calculatedDeposit = Math.round((estimatedTotal * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      const calculatedDeposit = Math.round((estimatedTotal * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
 
       if (estimatedTotal > 0) {
         setPendingDeposit({
@@ -824,6 +824,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         const paymentUrl = data?.data?.paymentUrl;
         if (!paymentUrl) throw new Error('Không nhận được URL thanh toán');
 
+        // Save provisional payment data for later linking
+        const provisionalPayment = data?.data?.payment;
+        if (provisionalPayment?.transactionId) {
+          sessionStorage.setItem('aw_provisionalPayment', JSON.stringify({ transactionId: provisionalPayment.transactionId }));
+        }
+
         // Lưu lastBooking preview để khôi phục sau VNPay return
         const lastBk = {
           branch: selectedBranch || { name: '' },
@@ -1027,28 +1033,41 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const bkId = isRec ? (newBk.created?.[0]?._id || newBk.created?.[0]?.id) : (newBk._id || newBk.id);
       const newCode = isRec ? newBk.recurringGroupId : (newBk?.bookingCode || newBk?.code || '');
 
-      // Tạo payment cho booking
-      const actualAmount = draft.paymentMode === 'full' ? draft.finalPrice : draft.depositAmount;
-      const method = isBank ? 'bank' : 'vnpay';
-      const payRes = await fetch(`${apiBase}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: ah },
-        body: JSON.stringify({ bookingId: bkId, method, paymentType: draft.paymentMode, amount: actualAmount }),
-      });
-      const payData = await payRes.json();
-      if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
-      const payment = payData?.data || payData;
+      // Link provisional payment (VNPay return) vào booking
+      const provisionalData = JSON.parse(sessionStorage.getItem('aw_provisionalPayment') || '{}');
+      const provisionalTxn = provisionalData?.transactionId;
+      if (provisionalTxn) {
+        const linkRes = await fetch(`${apiBase}/payments/link-provisional`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: ah },
+          body: JSON.stringify({ transactionId: provisionalTxn, bookingId: bkId, paymentType: draft.paymentMode }),
+        });
+        const linkData = await linkRes.json();
+        if (!linkRes.ok) throw new Error(linkData.message || 'Liên kết thanh toán thất bại');
+        const payment = linkData?.data || linkData;
+      } else {
+        // Fallback: create new payment + simulate (for bank flow or no provisional)
+        const actualAmount = draft.paymentMode === 'full' ? draft.finalPrice : draft.depositAmount;
+        const method = isBank ? 'bank' : 'vnpay';
+        const payRes = await fetch(`${apiBase}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: ah },
+          body: JSON.stringify({ bookingId: bkId, method, paymentType: draft.paymentMode, amount: actualAmount }),
+        });
+        const payData = await payRes.json();
+        if (!payRes.ok) throw new Error(payData.message || 'Tạo thanh toán thất bại');
+        const payment = payData?.data || payData;
 
-      // Confirm payment
-      await fetch(`${apiBase}/payments/simulate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: ah },
-        body: JSON.stringify({
-          transactionId: payment.transactionId,
-          gatewayTransactionId: method === 'bank' ? `SIM${Date.now()}` : 'VNPAY',
-          success: true,
-        }),
-      });
+        await fetch(`${apiBase}/payments/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: ah },
+          body: JSON.stringify({
+            transactionId: payment.transactionId,
+            gatewayTransactionId: method === 'bank' ? `SIM${Date.now()}` : 'VNPAY',
+            success: true,
+          }),
+        });
+      }
 
       // Build lastBooking
       const subPrices = draft.subServicesPrices || {};
@@ -1311,7 +1330,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     try {
       const branchId = selectedBranch._id || selectedBranch.id;
       const pkgId = pkg._id || pkg.id;
-      const calculatedDeposit = Math.round((total * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      const calculatedDeposit = Math.round((total * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
       if (total > 0) {
         setPendingDeposit({
           isDraft: true, tab: 'regular', finalPrice: total, totalAmount: total, depositAmount: calculatedDeposit, depositPaid: false
@@ -1388,7 +1407,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
       const singlePrice = Math.max(0, totalBase - discount);
       const totalPrice = singlePrice * totalValid;
-      const totalDeposit = Math.round((totalPrice * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      const totalDeposit = Math.round((totalPrice * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
 
       const pb = {
         branchId,

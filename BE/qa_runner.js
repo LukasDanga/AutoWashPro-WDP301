@@ -107,7 +107,7 @@ async function runQA() {
     const existingConfig = await SystemConfig.findOne({ key: 'DEPOSIT_RATE' });
     if (existingConfig) originalConfigs['DEPOSIT_RATE'] = existingConfig.value;
 
-    const newDepositRate = 0.5; // 50%
+    const newDepositRate = 50;
     try {
       // Update config via Admin API
       const resUpdate = await fetchAdmin('/configs/update', {
@@ -121,7 +121,7 @@ async function runQA() {
         })
       });
       if (resUpdate.status !== 200 && resUpdate.status !== 201) throw new Error('API return bad status');
-      
+
       // Fetch via Public API (simulating FE/Mobile load)
       const resPublicReq = await fetch(`${API_URL}/configs/public`);
       const resPublicData = await resPublicReq.json();

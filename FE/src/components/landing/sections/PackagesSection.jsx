@@ -15,7 +15,7 @@ export default function PackagesSection() {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const configs = useSystemConfig();
-  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 0;
 
   useEffect(() => {
     async function fetchPackages() {

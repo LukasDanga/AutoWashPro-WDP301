@@ -246,7 +246,7 @@ export default function PaymentCheckoutScreen() {
     }
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
-    const depositRate = configs?.DEPOSIT_RATE ?? 0.3;
+    const depositRate = configs?.DEPOSIT_RATE ?? 30;
     if (beDeposit > 0) {
       return Math.round(beDeposit / depositRate / 1000) * 1000;
     }
@@ -256,12 +256,12 @@ export default function PaymentCheckoutScreen() {
   const depositAmount = useMemo(() => {
     if (isProvisional) {
       if (isRecurringType && recurringDraft) {
-        return recurringDraft.depositAmount ?? Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+        return recurringDraft.depositAmount ?? Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
       }
-      return Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+      return Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
     }
     if (!booking) return 0;
-    return booking.depositAmount ?? Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+    return booking.depositAmount ?? Math.round((totalAmount * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
   }, [booking, totalAmount, isProvisional, isRecurringType, recurringDraft]);
 
   const amount = useMemo(() => {

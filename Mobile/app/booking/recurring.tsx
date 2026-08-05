@@ -97,7 +97,7 @@ function getPointMultiplier(tier?: string): number {
 
 export default function RecurringBookingScreen() {
   const configs = useSystemConfig();
-  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE * 100) : 0;
+  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 0;
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
   const toast = useToast();
@@ -591,7 +591,7 @@ export default function RecurringBookingScreen() {
       const computedTotal = Math.max(0, totalEstimate - voucherSavings);
       const computedDeposit = paymentOption === 'full'
         ? computedTotal
-        : Math.round((computedTotal * (configs?.DEPOSIT_RATE ?? 0)) / 1000) * 1000;
+        : Math.round((computedTotal * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
 
       const recurringDraft = {
         branchId: selectedBranch._id,

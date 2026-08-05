@@ -181,7 +181,7 @@ function Sidebar({ policies = [], activeSection, onSelect }) {
 export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, onGoToHistory, onGoToPayments, onGoToNotifications }) {
   const location = useLocation();
   const configs = useSystemConfig();
-  const depositPercent = Math.round((configs?.DEPOSIT_RATE ?? 0) * 100);
+  const depositPercent = Math.round(configs?.DEPOSIT_RATE ?? 0);
   const noShowGraceMinutes = configs?.AUTO_CANCEL_GRACE_MINUTES;
   const minAdvanceMinutes = configs?.MIN_ADVANCE_BOOKING_MINUTES;
   const policies = getPolicies({ depositPercent, noShowGraceMinutes, minAdvanceMinutes });
