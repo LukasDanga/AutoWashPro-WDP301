@@ -22,6 +22,7 @@ import {
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { PointHistoryTab } from '@/components/admin/AdminRewards';
+import { RewardsConfigTab, RedemptionsTab } from '@/components/admin/AdminRewardsManagement';
 
 // --- Helper Component ---
 function ListTrend({ current, previous }) {
@@ -533,6 +534,18 @@ export default function ManagerPromotions({ user }) {
           Lịch sử điểm thưởng
         </button>
         <button 
+          onClick={() => { setActiveTab('gifts'); setSearchParams({ tab: 'gifts' }); }}
+          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'gifts' ? 'border-violet-600 text-violet-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          Quà tặng vật lý
+        </button>
+        <button 
+          onClick={() => { setActiveTab('redemptions'); setSearchParams({ tab: 'redemptions' }); }}
+          className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'redemptions' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          Trao quà
+        </button>
+        <button 
           onClick={() => { setActiveTab('report'); setSearchParams({ tab: 'report' }); }}
           className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'report' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
@@ -552,6 +565,10 @@ export default function ManagerPromotions({ user }) {
         <VoucherUsageReportTab />
       ) : activeTab === 'wheel' ? (
         <WheelManagementTab />
+      ) : activeTab === 'gifts' ? (
+        <RewardsConfigTab isManager={true} />
+      ) : activeTab === 'redemptions' ? (
+        <RedemptionsTab isManager={true} managerBranchId={managerBranchId} />
       ) : (
         <>
           {/* toolbar */}

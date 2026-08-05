@@ -185,8 +185,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     } catch (e) { }
   };
 
-  const handleRedeem = async (templateId) => {
-    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
+  const handleRedeem = async (templateId) => {    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
     setRedeemLoading(true);
     try {
       const res = await api('/vouchers/redeem-points', {
@@ -198,6 +197,17 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       fetchVouchers();
       if (refreshUser) refreshUser();
       fetchHistory();
+    } catch (err) { } finally { setRedeemLoading(false); }
+  };
+
+  const handleConfirmReceipt = async (redemptionId) => {
+    if (!(await confirmDialog({ title: 'Xác nhận đã nhận quà', message: 'Bạn đã nhận được quà từ cửa hàng?', confirmLabel: 'Đã nhận' }))) return;
+    setRedeemLoading(true);
+    try {
+      const res = await api(`/rewards/redemptions/${redemptionId}/received`, { method: 'POST' });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || 'Lỗi xác nhận nhận quà');
+      fetchVouchers();
     } catch (err) { } finally { setRedeemLoading(false); }
   };
 
@@ -407,6 +417,8 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                 {myRewards.map(rd => {
                   const snap = rd.rewardSnapshot || {};
                   const cancelled = rd.status === 'cancelled';
+                  const received = rd.status === 'received';
+                  const sent = rd.status === 'sent';
                   return (
                     <div key={rd._id} className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm">
                       <div className="flex items-center gap-3 mb-3">
@@ -428,12 +440,23 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                         <span className="flex items-center gap-1"><Coins weight="fill" size={12} /> {formatCurrency(rd.pointsSpent)} điểm</span>
                         {cancelled
                           ? <span className="text-rose-500 font-bold">Đã hủy</span>
-                          : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
+                          : received
+                            ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
+                            : sent
+                              ? <span className="text-blue-600 font-bold">Đang giao · Quà đã gửi</span>
+                              : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
                       </div>
-                      <button onClick={() => { navigator.clipboard.writeText(rd.code); }}
-                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all">
-                        Copy mã đổi thưởng
-                      </button>
+                      {sent ? (
+                        <button onClick={() => handleConfirmReceipt(rd._id)} disabled={redeemLoading}
+                          className="w-full py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 border border-blue-600 transition-all disabled:opacity-50">
+                          {redeemLoading ? 'Đang xử lý...' : 'Đã nhận quà'}
+                        </button>
+                      ) : (
+                        <button onClick={() => { navigator.clipboard.writeText(rd.code); }}
+                          className={`w-full py-2.5 rounded-lg text-sm font-bold border transition-all ${cancelled ? 'bg-slate-50 text-slate-400 border-slate-200' : received ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'}`}>
+                          Copy mã đổi thưởng
+                        </button>
+                      )}
                     </div>
                   );
                 })}

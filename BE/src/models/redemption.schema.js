@@ -11,7 +11,11 @@ const redemptionSchema = new mongoose.Schema({
   },
   code: { type: String, required: true, unique: true, uppercase: true, trim: true },
   pointsSpent: { type: Number, required: true, min: 1 },
-  status: { type: String, enum: ['claimed', 'cancelled'], default: 'claimed' },
+  status: { type: String, enum: ['claimed', 'sent', 'received', 'cancelled'], default: 'claimed' },
+  sentAt: { type: Date },
+  sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+  receivedAt: { type: Date },
   cancelledAt: { type: Date },
 }, { timestamps: true });
 

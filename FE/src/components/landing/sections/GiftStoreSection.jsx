@@ -409,6 +409,33 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
     }
   };
 
+  const handleConfirmReceipt = async (redemptionId) => {
+    if (!user) return onOpenAuth();
+    const ok = await confirmDialog({
+      title: 'Xác nhận đã nhận quà',
+      message: 'Bạn đã nhận được phần quà này từ cửa hàng?',
+      confirmLabel: 'Đã nhận',
+    });
+    if (!ok) return;
+
+    setRewardLoading(true);
+    try {
+      const token = localStorage.getItem(storageKeys.accessToken);
+      const res = await fetch(`${API_BASE}/rewards/redemptions/${redemptionId}/received`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || 'Lỗi xác nhận nhận quà');
+      showToast('Xác nhận nhận quà thành công!');
+      await loadVouchers();
+    } catch (err) {
+      showToast(err.message || 'Lỗi xác nhận nhận quà', 'error');
+    } finally {
+      setRewardLoading(false);
+    }
+  };
+
   const handleSpinClick = async () => {
     if (!user) return onOpenAuth();
     if (spinning) return;
@@ -631,6 +658,8 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                   {myRewards.map(rd => {
                     const snap = rd.rewardSnapshot || {};
                     const cancelled = rd.status === 'cancelled';
+                    const received = rd.status === 'received';
+                    const sent = rd.status === 'sent';
                     return (
                       <div key={rd._id} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col">
                         <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
@@ -654,12 +683,23 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                           <div className="flex items-center justify-between text-[11px] text-slate-400 mb-3">
                             {cancelled
                               ? <span className="text-rose-500 font-bold">Đã hủy</span>
-                              : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
+                              : received
+                                ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
+                                : sent
+                                  ? <span className="text-blue-600 font-bold">Đang giao · Quà đã gửi</span>
+                                  : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
                           </div>
-                          <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
-                            className="mt-auto w-full py-2.5 rounded-xl font-bold text-sm bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all">
-                            Copy mã đổi thưởng
-                          </button>
+                          {sent ? (
+                            <button onClick={() => handleConfirmReceipt(rd._id)} disabled={rewardLoading}
+                              className="mt-auto w-full py-2.5 rounded-xl font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 border border-blue-600 transition-all disabled:opacity-50">
+                              {rewardLoading ? 'Đang xử lý...' : 'Đã nhận quà'}
+                            </button>
+                          ) : (
+                            <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
+                              className={`mt-auto w-full py-2.5 rounded-xl font-bold text-sm border transition-all ${cancelled ? 'bg-slate-50 text-slate-400 border-slate-200' : received ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'}`}>
+                              Copy mã đổi thưởng
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

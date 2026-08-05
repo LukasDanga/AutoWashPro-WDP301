@@ -94,6 +94,94 @@ router.post('/redeem', authenticate, rewardController.redeemReward);
 
 /**
  * @swagger
+ * /api/rewards/redemptions:
+ *   get:
+ *     summary: Danh sách lượt đổi thưởng (admin/manager)
+ *     tags: [Rewards]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [claimed, sent, received, cancelled]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Tìm theo mã đổi thưởng hoặc tên quà
+ *       - in: query
+ *         name: branchId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Danh sách lượt đổi thưởng
+ */
+router.get('/redemptions', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), rewardController.getRedemptions);
+
+/**
+ * @swagger
+ * /api/rewards/redemptions/{id}/sent:
+ *   post:
+ *     summary: Xác nhận đã gửi quà cho khách (admin/manager)
+ *     tags: [Rewards]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               branchId:
+ *                 type: string
+ *                 description: Chi nhánh gửi quà (mặc định lấy chi nhánh của tài khoản đang xử lý)
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ */
+router.post('/redemptions/:id/sent', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), rewardController.markRedemptionSent);
+
+/**
+ * @swagger
+ * /api/rewards/redemptions/{id}/received:
+ *   post:
+ *     summary: Khách hàng xác nhận đã nhận quà
+ *     tags: [Rewards]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ */
+router.post('/redemptions/:id/received', authenticate, rewardController.markRedemptionReceived);
+
+/**
+ * @swagger
  * /api/rewards:
  *   post:
  *     summary: Tạo phần thưởng mới
