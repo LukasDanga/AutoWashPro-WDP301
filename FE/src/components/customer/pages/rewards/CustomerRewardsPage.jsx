@@ -110,6 +110,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
 
   const [vouchers, setVouchers] = useState([]);
   const [myVouchers, setMyVouchers] = useState([]);
+  const [myRewards, setMyRewards] = useState([]);
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [tierConfig, setTierConfig] = useState(null);
   const [tierList, setTierList] = useState([]);
@@ -175,6 +176,12 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       const resMy = await api('/vouchers/me');
       const dataMy = await resMy.json();
       setMyVouchers(dataMy.data || []);
+    } catch (e) { }
+
+    try {
+      const resRewards = await api('/rewards/me');
+      const dataRewards = await resRewards.json();
+      setMyRewards(dataRewards.data || []);
     } catch (e) { }
   };
 
@@ -390,34 +397,84 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
 
       {/* Tab: Quà tặng của tôi */}
       {activeTab === 'my-vouchers' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {myVouchers.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-slate-400 text-sm">Bạn chưa có voucher nào.</div>
-          ) : (
-            myVouchers.map(uv => {
-              const v = uv.voucherId;
-              if (!v) return null;
-              return (
-                <div key={uv._id} className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="font-bold text-slate-800 text-sm">{v.name}</p>
-                      <p className="text-sm font-mono text-emerald-600 mt-0.5">{v.code}</p>
+        <div className="space-y-8">
+          {myRewards.length > 0 && (
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-800 mb-3 flex items-center gap-2">
+                <Gift weight="fill" className="text-amber-500" /> Phần thưởng đã đổi ({myRewards.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myRewards.map(rd => {
+                  const snap = rd.rewardSnapshot || {};
+                  const cancelled = rd.status === 'cancelled';
+                  return (
+                    <div key={rd._id} className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                        {snap.imageUrl ? (
+                          <img src={snap.imageUrl} alt={snap.name} className="w-14 h-14 rounded-lg object-cover border border-slate-100" />
+                        ) : (
+                          <div className="w-14 h-14 rounded-lg bg-amber-50 flex items-center justify-center text-2xl shrink-0">🎁</div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800 text-sm line-clamp-2">{snap.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Đổi ngày {formatDate(rd.createdAt)}</p>
+                        </div>
+                      </div>
+                      <div className={`rounded-lg px-3 py-2 border flex items-center justify-between mb-3 ${cancelled ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50 border-emerald-100'}`}>
+                        <span className="text-xs font-semibold text-slate-500">Mã đổi thưởng</span>
+                        <span className={`font-mono font-extrabold tracking-wider ${cancelled ? 'text-slate-400 line-through' : 'text-emerald-700'}`}>{rd.code}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-3">
+                        <span className="flex items-center gap-1"><Coins weight="fill" size={12} /> {formatCurrency(rd.pointsSpent)} điểm</span>
+                        {cancelled
+                          ? <span className="text-rose-500 font-bold">Đã hủy</span>
+                          : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
+                      </div>
+                      <button onClick={() => { navigator.clipboard.writeText(rd.code); }}
+                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all">
+                        Copy mã đổi thưởng
+                      </button>
                     </div>
-                    <CheckCircle weight="fill" size={22} className="text-emerald-500" />
-                  </div>
-                  <p className="text-xs text-slate-500 mb-4">{v.description}</p>
-                  <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-4">
-                    <Tag size={12} /> HSD: {v.endDate ? new Date(v.endDate).toLocaleDateString('vi-VN') : '-'}
-                  </div>
-                  <button onClick={() => { navigator.clipboard.writeText(v.code); }}
-                    className="w-full py-2.5 rounded-lg text-sm font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all">
-                    Copy mã khuyến mãi
-                  </button>
-                </div>
-              );
-            })
+                  );
+                })}
+              </div>
+            </div>
           )}
+
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-800 mb-3 flex items-center gap-2">
+              <Ticket weight="fill" className="text-emerald-500" /> Voucher của tôi ({myVouchers.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {myVouchers.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-slate-400 text-sm">Bạn chưa có voucher nào.</div>
+              ) : (
+                myVouchers.map(uv => {
+                  const v = uv.voucherId;
+                  if (!v) return null;
+                  return (
+                    <div key={uv._id} className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{v.name}</p>
+                          <p className="text-sm font-mono text-emerald-600 mt-0.5">{v.code}</p>
+                        </div>
+                        <CheckCircle weight="fill" size={22} className="text-emerald-500" />
+                      </div>
+                      <p className="text-xs text-slate-500 mb-4">{v.description}</p>
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-4">
+                        <Tag size={12} /> HSD: {v.endDate ? new Date(v.endDate).toLocaleDateString('vi-VN') : '-'}
+                      </div>
+                      <button onClick={() => { navigator.clipboard.writeText(v.code); }}
+                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all">
+                        Copy mã khuyến mãi
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
