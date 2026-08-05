@@ -41,7 +41,9 @@ export default function ManagerBookingDetail() {
 
   const handleBack = useCallback(() => {
     const saved = sessionStorage.getItem('manager_bookings_filters');
-    if (location.state?.fromSearch) {
+    if (location.state?.from) {
+      navigate(location.state.from);
+    } else if (location.state?.fromSearch) {
       navigate(`/manager/bookings${location.state.fromSearch}`);
     } else if (saved) {
       navigate(`/manager/bookings?${saved}`);

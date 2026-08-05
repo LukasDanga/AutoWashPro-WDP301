@@ -36,6 +36,7 @@ function resolvePageMeta(pathname, search = '') {
   if (pathname.startsWith('/manager/revenue')) return MANAGER_PAGE_META.revenue;
   if (pathname.startsWith('/manager/packages')) return MANAGER_PAGE_META.packages;
   if (pathname.startsWith('/manager/slot-packs')) return MANAGER_PAGE_META['slot-packs'];
+  if (pathname.startsWith('/manager/system-config')) return MANAGER_PAGE_META['system-config'];
   if (pathname.startsWith('/manager/profile')) return MANAGER_PAGE_META.profile;
   return MANAGER_PAGE_META.overview;
 }

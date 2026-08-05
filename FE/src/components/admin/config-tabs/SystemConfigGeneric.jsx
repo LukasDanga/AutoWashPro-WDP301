@@ -98,7 +98,7 @@ function normalizeValue(config) {
 }
 
 // ---- Dedicated editor: SLOT_PACK_DISCOUNTS (array of { minSlots, discountPercent }) ----
-function SlotPackDiscountsEditor({ config, formValues, updateJsonField }) {
+function SlotPackDiscountsEditor({ config, formValues, updateJsonField, readOnly }) {
   const rows = useMemo(() => {
     try {
       const v = JSON.parse(formValues[config.key] || '[]');
@@ -124,7 +124,8 @@ function SlotPackDiscountsEditor({ config, formValues, updateJsonField }) {
               min="1"
               value={row.minSlots ?? ''}
               onChange={(e) => setRow(idx, 'minSlots', e.target.value)}
-              className="w-28 rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-14 bg-white text-slate-800"
+              disabled={readOnly}
+              className="w-28 rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-14 bg-white text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
             />
             <span className="absolute right-2.5 text-xs font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-lg pointer-events-none border border-slate-300/50">
               lượt
@@ -138,35 +139,40 @@ function SlotPackDiscountsEditor({ config, formValues, updateJsonField }) {
               max="100"
               value={row.discountPercent ?? ''}
               onChange={(e) => setRow(idx, 'discountPercent', e.target.value)}
-              className="w-32 rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-12 bg-white text-slate-800"
+              disabled={readOnly}
+              className="w-32 rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-12 bg-white text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
             />
             <span className="absolute right-2.5 text-xs font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-lg pointer-events-none border border-slate-300/50">
               %
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => removeRow(idx)}
-            disabled={rows.length <= 1}
-            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
-          >
-            <Trash size={14} /> Xóa
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => removeRow(idx)}
+              disabled={rows.length <= 1}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
+            >
+              <Trash size={14} /> Xóa
+            </button>
+          )}
         </div>
       ))}
-      <button
-        type="button"
-        onClick={addRow}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors"
-      >
-        <Plus size={14} weight="bold" /> Thêm mức chiết khấu
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={addRow}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors"
+        >
+          <Plus size={14} weight="bold" /> Thêm mức chiết khấu
+        </button>
+      )}
     </div>
   );
 }
 
 // ---- Dedicated editor: SLOT_PACK_VIP_BONUS_DISCOUNTS (map tier -> percent) ----
-function MapEditor({ config, formValues, updateJsonField }) {
+function MapEditor({ config, formValues, updateJsonField, readOnly }) {
   const entries = useMemo(() => {
     try {
       const v = JSON.parse(formValues[config.key] || '{}');
@@ -193,7 +199,8 @@ function MapEditor({ config, formValues, updateJsonField }) {
             type="text"
             value={tierKey}
             onChange={(e) => setEntry(idx, e.target.value, value)}
-            className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
+            disabled={readOnly}
+            className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:border-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500"
             placeholder="tier id"
           />
           <div className="relative flex items-center">
@@ -203,29 +210,34 @@ function MapEditor({ config, formValues, updateJsonField }) {
               max="100"
               value={value ?? ''}
               onChange={(e) => setEntry(idx, tierKey, e.target.value)}
-              className="w-32 rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-12 bg-white text-slate-800"
+              disabled={readOnly}
+              className="w-32 rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-12 bg-white text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
             />
             <span className="absolute right-2.5 text-xs font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-lg pointer-events-none border border-slate-300/50">
               %
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => removeEntry(idx)}
-            disabled={entries.length <= 1}
-            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
-          >
-            <Trash size={14} /> Xóa
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => removeEntry(idx)}
+              disabled={entries.length <= 1}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
+            >
+              <Trash size={14} /> Xóa
+            </button>
+          )}
         </div>
       ))}
-      <button
-        type="button"
-        onClick={addEntry}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors"
-      >
-        <Plus size={14} weight="bold" /> Thêm hạng VIP
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={addEntry}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors"
+        >
+          <Plus size={14} weight="bold" /> Thêm hạng VIP
+        </button>
+      )}
     </div>
   );
 }
@@ -233,7 +245,7 @@ function MapEditor({ config, formValues, updateJsonField }) {
 const DEFAULT_CATEGORIES = [];
 const DEFAULT_EXCLUDE_KEYS = [];
 
-export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, keys = null, excludeKeys = DEFAULT_EXCLUDE_KEYS }) {
+export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, keys = null, excludeKeys = DEFAULT_EXCLUDE_KEYS, readOnly = false }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [configs, setConfigs] = useState([]);
@@ -470,7 +482,8 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
                                   min="0"
                                   value={obj[tier.key] ?? ''}
                                   onChange={(e) => handleChange(config.key, e.target.value, tier.key)}
-                                  className="w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-12 bg-slate-50/70 text-slate-800"
+                                  disabled={readOnly}
+                                  className="w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2 pl-3.5 pr-12 bg-slate-50/70 text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
                                 />
                                 <span className="absolute right-2.5 text-xs font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-lg pointer-events-none uppercase tracking-wider border border-slate-300/50">
                                   ngày
@@ -486,16 +499,17 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
                     );
                   })()
                 ) : config.key === 'SLOT_PACK_DISCOUNTS' ? (
-                  <SlotPackDiscountsEditor config={config} formValues={formValues} updateJsonField={updateJsonField} />
+                  <SlotPackDiscountsEditor config={config} formValues={formValues} updateJsonField={updateJsonField} readOnly={readOnly} />
                 ) : config.key === 'SLOT_PACK_VIP_BONUS_DISCOUNTS' ? (
-                  <MapEditor config={config} formValues={formValues} updateJsonField={updateJsonField} />
+                  <MapEditor config={config} formValues={formValues} updateJsonField={updateJsonField} readOnly={readOnly} />
                 ) : config.type === 'boolean' ? (
                   <div className="flex items-center gap-2 mt-1">
                     <input
                       type="checkbox"
                       checked={formValues[config.key] === true || formValues[config.key] === 'true'}
                       onChange={(e) => handleChange(config.key, e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                      disabled={readOnly}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 disabled:opacity-50"
                     />
                     <span className="text-sm font-medium text-slate-700">Kích hoạt</span>
                   </div>
@@ -503,11 +517,12 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
                   <textarea
                     value={formValues[config.key] ?? ''}
                     onChange={(e) => handleChange(config.key, e.target.value)}
+                    disabled={readOnly}
                     className={`w-full max-w-2xl rounded-lg border text-sm font-mono outline-none transition-colors focus:ring-1 p-2.5 bg-slate-50 min-h-[150px] ${
                       isInvalid
                         ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-rose-100'
                         : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500'
-                    }`}
+                    } disabled:bg-slate-100 disabled:text-slate-500`}
                   />
                 ) : config.type === 'number' ? (
                   <div className="relative flex items-center max-w-sm">
@@ -516,7 +531,8 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
                       step="any"
                       value={formValues[config.key] ?? ''}
                       onChange={(e) => handleChange(config.key, clampPercent(config.key, e.target.value))}
-                      className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 ${
+                      disabled={readOnly}
+                      className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 ${
                         unit ? 'pr-24' : 'pr-3.5'
                       }`}
                     />
@@ -532,7 +548,8 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
                       type="text"
                       value={formValues[config.key] ?? ''}
                       onChange={(e) => handleChange(config.key, e.target.value)}
-                      className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 ${
+                      disabled={readOnly}
+                      className={`w-full rounded-xl border border-slate-200 text-sm font-semibold outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 py-2.5 pl-3.5 bg-slate-50/70 text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 ${
                         unit ? 'pr-24' : 'pr-3.5'
                       }`}
                     />
@@ -549,7 +566,7 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
         )}
       </div>
 
-      {hasChanges && (
+      {hasChanges && !readOnly && (
         <div className="fixed bottom-6 left-1/2 ml-[120px] flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-slate-200">
           <div className="flex items-center gap-2 border-r border-slate-100 pr-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">

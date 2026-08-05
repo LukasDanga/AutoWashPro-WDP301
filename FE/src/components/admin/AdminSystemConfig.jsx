@@ -17,7 +17,7 @@ const PAYMENT_CATEGORIES = ['payment'];
 const PROMOTION_CATEGORIES = ['general', 'booking', 'promotion'];
 const OPERATIONS_EXCLUDE_KEYS = [...PROMOTION_KEYS, 'ADVANCE_BOOKING_LIMITS'];
 
-export default function AdminSystemConfig() {
+export default function AdminSystemConfig({ readOnly = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(tabParam || 'operations');
@@ -64,11 +64,12 @@ export default function AdminSystemConfig() {
           <SystemConfigGeneric
             categories={OPERATIONS_CATEGORIES}
             excludeKeys={OPERATIONS_EXCLUDE_KEYS}
+            readOnly={readOnly}
           />
         )}
-        {activeTab === 'payments' && <SystemConfigGeneric categories={PAYMENT_CATEGORIES} />}
-        {activeTab === 'promotion' && <SystemConfigGeneric categories={PROMOTION_CATEGORIES} keys={PROMOTION_KEYS} />}
-        {activeTab === 'loyalty' && <LoyaltyConfigTab />}
+        {activeTab === 'payments' && <SystemConfigGeneric categories={PAYMENT_CATEGORIES} readOnly={readOnly} />}
+        {activeTab === 'promotion' && <SystemConfigGeneric categories={PROMOTION_CATEGORIES} keys={PROMOTION_KEYS} readOnly={readOnly} />}
+        {activeTab === 'loyalty' && <LoyaltyConfigTab readOnly={readOnly} />}
       </div>
     </div>
   );

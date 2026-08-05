@@ -12,6 +12,7 @@ import {
   Ticket,
   CalendarBlank,
   CurrencyDollar,
+  Gear,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -94,6 +95,12 @@ export const MANAGER_MENU_ITEMS = [
     to: '/manager/profile',
     icon: UserCircle,
   },
+  {
+    id: 'system-config',
+    label: 'Cấu hình Quy tắc Nghiệp vụ',
+    to: '/manager/system-config',
+    icon: Gear,
+  },
 ];
 
 export const MANAGER_PAGE_META = {
@@ -149,5 +156,9 @@ export const MANAGER_PAGE_META = {
   profile: {
     title: 'Hồ sơ cá nhân',
     description: 'Thông tin tài khoản quản lý chi nhánh.',
+  },
+  'system-config': {
+    title: 'Cấu hình Quy tắc Nghiệp vụ',
+    description: 'Xem cấu hình các quy tắc nghiệp vụ, điểm thưởng và chính sách giá chung của toàn hệ thống.',
   },
 };

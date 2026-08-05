@@ -63,7 +63,7 @@ export const ADMIN_MENU_ITEMS = [
   },
   {
     id: 'system-config',
-    label: 'Cấu hình hệ thống',
+    label: 'Cấu hình Quy tắc Nghiệp vụ',
     to: '/admin/system-config',
     icon: Gear,
   },
@@ -121,7 +121,7 @@ export const ADMIN_PAGE_META = {
     description: 'Xem và quản lý toàn bộ đặt lịch trên tất cả chi nhánh.',
   },
   'system-config': {
-    title: 'Cấu hình hệ thống',
+    title: 'Cấu hình Quy tắc Nghiệp vụ',
     description: 'Quản lý tập trung tất cả các quy tắc nghiệp vụ, chính sách booking, và điểm thưởng.',
   },
   payments: {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { CaretLeft, CaretRight, ArrowClockwise, CalendarBlank, Clock, User, Car } from '@phosphor-icons/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -30,6 +30,9 @@ const STATUS_LABEL = {
   cancelled: 'Đã hủy',
 };
 
+import { useSystemConfig } from '@/hooks/useSystemConfig';
+import useSSE from '@/hooks/useSSE';
+
 // Generate half-hour slots from 06:00 to 21:00
 function generateTimeSlots() {
   const slots = [];
@@ -40,8 +43,7 @@ function generateTimeSlots() {
   return slots;
 }
 
-const TIME_SLOTS = generateTimeSlots(); 
-const MAX_SLOT_CAPACITY = 4;
+const TIME_SLOTS = generateTimeSlots();
 
 function isNewBooking(b) {
   return b?.status === 'pending';
@@ -52,7 +54,10 @@ function formatDateVN(d) {
 }
 
 function toDateStr(d) {
-  return d.toISOString().split('T')[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function BookingCard({ booking, onClick }) {
@@ -94,7 +99,13 @@ function BookingCard({ booking, onClick }) {
 }
 
 export default function ManagerSchedule() {
-  const [date, setDate] = useState(new Date());
+  const configs = useSystemConfig();
+  const maxSlotCapacity = Number(configs?.DEFAULT_BRANCH_CAPACITY) || 4;
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const dateParam = searchParams.get('date');
+  const [date, setDate] = useState(() => dateParam ? new Date(dateParam + 'T00:00:00') : new Date());
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -115,9 +126,20 @@ export default function ManagerSchedule() {
 
   useEffect(() => { load(date); }, [date, load]);
 
-  function prevDay() { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d); }
-  function nextDay() { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d); }
-  function goToday() { setDate(new Date()); }
+  // Real-time updates for new bookings and slot changes
+  const token = getStoredToken();
+  useSSE(token, 'slots_updated', () => load(date));
+  useSSE(token, 'payment_new', () => load(date));
+  useSSE(token, 'booking_updated', () => load(date));
+
+  function handleDateChange(newDate) {
+    setDate(newDate);
+    setSearchParams({ date: toDateStr(newDate) });
+  }
+
+  function prevDay() { const d = new Date(date); d.setDate(d.getDate() - 1); handleDateChange(d); }
+  function nextDay() { const d = new Date(date); d.setDate(d.getDate() + 1); handleDateChange(d); }
+  function goToday() { handleDateChange(new Date()); }
 
   // Group bookings by time slot
   const bookingsBySlot = {};
@@ -160,7 +182,7 @@ export default function ManagerSchedule() {
           Hôm nay
         </button>
         <input type="date" value={toDateStr(date)}
-          onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value + 'T00:00:00')); }}
+          onChange={(e) => { if (e.target.value) handleDateChange(new Date(e.target.value + 'T00:00:00')); }}
           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm" />
         <button onClick={() => load(date)} disabled={loading}
           className="ml-auto flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 shadow-sm">
@@ -205,7 +227,7 @@ export default function ManagerSchedule() {
             const items = bookingsBySlot[slot];
             // Lượt đặt ở trạng thái ( ko hiển thị trạng thái hoàn thành với trạng thái hủy) để quản lý slot đặt lịch xem thử còn slot nào trống.
             const activeCount = items.filter(b => b.status !== 'completed' && b.status !== 'cancelled').length;
-            const isFull = activeCount >= MAX_SLOT_CAPACITY;
+            const isFull = activeCount >= maxSlotCapacity;
             const hasItems = items.length > 0;
             
             // Only show slots that have items OR are within standard hours
@@ -220,7 +242,7 @@ export default function ManagerSchedule() {
                     {isFull && <span className="flex h-2 w-2 rounded-full bg-red-500 shadow-sm animate-pulse" title="Đã đầy" />}
                   </div>
                   <div className={`text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${isFull ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {activeCount}/{MAX_SLOT_CAPACITY} LƯỢT
+                    {activeCount}/{maxSlotCapacity} LƯỢT
                   </div>
                 </div>
                 
@@ -232,7 +254,7 @@ export default function ManagerSchedule() {
                     </div>
                   ) : (
                     items.map(b => (
-                      <BookingCard key={b._id} booking={b} onClick={() => navigate(`/manager/bookings/${b._id}`)} />
+                      <BookingCard key={b._id} booking={b} onClick={() => navigate(`/manager/bookings/${b._id}`, { state: { from: location.pathname + location.search } })} />
                     ))
                   )}
                 </div>
