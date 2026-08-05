@@ -2786,9 +2786,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             </div>
                           </div>
                         ) : (
-                          <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
-                            <span className="text-base font-bold text-slate-800">Thành tiền tổng cộng</span>
-                            <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(total)}</span>
+                          <div>
+                            <div className="flex justify-between items-baseline pt-4 mt-2 border-t border-slate-100">
+                              <span className="text-base font-bold text-slate-800">Thành tiền tổng cộng</span>
+                              <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(total)}</span>
+                            </div>
+                            <p className="text-[11px] font-medium text-slate-400 text-right mt-1">* Giá đã bao gồm VAT 10%</p>
                           </div>
                         )}
                       </div>

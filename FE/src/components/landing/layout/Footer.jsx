@@ -1,7 +1,59 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUp, Phone, Mail, Clock, MapPin, ShieldCheck, Heart } from 'lucide-react';
+import { getApiBaseUrl } from '../../../lib/authStorage.js';
+
+const DEFAULT_SERVICES = [
+  { title: 'Rửa xe bọt tuyết cao cấp', linkUrl: '/#services' },
+  { title: 'Rửa khoang máy chi tiết', linkUrl: '/#services' },
+  { title: 'Phủ bóng Ceramic Nano', linkUrl: '/#services' },
+  { title: 'Vệ sinh nội thất khử khuẩn', linkUrl: '/#services' },
+  { title: 'Đánh bóng & Khôi phục sơn', linkUrl: '/#services' },
+];
+
+const DEFAULT_POLICIES = [
+  { slug: 'privacy', title: 'Chính sách bảo mật', icon: '🔒' },
+  { slug: 'terms', title: 'Điều khoản sử dụng', icon: '📋' },
+  { slug: 'payment', title: 'Thanh toán linh hoạt', icon: '💳' },
+  { slug: 'cancellation', title: 'Chính sách hủy lịch', icon: '❌' },
+  { slug: 'refund', title: 'Hoàn tiền 100%', icon: '🔙' },
+];
 
 export default function Footer() {
+  const [featuredServices, setFeaturedServices] = useState(DEFAULT_SERVICES);
+  const [policyList, setPolicyList] = useState(DEFAULT_POLICIES);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchFooterData() {
+      try {
+        const apiBase = getApiBaseUrl();
+        const res = await fetch(`${apiBase}/policies`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (!cancelled && data?.success && Array.isArray(data?.data)) {
+          const allItems = data.data;
+
+          const services = allItems.filter(item => item.category === 'featured_service' && item.isActive);
+          if (services.length > 0) {
+            setFeaturedServices(services);
+          }
+
+          const policies = allItems.filter(item => item.category === 'policy' && item.isActive);
+          if (policies.length > 0) {
+            setPolicyList(policies);
+          }
+        }
+      } catch {
+        // Fallback to default lists on transport error
+      }
+    }
+
+    fetchFooterData();
+    return () => { cancelled = true; };
+  }, []);
+
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -105,16 +157,11 @@ export default function Footer() {
               Dịch vụ nổi bật
             </h4>
             <ul className="space-y-2.5 text-sm font-medium">
-              {[
-                'Rửa xe bọt tuyết cao cấp',
-                'Rửa khoang máy chi tiết',
-                'Phủ bóng Ceramic Nano',
-                'Vệ sinh nội thất khử khuẩn',
-                'Đánh bóng & Khôi phục sơn',
-              ].map((item) => (
-                <li key={item}>
-                  <a href="/#services" className="text-slate-600 hover:text-emerald-600 hover:translate-x-1 transition-all duration-200 inline-block">
-                    {item}
+              {featuredServices.map((item, idx) => (
+                <li key={item._id || item.slug || idx}>
+                  <a href={item.linkUrl || '/#services'} className="text-slate-600 hover:text-emerald-600 hover:translate-x-1 transition-all duration-200 inline-block">
+                    {item.icon && <span className="mr-1.5">{item.icon}</span>}
+                    {item.title}
                   </a>
                 </li>
               ))}
@@ -128,31 +175,13 @@ export default function Footer() {
               Chính sách & Hỗ trợ
             </h4>
             <ul className="space-y-2.5 text-sm font-medium">
-              <li>
-                <a href="/policies#privacy" className="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-2">
-                  <span>🔒</span> Chính sách bảo mật
-                </a>
-              </li>
-              <li>
-                <a href="/policies#terms" className="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-2">
-                  <span>📋</span> Điều khoản sử dụng
-                </a>
-              </li>
-              <li>
-                <a href="/policies#payment" className="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-2">
-                  <span>💳</span> Thanh toán linh hoạt
-                </a>
-              </li>
-              <li>
-                <a href="/policies#cancellation" className="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-2">
-                  <span>❌</span> Chính sách hủy lịch
-                </a>
-              </li>
-              <li>
-                <a href="/policies#refund" className="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-2">
-                  <span>🔙</span> Hoàn tiền 100%
-                </a>
-              </li>
+              {policyList.map((item, idx) => (
+                <li key={item._id || item.slug || idx}>
+                  <a href={`/policies#${item.slug}`} className="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-2">
+                    <span>{item.icon || '📜'}</span> {item.title}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
 

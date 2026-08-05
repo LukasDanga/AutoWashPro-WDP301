@@ -15,6 +15,7 @@ import ManagerSlotPacks from '@/components/manager/ManagerSlotPacks';
 import ManagerSchedule from '@/components/manager/ManagerSchedule';
 import ManagerPayments from '@/components/manager/ManagerPayments';
 import ManagerSystemConfig from '@/components/manager/ManagerSystemConfig';
+import ManagerPolicies from '@/components/manager/ManagerPolicies';
 import PaymentDetailPage from '@/components/admin/PaymentDetailPage';
 import RefundDetailPage from '@/components/shared/RefundDetailPage';
 import AdminPointHistoryDetail from '@/components/admin/AdminPointHistoryDetail';
@@ -101,6 +102,7 @@ export default function ManagerRoutes() {
         <Route path="feedbacks" element={<ManagerFeedbacks user={user} />} />
         <Route path="packages" element={<ManagerPackages user={user} />} />
         <Route path="slot-packs" element={<ManagerSlotPacks user={user} />} />
+        <Route path="policies" element={<ManagerPolicies />} />
         <Route path="system-config" element={<ManagerSystemConfig />} />
         <Route path="profile" element={<ManagerProfile user={user} />} />
         <Route path="*" element={<Navigate to="/manager" replace />} />

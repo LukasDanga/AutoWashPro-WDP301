@@ -10,6 +10,7 @@ import {
   Ticket,
   CurrencyDollar,
   Gear,
+  FileText,
 } from '@phosphor-icons/react';
 
 export const ADMIN_BRAND = {
@@ -18,6 +19,7 @@ export const ADMIN_BRAND = {
 };
 
 export const ADMIN_MENU_ITEMS = [
+  // --- 1. GIÁM SÁT & VẬN HÀNH HÀNG NGÀY ---
   {
     id: 'overview',
     label: 'Giám sát tổng quan',
@@ -25,6 +27,26 @@ export const ADMIN_MENU_ITEMS = [
     icon: ChartLine,
     end: true,
   },
+  {
+    id: 'bookings',
+    label: 'Quản lý đặt lịch',
+    to: '/admin/bookings',
+    icon: CalendarBlank,
+  },
+  {
+    id: 'payments',
+    label: 'Quản lý thanh toán',
+    to: '/admin/payments',
+    icon: CurrencyDollar,
+  },
+  {
+    id: 'reviews',
+    label: 'Đánh giá',
+    to: '/admin/reviews',
+    icon: Star,
+  },
+
+  // --- 2. QUẢN LÝ DỮ LIỆU & TÀI NGUYÊN ---
   {
     id: 'branches',
     label: 'Quản lý chi nhánh',
@@ -38,11 +60,13 @@ export const ADMIN_MENU_ITEMS = [
     icon: Users,
   },
   {
-    id: 'reviews',
-    label: 'Đánh giá',
-    to: '/admin/reviews',
-    icon: Star,
+    id: 'slot-packs',
+    label: 'Gói lượt',
+    to: '/admin/slot-packs',
+    icon: Ticket,
   },
+
+  // --- 3. MARKETING & NỘI DUNG ---
   {
     id: 'rewards',
     label: 'Khuyến mãi & Quà tặng',
@@ -50,34 +74,24 @@ export const ADMIN_MENU_ITEMS = [
     icon: Gift,
   },
   {
+    id: 'policies',
+    label: 'Quản lý Chính sách & Dịch vụ',
+    to: '/admin/policies',
+    icon: FileText,
+  },
+
+  // --- 4. HỆ THỐNG & TÀI KHOẢN ---
+  {
     id: 'activity',
     label: 'Hoạt động gần đây',
     to: '/admin/activity',
     icon: ClockCounterClockwise,
   },
   {
-    id: 'bookings',
-    label: 'Quản lý đặt lịch',
-    to: '/admin/bookings',
-    icon: CalendarBlank,
-  },
-  {
     id: 'system-config',
     label: 'Cấu hình Quy tắc Nghiệp vụ',
     to: '/admin/system-config',
     icon: Gear,
-  },
-  {
-    id: 'payments',
-    label: 'Quản lý thanh toán',
-    to: '/admin/payments',
-    icon: CurrencyDollar,
-  },
-  {
-    id: 'slot-packs',
-    label: 'Gói lượt',
-    to: '/admin/slot-packs',
-    icon: Ticket,
   },
   {
     id: 'profile',
@@ -123,6 +137,10 @@ export const ADMIN_PAGE_META = {
   'system-config': {
     title: 'Cấu hình Quy tắc Nghiệp vụ',
     description: 'Quản lý tập trung tất cả các quy tắc nghiệp vụ, chính sách booking, và điểm thưởng.',
+  },
+  policies: {
+    title: 'Quản lý Chính sách & Dịch vụ Động',
+    description: 'Tạo, sửa, xóa và quản lý nội dung hiển thị ở Landing Footer và trang Điều khoản dịch vụ.',
   },
   payments: {
     title: 'Quản lý thanh toán',

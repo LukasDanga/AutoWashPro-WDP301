@@ -13,6 +13,7 @@ import {
   CalendarBlank,
   CurrencyDollar,
   Gear,
+  FileText,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -90,6 +91,12 @@ export const MANAGER_MENU_ITEMS = [
     icon: Star,
   },
   {
+    id: 'policies',
+    label: 'Xem Chính sách & Điều khoản',
+    to: '/manager/policies',
+    icon: FileText,
+  },
+  {
     id: 'profile',
     label: 'Hồ sơ',
     to: '/manager/profile',
@@ -152,6 +159,10 @@ export const MANAGER_PAGE_META = {
   'slot-packs': {
     title: 'Gói lượt',
     description: 'Quản lý gói lượt rửa xe đã mua và tra cứu theo mã.',
+  },
+  policies: {
+    title: 'Quy định & Chính sách Hệ thống',
+    description: 'Tra cứu các quy định đặt lịch, bảo hiểm xe, hủy đơn và hoàn tiền ở chế độ chỉ xem.',
   },
   profile: {
     title: 'Hồ sơ cá nhân',

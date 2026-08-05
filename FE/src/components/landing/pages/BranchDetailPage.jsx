@@ -315,6 +315,7 @@ export default function BranchDetailPage({ onOpenAuth, user, onLogout, onGoToPro
                     <span className="text-base font-bold text-emerald-600">{fmtCurrency(pkg.price)}</span>
                     {pkg.duration && <span className="text-xs text-slate-400">{pkg.duration} phút</span>}
                   </div>
+                  <p className="text-[10px] font-medium text-slate-400 mt-1">* Giá đã bao gồm VAT 10%</p>
                   {pkg.rating && (
                     <div className="flex items-center gap-1 mt-2 text-xs text-amber-500">
                       <Star size={12} weight="fill" />
