@@ -181,7 +181,12 @@ export default function AdminPointHistoryDetail() {
   const branchObj = (typeof snap.branchId === 'object' && snap.branchId) ? snap.branchId : refBooking?.branchId || {};
   const branchName = snap.branchName || branchObj.name || '';
   const branchAddress = snap.branchAddress || branchObj.address || '';
-  const bookingCode = snap.bookingCode || refBooking?.bookingCode || '';
+  let bookingCode = snap.bookingCode || refBooking?.bookingCode || '';
+  if (!bookingCode && refBooking?._id) {
+    bookingCode = 'AWP-' + String(refBooking._id).slice(-8).toUpperCase();
+  } else if (!bookingCode && typeof data.referenceId === 'string' && data.referenceId) {
+    bookingCode = 'AWP-' + String(data.referenceId).slice(-8).toUpperCase();
+  }
   const bookingType = snap.bookingType || refBooking?.bookingType || 'single';
   const bookingTypeInfo = getBookingTypeLabel(bookingType);
   const pkgObj = refBooking?.packageId || {};
@@ -275,12 +280,39 @@ export default function AdminPointHistoryDetail() {
             </div>
           </div>
 
-          {bookingCode && (
-            <div className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200/60 p-3.5 text-right shadow-2xs">
-              <span className="text-[11px] font-semibold text-slate-500 block uppercase tracking-wider">Mã Đơn hàng</span>
-              <span className="text-base font-mono font-black text-blue-700">{bookingCode}</span>
+          <div className="flex flex-col gap-2 items-end">
+            <div className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200/60 p-3.5 text-right shadow-2xs min-w-[200px]">
+              <span className="text-[11px] font-semibold text-slate-500 block uppercase tracking-wider">Mã Giao dịch</span>
+              <span className="text-sm font-mono font-bold text-slate-700">{data._id}</span>
             </div>
-          )}
+            {bookingCode && (
+              <div className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200/60 p-3.5 text-right shadow-2xs min-w-[200px]">
+                <span className="text-[11px] font-semibold text-slate-500 block uppercase tracking-wider">
+                  {bookingCode.startsWith('SP-') ? 'Gói lượt' : 'Mã Đơn hàng'}
+                </span>
+                <span className="text-base font-mono font-black text-blue-700">{bookingCode}</span>
+                <button
+                  onClick={() => {
+                    const bId = refBooking?._id || (typeof data.referenceId === 'string' ? data.referenceId : null) || data.referenceId;
+                    if (bId) {
+                      if (bookingCode.startsWith('SP-')) {
+                        navigate(isManager ? '/manager/slot-packs' : '/admin/slot-packs', { 
+                          state: { openSlotPack: { _id: bId, packCode: bookingCode, userId: data.userId } } 
+                        });
+                      } else {
+                        navigate(isManager ? '/manager/bookings' : '/admin/bookings', { 
+                          state: { openBooking: { _id: bId, bookingCode, userId: data.userId } } 
+                        });
+                      }
+                    }
+                  }}
+                  className="mt-1 text-[11px] text-blue-600 hover:text-blue-700 underline font-medium block ml-auto"
+                >
+                  {bookingCode.startsWith('SP-') ? 'Xem gói lượt' : 'Xem đơn'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

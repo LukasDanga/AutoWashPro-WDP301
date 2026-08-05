@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { confirmDialog } from '@/lib/confirm';
 import {
@@ -59,11 +60,33 @@ export default function AdminBookings() {
   const [deleting, setDeleting] = useState(false);
   const token = getStoredToken();
   const [viewedBookings, setViewedBookings] = useState([]);
+  const [pendingOpenId, setPendingOpenId] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('viewed_bookings') || '[]');
     setViewedBookings(stored);
   }, []);
+
+  useEffect(() => {
+    if (location.state?.openBooking) {
+      const b = location.state.openBooking;
+      setSearch(b.bookingCode || b._id);
+      setPendingOpenId(b._id);
+      window.history.replaceState({}, document.title);
+      // We will let load(1) fetch the exact booking and then open it.
+    }
+  }, [location.state]);
+
+  // Handle highlighting clearance when closing modal
+  useEffect(() => {
+    if (!selected && highlightId) {
+      // Keep highlight for a bit then fade it? Actually keeping it is fine, or clear after 3 seconds
+      const t = setTimeout(() => setHighlightId(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [selected, highlightId]);
 
   function handleOpenDetail(booking) {
     if (booking._id && !viewedBookings.includes(booking._id)) {
@@ -73,6 +96,7 @@ export default function AdminBookings() {
       window.dispatchEvent(new Event('booking-viewed'));
     }
     setSelected(booking);
+    setHighlightId(booking._id);
   }
 
   const load = useCallback(async (pg = page) => {
@@ -88,14 +112,32 @@ export default function AdminBookings() {
       if (!res.ok) throw new Error('Không thể tải danh sách đặt lịch');
       const data = await res.json();
       const list = data?.data?.bookings || data?.data || [];
-      setBookings(Array.isArray(list) ? list : []);
-      const pag = data?.data?.pagination;
-      setTotalPages(pag?.totalPages || 1);
-      setTotal(pag?.total || 0);
+      const bookingsArr = Array.isArray(list) ? list : [];
+      setBookings(bookingsArr);
+      setTotalPages(data?.data?.pagination?.totalPages || 1);
+      setTotal(data?.data?.pagination?.total || 0);
       setPage(pg);
+
+      // Handle pending open booking from navigation
+      setPendingOpenId(currentPending => {
+        if (currentPending) {
+          const found = bookingsArr.find(x => x._id === currentPending);
+          if (found) {
+            setSelected(found);
+            setHighlightId(currentPending);
+          }
+        }
+        return null;
+      });
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, [search, status, branchId, dateFrom, dateTo, page]);
+
+  useEffect(() => {
+    if (pendingOpenId) {
+      load(1);
+    }
+  }, [pendingOpenId, load]);
 
   useEffect(() => {
     api('/branches?limit=100').then((r) => r.json()).then((d) => {
@@ -211,7 +253,7 @@ export default function AdminBookings() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                {['Khách hàng', 'Chi nhánh', 'Dịch vụ', 'Ngày', 'Giờ', 'Tổng tiền', 'Trạng thái', ''].map((h) => (
+                {['Mã đơn', 'Khách hàng', 'Chi nhánh', 'Dịch vụ', 'Ngày', 'Giờ', 'Tổng tiền', 'Trạng thái', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -222,7 +264,10 @@ export default function AdminBookings() {
                 const isNew = b.status === 'pending' && isCreatedToday && !viewedBookings.includes(b._id);
 
                 return (
-                  <tr key={b._id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={b._id} className={`transition-colors ${highlightId === b._id ? 'bg-amber-100 hover:bg-amber-200' : 'hover:bg-slate-50'}`}>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-blue-600">
+                      {b.bookingCode || `AWP-${String(b._id).slice(-8).toUpperCase()}`}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div>
@@ -352,8 +397,11 @@ export default function AdminBookings() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setSelected(null)}>
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">Chi tiết đặt lịch</h2>
+            <div className="border-b border-slate-100 px-6 py-4 flex items-start justify-between">
+              <div>
+                <h2 className="font-semibold text-slate-800">Chi tiết đặt lịch</h2>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">Mã đơn: {selected.bookingCode || `AWP-${String(selected._id).slice(-8).toUpperCase()}`}</p>
+              </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
             </div>
             <div className="p-6 space-y-3 text-sm">

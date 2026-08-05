@@ -439,9 +439,10 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     query.bookingDate = { $gte: gte, $lte: lte };
   }
 
-  // search: match by customer name/phone or license plate
+  // search: match by customer name/phone, license plate, or booking code
   if (filters.search && filters.search.trim()) {
-    const re = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const searchStr = filters.search.trim();
+    const re = new RegExp(searchStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     const [matchedUsers, matchedVehicles] = await Promise.all([
       User.find({ $or: [{ name: re }, { phone: re }] }, '_id'),
       Vehicle.find({ licensePlate: re }, 'userId'),
@@ -450,8 +451,24 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
       ...matchedUsers.map(u => String(u._id)),
       ...matchedVehicles.map(v => String(v.userId)),
     ]);
-    if (ids.size === 0) return { bookings: [], total: 0, page: 1, totalPages: 0 };
-    query.userId = { $in: [...ids].map(id => new mongoose.Types.ObjectId(id)) };
+    
+    const searchOrClauses = [];
+    if (ids.size > 0) {
+      searchOrClauses.push({ userId: { $in: [...ids].map(id => new mongoose.Types.ObjectId(id)) } });
+    }
+    searchOrClauses.push({ bookingCode: re });
+    if (mongoose.Types.ObjectId.isValid(searchStr) && String(new mongoose.Types.ObjectId(searchStr)) === searchStr) {
+      searchOrClauses.push({ _id: new mongoose.Types.ObjectId(searchStr) });
+    }
+    
+    if (query.$or) {
+      query.$and = query.$and || [];
+      query.$and.push({ $or: query.$or });
+      query.$and.push({ $or: searchOrClauses });
+      delete query.$or;
+    } else {
+      query.$or = searchOrClauses;
+    }
   }
 
   // keyword: search package name OR branch name

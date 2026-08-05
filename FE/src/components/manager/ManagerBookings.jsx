@@ -632,7 +632,7 @@ function PrintReceiptModal({ booking, onClose }) {
                 <tr className="border-b border-black">
                   <th className="py-2 text-left font-normal text-black w-1/2">Mô tả</th>
                   <th className="py-2 text-right font-normal text-black">SL</th>
-                  <th className="py-2 text-right font-normal text-black">Đơn giá</th>
+                  <th className="py-2 text-right font-normal text-black">Đơn giá (đã gồm thuế)</th>
                   <th className="py-2 text-right font-normal text-black">Thuế</th>
                   <th className="py-2 text-right font-normal text-black">Thành tiền</th>
                 </tr>
@@ -640,7 +640,17 @@ function PrintReceiptModal({ booking, onClose }) {
               <tbody>
                 <tr className="border-b border-slate-200">
                   <td className="py-3 text-left align-top">
-                    <div className="font-normal text-black">{detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ rửa xe'}</div>
+                    <div className="font-normal text-black">
+                      {detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ rửa xe'}
+                      {(() => {
+                        const pkgSubs = detailBooking.packageId?.subServices;
+                        const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+                        if (included.length > 0) {
+                          return <span className="text-slate-600 text-[13px]"> ({included.map(s => s.name).join(', ')})</span>;
+                        }
+                        return null;
+                      })()}
+                    </div>
                     {!detailBooking.isGroup && <div className="text-black">{formatDate(detailBooking.bookingDate)} • {detailBooking.startTime || '—'}</div>}
                     {detailBooking.isGroup && (
                       <div className="mt-2 space-y-1">
@@ -664,18 +674,6 @@ function PrintReceiptModal({ booking, onClose }) {
                   <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
                 
-                {/* Included services rows */}
-                {(() => {
-                  const pkgSubs = detailBooking.packageId?.subServices;
-                  const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
-                  return included.map((sub, i) => (
-                    <tr key={`inc-${i}`} className="border-b border-slate-100/60">
-                      <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
-                        ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
-                      </td>
-                    </tr>
-                  ));
-                })()}
                 {/* Sub-services rows */}
                 {(detailBooking.selectedSubServices || []).filter(s => s.isOptional !== false).map((sub, i) => (
                   <tr key={`sub-${i}`} className="border-b border-slate-100">
@@ -1338,7 +1336,6 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       </div>
 
       {/* ── INVOICE (full width, outside grid) ── */}
-        {(booking.status === 'completed' || booking.status === 'awaiting_payment') && (
           <div className="mt-5 rounded-2xl border border-emerald-200/80 bg-white overflow-hidden shadow-xs">
             {/* Invoice header */}
             <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-5 py-3 text-white shadow-xs">
@@ -1468,7 +1465,6 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
               </div>
             </div>
           </div>
-        )}
 
         {/* Rating + Review (completed) */}
         {booking.status === 'completed' && (booking.rating || booking.feedback) && (

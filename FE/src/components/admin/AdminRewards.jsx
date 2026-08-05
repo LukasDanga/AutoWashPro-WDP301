@@ -248,6 +248,8 @@ function VoucherModal({ initial, onSave, onClose, saving, branches = [] }) {
 }
 
 function VoucherUsageModal({ voucherId, onClose }) {
+  const navigate = useNavigate();
+  const isManager = window.location.pathname.startsWith('/manager');
   const [usages, setUsages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -314,6 +316,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
                     <th className="px-4 py-3">Khách hàng</th>
+                    <th className="px-4 py-3">Mã đơn</th>
                     <th className="px-4 py-3">Ngày đặt</th>
                     <th className="px-4 py-3">Giảm giá</th>
                     <th className="px-4 py-3">Ngày dùng</th>
@@ -331,9 +334,37 @@ function VoucherUsageModal({ voucherId, onClose }) {
                           {u.userId?.phone && <p className="text-[11px] text-slate-400 mt-0.5">{u.userId.phone}</p>}
                         </div>
                       </td>
+                      <td className="px-4 py-3">
+                        {u.bookingId ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="font-mono text-[13px] font-bold text-slate-700">
+                              {u.bookingId.bookingCode || 'AWP-' + String(u.bookingId._id).slice(-8).toUpperCase()}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const code = u.bookingId.bookingCode || ('AWP-' + String(u.bookingId._id).slice(-8).toUpperCase());
+                                if (code.startsWith('SP-')) {
+                                  navigate(isManager ? '/manager/slot-packs' : '/admin/slot-packs', { 
+                                    state: { openSlotPack: { _id: u.bookingId._id, packCode: code, userId: u.userId } } 
+                                  });
+                                } else {
+                                  navigate(isManager ? '/manager/bookings' : '/admin/bookings', { 
+                                    state: { openBooking: { _id: u.bookingId._id, bookingCode: code, userId: u.userId } } 
+                                  });
+                                }
+                              }}
+                              className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
+                            >
+                              {(u.bookingId.bookingCode || '').startsWith('SP-') ? 'Xem gói lượt' : 'Xem đơn'}
+                            </button>
+                          </div>
+                        ) : '—'}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{u.bookingId?.bookingDate ? formatDate(u.bookingId.bookingDate) : '—'}</td>
                       <td className="px-4 py-3 text-emerald-600 font-medium">-{Number(u.discountAmount).toLocaleString('vi-VN')}₫</td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{new Date(u.usedAt).toLocaleString('vi-VN')}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        <span>{new Date(u.usedAt).toLocaleString('vi-VN')}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -380,6 +411,8 @@ function VoucherUsageModal({ voucherId, onClose }) {
 }
 
 function VoucherUsageReportTab() {
+  const navigate = useNavigate();
+  const isManager = window.location.pathname.startsWith('/manager');
   const [report, setReport] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -426,6 +459,14 @@ function VoucherUsageReportTab() {
                 <div className="flex flex-col gap-1 overflow-hidden pr-2">
                    <div className="flex items-center gap-1.5">
                      <span className="font-mono text-[10px] font-bold bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded shadow-sm">{v.code}</span>
+                     {v.bookings && v.bookings.length > 0 && (
+                       <button
+                         onClick={() => navigate(isManager ? '/manager/bookings' : '/admin/bookings', { state: { openBooking: { _id: v.bookings[0], userId: item.userId } } })}
+                         className="text-[10px] text-blue-600 hover:text-blue-700 underline font-medium"
+                       >
+                         {v.bookings.length === 1 ? 'Xem đơn' : 'Xem đơn gần nhất'}
+                       </button>
+                     )}
                    </div>
                    <span className="text-[11px] font-medium text-slate-600 truncate" title={v.name}>{v.name}</span>
                 </div>

@@ -379,7 +379,7 @@ exports.getVoucherUsage = async (voucherId, filters = {}) => {
   const [data, total] = await Promise.all([
     VoucherUsage.find(query)
       .populate('userId', 'name email phone tier')
-      .populate('bookingId', 'bookingDate startTime status')
+      .populate('bookingId', 'bookingCode bookingDate startTime status')
       .sort({ usedAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -429,7 +429,8 @@ exports.getVoucherUsageReport = async (filters = {}) => {
         $group: {
           _id: { userId: '$userId', voucherId: '$voucherId' },
           count: { $sum: 1 },
-          totalDiscount: { $sum: '$discountAmount' }
+          totalDiscount: { $sum: '$discountAmount' },
+          bookings: { $push: '$bookingId' }
         }
       },
       {
@@ -452,7 +453,8 @@ exports.getVoucherUsageReport = async (filters = {}) => {
               code: '$voucher.code',
               name: '$voucher.name',
               count: '$count',
-              totalDiscount: '$totalDiscount'
+              totalDiscount: '$totalDiscount',
+              bookings: '$bookings'
             }
           }
         }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import {
   Buildings, Ticket, CurrencyDollar, User, Phone, Car, CalendarBlank,
@@ -347,7 +348,7 @@ function UsageDetail({ booking, onClose }) {
 
 /* ─── Tab: Danh sách gói ──────────────────────────────────────────────────── */
 
-function PackListTab() {
+function PackListTab({ pendingOpenPack, onClearPending }) {
   const [packs, setPacks] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -360,6 +361,9 @@ function PackListTab() {
   const [total, setTotal] = useState(0);
   const debounceRef = useRef(null);
   const [viewedAdminSlotPacks, setViewedAdminSlotPacks] = useState([]);
+  
+  // Expose setDetail to parent if needed, or pass pendingOpenPack down
+  // Actually, we can fetch the detail directly in PackListTab if it receives pendingOpenPack.
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('viewed_admin_slot_packs') || '[]');
@@ -391,6 +395,22 @@ function PackListTab() {
       setBranches(d?.data?.branches || d?.data || []);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (pendingOpenPack && pendingOpenPack._id) {
+      api(`/slot-packs/${pendingOpenPack._id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d?.data) {
+            setDetail(d.data);
+          } else if (d) {
+             setDetail(d);
+          }
+          if (onClearPending) onClearPending();
+        })
+        .catch(() => { if (onClearPending) onClearPending(); });
+    }
+  }, [pendingOpenPack, onClearPending]);
 
   function onFilter(setter, value) { setter(value); setPage(1); }
 
@@ -740,6 +760,16 @@ const MAIN_TABS = [
 
 export default function AdminSlotPacks() {
   const [activeTab, setActiveTab] = useState('packs');
+  const location = useLocation();
+  const [pendingOpenPack, setPendingOpenPack] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.openSlotPack) {
+      setPendingOpenPack(location.state.openSlotPack);
+      setActiveTab('packs');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   return (
     <div className="space-y-5">
@@ -762,7 +792,14 @@ export default function AdminSlotPacks() {
         })}
       </div>
 
-      {activeTab === 'packs' ? <PackListTab /> : <UsageHistoryTab />}
+      {activeTab === 'packs' ? (
+        <PackListTab 
+          pendingOpenPack={pendingOpenPack} 
+          onClearPending={() => setPendingOpenPack(null)} 
+        />
+      ) : (
+        <UsageHistoryTab />
+      )}
     </div>
   );
 }
