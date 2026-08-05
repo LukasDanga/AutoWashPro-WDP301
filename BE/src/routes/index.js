@@ -19,6 +19,7 @@ const loyaltyRoutes = require('./loyalty.routes');
 const walletTransactionRoutes = require('./walletTransaction.routes');
 const configRoutes = require('./config.routes');
 const policyRoutes = require('./policy.routes');
+const rewardRoutes = require('./reward.routes');
 
 module.exports = {
   authRoutes,
@@ -42,4 +43,5 @@ module.exports = {
   walletTransactionRoutes,
   configRoutes,
   policyRoutes,
+  rewardRoutes,
 };
