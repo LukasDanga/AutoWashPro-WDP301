@@ -729,53 +729,7 @@ function PrintReceiptModal({ booking, onClose }) {
                 <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
               </div>
             </div>
-          </div>
-
-          {/* Payment History */}
-          <div>
-            <h3 className="text-xl font-bold text-black mb-4">Lịch sử thanh toán</h3>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-black">
-                  <th className="py-2 text-left font-normal text-black">Phương thức</th>
-                  <th className="py-2 text-left font-normal text-black">Ngày</th>
-                  <th className="py-2 text-right font-normal text-black">Đã trả</th>
-                  <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receiptPayments === null ? (
-                  <tr className="border-b border-slate-200">
-                    <td className="py-3 text-left text-black">
-                      {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
-                    </td>
-                    <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
-                    <td className="py-3 text-right text-black">
-                      {detailBooking.paymentStatus === 'paid'
-                        ? formatCurrency(displayTotal)
-                        : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
-                    </td>
-                    <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
-                  </tr>
-                ) : receiptPayments.length === 0 ? (
-                  <tr className="border-b border-slate-200">
-                    <td colSpan={4} className="py-3 text-center text-black">Chưa có giao dịch thanh toán</td>
-                  </tr>
-                ) : receiptPayments.map((p, i) => (
-                  <tr key={i} className="border-b border-slate-200">
-                    <td className="py-3 text-left text-black">
-                      {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : p.method || '—'}
-                      {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
-                    </td>
-                    <td className="py-3 text-left text-black">{formatDate(p.paidAt || p.createdAt || detailBooking.bookingDate)}</td>
-                    <td className="py-3 text-right text-black">{formatCurrency(p.amount)}</td>
-                    <td className="py-3 text-right text-black">AWP-{String(p.transactionId || p._id || displayId).slice(-8).toUpperCase()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          </div>          </div>
 
         {/* Footer Actions (Sticky) - Hide on Print */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 no-print">
@@ -1569,6 +1523,55 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             )}
           </div>
         )}
+
+        {/* Lịch sử thanh toán (Outer detail view) */}
+        <div className="mt-5 rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <CreditCard size={16} className="text-emerald-600" /> Lịch sử thanh toán
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
+                  <th className="py-2.5 px-3">Phương thức</th>
+                  <th className="py-2.5 px-3">Ngày</th>
+                  <th className="py-2.5 px-3 text-right">Đã trả</th>
+                  <th className="py-2.5 px-3 text-right">Mã biên lai</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {receiptPayments === null ? (
+                  <tr>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {booking.paymentStatus === 'paid' ? 'Thanh toán' : (booking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">{new Date(booking.paidAt || booking.updatedAt || booking.bookingDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">
+                      {booking.paymentStatus === 'paid'
+                        ? formatCurrency(booking.finalPrice || booking.totalAmount || 0)
+                        : (booking.paymentStatus === 'deposit_paid' ? formatCurrency(booking.depositAmount || 0) : '0đ')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500">AWP-{String(booking._id).slice(-8).toUpperCase()}</td>
+                  </tr>
+                ) : receiptPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-3 px-3 text-center text-slate-400 italic">Chưa có giao dịch thanh toán</td>
+                  </tr>
+                ) : receiptPayments.map((p, i) => (
+                  <tr key={i}>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : (p.method || '—')}
+                      {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">{new Date(p.paidAt || p.createdAt || booking.bookingDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500">AWP-{String(p.transactionId || p._id || booking._id).slice(-8).toUpperCase()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         {/* QR check-in — chỉ hiển thị khi đơn đã xác nhận / đã check-in / hết hạn */}
         {renderQrButton()}
