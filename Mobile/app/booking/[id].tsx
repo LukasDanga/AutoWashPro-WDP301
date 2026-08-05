@@ -24,6 +24,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +32,9 @@ import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSystemConfig } from '../../src/contexts/ConfigContext';
 import { sseService } from '../../src/services/sse';
 import { bookingApi, refundApi } from '../../src/api';
 import {
@@ -78,6 +81,12 @@ interface RefundRequest {
 }
 
 export default function BookingDetailScreen() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [showCheckInSuccessModal, setShowCheckInSuccessModal] = useState(false);
+  const [isWaitingConfirm, setIsWaitingConfirm] = useState(false);
+  const [scanned, setScanned] = useState(false);
+
   const configs = useSystemConfig();
   const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 0;
   const router = useRouter();
@@ -135,6 +144,52 @@ export default function BookingDetailScreen() {
       unsub6();
     };
   }, [id]);
+
+  useEffect(() => {
+    const unsub1 = sseService.subscribe('customer_checked_in_confirmed', (data: any) => {
+      if (data?.bookingId === id || !data?.bookingId) {
+        setIsWaitingConfirm(false);
+        fetchBooking();
+        setShowCheckInSuccessModal(true);
+      }
+    });
+
+    const unsub2 = sseService.subscribe('checkin_rejected', (data: any) => {
+      if (data?.bookingId === id || !data?.bookingId) {
+        setIsWaitingConfirm(false);
+        AlertDialog.error('Từ chối Check-in', data?.reason || 'Quản lý chưa xác nhận hoặc đã từ chối yêu cầu check-in.');
+      }
+    });
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!isWaitingConfirm || !id) return;
+    const interval = setInterval(async () => {
+      try {
+        const response = await bookingApi.getBooking(id);
+        if (response.status === 'checked_in') {
+          setIsWaitingConfirm(false);
+          setBooking(response);
+          setShowCheckInSuccessModal(true);
+        }
+      } catch {}
+    }, 2000);
+
+    const timeout = setTimeout(() => {
+      setIsWaitingConfirm(false);
+      AlertDialog.info('Thông báo', 'Quản lý chưa phản hồi yêu cầu check-in. Vui lòng liên hệ nhân viên tại quầy.');
+    }, 45000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [isWaitingConfirm, id]);
 
   const fetchBooking = async () => {
     if (!id) return;
@@ -236,6 +291,46 @@ export default function BookingDetailScreen() {
       } as any);
     } finally {
       setIsRebooking(false);
+    }
+  };
+
+  const handleOpenScanner = async () => {
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        AlertDialog.error('Quyền camera', 'Vui lòng cấp quyền truy cập camera để quét mã QR check-in.');
+        return;
+      }
+    }
+    setScanned(false);
+    setShowScannerModal(true);
+  };
+
+  const handleBarCodeScanned = async ({ data }: { data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    setShowScannerModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (!booking) return;
+
+    if (booking.status === 'checked_in') {
+      AlertDialog.info('Thông báo', 'Lịch đặt này đã ở trạng thái Đã check-in rồi.');
+      return;
+    }
+
+    try {
+      const { apiClient } = await import('../../src/api/client');
+      let branchIdFromQR: string | null = null;
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.branchId) branchIdFromQR = parsed.branchId;
+      } catch {}
+
+      await apiClient.post(`/bookings/${booking._id}/request-checkin`, { branchId: branchIdFromQR });
+      setIsWaitingConfirm(true);
+    } catch (err: any) {
+      AlertDialog.error('Lỗi Yêu Cầu', err?.response?.data?.message || 'Không thể gửi yêu cầu check-in tới Quản lý.');
     }
   };
 
@@ -348,7 +443,7 @@ export default function BookingDetailScreen() {
   const canCancel = ['pending', 'confirmed', 'awaiting_payment'].includes(booking.status);
   const canRebook = booking.status === 'completed';
   const canFeedback = booking.status === 'completed' && !booking.rating;
-  const canShowQR = ['confirmed', 'checked_in'].includes(booking.status);
+  const canShowQR = ['pending', 'confirmed'].includes(booking.status);
   const canEditServices = ['pending', 'confirmed', 'checked_in', 'in_progress'].includes(booking.status);
 
   // Logic payment actions — match BE booking.service.js.
@@ -382,13 +477,15 @@ export default function BookingDetailScreen() {
         title="Chi tiết đặt lịch"
         showBack
         rightAction={
-          <PressableScale
-            onPress={() => router.replace('/(tabs)')}
-            accessibilityLabel="Trang chủ"
-            style={styles.chatIconBtn}
-          >
-            <Icon name={Icons.homeOutline} size={22} color={colors.primary} />
-          </PressableScale>
+          canShowQR ? (
+            <PressableScale
+              onPress={handleOpenScanner}
+              accessibilityLabel="Quét mã QR Check-in"
+              style={styles.chatIconBtn}
+            >
+              <Icon name={Icons.qrCodeOutline} size={22} color={colors.primary} />
+            </PressableScale>
+          ) : undefined
         }
       />
 
@@ -742,7 +839,19 @@ export default function BookingDetailScreen() {
               accessibilityRole="button"
             >
               {qrDataUrl ? (
-                <QRCode value={qrDataUrl} size={180} color={colors.textPrimary} backgroundColor={colors.background} />
+                qrDataUrl.startsWith('data:image') || qrDataUrl.startsWith('http') ? (
+                  <Image source={{ uri: qrDataUrl }} style={{ width: 180, height: 180, borderRadius: 12 }} resizeMode="contain" />
+                ) : (
+                  <QRCode
+                    value={JSON.stringify({
+                      bookingId: booking._id,
+                      branchId: typeof booking.branchId === 'object' ? (booking.branchId as any)._id : booking.branchId,
+                    })}
+                    size={180}
+                    color={colors.textPrimary}
+                    backgroundColor={colors.background}
+                  />
+                )
               ) : (
                 <View style={styles.qrPlaceholder}>
                   <Icon name={Icons.qrCodeOutline} size={48} color={colors.textTertiary} />
@@ -1243,15 +1352,19 @@ export default function BookingDetailScreen() {
             </View>
             <View style={styles.qrModalContent}>
               {qrDataUrl ? (
-                <>
-                  <QRCode value={qrDataUrl} size={260} color="#0F172A" backgroundColor="#FFFFFF" />
-                  <AppText variant="body" style={styles.qrModalCode}>
-                    #{booking._id.slice(-8).toUpperCase()}
-                  </AppText>
-                  <AppText variant="caption" color="rgba(255,255,255,0.7)" style={styles.qrModalHint}>
-                    Đưa mã này cho nhân viên tại quầy check-in
-                  </AppText>
-                </>
+                qrDataUrl.startsWith('data:image') || qrDataUrl.startsWith('http') ? (
+                  <Image source={{ uri: qrDataUrl }} style={{ width: 260, height: 260, borderRadius: 16 }} resizeMode="contain" />
+                ) : (
+                  <QRCode
+                    value={JSON.stringify({
+                      bookingId: booking._id,
+                      branchId: typeof booking.branchId === 'object' ? (booking.branchId as any)._id : booking.branchId,
+                    })}
+                    size={260}
+                    color="#0F172A"
+                    backgroundColor="#FFFFFF"
+                  />
+                )
               ) : (
                 <AppText style={{ color: '#FFF' }}>Đang tạo QR…</AppText>
               )}
@@ -1267,6 +1380,97 @@ export default function BookingDetailScreen() {
         initialSelected={(booking.selectedSubServices || booking.subServices || []).map((s: any) => typeof s === 'object' ? s.name : s)}
         loading={isUpdatingServices}
       />
+
+      {/* QR Scanner Modal for Scanning Manager's Check-in QR */}
+      <Modal
+        visible={showScannerModal}
+        animationType="slide"
+        onRequestClose={() => setShowScannerModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#000' }}>
+            <TouchableOpacity onPress={() => setShowScannerModal(false)} style={{ padding: 8 }}>
+              <Icon name={Icons.close} size={26} color="#FFF" />
+            </TouchableOpacity>
+            <AppText variant="h4" style={{ color: '#FFF', fontWeight: '700' }}>
+              Quét mã QR Check-in Quản lý
+            </AppText>
+            <View style={{ width: 40 }} />
+          </View>
+          <View style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              onBarcodeScanned={handleBarCodeScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr'],
+              }}
+            />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ width: 250, height: 250, borderWidth: 2, borderColor: '#10B981', borderRadius: 24, backgroundColor: 'transparent' }} />
+              <AppText variant="bodySmall" style={{ color: '#FFF', textAlign: 'center', marginTop: 24, paddingHorizontal: 32, backgroundColor: 'rgba(0,0,0,0.6)', paddingVertical: 8, borderRadius: 12 }}>
+                Đưa camera vào Mã QR Check-in trên màn hình của Quản lý
+              </AppText>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Waiting for Manager Confirmation Modal */}
+      <Modal
+        visible={isWaitingConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsWaitingConfirm(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ width: '100%', maxWidth: 340, backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <ActivityIndicator size="large" color="#D97706" />
+            </View>
+            <AppText variant="h3" style={{ textAlign: 'center', fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>
+              Đang Chờ Quản Lý Xác Nhận...
+            </AppText>
+            <AppText variant="bodySmall" style={{ textAlign: 'center', color: '#475569', lineHeight: 20, marginBottom: 20 }}>
+              Yêu cầu check-in cho đơn <AppText style={{ fontWeight: '700', color: '#0F172A' }}>#{booking?._id?.slice(-8).toUpperCase()}</AppText> đã được gửi tới Quản lý tại quầy. Vui lòng chờ Quản lý xác nhận!
+            </AppText>
+            <Button
+              title="Hủy chờ"
+              onPress={() => setIsWaitingConfirm(false)}
+              variant="outline"
+              fullWidth
+              style={{ borderRadius: 16 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Check-in Success Modal */}
+      <Modal
+        visible={showCheckInSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCheckInSuccessModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ width: '100%', maxWidth: 340, backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <Icon name={Icons.checkmarkCircle} size={48} color="#10B981" />
+            </View>
+            <AppText variant="h3" style={{ textAlign: 'center', fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>
+              Check-in Thành Công!
+            </AppText>
+            <AppText variant="bodySmall" style={{ textAlign: 'center', color: '#475569', lineHeight: 20, marginBottom: 20 }}>
+              Đơn đặt lịch <AppText style={{ fontWeight: '700', color: '#0F172A' }}>#{booking?._id?.slice(-8).toUpperCase()}</AppText> đã tự động chuyển sang trạng thái <AppText style={{ fontWeight: '700', color: '#10B981' }}>Đã check-in</AppText>. Vui lòng chờ nhân viên tiếp nhận xe vào xưởng!
+            </AppText>
+            <Button
+              title="Đồng ý"
+              onPress={() => setShowCheckInSuccessModal(false)}
+              fullWidth
+              style={{ backgroundColor: '#10B981', borderRadius: 16 }}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

@@ -163,9 +163,33 @@ export default function ManagerPackages({ user }) {
 
   async function handleSave() {
     if (!form.name.trim() || !form.price || !form.duration) {
-      setError('Vui lòng điền tên, giá và thời gian.');
+      setError('Vui lòng điền đầy đủ tên, giá và thời gian của gói dịch vụ.');
       return;
     }
+    if (Number(form.price) <= 0) {
+      setError('Giá gói dịch vụ phải lớn hơn 0đ.');
+      return;
+    }
+    if (Number(form.duration) <= 0) {
+      setError('Thời gian thực hiện phải lớn hơn 0 phút.');
+      return;
+    }
+
+    // Kiểm tra từng dịch vụ con
+    const activeSubs = form.subServices.filter(s => s.name && s.name.trim());
+    for (const sub of activeSubs) {
+      if (sub.isOptional) {
+        if (!sub.duration || Number(sub.duration) <= 0) {
+          setError(`Dịch vụ thêm "${sub.name}" bắt buộc phải nhập số phút (> 0 phút).`);
+          return;
+        }
+        if (!sub.price || Number(sub.price) <= 1000) {
+          setError(`Giá của dịch vụ thêm "${sub.name}" phải lớn hơn 1.000đ.`);
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     setError('');
     try {
@@ -176,14 +200,12 @@ export default function ManagerPackages({ user }) {
         duration: Number(form.duration),
         category: form.category,
         vehicleTypes: form.vehicleTypes,
-        subServices: form.subServices
-          .filter(s => s.name.trim())
-          .map(s => ({
-            name: s.name.trim(),
-            price: Number(s.price) || 0,
-            duration: Number(s.duration) || 0,
-            isOptional: s.isOptional,
-          })),
+        subServices: activeSubs.map(s => ({
+          name: s.name.trim(),
+          price: s.isOptional ? (Number(s.price) || 0) : 0,
+          duration: Number(s.duration) || 0,
+          isOptional: s.isOptional,
+        })),
       };
       const res = editPkg
         ? await api(`/packages/${editPkg._id || editPkg.id}`, { method: 'PUT', body: JSON.stringify(body) })
@@ -345,7 +367,7 @@ export default function ManagerPackages({ user }) {
                     )}
                     {(pkg.subServices || []).filter(s => s.isOptional).length > 0 && (
                       <div>
-                        <span className="text-[10px] font-semibold text-indigo-700 block mb-1">✨ Tùy chọn thêm:</span>
+                        <span className="text-[10px] font-semibold text-indigo-700 block mb-1">✨ Dịch vụ thêm:</span>
                         <div className="flex flex-wrap gap-1">
                           {(pkg.subServices || []).filter(s => s.isOptional).map((s, i) => (
                             <span key={i} className="bg-white border border-indigo-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
@@ -407,38 +429,38 @@ export default function ManagerPackages({ user }) {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">{editPkg ? 'Sửa gói dịch vụ' : 'Thêm gói dịch vụ'}</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <h2 className="font-bold text-slate-800 text-base">{editPkg ? 'Sửa gói dịch vụ' : 'Thêm gói dịch vụ mới'}</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
             </div>
 
-            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Tên gói *</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Tên gói dịch vụ <span className="text-red-500">*</span></label>
                   <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className={inp} placeholder="VD: Rửa xe cơ bản" />
+                    className={inp} placeholder="VD: Rửa xe cao cấp & Phủ bóng" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Mô tả</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Mô tả gói</label>
                   <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    rows={2} className={`${inp} resize-none`} placeholder="Mô tả ngắn về gói dịch vụ" />
+                    rows={2} className={`${inp} resize-none`} placeholder="Mô tả ngắn gọn về quy trình rửa xe..." />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Giá (đ) *</label>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Giá gói chính (VNĐ) <span className="text-red-500">*</span></label>
                     <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
                       className={inp} placeholder="150000" min="0" />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Thời gian (phút) *</label>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Thời gian thực hiện (Phút) <span className="text-red-500">*</span></label>
                     <input type="number" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
                       className={inp} placeholder="30" min="1" />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Danh mục</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Danh mục gói</label>
                   <select value={form.category} onChange={e => {
                     const newCat = e.target.value;
                     setForm(f => {
@@ -455,14 +477,14 @@ export default function ManagerPackages({ user }) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-2">Loại xe áp dụng</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-2">Loại xe áp dụng</label>
                   <div className="flex flex-wrap gap-2">
                     {VEHICLE_TYPES.map(vt => (
                       <button key={vt} type="button" onClick={() => toggleVehicleType(vt)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                           form.vehicleTypes.includes(vt)
-                            ? 'bg-emerald-600 text-white border-emerald-600'
-                            : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                         }`}>
                         {vt}
                       </button>
@@ -471,51 +493,68 @@ export default function ManagerPackages({ user }) {
                 </div>
               </div>
 
-              <div>
+              <div className="pt-4 border-t border-slate-100">
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Chi tiết dịch vụ nhỏ (Bao gồm & Tùy chọn)</label>
+                  <div>
+                    <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wide block">Danh sách dịch vụ nhỏ (Sub-services)</label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Tích chọn "Dịch vụ thêm" để đặt giá &gt; 1.000đ và thời gian thực hiện</p>
+                  </div>
                   <button type="button" onClick={addSubService}
-                    className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
-                    + Thêm
+                    className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all cursor-pointer">
+                    + Thêm dịch vụ
                   </button>
                 </div>
 
                 {form.subServices.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400">
+                  <div className="rounded-2xl border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400 bg-slate-50/50">
                     Chưa có dịch vụ nhỏ nào.
-                    <button type="button" onClick={addSubService} className="ml-1 text-emerald-500 underline">Thêm ngay</button>
+                    <button type="button" onClick={addSubService} className="ml-1 text-emerald-600 font-bold underline">Thêm dịch vụ ngay</button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {form.subServices.map((sub, idx) => (
-                      <div key={idx} className="rounded-xl border border-slate-200 p-3 space-y-2 bg-slate-50">
+                      <div key={idx} className={`rounded-2xl border p-3.5 space-y-2.5 transition-all ${sub.isOptional ? 'bg-indigo-50/40 border-indigo-200' : 'bg-slate-50/70 border-slate-200'}`}>
                         <div className="flex items-center gap-2">
                           <input value={sub.name} onChange={e => updateSub(idx, 'name', e.target.value)}
-                            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                            placeholder="Tên dịch vụ (VD: Dán phim, Hút bụi)" />
+                            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                            placeholder="Tên dịch vụ (VD: Hút bụi nội thất, Tẩy ố kính)" />
                           <button type="button" onClick={() => removeSubService(idx)}
-                            className="text-red-400 hover:text-red-600 text-lg shrink-0 px-1">×</button>
+                            className="w-8 h-8 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 font-bold text-base flex items-center justify-center transition-colors shrink-0">✕</button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-1">Giá thêm (đ)</label>
-                            <input type="number" value={sub.price} onChange={e => updateSub(idx, 'price', e.target.value)}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                              placeholder="0" min="0" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-1">Thêm (phút)</label>
-                            <input type="number" value={sub.duration} onChange={e => updateSub(idx, 'duration', e.target.value)}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                              placeholder="0" min="0" />
-                          </div>
-                          <div className="flex items-end pb-1.5">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                          <div className="flex items-center h-full pt-1 sm:pt-0">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
                               <input type="checkbox" checked={sub.isOptional}
-                                onChange={e => updateSub(idx, 'isOptional', e.target.checked)}
-                                className="accent-emerald-600" />
-                              <span className="text-xs text-slate-500">Tùy chọn</span>
+                                onChange={e => {
+                                  const checked = e.target.checked;
+                                  setForm(f => ({
+                                    ...f,
+                                    subServices: f.subServices.map((s, i) =>
+                                      i === idx ? { ...s, isOptional: checked, price: checked ? (s.price && s.price !== '0' ? s.price : '') : '0' } : s
+                                    )
+                                  }));
+                                }}
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" />
+                              <span className="text-xs font-bold text-slate-800">Dịch vụ thêm</span>
                             </label>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                              Giá thêm (đ) {sub.isOptional ? <span className="text-red-500 font-bold">* (&gt;1.000đ)</span> : <span className="text-slate-400 font-normal">(Cố định 0đ)</span>}
+                            </label>
+                            <input type="number" value={sub.isOptional ? sub.price : '0'}
+                              disabled={!sub.isOptional}
+                              onChange={e => updateSub(idx, 'price', e.target.value)}
+                              className={`w-full rounded-xl border px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 ${!sub.isOptional ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-900'}`}
+                              placeholder={sub.isOptional ? 'VD: 50000' : '0'} min="1001" step="1000" />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                              Số phút {sub.isOptional ? <span className="text-red-500 font-bold">* (Bắt buộc)</span> : <span className="text-slate-400">(Trong gói)</span>}
+                            </label>
+                            <input type="number" value={sub.duration} onChange={e => updateSub(idx, 'duration', e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                              placeholder="VD: 15" min="1" />
                           </div>
                         </div>
                       </div>
@@ -524,7 +563,11 @@ export default function ManagerPackages({ user }) {
                 )}
               </div>
 
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
+                  ⚠️ {error}
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">

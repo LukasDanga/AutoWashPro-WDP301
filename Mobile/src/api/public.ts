@@ -9,7 +9,7 @@ import type { PublicStats, Gift, SlotProduct, Testimonial } from '../types';
 // Use direct axios to avoid auth interceptor
 const publicClient = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api',
-  timeout: 30000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },

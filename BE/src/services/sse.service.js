@@ -42,8 +42,9 @@ function broadcastToManagers(branchId, event, data) {
   // Socket.io
   try {
     const socket = require('./../socket');
-    socket.getIO().to(`branch_${branchId}`).emit(event, data);
+    if (branchId) socket.getIO().to(`branch_${branchId}`).emit(event, data);
     socket.getIO().to('admin').emit(event, data);
+    socket.getIO().emit(event, data || {});
   } catch (err) {
     // ignore
   }
