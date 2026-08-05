@@ -108,6 +108,85 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
   // Pay remaining
   const [payRemainingTarget, setPayRemainingTarget] = useState(null);
+  const [earnedPointRecord, setEarnedPointRecord] = useState(null);
+
+  useEffect(() => {
+    if (!token || !booking || booking.status !== 'completed') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase || API_BASE}/loyalty/my-history?limit=100`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const items = Array.isArray(payload?.data) ? payload.data : (payload?.items || []);
+        const bookingId = String(booking._id || booking.id);
+        const matched = items.find(ph => String(ph.referenceId?._id || ph.referenceId) === bookingId);
+        if (!cancelled && matched) {
+          setEarnedPointRecord(matched);
+        }
+      } catch (e) {}
+    })();
+    return () => { cancelled = true; };
+  }, [apiBase, token, booking?._id, booking?.status]);
+
+  const handlePrint = () => {
+    const el = document.getElementById('receipt-printable-area');
+    if (!el) return;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.no-print').forEach((n) => n.remove());
+    let headCSS = '';
+    document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+      if (l.href) headCSS += `<link rel="stylesheet" href="${l.href}">`;
+    });
+    document.querySelectorAll('style').forEach((s) => {
+      headCSS += s.outerHTML;
+    });
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('id', 'receipt-print-frame');
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    doc.open();
+    doc.write(`<html><head><title>Biên lai</title>
+      ${headCSS}
+      <style>
+        @page { size: A4; margin: 8mm; }
+        html, body { margin: 0; padding: 0; background: #fff; font-family: system-ui, -Apple-System, 'Segoe UI', sans-serif; }
+        #receipt-printable-area {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: relative !important;
+        }
+        #receipt-printable-area .receipt-body {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        #receipt-printable-area .receipt-body { padding: 5mm 10mm !important; }
+        #receipt-printable-area h2 { font-size: 36px !important; margin-bottom: 5mm !important; }
+        #receipt-printable-area h3 { font-size: 22px !important; margin-bottom: 4mm !important; }
+        #receipt-printable-area .text-4xl { font-size: 44px !important; }
+        #receipt-printable-area table { font-size: 15px !important; border-collapse: collapse !important; }
+        #receipt-printable-area th, #receipt-printable-area td { padding: 6px 2px !important; }
+        #receipt-printable-area .text-\[13px\],
+        #receipt-printable-area .text-\[10px\],
+        #receipt-printable-area .text-xs { font-size: 15px !important; }
+      </style>
+      </head><body>${clone.outerHTML}</body></html>`);
+    doc.close();
+    const doPrint = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => { iframe.remove(); }, 1500);
+      }, 300);
+    };
+    if (doc.readyState === 'complete') doPrint();
+    else iframe.addEventListener('load', doPrint);
+  };
   const [payRemainingMethod, setPayRemainingMethod] = useState('vnpay');
   const [payRemainingLoading, setPayRemainingLoading] = useState(false);
   const [payRemainingBankQR, setPayRemainingBankQR] = useState(null);
@@ -153,7 +232,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
     } catch (e) { setReceiptPayments(null); }
   }, [booking, apiBase, token]);
 
-  useEffect(() => { if (showReceipt) loadReceiptPayments(); }, [showReceipt, loadReceiptPayments]);
+  useEffect(() => { loadReceiptPayments(); }, [loadReceiptPayments]);
 
   // Recurring group
   const [recurringGroupBookings, setRecurringGroupBookings] = useState([]);
@@ -935,6 +1014,12 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
               </span>
               <span className="font-bold text-slate-800 text-sm sm:text-base">{formatCurrency(paidVal)}</span>
             </div>
+            {b.depositAmount > 0 && !isDepositPaid && !isFullyPaid && (
+              <div className="text-[11px] font-medium text-amber-700 bg-amber-50/80 px-3 py-1.5 rounded-lg border border-amber-200/80 flex items-center justify-between">
+                <span>Số tiền đặt cọc cần trả:</span>
+                <span className="font-extrabold">{formatCurrency(b.depositAmount)} (Chưa cọc)</span>
+              </div>
+            )}
             <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center">
               <div className="text-xs sm:text-sm font-bold text-amber-700 flex items-center gap-1">
                 🔥 Tiền còn lại cần thanh toán
@@ -1165,6 +1250,116 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
           )}
         </div>
 
+        {/* Điểm thưởng đơn hàng */}
+        {(() => {
+          const isRefunded = b.status === 'refunded' || b.paymentStatus === 'refunded';
+          if (isRefunded) return null; // Ẩn điểm thưởng hoàn toàn đối với đơn đã hoàn tiền
+
+          const estPoints = Math.floor(((b.finalPrice || b.totalAmount || 0) * 5) / 100);
+
+          if (b.status === 'completed') {
+            return (
+              <div className="mt-6 mb-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 rounded-2xl p-5 text-white shadow-md flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/30 shadow-xs">
+                    <span className="text-xl">🏆</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider block">Điểm thưởng tích lũy từ đơn này</span>
+                    <strong className="text-lg font-black text-white">
+                      +{earnedPointRecord ? Number(earnedPointRecord.points).toLocaleString('vi-VN') : estPoints.toLocaleString('vi-VN')} điểm
+                    </strong>
+                  </div>
+                </div>
+                {earnedPointRecord && (
+                  <button
+                    onClick={() => navigate(`/rewards/history/${earnedPointRecord._id}?tab=reward`)}
+                    className="px-4 py-2.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-extrabold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Xem chi tiết điểm thưởng</span>
+                    <ArrowLeft size={14} className="rotate-180" />
+                  </button>
+                )}
+              </div>
+            );
+          }
+
+          if (b.status !== 'cancelled' && estPoints > 0) {
+            return (
+              <div className="mt-6 mb-2 bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 shadow-2xs flex items-center gap-3 text-amber-900">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-base">
+                  🎁
+                </div>
+                <div className="text-xs font-medium leading-relaxed">
+                  <span className="text-slate-500 block font-semibold text-[11px] uppercase tracking-wider">Dự kiến tích lũy điểm thưởng</span>
+                  Bạn sẽ nhận được <strong className="font-extrabold text-amber-700">+{estPoints.toLocaleString('vi-VN')} điểm</strong> sau khi hoàn thành đơn hàng này.
+                </div>
+              </div>
+            );
+          }
+
+          return null;
+        })()}
+
+        {/* Lịch sử thanh toán */}
+        <div className="mt-5 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <span>💳</span> Lịch sử thanh toán
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
+                  <th className="py-2.5 px-3">Loại thanh toán</th>
+                  <th className="py-2.5 px-3">Phương thức</th>
+                  <th className="py-2.5 px-3">Ngày thanh toán</th>
+                  <th className="py-2.5 px-3 text-right">Đã trả</th>
+                  <th className="py-2.5 px-3 text-right">Mã giao dịch</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {receiptPayments === null ? (
+                  <tr>
+                    <td className="py-3 px-3 font-semibold text-slate-800">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${b.paymentStatus === 'deposit_paid' ? 'bg-amber-50 text-amber-700 border border-amber-200' : b.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                        {b.paymentStatus === 'paid' ? 'Toàn bộ' : (b.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {b.paymentMethod === 'wallet' ? 'Ví AutoWash' : b.paymentMethod === 'cash' ? 'Tiền mặt' : b.paymentMethod === 'vnpay' ? 'VNPay' : b.paymentMethod === 'bank' ? 'Chuyển khoản' : 'Ví AutoWash'}
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">{formatDate(b.paidAt || b.updatedAt || b.bookingDate)}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">
+                      {b.paymentStatus === 'paid'
+                        ? formatCurrency(b.isGroup ? (b.groupTotalPrice || 0) : (b.totalAmount || b.finalPrice || 0))
+                        : (b.paymentStatus === 'deposit_paid' ? formatCurrency(b.isGroup ? (b.groupTotalDeposit || 0) : (b.depositAmount || 0)) : '0đ')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500 font-semibold">TXN-{String(b._id).slice(-8).toUpperCase()}</td>
+                  </tr>
+                ) : receiptPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-3 px-3 text-center text-slate-400 italic">Chưa có giao dịch thanh toán</td>
+                  </tr>
+                ) : (receiptPayments || []).map((p, i) => (
+                  <tr key={p._id || p.transactionId || i}>
+                    <td className="py-3 px-3 font-semibold text-slate-800">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${p.paymentType === 'deposit' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                        {p.paymentType === 'deposit' ? 'Đặt cọc' : p.paymentType === 'remaining' ? 'Phần còn lại' : p.paymentType === 'full' ? 'Toàn bộ' : 'Thanh toán'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : (p.method || '—')}
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">{formatDate(p.paidAt || p.createdAt || b.bookingDate)}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500 font-semibold">{p.transactionId ? String(p.transactionId).toUpperCase() : `TXN-${String(p._id || b._id).slice(-8).toUpperCase()}`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
 
       {/* Footer actions */}
@@ -1286,10 +1481,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 <div>
                   <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Biên lai</h2>
                   <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
-                    <div className="font-semibold text-black">Mã hóa đơn</div>
-                    <div className="text-black">AWP-{displayInvoiceNumber}</div>
-                    <div className="font-semibold text-black">Mã biên lai</div>
-                    <div className="text-black">{displayId}</div>
+                    <div className="font-semibold text-black">Mã đơn đặt lịch</div>
+                    <div className="text-black">#{b.bookingCode || `AWP-${displayInvoiceNumber}`}</div>
+                    <div className="font-semibold text-black">Mã giao dịch</div>
+                    <div className="text-black">TXN-{displayInvoiceNumber}</div>
                     <div className="font-semibold text-black">Ngày thanh toán</div>
                     <div className="text-black">{formatDateTime(b.paidAt || b.updatedAt || b.bookingDate)}</div>
                   </div>
@@ -1332,9 +1527,6 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                   THÔNG TIN THANH TOÁN:<br/>
                   AutoWash Pro<br/>
                   Hồ Chí Minh, Vietnam
-                </p>
-                <p className="text-[13px] text-black mt-4">
-                  VAT được tính trên tổng giá trị hóa đơn (10%)
                 </p>
               </div>
 
@@ -1384,14 +1576,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                       const pkgSubs = b.packageId?.subServices;
                       const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
                       return included.map((sub, i) => (
-                        <tr key={`inc-${i}`} className="border-b border-slate-100">
-                          <td className="py-2 text-left text-black pl-4 text-emerald-600">
-                            {sub.name} <span className="text-[10px] text-emerald-400 font-normal">(có sẵn)</span>
+                        <tr key={`inc-${i}`} className="border-b border-slate-100/60">
+                          <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
+                            ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
                           </td>
-                          <td className="py-2 text-right text-black">—</td>
-                          <td className="py-2 text-right text-black">—</td>
-                          <td className="py-2 text-right text-black">—</td>
-                          <td className="py-2 text-right text-black">—</td>
                         </tr>
                       ));
                     })()}
@@ -1437,65 +1625,14 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         }
                       </span>
                     </div>
-                    {b.paymentStatus === 'paid' && b.paidAt && (
-                      <div className="flex justify-between py-1 border-b border-slate-200">
-                        <span className="font-normal text-black">Ngày thanh toán</span>
-                        <span className="font-normal text-black">{formatDateTime(b.paidAt)}</span>
-                      </div>
-                    )}
+                    <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
                   </div>
                 </div>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-black mb-4">Lịch sử thanh toán</h3>
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="border-b border-black">
-                      <th className="py-2 text-left font-normal text-black">Phương thức</th>
-                      <th className="py-2 text-left font-normal text-black">Ngày</th>
-                      <th className="py-2 text-right font-normal text-black">Đã trả</th>
-                      <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {receiptPayments === null ? (
-                      <tr className="border-b border-slate-200">
-                        <td className="py-3 text-left text-black">
-                          {b.paymentStatus === 'paid' ? 'Thanh toán' : (b.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
-                        </td>
-                        <td className="py-3 text-left text-black">{formatDate(b.paidAt || b.updatedAt || b.bookingDate)}</td>
-                        <td className="py-3 text-right text-black">
-                          {b.paymentStatus === 'paid'
-                            ? formatCurrency(displayTotal)
-                            : (b.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
-                        </td>
-                        <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
-                      </tr>
-                    ) : receiptPayments.length === 0 ? (
-                      <tr className="border-b border-slate-200">
-                        <td colSpan={4} className="py-3 text-center text-black">Chưa có giao dịch thanh toán</td>
-                      </tr>
-                    ) : (receiptPayments || []).map((p, i) => (
-                      <tr key={p._id || p.transactionId || i} className="border-b border-slate-200">
-                        <td className="py-3 text-left text-black">
-                          {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : (p.method || '—')}
-                          {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
-                        </td>
-                        <td className="py-3 text-left text-black">{formatDate(p.paidAt || p.createdAt || b.bookingDate)}</td>
-                        <td className="py-3 text-right text-black">{formatCurrency(p.amount)}</td>
-                        <td className="py-3 text-right text-black">AWP-{String(p.transactionId || p._id || displayId).slice(-8).toUpperCase()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-            </div>
+              </div>            </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 no-print">
               {b.status === 'completed' && (
-                <button onClick={() => window.print()}
+                <button onClick={handlePrint}
                   className="w-full px-4 py-2.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-slate-800 transition-colors text-center cursor-pointer">
                   In hóa đơn
                 </button>
