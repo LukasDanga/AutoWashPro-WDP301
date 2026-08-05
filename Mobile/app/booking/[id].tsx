@@ -84,6 +84,7 @@ export default function BookingDetailScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showCheckInSuccessModal, setShowCheckInSuccessModal] = useState(false);
+  const [isWaitingConfirm, setIsWaitingConfirm] = useState(false);
   const [scanned, setScanned] = useState(false);
 
   const configs = useSystemConfig();
@@ -143,6 +144,52 @@ export default function BookingDetailScreen() {
       unsub6();
     };
   }, [id]);
+
+  useEffect(() => {
+    const unsub1 = sseService.subscribe('customer_checked_in_confirmed', (data: any) => {
+      if (data?.bookingId === id || !data?.bookingId) {
+        setIsWaitingConfirm(false);
+        fetchBooking();
+        setShowCheckInSuccessModal(true);
+      }
+    });
+
+    const unsub2 = sseService.subscribe('checkin_rejected', (data: any) => {
+      if (data?.bookingId === id || !data?.bookingId) {
+        setIsWaitingConfirm(false);
+        AlertDialog.error('Từ chối Check-in', data?.reason || 'Quản lý chưa xác nhận hoặc đã từ chối yêu cầu check-in.');
+      }
+    });
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!isWaitingConfirm || !id) return;
+    const interval = setInterval(async () => {
+      try {
+        const response = await bookingApi.getBooking(id);
+        if (response.status === 'checked_in') {
+          setIsWaitingConfirm(false);
+          setBooking(response);
+          setShowCheckInSuccessModal(true);
+        }
+      } catch {}
+    }, 2000);
+
+    const timeout = setTimeout(() => {
+      setIsWaitingConfirm(false);
+      AlertDialog.info('Thông báo', 'Quản lý chưa phản hồi yêu cầu check-in. Vui lòng liên hệ nhân viên tại quầy.');
+    }, 45000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [isWaitingConfirm, id]);
 
   const fetchBooking = async () => {
     if (!id) return;
@@ -280,24 +327,10 @@ export default function BookingDetailScreen() {
         if (parsed.branchId) branchIdFromQR = parsed.branchId;
       } catch {}
 
-      let updatedBooking;
-      if (branchIdFromQR) {
-        try {
-          const res = await apiClient.post(`/bookings/${booking._id}/checkin-qr`, { branchId: branchIdFromQR });
-          updatedBooking = res.data;
-        } catch {
-          const res = await apiClient.patch(`/bookings/${booking._id}/status`, { status: 'checked_in' });
-          updatedBooking = res.data;
-        }
-      } else {
-        const res = await apiClient.patch(`/bookings/${booking._id}/status`, { status: 'checked_in' });
-        updatedBooking = res.data;
-      }
-
-      setBooking((prev) => (prev ? { ...prev, status: 'checked_in', ...(updatedBooking || {}) } : null));
-      setShowCheckInSuccessModal(true);
+      await apiClient.post(`/bookings/${booking._id}/request-checkin`, { branchId: branchIdFromQR });
+      setIsWaitingConfirm(true);
     } catch (err: any) {
-      AlertDialog.error('Lỗi Check-in', err?.response?.data?.message || 'Không thể chuyển trạng thái sang Đã check-in.');
+      AlertDialog.error('Lỗi Yêu Cầu', err?.response?.data?.message || 'Không thể gửi yêu cầu check-in tới Quản lý.');
     }
   };
 
@@ -410,7 +443,7 @@ export default function BookingDetailScreen() {
   const canCancel = ['pending', 'confirmed', 'awaiting_payment'].includes(booking.status);
   const canRebook = booking.status === 'completed';
   const canFeedback = booking.status === 'completed' && !booking.rating;
-  const canShowQR = ['confirmed', 'checked_in'].includes(booking.status);
+  const canShowQR = ['pending', 'confirmed'].includes(booking.status);
   const canEditServices = ['pending', 'confirmed', 'checked_in', 'in_progress'].includes(booking.status);
 
   // Logic payment actions — match BE booking.service.js.
@@ -444,13 +477,15 @@ export default function BookingDetailScreen() {
         title="Chi tiết đặt lịch"
         showBack
         rightAction={
-          <PressableScale
-            onPress={handleOpenScanner}
-            accessibilityLabel="Quét mã QR Check-in"
-            style={styles.chatIconBtn}
-          >
-            <Icon name={Icons.qrCodeOutline} size={22} color={colors.primary} />
-          </PressableScale>
+          canShowQR ? (
+            <PressableScale
+              onPress={handleOpenScanner}
+              accessibilityLabel="Quét mã QR Check-in"
+              style={styles.chatIconBtn}
+            >
+              <Icon name={Icons.qrCodeOutline} size={22} color={colors.primary} />
+            </PressableScale>
+          ) : undefined
         }
       />
 
@@ -1378,6 +1413,35 @@ export default function BookingDetailScreen() {
             </View>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      {/* Waiting for Manager Confirmation Modal */}
+      <Modal
+        visible={isWaitingConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsWaitingConfirm(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ width: '100%', maxWidth: 340, backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <ActivityIndicator size="large" color="#D97706" />
+            </View>
+            <AppText variant="h3" style={{ textAlign: 'center', fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>
+              Đang Chờ Quản Lý Xác Nhận...
+            </AppText>
+            <AppText variant="bodySmall" style={{ textAlign: 'center', color: '#475569', lineHeight: 20, marginBottom: 20 }}>
+              Yêu cầu check-in cho đơn <AppText style={{ fontWeight: '700', color: '#0F172A' }}>#{booking?._id?.slice(-8).toUpperCase()}</AppText> đã được gửi tới Quản lý tại quầy. Vui lòng chờ Quản lý xác nhận!
+            </AppText>
+            <Button
+              title="Hủy chờ"
+              onPress={() => setIsWaitingConfirm(false)}
+              variant="outline"
+              fullWidth
+              style={{ borderRadius: 16 }}
+            />
+          </View>
+        </View>
       </Modal>
 
       {/* Check-in Success Modal */}

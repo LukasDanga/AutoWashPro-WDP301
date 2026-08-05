@@ -16,6 +16,10 @@ export default function ManagerGenericQRDisplay({ branchId, onClose }) {
     navigate(`/manager/bookings/${bookingId}`);
   };
 
+  useSSE(token, 'customer_checkin_request', () => {
+    onClose();
+  });
+
   useSSE(token, 'customer_checked_in_via_qr', (data) => {
     if (data?.bookingId) {
       handleRedirect(data.bookingId);
