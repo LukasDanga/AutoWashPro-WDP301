@@ -499,6 +499,20 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
   const [refundTarget, setRefundTarget] = useState(null);
   const [refundReason, setRefundReason] = useState('');
   const [refundLoading, setRefundLoading] = useState(false);
+  const [pointHistories, setPointHistories] = useState([]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${apiBase || API_BASE}/loyalty/my-history?limit=100`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(payload => {
+        const list = Array.isArray(payload?.data) ? payload.data : (payload?.items || []);
+        setPointHistories(list);
+      })
+      .catch(() => setPointHistories([]));
+  }, [apiBase, token]);
 
   // Quick book modal
   const [showQuickBookModal, setShowQuickBookModal] = useState(false);
@@ -2094,7 +2108,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                               </span>
                             ) : b.depositAmount > 0 ? (
                               <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border ${b.depositPaid || b.paymentStatus === 'deposit_paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
-                                {b.depositPaid || b.paymentStatus === 'deposit_paid' ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cọc ${formatCurrency(b.depositAmount)}`}
+                                {b.depositPaid || b.paymentStatus === 'deposit_paid' ? `Đã cọc ${formatCurrency(b.depositAmount)}` : `Cần cọc ${formatCurrency(b.depositAmount)}`}
                               </span>
                             ) : null}
                           </div>
@@ -2106,6 +2120,11 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                           {b.startTime && <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg><span className="font-semibold text-slate-800">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span></span>}
                           {b.bookingCode ? <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">#{b.bookingCode}</span> : b.recurringGroupId && b.isGroup ? <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">#{String(b.recurringGroupId).slice(-6).toUpperCase()}</span> : null}
                           {b.recurringGroupId && <span className="text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/80 flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5" /></svg>Định kỳ</span>}
+                          {b.status !== 'completed' && b.status !== 'cancelled' && b.status !== 'refunded' && b.paymentStatus !== 'refunded' && ((b.finalPrice || 0) > 0) && (
+                            <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                              🎁 Dự kiến +{Math.floor(((b.finalPrice || 0) * 5) / 100).toLocaleString('vi-VN')} điểm
+                            </span>
+                          )}
                         </div>
 
                         {/* Review rating */}
@@ -2152,12 +2171,26 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                             )}
                             {b.status === 'completed' && (
                               <>
+                                {!(b.status === 'refunded' || b.paymentStatus === 'refunded') && (
+                                  <button onClick={(e) => {
+                                    e.stopPropagation();
+                                    const ph = (pointHistories || []).find(p => String(p.referenceId?._id || p.referenceId) === String(b._id || b.id));
+                                    if (ph) {
+                                      navigate(`/rewards/history/${ph._id}?tab=reward`);
+                                    } else {
+                                      navigate('/rewards?tab=history');
+                                    }
+                                  }}
+                                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all cursor-pointer">
+                                    🏆 Xem điểm thưởng
+                                  </button>
+                                )}
                                 <button onClick={(e) => { e.stopPropagation(); handleRebook(b); }}
                                   disabled={rebookLoading}
                                   className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all disabled:opacity-50">
                                   Đặt lại
                                 </button>
-                                {b.status === 'completed' && ['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
+                                {['paid', 'deposit_paid'].includes(b.paymentStatus) && !isRefundExpired(b) && (() => {
                                   const existing = findRefundRequest(b._id || b.id);
                                   if (existing?.status === 'pending') {
                                     return (

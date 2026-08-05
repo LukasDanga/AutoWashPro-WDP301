@@ -470,6 +470,9 @@ export default function PackagesSection() {
                                   </span>
                                 )}
                               </div>
+                              <p className={`text-[11px] font-medium -mt-4 ${pkg.popular || i === 1 ? 'text-emerald-100/80' : 'text-slate-400'}`}>
+                                * Giá đã bao gồm VAT 10%
+                              </p>
 
                               {pkg.slots && (
                                 <div className={`text-sm font-bold flex items-center gap-2 ${pkg.popular || i === 1 ? 'text-amber-300' : 'text-emerald-600'}`}>

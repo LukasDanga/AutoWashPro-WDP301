@@ -13,6 +13,7 @@ import {
   CalendarBlank,
   CurrencyDollar,
   Gear,
+  FileText,
 } from '@phosphor-icons/react';
 
 export const MANAGER_BRAND = {
@@ -21,6 +22,7 @@ export const MANAGER_BRAND = {
 };
 
 export const MANAGER_MENU_ITEMS = [
+  // --- 1. VẬN HÀNH TẠI CHỖ HẰNG NGÀY ---
   {
     id: 'overview',
     label: 'Tổng quan',
@@ -40,25 +42,6 @@ export const MANAGER_MENU_ITEMS = [
     to: '/manager/schedule',
     icon: CalendarBlank,
   },
-
-  {
-    id: 'branch',
-    label: 'Chi nhánh của tôi',
-    to: '/manager/branch',
-    icon: Buildings,
-  },
-  {
-    id: 'revenue',
-    label: 'Doanh thu',
-    to: '/manager/revenue',
-    icon: CurrencyCircleDollar,
-  },
-  {
-    id: 'vouchers',
-    label: 'Khuyến mãi & Quà tặng',
-    to: '/manager/vouchers',
-    icon: Tag,
-  },
   {
     id: 'payments',
     label: 'Quản lý thanh toán',
@@ -66,22 +49,18 @@ export const MANAGER_MENU_ITEMS = [
     icon: CurrencyDollar,
   },
   {
-    id: 'customers',
-    label: 'Khách hàng',
-    to: '/manager/customers',
-    icon: Users,
-  },
-  {
-    id: 'packages',
-    label: 'Gói dịch vụ',
-    to: '/manager/packages',
-    icon: Package,
-  },
-  {
     id: 'slot-packs',
     label: 'Gói lượt',
     to: '/manager/slot-packs',
     icon: Ticket,
+  },
+
+  // --- 2. DỊCH VỤ & KHÁCH HÀNG CHI NHÁNH ---
+  {
+    id: 'customers',
+    label: 'Khách hàng',
+    to: '/manager/customers',
+    icon: Users,
   },
   {
     id: 'feedbacks',
@@ -90,16 +69,50 @@ export const MANAGER_MENU_ITEMS = [
     icon: Star,
   },
   {
-    id: 'profile',
-    label: 'Hồ sơ',
-    to: '/manager/profile',
-    icon: UserCircle,
+    id: 'packages',
+    label: 'Gói dịch vụ',
+    to: '/manager/packages',
+    icon: Package,
+  },
+  {
+    id: 'vouchers',
+    label: 'Khuyến mãi & Quà tặng',
+    to: '/manager/vouchers',
+    icon: Tag,
+  },
+
+  // --- 3. THỐNG KÊ & QUẢN LÝ CƠ SỞ ---
+  {
+    id: 'revenue',
+    label: 'Báo cáo doanh thu',
+    to: '/manager/revenue',
+    icon: CurrencyCircleDollar,
+  },
+  {
+    id: 'branch',
+    label: 'Chi nhánh của tôi',
+    to: '/manager/branch',
+    icon: Buildings,
+  },
+
+  // --- 4. TRA CỨU & CÀI ĐẶT CÁ NHÂN ---
+  {
+    id: 'policies',
+    label: 'Xem Chính sách & Điều khoản',
+    to: '/manager/policies',
+    icon: FileText,
   },
   {
     id: 'system-config',
     label: 'Cấu hình Quy tắc Nghiệp vụ',
     to: '/manager/system-config',
     icon: Gear,
+  },
+  {
+    id: 'profile',
+    label: 'Hồ sơ cá nhân',
+    to: '/manager/profile',
+    icon: UserCircle,
   },
 ];
 
@@ -152,6 +165,10 @@ export const MANAGER_PAGE_META = {
   'slot-packs': {
     title: 'Gói lượt',
     description: 'Quản lý gói lượt rửa xe đã mua và tra cứu theo mã.',
+  },
+  policies: {
+    title: 'Quy định & Chính sách Hệ thống',
+    description: 'Tra cứu các quy định đặt lịch, bảo hiểm xe, hủy đơn và hoàn tiền ở chế độ chỉ xem.',
   },
   profile: {
     title: 'Hồ sơ cá nhân',

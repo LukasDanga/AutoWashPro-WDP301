@@ -574,12 +574,12 @@ function PrintReceiptModal({ booking, onClose }) {
             <div>
               <h2 className="text-3xl font-bold mb-6 text-black tracking-tight">Biên lai</h2>
               <div className="grid grid-cols-[140px_1fr] gap-y-1 text-[13px]">
-                <div className="font-semibold text-black">Mã hóa đơn</div>
-                <div className="text-black">AWP-{displayInvoiceNumber}</div>
-                <div className="font-semibold text-black">Mã biên lai</div>
-                <div className="text-black">{displayId}</div>
+                <div className="font-semibold text-black">Mã đơn đặt lịch</div>
+                <div className="text-black">#{detailBooking.bookingCode || `AWP-${displayInvoiceNumber}`}</div>
+                <div className="font-semibold text-black">Mã giao dịch</div>
+                <div className="text-black">TXN-{displayInvoiceNumber}</div>
                 <div className="font-semibold text-black">Ngày thanh toán</div>
-                <div className="text-black">{formatDateTime(detailBooking.updatedAt || detailBooking.bookingDate)}</div>
+                <div className="text-black">{formatDateTime(detailBooking.paidAt || detailBooking.updatedAt || detailBooking.bookingDate)}</div>
               </div>
             </div>
             <div>
@@ -622,9 +622,6 @@ function PrintReceiptModal({ booking, onClose }) {
               THÔNG TIN THANH TOÁN:<br/>
               AutoWash Pro<br/>
               Hồ Chí Minh, Vietnam
-            </p>
-            <p className="text-[13px] text-black mt-4">
-              VAT được tính trên tổng giá trị hóa đơn (10%)
             </p>
           </div>
 
@@ -672,14 +669,10 @@ function PrintReceiptModal({ booking, onClose }) {
                   const pkgSubs = detailBooking.packageId?.subServices;
                   const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
                   return included.map((sub, i) => (
-                    <tr key={`inc-${i}`} className="border-b border-slate-100">
-                      <td className="py-2 text-left text-black pl-4 text-emerald-600">
-                        {sub.name} <span className="text-[10px] text-emerald-400 font-normal">(có sẵn)</span>
+                    <tr key={`inc-${i}`} className="border-b border-slate-100/60">
+                      <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
+                        ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
                       </td>
-                      <td className="py-2 text-right text-black">—</td>
-                      <td className="py-2 text-right text-black">—</td>
-                      <td className="py-2 text-right text-black">—</td>
-                      <td className="py-2 text-right text-black">—</td>
                     </tr>
                   ));
                 })()}
@@ -726,55 +719,10 @@ function PrintReceiptModal({ booking, onClose }) {
                     }
                   </span>
                 </div>
+                <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
               </div>
             </div>
-          </div>
-
-          {/* Payment History */}
-          <div>
-            <h3 className="text-xl font-bold text-black mb-4">Lịch sử thanh toán</h3>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-black">
-                  <th className="py-2 text-left font-normal text-black">Phương thức</th>
-                  <th className="py-2 text-left font-normal text-black">Ngày</th>
-                  <th className="py-2 text-right font-normal text-black">Đã trả</th>
-                  <th className="py-2 text-right font-normal text-black">Mã biên lai</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receiptPayments === null ? (
-                  <tr className="border-b border-slate-200">
-                    <td className="py-3 text-left text-black">
-                      {detailBooking.paymentStatus === 'paid' ? 'Chuyển khoản' : (detailBooking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
-                    </td>
-                    <td className="py-3 text-left text-black">{formatDate(detailBooking.updatedAt || detailBooking.bookingDate)}</td>
-                    <td className="py-3 text-right text-black">
-                      {detailBooking.paymentStatus === 'paid'
-                        ? formatCurrency(displayTotal)
-                        : (detailBooking.paymentStatus === 'deposit_paid' ? formatCurrency(displayDeposit) : '0đ')}
-                    </td>
-                    <td className="py-3 text-right text-black">AWP-{displayInvoiceNumber}</td>
-                  </tr>
-                ) : receiptPayments.length === 0 ? (
-                  <tr className="border-b border-slate-200">
-                    <td colSpan={4} className="py-3 text-center text-black">Chưa có giao dịch thanh toán</td>
-                  </tr>
-                ) : receiptPayments.map((p, i) => (
-                  <tr key={i} className="border-b border-slate-200">
-                    <td className="py-3 text-left text-black">
-                      {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : p.method || '—'}
-                      {p.paymentType === 'deposit' ? ' (Đặt cọc)' : p.paymentType === 'remaining' ? ' (Phần còn lại)' : p.paymentType === 'full' ? ' (Toàn bộ)' : ''}
-                    </td>
-                    <td className="py-3 text-left text-black">{formatDate(p.paidAt || p.createdAt || detailBooking.bookingDate)}</td>
-                    <td className="py-3 text-right text-black">{formatCurrency(p.amount)}</td>
-                    <td className="py-3 text-right text-black">AWP-{String(p.transactionId || p._id || displayId).slice(-8).toUpperCase()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          </div>          </div>
 
         {/* Footer Actions (Sticky) - Hide on Print */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 no-print">
@@ -891,6 +839,24 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
   const [savingSubServices, setSavingSubServices] = useState(false);
   const [qrPaymentStatus, setQrPaymentStatus] = useState('loading');
   const [qrPollCount, setQrPollCount] = useState(0);
+  const [receiptPayments, setReceiptPayments] = useState(null);
+
+  const loadReceiptPayments = useCallback(async () => {
+    if (!booking?._id) return;
+    try {
+      const res = await api(`/payments/booking/${booking._id}/history`);
+      if (!res.ok) throw new Error('Không thể tải lịch sử thanh toán');
+      const payload = await res.json();
+      setReceiptPayments(Array.isArray(payload?.data) ? payload.data : []);
+    } catch (e) {
+      setReceiptPayments(null);
+    }
+  }, [booking?._id]);
+
+  useEffect(() => {
+    loadReceiptPayments();
+  }, [loadReceiptPayments]);
+
   const needsPayment = booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'refunded' && (booking.finalPrice || 0) > 0;
   const stages = [
     { id: 'pending', label: 'Chờ xác nhận' },
@@ -937,6 +903,10 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
         body: JSON.stringify({ bookingId: booking._id, method, paymentType: booking.depositPaid ? 'remaining' : 'full' }),
       });
       if (!res.ok) throw new Error(await readErr(res));
+
+      // Re-fetch payment history so table updates immediately
+      await loadReceiptPayments();
+
       onUpdated({
         ...booking,
         paymentStatus: 'paid',
@@ -1369,172 +1339,130 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
       {/* ── INVOICE (full width, outside grid) ── */}
         {(booking.status === 'completed' || booking.status === 'awaiting_payment') && (
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 overflow-hidden">
+          <div className="mt-5 rounded-2xl border border-emerald-200/80 bg-white overflow-hidden shadow-xs">
             {/* Invoice header */}
-            <div className="flex items-center justify-between bg-emerald-600 px-5 py-3">
-              <div className="flex items-center gap-2 text-white">
-                <Receipt size={18} weight="fill" />
-                <span className="font-bold text-sm tracking-wide">HÓA ĐƠN DỊCH VỤ</span>
-              </div>
-              <span className="font-mono text-xs text-emerald-100">
+            <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-5 py-3 text-white shadow-xs">
+              <span className="font-bold text-xs uppercase tracking-wider">Hóa đơn dịch vụ</span>
+              <span className="font-mono text-xs font-semibold text-emerald-100">
                 #{String(booking._id).slice(-8).toUpperCase()}
               </span>
             </div>
 
-            <div className="p-5 bg-white space-y-1">
-              {/* Info rows with phosphor icons */}
-              {([
-                { icon: <Package size={14} weight="fill" className="text-emerald-600 shrink-0" />, label: 'Dịch vụ', value: booking.packageName || booking.packageId?.name || '—' },
-                { icon: <CalendarBlank size={14} weight="fill" className="text-blue-500 shrink-0" />, label: 'Ngày', value: new Date(booking.bookingDate).toLocaleDateString('vi-VN') },
-                { icon: <Clock size={14} weight="fill" className="text-indigo-500 shrink-0" />, label: 'Giờ', value: booking.startTime || '—' },
-                { icon: <Buildings size={14} weight="fill" className="text-slate-500 shrink-0" />, label: 'Chi nhánh', value: booking.branchName || booking.branchId?.name || '—' },
-                { icon: <Car size={14} weight="fill" className="text-cyan-600 shrink-0" />, label: 'Biển số', value: booking.vehiclePlate || booking.vehicleId?.licensePlate || '—' },
-                { icon: <CurrencyCircleDollar size={14} weight="fill" className="text-emerald-600 shrink-0" />, label: 'Thành tiền', value: Number(booking.totalAmount || booking.finalPrice || 0).toLocaleString('vi-VN') + 'đ' },
-                { icon: <CreditCard size={14} weight="fill" className="text-violet-500 shrink-0" />, label: 'Phương thức', value: booking.paymentMethod ? (
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                    booking.paymentMethod === 'cash' ? 'bg-violet-100 text-violet-700' :
-                    booking.paymentMethod === 'bank' ? 'bg-blue-100 text-blue-700' :
-                    booking.paymentMethod === 'wallet' ? 'bg-rose-100 text-rose-700' :
-                    'bg-indigo-100 text-indigo-700'
-                  }`}>
-                    {booking.paymentMethod === 'cash' ? 'Tiền mặt' : 
-                     booking.paymentMethod === 'bank' ? 'Chuyển khoản' : 
+            <div className="p-5 space-y-4">
+              {/* Main info rows - simple & no icons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 pb-4 border-b border-slate-100 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Dịch vụ:</span>
+                  <span className="font-semibold text-slate-900">{booking.packageName || booking.packageId?.name || '—'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Ngày:</span>
+                  <span className="font-semibold text-slate-900">{new Date(booking.bookingDate).toLocaleDateString('vi-VN')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Giờ:</span>
+                  <span className="font-semibold text-slate-900">{booking.startTime || '—'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Chi nhánh:</span>
+                  <span className="font-semibold text-slate-900">{booking.branchName || booking.branchId?.name || '—'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Biển số:</span>
+                  <span className="font-mono font-bold text-slate-900">{booking.vehiclePlate || booking.vehicleId?.licensePlate || '—'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Phương thức:</span>
+                  <span className="font-medium text-slate-800">
+                    {booking.paymentMethod === 'cash' ? 'Tiền mặt' :
+                     booking.paymentMethod === 'bank' ? 'Chuyển khoản' :
                      booking.paymentMethod === 'wallet' ? 'Ví AutoWash' :
-                     booking.paymentMethod === 'vnpay' ? 'VNPay' : 
-                     booking.paymentMethod === 'momo' ? 'MoMo' : booking.paymentMethod}
+                     booking.paymentMethod === 'vnpay' ? 'VNPay' :
+                     booking.paymentMethod === 'momo' ? 'MoMo' : (booking.paymentMethod || '—')}
                   </span>
-                ) : '—' },
-                { icon: <CheckCircle size={14} weight="fill" className={(booking.paymentStatus === 'paid' || booking.paymentStatus === 'deposit_paid') ? 'text-emerald-600 shrink-0' : 'text-amber-500 shrink-0'} />, label: 'Thanh toán', value: (
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                    booking.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 
-                    booking.paymentStatus === 'deposit_paid' ? 'bg-emerald-50 text-emerald-600' : 
-                    'bg-amber-100 text-amber-700'
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Thanh toán:</span>
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                    booking.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                    booking.paymentStatus === 'deposit_paid' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                    'bg-slate-100 text-slate-600 border border-slate-200'
                   }`}>
                     {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'deposit_paid' ? 'Đã đặt cọc' : 'Chưa thanh toán'}
                   </span>
-                )},
-                { icon: <Tag size={14} weight="fill" className="text-orange-500 shrink-0" />, label: 'Loại đặt', value: booking.bookingType === 'recurring' ? 'Định kỳ' : booking.bookingType === 'slot_pack_usage' ? 'Gói lượt' : '1 lần' },
-              ]).map(({ icon, label, value }) => (
-                <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-100 last:border-0 gap-2">
-                  <span className="flex items-center gap-2 text-[13px] text-slate-500">{icon}{label}</span>
-                  <span className="text-[13px] font-semibold text-slate-900 text-right max-w-[55%]">{value}</span>
                 </div>
-              ))}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Loại đặt:</span>
+                  <span className="font-medium text-slate-800">{booking.bookingType === 'recurring' ? 'Định kỳ' : booking.bookingType === 'slot_pack_usage' ? 'Gói lượt' : '1 lần'}</span>
+                </div>
+              </div>
 
-              {/* Full service value breakdown (for all booking types) */}
+              {/* Price Breakdown */}
               {(() => {
                 const pkgPrice = booking.packagePrice ?? booking.packageId?.price ?? 0;
                 const subTotal = (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
                 const totalValue = pkgPrice + subTotal;
-                return <>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
-                    <span className="flex items-center gap-2 text-[13px] text-slate-500">
-                      <Package size={14} weight="fill" className="text-emerald-500 shrink-0" />
-                      Giá gói (cơ bản)
-                    </span>
-                    <span className="text-[13px] font-bold text-slate-900">{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
-                  </div>
-                  {booking.bookingType === 'slot_pack_usage' && (
-                    <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
-                      <span className="flex items-center gap-2 text-[13px] text-slate-500">
-                        <CheckCircle size={14} weight="fill" className="text-emerald-500 shrink-0" />
-                        Chiết khấu gói lượt
-                      </span>
-                      <span className="text-[13px] font-bold text-emerald-600">-{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
+                const finalVal = Number(booking.finalPrice ?? (totalValue - (booking.discountAmount || 0)));
+
+                return (
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Giá gói (cơ bản):</span>
+                      <span className="font-mono font-semibold text-slate-800">{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
                     </div>
-                  )}
-                  {(booking.selectedSubServices || []).filter(s => s.price > 0).map((s, i) => (
-                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
-                      <span className="flex items-center gap-2 text-[13px] text-slate-500">
-                        <span className="w-2 h-2 rounded-full bg-indigo-300 shrink-0" />
-                        {s.name}
-                      </span>
-                      <span className="text-[13px] font-semibold text-slate-800">+{Number(s.price).toLocaleString('vi-VN')}đ</span>
+
+                    {booking.bookingType === 'slot_pack_usage' && (
+                      <div className="flex justify-between items-center text-emerald-600">
+                        <span>Chiết khấu gói lượt:</span>
+                        <span className="font-mono font-semibold">-{Number(pkgPrice).toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
+
+                    {(booking.selectedSubServices || []).filter(s => s.price > 0).map((s, i) => (
+                      <div key={i} className="flex justify-between items-center text-slate-600">
+                        <span>Dịch vụ chọn thêm ({s.name}):</span>
+                        <span className="font-mono font-semibold text-slate-800">+{Number(s.price).toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    ))}
+
+                    {booking.voucherCode && booking.discountAmount > 0 && (
+                      <div className="flex justify-between items-center text-emerald-700">
+                        <span>Voucher ({booking.voucherCode}):</span>
+                        <span className="font-mono font-semibold">-{Number(booking.discountAmount).toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-xs sm:text-sm font-bold text-slate-900">
+                      <span>Thành tiền:</span>
+                      <span className="font-mono font-black text-sm sm:text-base text-emerald-700">{finalVal.toLocaleString('vi-VN')}đ</span>
                     </div>
-                  ))}
-                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
-                    <span className="flex items-center gap-2 text-[13px] font-bold text-slate-700">
-                      <CurrencyCircleDollar size={14} weight="fill" className="text-emerald-600 shrink-0" />
-                      Tổng giá trị dịch vụ
-                    </span>
-                    <span className="text-[13px] font-bold text-slate-900">
-                      {Number(totalValue).toLocaleString('vi-VN')}đ
-                    </span>
+                    <p className="text-[11px] text-slate-400 text-right">* Giá đã bao gồm VAT 10%</p>
                   </div>
-                  {booking.voucherCode && booking.discountAmount > 0 && (
-                    <div className="flex items-center justify-between py-2 border-b border-slate-100 gap-2">
-                      <span className="flex items-center gap-2 text-[13px] font-semibold text-emerald-600">
-                        <Tag size={14} weight="fill" className="text-emerald-500 shrink-0" />
-                        Voucher ({booking.voucherCode})
-                      </span>
-                      <span className="text-[13px] font-bold text-emerald-600">
-                        -{Number(booking.discountAmount).toLocaleString('vi-VN')}đ
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between py-2.5 gap-2">
-                    <span className="flex items-center gap-2 text-[13px] font-black text-slate-800">
-                      <Receipt size={14} weight="fill" className="text-emerald-600 shrink-0" />
-                      Thành tiền
-                    </span>
-                    <span className="text-[13px] font-black text-slate-900">
-                      {Number(booking.finalPrice ?? (totalValue - (booking.discountAmount || 0))).toLocaleString('vi-VN')}đ
-                    </span>
-                  </div>
-                </>;
+                );
               })()}
 
-              {booking.depositAmount > 0 && booking.depositAmount < (booking.totalAmount || booking.finalPrice || 0) && (
-                <>
-                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
-                    <span className="flex items-center gap-2 text-[13px] font-semibold text-amber-600">
-                      <Lock size={14} weight="fill" className="text-amber-500 shrink-0" />
-                      Đặt cọc {Math.round((booking.depositAmount || 0) / ((booking.totalAmount || booking.finalPrice || 1)) * 100)}%
+              {/* Deposit summary */}
+              {booking.depositAmount > 0 && (
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  {booking.paymentStatus === 'paid' ? (
+                    <span className="text-emerald-700 font-bold">
+                      ✓ Đã thanh toán trước 100% ({Number(booking.finalPrice || booking.totalAmount || 0).toLocaleString('vi-VN')}đ)
                     </span>
-                    <span className="text-[13px] font-bold text-amber-600">
-                      {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
+                  ) : booking.depositPaid ? (
+                    <span className="text-amber-700 font-bold">
+                      ✓ Đã đặt cọc {Number(booking.depositAmount).toLocaleString('vi-VN')}đ (Còn lại: {Number(Math.max(0, (booking.finalPrice || booking.totalAmount || 0) - (booking.depositAmount || 0))).toLocaleString('vi-VN')}đ)
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5 border-b border-slate-100 gap-2">
-                    <span className="flex items-center gap-2 text-[13px] text-slate-500">
-                      <ClockCounterClockwise size={14} weight="fill" className="text-slate-400 shrink-0" />
-                      Còn lại (thanh toán sau)
+                  ) : (
+                    <span className="text-slate-600 font-bold">
+                      Cần đặt cọc: {Number(booking.depositAmount).toLocaleString('vi-VN')}đ (Chưa cọc)
                     </span>
-                    <span className="text-[13px] font-semibold text-slate-500">
-                      {booking.paymentStatus === 'paid' ? '0đ' : `${Number(Math.max(0, (booking.totalAmount || booking.finalPrice || 0) - (booking.depositAmount || 0))).toLocaleString('vi-VN')}đ`}
-                    </span>
-                  </div>
-                  {booking.depositPaid && booking.paymentStatus !== 'paid' && (
-                    <div className="mt-2 text-center pb-2 border-b border-slate-100">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
-                        <CheckCircle size={13} weight="fill" /> Đã đặt cọc {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
-                      </span>
-                    </div>
                   )}
-                  {booking.paymentStatus === 'paid' && (
-                    <div className="mt-2 flex flex-col gap-2 items-center pb-2 border-b border-slate-100">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
-                        <CheckCircle size={13} weight="fill" /> Đã đặt cọc {Number(booking.depositAmount).toLocaleString('vi-VN')}đ
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
-                        <CheckCircle size={13} weight="fill" /> Đã thu phần còn lại {Number((booking.totalAmount || booking.finalPrice || 0) - booking.depositAmount).toLocaleString('vi-VN')}đ
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-              {booking.depositAmount > 0 && booking.depositAmount >= (booking.totalAmount || booking.finalPrice || 0) && (
-                <div className="mt-2 text-center pb-2 border-b border-slate-100">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
-                    <CheckCircle size={13} weight="fill" /> Đã thanh toán trước 100% ({Number(booking.depositAmount).toLocaleString('vi-VN')}đ)
-                  </span>
                 </div>
               )}
 
-              <div className="pt-3">
+              <div className="pt-2">
                 <button onClick={() => setShowPrint(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors">
-                  <Printer size={15} />
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all shadow-xs cursor-pointer">
                   In hóa đơn
                 </button>
               </div>
@@ -1567,6 +1495,65 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             )}
           </div>
         )}
+
+        {/* Lịch sử thanh toán (Outer detail view) */}
+        <div className="mt-5 rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <CreditCard size={16} className="text-emerald-600" /> Lịch sử thanh toán
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
+                  <th className="py-2.5 px-3">Loại thanh toán</th>
+                  <th className="py-2.5 px-3">Phương thức</th>
+                  <th className="py-2.5 px-3">Ngày thanh toán</th>
+                  <th className="py-2.5 px-3 text-right">Đã trả</th>
+                  <th className="py-2.5 px-3 text-right">Mã giao dịch</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {receiptPayments === null ? (
+                  <tr>
+                    <td className="py-3 px-3 font-semibold text-slate-800">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${booking.paymentStatus === 'deposit_paid' ? 'bg-amber-50 text-amber-700 border border-amber-200' : booking.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                        {booking.paymentStatus === 'paid' ? 'Toàn bộ' : (booking.paymentStatus === 'deposit_paid' ? 'Đặt cọc' : 'Chưa thanh toán')}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {booking.paymentMethod === 'wallet' ? 'Ví AutoWash' : booking.paymentMethod === 'cash' ? 'Tiền mặt' : booking.paymentMethod === 'vnpay' ? 'VNPay' : booking.paymentMethod === 'bank' ? 'Chuyển khoản' : 'Ví AutoWash'}
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">{new Date(booking.paidAt || booking.updatedAt || booking.bookingDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">
+                      {booking.paymentStatus === 'paid'
+                        ? formatCurrency(booking.finalPrice || booking.totalAmount || 0)
+                        : (booking.paymentStatus === 'deposit_paid' ? formatCurrency(booking.depositAmount || 0) : '0đ')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500 font-semibold">TXN-{String(booking._id).slice(-8).toUpperCase()}</td>
+                  </tr>
+                ) : receiptPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-3 px-3 text-center text-slate-400 italic">Chưa có giao dịch thanh toán</td>
+                  </tr>
+                ) : receiptPayments.map((p, i) => (
+                  <tr key={i}>
+                    <td className="py-3 px-3 font-semibold text-slate-800">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${p.paymentType === 'deposit' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                        {p.paymentType === 'deposit' ? 'Đặt cọc' : p.paymentType === 'remaining' ? 'Phần còn lại' : p.paymentType === 'full' ? 'Toàn bộ' : 'Thanh toán'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {p.method === 'cash' ? 'Tiền mặt' : p.method === 'wallet' ? 'Ví AutoWash' : p.method === 'bank' ? 'Chuyển khoản' : p.method === 'vnpay' ? 'VNPay' : p.method === 'momo' ? 'MoMo' : (p.method || '—')}
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">{new Date(p.paidAt || p.createdAt || booking.bookingDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-500 font-semibold">{p.transactionId ? String(p.transactionId).toUpperCase() : `TXN-${String(p._id || booking._id).slice(-8).toUpperCase()}`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         {/* QR check-in — chỉ hiển thị khi đơn đã xác nhận / đã check-in / hết hạn */}
         {renderQrButton()}

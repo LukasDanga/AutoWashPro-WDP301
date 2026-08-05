@@ -16,6 +16,7 @@ import AdminSlotPacks from '@/components/admin/AdminSlotPacks';
 import AdminPaymentsPage from '@/components/admin/AdminPaymentsPage';
 import PaymentDetailPage from '@/components/admin/PaymentDetailPage';
 import RefundDetailPage from '@/components/shared/RefundDetailPage';
+import AdminPolicies from '@/components/admin/AdminPolicies';
 import { ADMIN_PAGE_META } from '@/config/adminMenu';
 import { clearSession, fetchProfile, getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 
@@ -123,6 +124,7 @@ export default function AdminRoutes() {
         <Route path="payments/:id" element={<PaymentDetailPage basePath="/admin/payments" />} />
         <Route path="refund-requests" element={<Navigate to="/admin/payments?tab=refunds" replace />} />
         <Route path="slot-packs" element={<AdminSlotPacks />} />
+        <Route path="policies" element={<AdminPolicies />} />
         <Route path="profile" element={<AdminProfile user={user} />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>

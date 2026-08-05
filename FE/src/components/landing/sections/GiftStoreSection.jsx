@@ -18,6 +18,15 @@ function formatDate(dStr) {
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+const TIER_LABELS = { bronze: 'Đồng', silver: 'Bạc', gold: 'Vàng', diamond: 'Kim Cương' };
+const TIER_RANK = { bronze: 0, silver: 1, gold: 2, diamond: 3 };
+const TIER_BADGE_CLS = {
+  bronze: 'bg-amber-100 text-amber-800',
+  silver: 'bg-slate-200 text-slate-700',
+  gold: 'bg-yellow-200 text-yellow-900',
+  diamond: 'bg-cyan-100 text-cyan-800',
+};
+
 function VoucherCard({ voucher, index, onRedeem, redeeming }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-40px' });
@@ -120,6 +129,63 @@ function VoucherCard({ voucher, index, onRedeem, redeeming }) {
   );
 }
 
+function RewardCard({ reward, index, onRedeem, redeeming, points, userTier }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-40px' });
+  const enough = (points || 0) >= (reward.pointCost || 0);
+  const soldOut = (reward.stock || 0) <= 0;
+  const reqTier = reward.requiredTier || 'bronze';
+  const userRank = TIER_RANK[userTier] ?? 0;
+  const reqRank = TIER_RANK[reqTier] ?? 0;
+  const tierOk = userRank >= reqRank;
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 20 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.4, delay: index * 0.08 }}
+      className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-emerald-300 hover:shadow-xl transition-all duration-300"
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+        {reward.imageUrl ? (
+          <img src={reward.imageUrl} alt={reward.name} loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-4xl">🎁</div>
+        )}
+        {soldOut && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
+            <span className="px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-black uppercase tracking-wider">Hết hàng</span>
+          </div>
+        )}
+        <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
+          ⭐ {reward.pointCost} Điểm
+        </div>
+        <div className={`absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black shadow-sm border ${TIER_BADGE_CLS[reqTier] || TIER_BADGE_CLS.bronze}`}>
+          {reqTier === 'bronze' ? 'Mọi hạng' : `Hạng ${TIER_LABELS[reqTier]}`}
+        </div>
+      </div>
+      <div className="p-5">
+        <h4 className="text-base font-bold text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-600 transition-colors">{reward.name}</h4>
+        <p className="text-sm text-slate-500 leading-relaxed mb-3 line-clamp-2">{reward.description}</p>
+        <div className="text-xs text-slate-400 font-medium mb-4">Còn {reward.stock} phần quà</div>
+        <button
+          onClick={() => onRedeem(reward)}
+          disabled={redeeming || soldOut || !enough || !tierOk}
+          className={`w-full px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            soldOut || !enough || !tierOk
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed'
+          }`}
+        >
+          {soldOut ? 'Hết hàng' : !tierOk ? `Cần hạng ${TIER_LABELS[reqTier]} trở lên` : !enough ? `Cần thêm ${(reward.pointCost || 0) - (points || 0)} điểm` : redeeming ? 'Đang xử lý...' : 'Đổi ngay'}
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function GiftStoreSection({ user, onOpenAuth }) {
   const [activeTab, setActiveTab] = useState('redeem'); // 'redeem' | 'wheel'
   const [vouchers, setVouchers] = useState([]);
@@ -135,6 +201,8 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [spinHistory, setSpinHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [redeemingId, setRedeemingId] = useState(null);
+  const [rewards, setRewards] = useState([]);
+  const [rewardLoading, setRewardLoading] = useState(false);
 
   const wheelRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
@@ -223,6 +291,14 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
            setUserPoints(uData.loyaltyPoints || 0);
          }
       }
+
+      const resR = await fetch(`${API_BASE}/rewards/public`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (resR.ok) {
+        const payload = await resR.json();
+        setRewards(Array.isArray(payload?.data) ? payload.data : []);
+      }
     } catch (e) {
       console.error('Failed to load store data:', e);
     } finally {
@@ -262,6 +338,65 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
       showToast(err.message || 'Lỗi đổi điểm', 'error');
     } finally {
       setRedeemingId(null);
+    }
+  };
+
+  const handleRedeemReward = async (reward) => {
+    if (!user) return onOpenAuth();
+    if (rewardLoading) return;
+    const reqTier = reward.requiredTier || 'bronze';
+    if ((TIER_RANK[user.tier] ?? 0) < (TIER_RANK[reqTier] ?? 0)) {
+      showToast(`Phần thưởng này yêu cầu hạng ${TIER_LABELS[reqTier]} trở lên.`, 'error');
+      return;
+    }
+    if ((userPoints || 0) < (reward.pointCost || 0)) {
+      showToast('Bạn không đủ điểm để đổi phần thưởng này.', 'error');
+      return;
+    }
+    const ok = await confirmDialog({
+      title: 'Đổi điểm lấy phần thưởng',
+      message: `Bạn có chắc chắn muốn dùng ${reward.pointCost} điểm để đổi lấy "${reward.name}"?`,
+      confirmLabel: 'Đổi điểm',
+    });
+    if (!ok) return;
+
+    setRewardLoading(true);
+    try {
+      const token = localStorage.getItem(storageKeys.accessToken);
+      const res = await fetch(`${API_BASE}/rewards/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rewardId: reward._id }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || 'Lỗi đổi phần thưởng');
+      const code = payload.data?.redemption?.code || '';
+      await confirmDialog({
+        title: 'Đổi phần thưởng thành công! 🎉',
+        content: (
+          <div className="text-center">
+            <p className="text-sm text-slate-500 mb-3">Bạn đã đổi <b className="text-slate-800">{reward.name}</b>. Xuất trình mã sau tại quầy để nhận phần thưởng:</p>
+            <div className="flex items-center justify-center gap-2">
+              <code className="px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-black text-lg tracking-widest">{code}</code>
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard.writeText(code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-sm font-bold hover:bg-slate-700 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-3">Mã này cũng được lưu tại mục <b>Quà tặng của tôi</b> trong Kho quà & Tích điểm.</p>
+          </div>
+        ),
+        confirmLabel: 'Đóng',
+        hideCancel: true,
+      });
+      await loadVouchers();
+    } catch (err) {
+      showToast(err.message || 'Lỗi đổi phần thưởng', 'error');
+    } finally {
+      setRewardLoading(false);
     }
   };
 
@@ -454,6 +589,23 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7"/></svg>
                 </button>
+              </div>
+            )}
+
+            {(filterType === 'all' || filterType === 'redeemable') && rewards.length > 0 && (
+              <div className="mt-12">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
+                    <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {rewards.map((reward, i) => (
+                    <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} />
+                  ))}
+                </div>
               </div>
             )}
           </div>

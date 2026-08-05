@@ -144,11 +144,13 @@ export default function CustomerPointHistoryDetail() {
     ? Math.floor((orderAmount * effectiveRate) / 100)
     : Math.abs(data.points);
 
+  const targetBookingId = refBooking._id || (typeof data.referenceId === 'string' ? data.referenceId : null);
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in duration-300">
       <div className="flex items-center justify-between border-b border-slate-200/80 pb-4">
         <button onClick={() => navigate(`/rewards?tab=${returnTab}`)}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm cursor-pointer">
           <ArrowLeft size={16} /> Quay lại
         </button>
         <span className="text-xs font-mono font-bold text-slate-400">ID: {data._id}</span>
@@ -182,141 +184,96 @@ export default function CustomerPointHistoryDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
-            <User size={18} className="text-blue-600" weight="fill" /> Thông tin của bạn
-          </h2>
-          <div className="flex items-center gap-4">
-            <img src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} alt="" className="h-14 w-14 rounded-2xl object-cover border-2 border-slate-200 shadow-sm" />
-            <div>
-              <h3 className="text-base font-extrabold text-slate-800">{user.name || 'Khách hàng'}</h3>
-              <p className="text-xs text-slate-500">{user.phone || user.email || '-'}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="text-[11px] text-slate-400 font-medium">Hạng hiện tại:</span>
-                {user.tier && <TierBadge tier={user.tier} />}
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-              <span className="text-[11px] text-slate-500 font-medium block">Điểm khả dụng</span>
-              <strong className="text-base font-extrabold text-emerald-700">{formatCurrency(user.loyaltyPoints)} điểm</strong>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-              <span className="text-[11px] text-slate-500 font-medium block">Tổng tích lũy</span>
-              <strong className="text-base font-extrabold text-blue-700">{formatCurrency(user.lifetimePoints)} điểm</strong>
-            </div>
-          </div>
-        </div>
+      {/* Chi tiết & Lý do — Full Width */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+          <FileText size={20} className="text-amber-500" weight="fill" /> Chi tiết & Lý do
+        </h2>
+        <p className="text-base font-extrabold text-slate-800 leading-relaxed">{data.description}</p>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
-            <FileText size={18} className="text-amber-500" weight="fill" /> Chi tiết & Lý do (Snapshot)
-          </h2>
-          <p className="text-sm font-bold text-slate-800 leading-relaxed">{data.description}</p>
-          {isEarned && orderAmount > 0 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-slate-50 p-2.5 text-[11px] text-slate-600 border border-slate-100">
-              <div><span className="text-slate-400">Đơn hàng:</span> <strong className="text-slate-800">{formatCurrency(orderAmount)}₫</strong></div>
-              <div><span className="text-slate-400">Tỷ lệ tích:</span> <strong className="text-blue-600">{effectiveRate}%</strong> <span className="text-slate-400 text-[10px]">(Cơ bản {baseRate}% x{multiplier})</span></div>
-              {bookingCode && <div><span className="text-slate-400">Mã đơn:</span> <span className="font-mono font-bold text-slate-700">{bookingCode}</span></div>}
-              {branchName && <div><span className="text-slate-400">Chi nhánh:</span> <strong className="text-emerald-700">{branchName}</strong>{branchAddress && <span className="text-slate-400"> - {branchAddress}</span>}</div>}
+        {isEarned && orderAmount > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
+            <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 text-xs">
+              <span className="text-slate-400 font-medium block mb-1">Giá trị đơn hàng</span>
+              <strong className="text-sm font-black text-slate-800">{formatCurrency(orderAmount)} ₫</strong>
             </div>
-          )}
-        </div>
+            <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 text-xs">
+              <span className="text-slate-400 font-medium block mb-1">Tỷ lệ tích điểm</span>
+              <strong className="text-sm font-black text-blue-600">{effectiveRate}%</strong>
+              <span className="text-[10px] text-slate-400 block mt-0.5">(Cơ bản {baseRate}% × {multiplier})</span>
+            </div>
+            {bookingCode && (
+              <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 text-xs">
+                <span className="text-slate-400 font-medium block mb-1">Mã đơn hàng</span>
+                <strong className="text-sm font-mono font-black text-blue-700">{bookingCode}</strong>
+              </div>
+            )}
+            {branchName && (
+              <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 text-xs">
+                <span className="text-slate-400 font-medium block mb-1">Chi nhánh</span>
+                <strong className="text-xs font-bold text-emerald-700 block truncate">{branchName}</strong>
+                {branchAddress && <span className="text-[10px] text-slate-400 block truncate">{branchAddress}</span>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Chi tiết Đơn hàng — Gọn gàng & có nút xem đơn */}
       {(bookingCode || pkgName) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <Receipt size={18} className="text-blue-600" weight="fill" /> Chi tiết Đơn hàng
-            </h2>
-            <span className={`inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-extrabold border ${bookingTypeInfo.color}`}>
-              <Bookmarks size={14} /> {bookingTypeInfo.label}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            {bookingCode && <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1"><span className="text-slate-400 block font-semibold">Mã đơn hàng:</span><strong className="text-sm font-mono font-black text-blue-700">{bookingCode}</strong></div>}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1"><span className="text-slate-400 block font-semibold">Loại đơn hàng:</span><strong className="text-xs font-extrabold text-slate-800">{bookingTypeInfo.label}</strong></div>
-            {orderAmount > 0 && <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1"><span className="text-slate-400 block font-semibold">Tổng tiền:</span><strong className="text-sm font-black text-emerald-700">{formatCurrency(orderAmount)} ₫</strong></div>}
-            {snap.paymentMethod && <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1"><span className="text-slate-400 block font-semibold">PT thanh toán:</span><strong className="text-xs font-extrabold text-slate-800">{snap.paymentMethod}</strong></div>}
-          </div>
-          {pkgName && (
-            <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/60 space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Gói dịch vụ chính</span>
-                  <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                    <Tag size={16} className="text-blue-600" weight="fill" /> {pkgName}
-                  </span>
-                </div>
-                {pkgPrice > 0 && (
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 block">Giá gói cơ bản</span>
-                    <span className="font-extrabold text-sm text-slate-900">{formatCurrency(pkgPrice)} ₫</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Các dịch vụ bao gồm trong gói */}
-              {includedSubServices.length > 0 && (
-                <div className="space-y-1.5 pt-0.5">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Các dịch vụ bao gồm trong gói:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {includedSubServices.map((sub, idx) => (
-                      <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-semibold">
-                        <CheckCircle size={13} weight="fill" className="text-emerald-600" /> {typeof sub === 'string' ? sub : sub.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Các dịch vụ chọn thêm */}
-              {addedSubServices.length > 0 && (
-                <div className="space-y-1.5 pt-1.5 border-t border-slate-200/60">
-                  <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider block">Dịch vụ chọn thêm:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {addedSubServices.map((sub, idx) => {
-                      const subName = typeof sub === 'string' ? sub : sub.name;
-                      const subPrice = typeof sub === 'object' ? sub.price : 0;
-                      return (
-                        <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
-                          <span>+ {subName}</span>
-                          {subPrice > 0 && <span className="text-[10px] text-indigo-500">({formatCurrency(subPrice)} ₫)</span>}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Voucher áp dụng */}
-              {(voucherCode || discountAmount > 0) && (
-                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/80">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 font-bold text-[11px]">🎫 Voucher áp dụng</span>
-                    {voucherCode && <span className="font-mono font-black text-amber-900 text-xs uppercase tracking-wider">Mã: {voucherCode}</span>}
-                  </div>
-                  {discountAmount > 0 && (
-                    <span className="font-black text-amber-700 text-xs">-{formatCurrency(discountAmount)} ₫</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {branchName && (
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-xs space-y-2">
-              <span className="font-extrabold text-emerald-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                <Building size={16} className="text-emerald-700" weight="fill" /> Chi nhánh
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <Receipt size={18} className="text-blue-600" weight="fill" /> Chi tiết Đơn hàng
+              </h2>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-extrabold border ${bookingTypeInfo.color}`}>
+                <Bookmarks size={13} /> {bookingTypeInfo.label}
               </span>
-              <div className="text-slate-700"><strong className="font-bold">{branchName}</strong>{branchAddress && <span className="text-slate-500"> - {branchAddress}</span>}</div>
             </div>
-          )}
+            {targetBookingId && (
+              <button
+                onClick={() => navigate(`/history/${targetBookingId}`)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                <span>Xem chi tiết đơn hàng</span>
+                <ArrowLeft size={14} className="rotate-180" />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {bookingCode && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+                <span className="text-slate-400 block font-semibold">Mã đơn hàng:</span>
+                <strong className="text-sm font-mono font-black text-blue-700">{bookingCode}</strong>
+              </div>
+            )}
+            {pkgName && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+                <span className="text-slate-400 block font-semibold">Gói dịch vụ:</span>
+                <strong className="text-xs font-extrabold text-slate-800 flex items-center gap-1">
+                  <Tag size={14} className="text-blue-600" weight="fill" /> {pkgName}
+                </strong>
+              </div>
+            )}
+            {orderAmount > 0 && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+                <span className="text-slate-400 block font-semibold">Tổng tiền thanh toán:</span>
+                <strong className="text-sm font-black text-emerald-700">{formatCurrency(orderAmount)} ₫</strong>
+              </div>
+            )}
+            {branchName && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+                <span className="text-slate-400 block font-semibold">Chi nhánh rửa xe:</span>
+                <strong className="text-xs font-bold text-slate-800 block truncate">{branchName}</strong>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
+      {/* Công thức tính điểm */}
       {isEarned && orderAmount > 0 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">

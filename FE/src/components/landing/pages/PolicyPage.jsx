@@ -3,13 +3,15 @@ import { useLocation } from 'react-router-dom';
 import Navbar from '../layout/Navbar';
 import Footer from '../layout/Footer';
 import { useSystemConfig } from '../../../hooks/useSystemConfig.jsx';
+import { getApiBaseUrl } from '../../../lib/authStorage.js';
 
-const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } = {}) => [
+const getFallbackPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } = {}) => [
   {
     id: 'privacy',
+    slug: 'privacy',
     title: 'Chính sách bảo mật',
     icon: '🔒',
-    content: [
+    sections: [
       { subtitle: '1. Mục đích và phạm vi thu thập thông tin',
         body: 'AutoWashPro thu thập thông tin cá nhân của khách hàng bao gồm: họ tên, email, số điện thoại, biển số xe, địa chỉ và thông tin thanh toán. Các thông tin này chỉ được thu thập khi khách hàng tự nguyện đăng ký tài khoản, đặt lịch rửa xe hoặc sử dụng các dịch vụ trên hệ thống.' },
       { subtitle: '2. Phạm vi sử dụng thông tin',
@@ -24,9 +26,10 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'terms',
+    slug: 'terms',
     title: 'Điều khoản sử dụng',
     icon: '📋',
-    content: [
+    sections: [
       { subtitle: '1. Chấp nhận điều khoản',
         body: 'Bằng việc truy cập và sử dụng hệ thống AutoWashPro, khách hàng xác nhận đã đọc, hiểu và đồng ý với tất cả các điều khoản được quy định trong tài liệu này.' },
       { subtitle: '2. Tài khoản người dùng',
@@ -41,9 +44,10 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'payment',
+    slug: 'payment',
     title: 'Chính sách thanh toán',
     icon: '💳',
-    content: [
+    sections: [
       { subtitle: '1. Hình thức thanh toán',
         body: 'AutoWashPro chấp nhận các hình thức thanh toán sau: tiền mặt tại chi nhánh, chuyển khoản ngân hàng, thanh toán trực tuyến qua VNPay và MoMo.' },
       { subtitle: '2. Thanh toán đặt cọc',
@@ -58,15 +62,16 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'cancellation',
+    slug: 'cancellation',
     title: 'Chính sách hủy lịch',
     icon: '❌',
-    content: [
+    sections: [
       { subtitle: '1. Hủy lịch trước giờ hẹn',
         body: 'Khách hàng có thể hủy lịch hẹn trước tối thiểu 2 giờ so với giờ bắt đầu. Việc hủy lịch được thực hiện trực tiếp trên hệ thống qua mục "Lịch sử đặt xe".' },
       { subtitle: '2. Hủy lịch muộn (dưới 2 giờ)',
         body: 'Trong trường hợp hủy lịch dưới 2 giờ trước giờ hẹn, khoản tiền cọc (nếu có) sẽ không được hoàn lại. Khách hàng vui lòng liên hệ chi nhánh qua số điện thoại để được hỗ trợ.' },
       { subtitle: '3. Không đến (No-show)',
-        body: `Nếu khách hàng không đến sau ${noShowGraceMinutes ?? '...'} phút kể từ giờ hẹn, lịch hẹn sẽ tự động bị hủy bởi hệ thống. Tiền cọc sẽ không được hoàn lại và khách hàng sẽ bị ghi nhận một lượt "vắng mặt" (no-show).` },
+        body: `Nếu khách hàng không đến sau ${noShowGraceMinutes ?? '30'} phút kể từ giờ hẹn, lịch hẹn sẽ tự động bị hủy bởi hệ thống. Tiền cọc sẽ không được hoàn lại và khách hàng sẽ bị ghi nhận một lượt "vắng mặt" (no-show).` },
       { subtitle: '4. Hủy lịch do chi nhánh',
         body: 'Trong trường hợp chi nhánh phải hủy lịch hẹn vì lý do bất khả kháng (mất điện, hỏng thiết bị, thiên tai), AutoWashPro sẽ thông báo sớm nhất có thể và hỗ trợ khách hàng đặt lại lịch miễn phí.' },
       { subtitle: '5. Giới hạn số lần hủy',
@@ -75,9 +80,10 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'refund',
+    slug: 'refund',
     title: 'Chính sách hoàn tiền',
     icon: '🔙',
-    content: [
+    sections: [
       { subtitle: '1. Điều kiện hoàn tiền',
         body: 'Khách hàng được hoàn tiền tự động vào Ví AutoWash khi hủy đơn đã thanh toán/cọc. Đối với đơn đã hoàn thành, khách hàng có thể gửi yêu cầu hoàn tiền trong vòng 24h kể từ khi hoàn thành. Ngoài ra, khách hàng được hoàn tiền khi chi nhánh hủy lịch do lỗi từ phía hệ thống.' },
       { subtitle: '2. Quy trình hoàn tiền',
@@ -90,9 +96,10 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'insurance',
+    slug: 'insurance',
     title: 'Chính sách bảo hiểm & bồi thường',
     icon: '🤝',
-    content: [
+    sections: [
       { subtitle: '1. Phạm vi bảo hiểm',
         body: 'AutoWashPro áp dụng bảo hiểm trách nhiệm dịch vụ cho toàn bộ quy trình rửa xe tại tất cả chi nhánh. Bảo hiểm này chi trả trong trường hợp xe của khách hàng bị trầy xước, móp méo, vỡ kính hoặc hư hỏng ngoại thất phát sinh trực tiếp từ quy trình rửa và chăm sóc xe của nhân viên AutoWashPro. Bảo hiểm không áp dụng cho các hư hỏng có sẵn trước khi nhận xe hoặc hư hỏng do nguyên nhân khách quan (thiên tai, trộm cắp).' },
       { subtitle: '2. Quy trình kiểm tra xe trước khi rửa',
@@ -109,13 +116,14 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'booking',
+    slug: 'booking',
     title: 'Chính sách đặt lịch',
     icon: '📅',
-    content: [
+    sections: [
       { subtitle: '1. Quy trình đặt lịch',
         body: 'Khách hàng chọn chi nhánh, gói dịch vụ, thời gian và phương tiện. Hệ thống sẽ kiểm tra slot trống và xác nhận lịch hẹn. Mỗi lịch hẹn được cấp một mã duy nhất dùng để check-in tại chi nhánh.' },
       { subtitle: '2. Thời gian đặt lịch',
-        body: `Khách hàng có thể đặt lịch trước tối thiểu ${minAdvanceMinutes ?? '...'} phút và tối đa 30 ngày so với thời điểm hiện tại. Mỗi khung giờ cách nhau 30 phút để đảm bảo đủ thời gian phục vụ.` },
+        body: `Khách hàng có thể đặt lịch trước tối thiểu ${minAdvanceMinutes ?? '15'} phút và tối đa 30 ngày so với thời điểm hiện tại. Mỗi khung giờ cách nhau 30 phút để đảm bảo đủ thời gian phục vụ.` },
       { subtitle: '3. Check-in và Check-out',
         body: 'Khách hàng đến chi nhánh đúng giờ hẹn, xuất trình mã lịch hẹn (QR code) để check-in. Sau khi hoàn tất dịch vụ, nhân viên thực hiện check-out và xác nhận hoàn thành.' },
       { subtitle: '4. Lịch hẹn định kỳ',
@@ -126,9 +134,10 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'loyalty',
+    slug: 'loyalty',
     title: 'Chính sách khách hàng thân thiết',
     icon: '⭐',
-    content: [
+    sections: [
       { subtitle: '1. Hạng thành viên',
         body: 'AutoWashPro có 4 hạng thành viên: Đồng (0-99 điểm), Bạc (100-499 điểm), Vàng (500-999 điểm), Kim cương (1.000+ điểm). Điểm tích lũy dựa trên giá trị đơn hàng đã hoàn thành.' },
       { subtitle: '2. Tích điểm',
@@ -141,9 +150,10 @@ const getPolicies = ({ depositPercent, noShowGraceMinutes, minAdvanceMinutes } =
   },
   {
     id: 'data-protection',
+    slug: 'data-protection',
     title: 'Chính sách bảo vệ dữ liệu cá nhân',
     icon: '🛡️',
-    content: [
+    sections: [
       { subtitle: '1. Nguyên tắc xử lý dữ liệu',
         body: 'AutoWashPro tuân thủ các nguyên tắc: thu thập dữ liệu tối thiểu (chỉ thu thập dữ liệu cần thiết), minh bạch về mục đích sử dụng, có sự đồng ý rõ ràng từ khách hàng, và đảm bảo tính chính xác của dữ liệu.' },
       { subtitle: '2. Quyền của khách hàng đối với dữ liệu',
@@ -160,20 +170,23 @@ function Sidebar({ policies = [], activeSection, onSelect }) {
   return (
     <nav className="space-y-1 sticky top-24">
       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 pb-2">Danh sách chính sách</p>
-      {policies.map(p => (
-        <button
-          key={p.id}
-          onClick={() => onSelect(p.id)}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left cursor-pointer ${
-            activeSection === p.id
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
-          }`}
-        >
-          <span className="text-base shrink-0">{p.icon}</span>
-          <span className="truncate">{p.title}</span>
-        </button>
-      ))}
+      {policies.map(p => {
+        const key = p.slug || p.id;
+        return (
+          <button
+            key={key}
+            onClick={() => onSelect(key)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left cursor-pointer ${
+              activeSection === key
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
+            }`}
+          >
+            <span className="text-base shrink-0">{p.icon || '📜'}</span>
+            <span className="truncate">{p.title}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -184,12 +197,41 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
   const depositPercent = Math.round(configs?.DEPOSIT_RATE ?? 0);
   const noShowGraceMinutes = configs?.AUTO_CANCEL_GRACE_MINUTES;
   const minAdvanceMinutes = configs?.MIN_ADVANCE_BOOKING_MINUTES;
-  const policies = getPolicies({ depositPercent, noShowGraceMinutes, minAdvanceMinutes });
+
+  const [policies, setPolicies] = useState(() => getFallbackPolicies({ depositPercent, noShowGraceMinutes, minAdvanceMinutes }));
   const [activeSection, setActiveSection] = useState('privacy');
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadPolicies() {
+      try {
+        const apiBase = getApiBaseUrl();
+        const res = await fetch(`${apiBase}/policies?category=policy`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.success && Array.isArray(data?.data) && data.data.length > 0) {
+          const mapped = data.data.map(p => ({
+            id: p.slug || p._id,
+            slug: p.slug,
+            title: p.title,
+            icon: p.icon || '📜',
+            sections: p.sections || [],
+            updatedAt: p.updatedAt
+          }));
+          setPolicies(mapped);
+        }
+      } catch {
+        // keep fallback
+      }
+    }
+
+    loadPolicies();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     const hash = location.hash?.replace('#', '');
-    if (hash && policies.some(p => p.id === hash)) {
+    if (hash && policies.some(p => (p.slug || p.id) === hash)) {
       setActiveSection(hash);
     }
   }, [location.hash, policies]);
@@ -244,16 +286,16 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
                 className="w-full h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               >
                 {policies.map(p => (
-                  <option key={p.id} value={p.id}>{p.icon} {p.title}</option>
+                  <option key={p.slug || p.id} value={p.slug || p.id}>{p.icon} {p.title}</option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-10">
-              {policies.filter(p => p.id === activeSection).map(policy => (
+              {policies.filter(p => (p.slug || p.id) === activeSection).map(policy => (
                 <section
-                  key={policy.id}
-                  id={policy.id}
+                  key={policy.slug || policy.id}
+                  id={policy.slug || policy.id}
                   className="scroll-mt-28"
                 >
                   <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-200">
@@ -262,14 +304,16 @@ export default function PolicyPage({ onOpenAuth, user, onLogout, onGoToProfile, 
                     </div>
                     <div>
                       <h2 className="text-xl md:text-2xl font-bold text-slate-900">{policy.title}</h2>
-                      <p className="text-xs text-slate-400 mt-0.5">Cập nhật lần cuối: 01/2026</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Cập nhật lần cuối: {policy.updatedAt ? new Date(policy.updatedAt).toLocaleDateString('vi-VN') : '01/2026'}
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-5">
-                    {policy.content.map((section, i) => (
+                    {(policy.sections || policy.content || []).map((section, i) => (
                       <div key={i} className="bg-slate-50/50 rounded-2xl p-5 md:p-6 border border-slate-100 hover:border-slate-200 transition-colors">
                         <h3 className="text-sm font-bold text-emerald-700 mb-2">{section.subtitle}</h3>
-                        <p className="text-sm text-slate-600 leading-relaxed">{section.body}</p>
+                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{section.body}</p>
                       </div>
                     ))}
                   </div>

@@ -53,6 +53,7 @@ function resolvePageMeta(pathname, search = '') {
     return ADMIN_PAGE_META.payments;
   }
   if (pathname.startsWith('/admin/slot-packs')) return ADMIN_PAGE_META['slot-packs'];
+  if (pathname.startsWith('/admin/policies')) return ADMIN_PAGE_META.policies;
   if (pathname.startsWith('/admin/profile')) return ADMIN_PAGE_META.profile;
   return ADMIN_PAGE_META.overview;
 }
