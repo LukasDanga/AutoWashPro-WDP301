@@ -623,8 +623,8 @@ function PrintReceiptModal({ booking, onClose }) {
               AutoWash Pro<br/>
               Hồ Chí Minh, Vietnam
             </p>
-            <p className="text-[13px] text-black mt-4">
-              VAT được tính trên tổng giá trị hóa đơn (10%)
+            <p className="text-[13px] text-black font-semibold mt-4">
+              * Giá đã bao gồm VAT 10%
             </p>
           </div>
 
@@ -726,6 +726,7 @@ function PrintReceiptModal({ booking, onClose }) {
                     }
                   </span>
                 </div>
+                <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
               </div>
             </div>
           </div>
@@ -1481,6 +1482,7 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                       {Number(booking.finalPrice ?? (totalValue - (booking.discountAmount || 0))).toLocaleString('vi-VN')}đ
                     </span>
                   </div>
+                  <p className="text-[11px] font-medium text-slate-400 text-right mt-0.5">* Giá đã bao gồm VAT 10%</p>
                 </>;
               })()}
 

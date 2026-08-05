@@ -1437,6 +1437,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         }
                       </span>
                     </div>
+                    <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
                     {b.paymentStatus === 'paid' && b.paidAt && (
                       <div className="flex justify-between py-1 border-b border-slate-200">
                         <span className="font-normal text-black">Ngày thanh toán</span>
