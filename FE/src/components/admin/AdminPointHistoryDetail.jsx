@@ -293,17 +293,8 @@ export default function AdminPointHistoryDetail() {
                 <span className="text-base font-mono font-black text-blue-700">{bookingCode}</span>
                 <button
                   onClick={() => {
-                    const bId = refBooking?._id || (typeof data.referenceId === 'string' ? data.referenceId : null) || data.referenceId;
-                    if (bId) {
-                      if (bookingCode.startsWith('SP-')) {
-                        navigate(isManager ? '/manager/slot-packs' : '/admin/slot-packs', { 
-                          state: { openSlotPack: { _id: bId, packCode: bookingCode, userId: data.userId } } 
-                        });
-                      } else {
-                        navigate(isManager ? '/manager/bookings' : '/admin/bookings', { 
-                          state: { openBooking: { _id: bId, bookingCode, userId: data.userId } } 
-                        });
-                      }
+                    if (bookingCode) {
+                      navigate(`${isManager ? '/manager/bookings' : '/admin/bookings'}?search=${encodeURIComponent(bookingCode)}`);
                     }
                   }}
                   className="mt-1 text-[11px] text-blue-600 hover:text-blue-700 underline font-medium block ml-auto"

@@ -109,9 +109,8 @@ export function PaymentDetailBody({ payment, onConfirm, onRefund, confirming, re
                         state: { openSlotPack: { _id: payment.slotPackId._id, packCode: payment.slotPackId.packCode, userId: payment.userId } } 
                       });
                     } else if (payment.bookingId?._id) {
-                      navigate(`${basePath}/bookings`, { 
-                        state: { openBooking: { _id: payment.bookingId._id, bookingCode: payment.bookingId.bookingCode, userId: payment.userId } } 
-                      });
+                      const code = payment.bookingId?.bookingCode || ('AWP-' + String(payment.bookingId?._id).slice(-8).toUpperCase());
+                      navigate(`${basePath}/bookings?search=${encodeURIComponent(code)}`);
                     }
                   }}
                   className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
