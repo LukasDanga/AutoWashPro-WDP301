@@ -432,7 +432,7 @@ export default function AdminBookings() {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [branchId, setBranchId] = useState('');
   const [typeFilter, setTypeFilter] = useState('');

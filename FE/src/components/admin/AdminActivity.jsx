@@ -152,7 +152,7 @@ export default function AdminActivity() {
                             </p>
                           </div>
                           <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-2">
-                            <button onClick={() => navigate(`/admin/bookings/${b._id}`)}
+                            <button onClick={() => navigate(`/admin/bookings?search=${encodeURIComponent(b.bookingCode || b._id)}`)}
                               className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 underline shrink-0">
                               Xem đơn
                             </button>

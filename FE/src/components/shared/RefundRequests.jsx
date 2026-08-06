@@ -157,7 +157,7 @@ export default function RefundRequests({ detailPath = '/admin/payments/refunds' 
     if (!bookingId) return;
     const isAdmin = detailPath.startsWith('/admin');
     const roleBase = isAdmin ? '/admin' : '/manager';
-    navigate(`${roleBase}/bookings/${bookingId}`);
+    navigate(`${roleBase}/bookings?search=${encodeURIComponent(b.bookingCode || bookingId)}`);
   };
 
   const handleOpenDetail = (r) => {

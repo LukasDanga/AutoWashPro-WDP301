@@ -30,7 +30,7 @@ export default function RefundDetailPage({ basePath = '/admin/payments?tab=refun
     if (!bookingId) return;
     const isAdmin = basePath.startsWith('/admin');
     const roleBase = isAdmin ? '/admin' : '/manager';
-    navigate(`${roleBase}/bookings/${bookingId}`);
+    navigate(`${roleBase}/bookings?search=${encodeURIComponent(b.bookingCode || bookingId)}`);
   };
 
   const load = useCallback(async () => {

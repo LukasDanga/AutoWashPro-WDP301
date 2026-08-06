@@ -120,7 +120,7 @@ function CustomTooltip({ active, payload, label, currency }) {
 export default function AdminOverview() {
   const navigate = useNavigate();
   const goToBooking = useCallback((booking) => {
-    navigate(`/admin/bookings/${booking._id}`);
+    navigate(`/admin/bookings?search=${encodeURIComponent(booking.bookingCode || booking._id)}`);
   }, [navigate]);
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);

@@ -93,6 +93,7 @@ function SlotBar({ total, remaining }) {
 }
 
 function SlotPackDetail({ pack, onClose }) {
+  const navigate = useNavigate();
   const st = STATUS_MAP[pack.status] || { label: pack.status, cls: 'bg-slate-100 text-slate-500' };
   const slotPct = pack.totalSlots > 0 ? (pack.usedSlots / pack.totalSlots) * 100 : 0;
   const slotColor = slotPct >= 80 ? '#ef4444' : slotPct >= 40 ? '#f59e0b' : '#10b981';
@@ -224,6 +225,7 @@ function SlotPackDetail({ pack, onClose }) {
                   <tr className="bg-slate-50/80 border-b border-slate-100">
                     <th className="px-3 py-2 text-left font-semibold text-slate-500">Ngày</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-500">Thời gian</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Mã đơn</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-500">Trạng thái</th>
                   </tr>
                 </thead>
@@ -236,6 +238,14 @@ function SlotPackDetail({ pack, onClose }) {
                       <tr key={b._id} className="border-b border-slate-50 last:border-0">
                         <td className="px-3 py-2 font-medium text-slate-700">{dateStr}</td>
                         <td className="px-3 py-2 text-slate-600">{b.startTime || '—'} → {b.endTime || '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className="font-medium text-fuchsia-600">{b.bookingCode || '—'}</span>
+                          <button
+                            onClick={() => navigate(`/admin/bookings?search=${encodeURIComponent(b.bookingCode || b._id)}`)}
+                            className="ml-2 rounded-md border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer">
+                            Xem thêm
+                          </button>
+                        </td>
                         <td className="px-3 py-2">
                           <span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${bst.cls}`}>{bst.label}</span>
                         </td>
@@ -347,7 +357,7 @@ function UsageDetail({ booking, onClose }) {
           <button
             onClick={() => {
               onClose();
-              navigate(`/admin/bookings/${booking._id}`);
+              navigate(`/admin/bookings?search=${encodeURIComponent(booking.bookingCode || booking._id)}`);
             }}
             className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors w-full">
             Xem đơn đặt này trong Booking
