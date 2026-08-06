@@ -281,18 +281,6 @@ function BranchForm({ initial, onSave, onCancel, saving }) {
           onChange={(e) => set('image', e.target.value)} placeholder="https://..." />
       </Field>
 
-      <Field label="Quản lý chi nhánh" error={errors.managerId}>
-        <select id="f-manager" className={inp} value={form.managerId}
-          onChange={(e) => set('managerId', e.target.value)}>
-          <option value="">{managersLoading ? 'Đang tải...' : '— Chọn quản lý —'}</option>
-          {managers.map((m) => (
-            <option key={m._id} value={m._id}>
-              {m.name} — {m.email}
-            </option>
-          ))}
-        </select>
-      </Field>
-
       <Field label="Trạng thái" error={errors.status}>
         <select id="f-status" className={inp} value={form.status}
           onChange={(e) => set('status', e.target.value)}>
@@ -731,6 +719,40 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
 
   const notify = (msg, type = 'success') => showToast(msg, type);
 
+  const [currentSortOrder, setCurrentSortOrder] = useState(branch?.packageSortOrder || 'price_asc');
+
+  useEffect(() => {
+    if (branch?.packageSortOrder) setCurrentSortOrder(branch.packageSortOrder);
+  }, [branch?.packageSortOrder]);
+
+  const handleSortOrderChange = async (newSortOrder) => {
+    setCurrentSortOrder(newSortOrder);
+    try {
+      const res = await apiFetch(`/branches/${branch._id || branch.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ packageSortOrder: newSortOrder }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+
+      setPackages((prev) => {
+        const list = [...prev];
+        if (newSortOrder === 'price_asc') {
+          list.sort((a, b) => (a.price || 0) - (b.price || 0));
+        } else if (newSortOrder === 'price_desc') {
+          list.sort((a, b) => (b.price || 0) - (a.price || 0));
+        } else if (newSortOrder === 'booking_count') {
+          list.sort((a, b) => (b.bookingCount || 0) - (a.bookingCount || 0));
+        }
+        return list;
+      });
+
+      const label = newSortOrder === 'price_asc' ? 'Giá thấp → cao' : newSortOrder === 'price_desc' ? 'Giá cao → thấp' : 'Lượt đặt nhiều nhất';
+      notify(`Đã đổi kiểu sắp xếp gói: ${label}`);
+    } catch (err) {
+      notify(err.message || 'Lỗi cập nhật kiểu sắp xếp', 'error');
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -744,7 +766,16 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
         if (!res.ok) return;
         const payload = await res.json();
         const data = payload?.data ?? payload;
-        if (mounted) setPackages(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? [...data] : [];
+        const sortOrder = currentSortOrder || 'price_asc';
+        if (sortOrder === 'price_asc') {
+          list.sort((a, b) => (a.price || 0) - (b.price || 0));
+        } else if (sortOrder === 'price_desc') {
+          list.sort((a, b) => (b.price || 0) - (a.price || 0));
+        } else if (sortOrder === 'booking_count') {
+          list.sort((a, b) => (b.bookingCount || 0) - (a.bookingCount || 0));
+        }
+        if (mounted) setPackages(list);
       } catch (e) {
         console.error('Failed to load packages', e);
       } finally {
@@ -753,7 +784,7 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
     }
     load();
     return () => { mounted = false; };
-  }, [pkgSearch]);
+  }, [pkgSearch, currentSortOrder]);
 
   const handlePkgUpdate = async (data) => {
     setPkgSaving(true);
@@ -957,20 +988,36 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
 
         {/* ── Packages Section ── */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                 <Package size={16} weight="duotone" />
               </div>
               <h3 className="text-sm font-bold text-slate-800">Gói dịch vụ</h3>
             </div>
-            <div className="relative">
-              <MagnifyingGlass size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={pkgSearch} onChange={(e) => setPkgSearch(e.target.value)}
-                placeholder="Tìm gói dịch vụ…"
-                className="w-56 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
-              />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs shadow-2xs">
+                <span className="text-slate-500 font-medium">Sắp xếp:</span>
+                <select
+                  value={currentSortOrder}
+                  onChange={(e) => handleSortOrderChange(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="price_asc">Giá từ thấp → cao</option>
+                  <option value="price_desc">Giá từ cao → thấp</option>
+                  <option value="booking_count">Theo lượt đặt (Nhiều nhất)</option>
+                </select>
+              </div>
+
+              <div className="relative">
+                <MagnifyingGlass size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={pkgSearch} onChange={(e) => setPkgSearch(e.target.value)}
+                  placeholder="Tìm gói dịch vụ…"
+                  className="w-48 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+                />
+              </div>
             </div>
           </div>
 
@@ -1003,6 +1050,9 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
                             : 'bg-slate-100 text-slate-500 border-slate-200'
                         }`}>
                           {pkg.status === 'active' ? '● Hoạt động' : '○ Ngừng'}
+                        </span>
+                        <span className="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80 flex items-center gap-1">
+                          🔥 {pkg.bookingCount || 0} lượt đặt
                         </span>
                       </div>
 
@@ -1229,17 +1279,83 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
   };
 
   const addSub = () => setForm((f) => ({ ...f, subServices: [...f.subServices, { name: '', price: '', duration: '', isOptional: true }] }));
-  const updSub = (idx, key, val) => setForm((f) => { const s = [...f.subServices]; s[idx] = { ...s[idx], [key]: val }; return { ...f, subServices: s }; });
-  const delSub = (idx) => setForm((f) => ({ ...f, subServices: f.subServices.filter((_, i) => i !== idx) }));
+  
+  const updSub = (idx, key, val) => {
+    setForm((f) => {
+      const s = [...f.subServices];
+      if (key === 'isOptional' && val === false) {
+        s[idx] = { ...s[idx], isOptional: false, price: 0 };
+      } else {
+        s[idx] = { ...s[idx], [key]: val };
+      }
+      return { ...f, subServices: s };
+    });
+    setErrors((e) => {
+      if (!e.subServices) return e;
+      const subErrs = [...e.subServices];
+      if (subErrs[idx]) {
+        subErrs[idx] = { ...subErrs[idx], [key]: '' };
+        if (key === 'isOptional' && val === false) {
+          subErrs[idx].price = '';
+        }
+      }
+      return { ...e, subServices: subErrs };
+    });
+  };
+
+  const delSub = (idx) => {
+    setForm((f) => ({ ...f, subServices: f.subServices.filter((_, i) => i !== idx) }));
+    setErrors((e) => {
+      if (!e.subServices) return e;
+      return { ...e, subServices: e.subServices.filter((_, i) => i !== idx) };
+    });
+  };
+
+  const parseVnd = (v) => Number(String(v).replace(/\./g, ''));
 
   const submit = (e) => {
     e.preventDefault();
     const errs = {};
-    if (!form.name.trim()) errs.name = 'Vui lòng nhập tên';
-    if (!form.price || Number(form.price) < 0) errs.price = 'Giá không hợp lệ';
-    if (!form.duration || Number(form.duration) < 1) errs.duration = 'Thời lượng không hợp lệ';
+    if (!form.name.trim()) errs.name = 'Vui lòng nhập tên gói';
+
+    const numericPrice = parseVnd(form.price);
+    if (!form.price || isNaN(numericPrice) || numericPrice <= 1000) {
+      errs.price = 'Giá gói phải lớn hơn 1.000 VNĐ';
+    }
+
+    if (!form.duration || Number(form.duration) <= 0) {
+      errs.duration = 'Thời lượng phải lớn hơn 0 phút';
+    }
+
+    const subErrors = [];
+    let hasSubError = false;
+
+    (form.subServices || []).forEach((sub, idx) => {
+      const sErr = {};
+      if (!sub.name || !sub.name.trim()) {
+        sErr.name = 'Vui lòng nhập tên dịch vụ nhỏ';
+        hasSubError = true;
+      }
+      if (!sub.duration || Number(sub.duration) <= 0) {
+        sErr.duration = 'Vui lòng nhập thời gian';
+        hasSubError = true;
+      }
+      if (sub.isOptional) {
+        const subPriceNum = parseVnd(sub.price);
+        if (!sub.price || isNaN(subPriceNum) || subPriceNum <= 1000) {
+          sErr.price = 'Giá phụ thu phải > 1.000 VNĐ';
+          hasSubError = true;
+        }
+      }
+      subErrors[idx] = sErr;
+    });
+
+    if (hasSubError) {
+      errs.subServices = subErrors;
+    }
+
     if (Object.keys(errs).length) return setErrors(errs);
-    onSave({ ...form, price: Number(String(form.price).replace(/\./g, '')), duration: Number(form.duration) });
+    onSave({ ...form, price: parseVnd(form.price), duration: Number(form.duration) });
   };
 
   const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
@@ -1270,7 +1386,7 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Giá (VNĐ) <span className="text-red-500">*</span></label>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Giá gói (VNĐ) <span className="text-red-500">*</span></label>
           <input type="text" inputMode="numeric" className={inp} value={form.price} onChange={(e) => onPriceChange(e.target.value)} placeholder="80000" />
           {errors.price && <p className="mt-1 text-[11px] text-red-500">{errors.price}</p>}
         </div>
@@ -1321,7 +1437,7 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    ✓ Đã bao gồm
+                    Đã bao gồm
                   </button>
                   <button
                     type="button"
@@ -1332,7 +1448,7 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    ✨ Tùy chọn
+                    Tùy chọn
                   </button>
                 </div>
                 <button type="button" onClick={() => delSub(idx)}
@@ -1343,19 +1459,41 @@ function CreatePackageForm({ initial, onSave, onCancel, saving }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="sm:col-span-1">
-                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Tên dịch vụ nhỏ</label>
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Tên dịch vụ nhỏ <span className="text-red-500">*</span>
+                  </label>
                   <input placeholder="VD: Phun bọt tuyết, Lau khô..." className={inp + ' text-xs'} value={sub.name}
                     onChange={(e) => updSub(idx, 'name', e.target.value)} />
+                  {errors.subServices?.[idx]?.name && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].name}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Giá phụ thu (VNĐ)</label>
-                  <input type="number" min="0" placeholder="0" className={inp + ' text-xs'} value={sub.price}
-                    onChange={(e) => updSub(idx, 'price', e.target.value)} />
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Giá phụ thu (VNĐ) {sub.isOptional ? <span className="text-red-500">*</span> : <span className="text-slate-400">(Miễn phí)</span>}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={!sub.isOptional ? "0đ (Đã bao gồm)" : "VD: 20000"}
+                    disabled={!sub.isOptional}
+                    className={`${inp} text-xs ${!sub.isOptional ? 'bg-slate-100/90 text-slate-400 cursor-not-allowed border-slate-200' : ''}`}
+                    value={!sub.isOptional ? '0' : sub.price}
+                    onChange={(e) => updSub(idx, 'price', e.target.value)}
+                  />
+                  {errors.subServices?.[idx]?.price && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].price}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Thời gian (phút)</label>
-                  <input type="number" min="0" placeholder="5" className={inp + ' text-xs'} value={sub.duration}
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Thời gian (phút) <span className="text-red-500">*</span>
+                  </label>
+                  <input type="number" min="1" placeholder="5" className={inp + ' text-xs'} value={sub.duration}
                     onChange={(e) => updSub(idx, 'duration', e.target.value)} />
+                  {errors.subServices?.[idx]?.duration && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].duration}</p>
+                  )}
                 </div>
               </div>
             </div>

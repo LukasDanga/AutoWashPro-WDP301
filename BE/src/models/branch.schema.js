@@ -20,6 +20,11 @@ const branchSchema = new mongoose.Schema(
       svgCx: { type: Number },
       svgCy: { type: Number },
     },
+    packageSortOrder: {
+      type: String,
+      enum: ['price_asc', 'price_desc', 'booking_count'],
+      default: 'price_asc',
+    },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },

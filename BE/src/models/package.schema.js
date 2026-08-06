@@ -21,6 +21,7 @@ const packageSchema = new mongoose.Schema(
     ],
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
+    bookingCount: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

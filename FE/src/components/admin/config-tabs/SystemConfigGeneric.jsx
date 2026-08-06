@@ -340,45 +340,100 @@ export default function SystemConfigGeneric({ categories = DEFAULT_CATEGORIES, k
 
   const hasInvalidJson = () => Object.keys(invalidJson).some(k => invalidJson[k]);
 
+  const formatValForDiff = (val, type, unit) => {
+    if (val === null || val === undefined) return 'Trống';
+    if (type === 'boolean' || typeof val === 'boolean') return val ? 'Bật (True)' : 'Tắt (False)';
+    if (type === 'json' || typeof val === 'object') {
+      try {
+        return JSON.stringify(val);
+      } catch (e) {
+        return String(val);
+      }
+    }
+    const cleanUnit = unit ? unit.replace(/\s*\([^)]*\)/g, '').trim() : '';
+    return `${val}${cleanUnit ? `${cleanUnit}` : ''}`;
+  };
+
   const handleSave = async () => {
     if (hasInvalidJson()) {
       showToast({ message: 'Có cấu hình JSON chưa hợp lệ. Vui lòng kiểm tra lại các ô được tô đỏ.', type: 'error' });
       return;
     }
 
-    const changes = configs.filter(c => {
+    const changesWithDiff = configs.filter(c => {
       if (c.type === 'json') {
         try {
           return JSON.stringify(JSON.parse(formValues[c.key])) !== JSON.stringify(c.value);
         } catch (e) { return false; }
       }
       return formValues[c.key] !== c.value;
-    }).map(c => ({
-      key: c.key,
-      value: c.type === 'json' ? JSON.parse(formValues[c.key]) : formValues[c.key],
-      type: c.type,
-      category: c.category,
-      scope: c.scope,
-      isPublic: c.isPublic,
-      description: c.description
-    }));
+    }).map(c => {
+      const newValue = c.type === 'json' ? JSON.parse(formValues[c.key]) : formValues[c.key];
+      const unit = getConfigUnit(c.key, c.description) || '';
+      return {
+        key: c.key,
+        oldValue: c.value,
+        newValue,
+        type: c.type,
+        category: c.category,
+        scope: c.scope,
+        isPublic: c.isPublic,
+        description: c.description,
+        unit,
+      };
+    });
 
-    if (changes.length === 0) return;
+    if (changesWithDiff.length === 0) return;
 
     const isConfirmed = await confirmDialog({
-      title: 'Lưu cấu hình',
-      message: `Bạn đang cập nhật ${changes.length} giá trị cấu hình. Tiếp tục?`,
-      confirmLabel: 'Lưu thay đổi',
+      title: 'Xác nhận thay đổi cấu hình',
+      message: `Bạn đang chuẩn bị cập nhật ${changesWithDiff.length} giá trị cấu hình dưới đây:`,
+      maxWidth: '680px',
+      content: (
+        <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
+          {changesWithDiff.map(item => (
+            <div key={item.key} className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+                <span className="font-bold text-slate-900 text-xs tracking-wide">{item.key}</span>
+                {item.description && (
+                  <span className="text-[11px] text-slate-500 font-normal leading-snug">
+                    {item.description}
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 flex items-center gap-2.5 font-mono text-xs flex-wrap">
+                <span className="rounded-lg bg-rose-50 px-3 py-1 text-rose-700 line-through border border-rose-200/60 font-semibold">
+                  {formatValForDiff(item.oldValue, item.type, item.unit)}
+                </span>
+                <span className="text-slate-400 font-bold text-base">→</span>
+                <span className="rounded-lg bg-emerald-50 px-3 py-1 font-bold text-emerald-700 border border-emerald-200/60">
+                  {formatValForDiff(item.newValue, item.type, item.unit)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+      confirmLabel: 'Xác nhận thay đổi',
       cancelLabel: 'Hủy'
     });
 
     if (isConfirmed) {
       try {
         setSaving(true);
-        for (const change of changes) {
+        for (const change of changesWithDiff) {
           const res = await api('/configs/update', {
             method: 'POST',
-            body: JSON.stringify({ ...change, reason: 'Admin cập nhật qua System Config UI' })
+            body: JSON.stringify({
+              key: change.key,
+              value: change.newValue,
+              type: change.type,
+              category: change.category,
+              scope: change.scope,
+              isPublic: change.isPublic,
+              description: change.description,
+              reason: 'Admin cập nhật qua System Config UI'
+            })
           });
           if (!res.ok) throw new Error(`Lỗi cập nhật ${change.key}`);
         }
