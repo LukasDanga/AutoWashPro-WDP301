@@ -652,6 +652,7 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
         .populate('branchId', 'name address phone')
         .populate('packageId', 'name price duration subServices')
         .populate('vehicleId', 'licensePlate vehicleType brand color')
+        .populate('slotPackId', 'packCode packageName totalSlots usedSlots remainingSlots status')
     : null;
 
   // id có thể là recurringGroupId (UUID) khi mở chi tiết từ danh sách đã gộp lịch định kỳ
@@ -659,9 +660,10 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
     booking = await Booking.findOne({ recurringGroupId: String(id) })
       .populate('userId', 'name email phone tier walletBalance')
       .populate('branchId', 'name address phone')
-      .populate('packageId', 'name price duration subServices')
-      .populate('vehicleId', 'licensePlate vehicleType brand color');
-  }
+.populate('packageId', 'name price duration subServices')
+      .populate('vehicleId', 'licensePlate vehicleType brand color')
+      .populate('slotPackId', 'packCode packageName totalSlots usedSlots remainingSlots status')
+}
   if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   // H-5: nếu booking đã soft-delete, customer/manager không truy cập được, admin thì có (?includeDeleted=true qua getAllBookings)
   if (booking.isDeleted && userRole !== 'admin') {
