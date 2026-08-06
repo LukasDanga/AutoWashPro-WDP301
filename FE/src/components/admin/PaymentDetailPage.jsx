@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from '@phosphor-icons/react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
@@ -97,7 +97,23 @@ export default function PaymentDetailPage({ basePath = '/admin/payments' }) {
         </button>
         <div>
           <h2 className="text-lg font-bold text-slate-800">Chi tiết thanh toán</h2>
-          <p className="text-xs text-slate-400 font-mono">Mã GD: {payment?.transactionId || '...'}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-xs text-slate-500 font-mono">Mã GD: {payment?.transactionId || '...'}</p>
+            {payment?.bookingId?.bookingCode && (
+              <>
+                <span className="text-slate-300">•</span>
+                <p className="text-xs text-slate-500 font-mono">Mã đơn: {payment.bookingId.bookingCode}</p>
+              </>
+            )}
+            {payment?.bookingId && (
+              <button 
+                onClick={() => navigate('/admin/bookings', { state: { openBooking: { ...payment.bookingId, userId: payment.userId } } })} 
+                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium underline ml-1"
+              >
+                Xem đơn
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -34,7 +34,7 @@ const INITIAL_CONFIGS = [
     value: 2,
     type: 'number',
     category: 'booking',
-    isPublic: false,
+    isPublic: true,
     description: 'Sức chứa mặc định (số xe rửa cùng lúc) nếu chi nhánh không cấu hình'
   },
   {

@@ -107,7 +107,58 @@ exports.updateBookingStatus = catchAsync(async (req, res) => {
   const booking = await bookingService.updateBookingStatus(req.params.id, req.body.status, updateData, req.user.role, req.user.branchId, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
+  if (req.body.status === 'checked_in' && booking) {
+    const targetBranchId = booking.branchId?._id || booking.branchId;
+    if (targetBranchId) sseService.broadcastToManagers(targetBranchId, 'customer_checked_in_via_qr', { bookingId: booking._id });
+    sseService.broadcastToAll('customer_checked_in_via_qr', { bookingId: booking._id });
+  }
   success(res, booking, 'Cập nhật trạng thái đặt lịch thành công');
+});
+
+exports.requestCheckin = catchAsync(async (req, res) => {
+  const { branchId } = req.body;
+  const Booking = require('../models/booking.schema');
+  const booking = await Booking.findById(req.params.id)
+    .populate('userId', 'name fullName phone email avatar')
+    .populate('vehicleId')
+    .populate('packageId')
+    .populate('branchId');
+
+  if (!booking) {
+    throw Object.assign(new Error('Đơn hàng không tồn tại'), { statusCode: 404 });
+  }
+
+  if (branchId && booking.branchId && String(booking.branchId._id || booking.branchId) !== String(branchId)) {
+    throw Object.assign(new Error('Mã QR không thuộc chi nhánh của đơn hàng này!'), { statusCode: 400 });
+  }
+
+  const targetBranchId = String(booking.branchId?._id || booking.branchId);
+
+  sseService.broadcastToManagers(targetBranchId, 'customer_checkin_request', {
+    bookingId: booking._id,
+    booking,
+    branchId: targetBranchId,
+  });
+  sseService.broadcastToAll('customer_checkin_request', {
+    bookingId: booking._id,
+    booking,
+    branchId: targetBranchId,
+  });
+
+  success(res, { bookingId: booking._id }, 'Đã gửi yêu cầu check-in tới Quản lý');
+});
+
+exports.rejectCheckin = catchAsync(async (req, res) => {
+  const Booking = require('../models/booking.schema');
+  const booking = await Booking.findById(req.params.id);
+  if (booking && booking.userId) {
+    sseService.sendToUser(String(booking.userId?._id || booking.userId), 'checkin_rejected', {
+      bookingId: booking._id,
+      reason: req.body.reason || 'Quản lý từ chối / hủy yêu cầu check-in',
+    });
+  }
+  sseService.broadcastToAll('checkin_rejected', { bookingId: req.params.id });
+  success(res, null, 'Đã từ chối yêu cầu check-in');
 });
 
 exports.customerScanCheckin = catchAsync(async (req, res) => {

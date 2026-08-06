@@ -3,8 +3,8 @@ require('dns').setServers(['8.8.8.8', '1.1.1.1']);
 const mongoose = require('mongoose');
 const { SystemConfig } = require('../models');
 
-// Các key cần mở isPublic để FE (ManagerBookings) đọc được qua /configs/public
-const PUBLIC_KEYS = ['GRACE_EXTENSION_STEP_MINUTES', 'MAX_GRACE_EXTENSION_MINUTES'];
+// Các key cần mở isPublic để FE đọc được qua /configs/public
+const PUBLIC_KEYS = ['GRACE_EXTENSION_STEP_MINUTES', 'MAX_GRACE_EXTENSION_MINUTES', 'DEFAULT_BRANCH_CAPACITY'];
 
 // Các key bị đặt nhầm category
 const CATEGORY_FIXES = {

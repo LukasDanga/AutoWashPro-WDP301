@@ -594,8 +594,8 @@ function PrintReceiptModal({ booking, onClose }) {
             <div>
               <div className="font-semibold text-black mb-1">AutoWash Pro</div>
               <div className="text-black">
-                {detailBooking.branchName || detailBooking.branchId?.name || 'Chi nhánh trung tâm'}<br/>
-                {detailBooking.branchId?.address || '123 Đường Rửa Xe'}<br/>
+                {detailBooking.branchName || detailBooking.branchSnapshot?.name || detailBooking.branchId?.name || 'Chi nhánh trung tâm'}<br/>
+                {detailBooking.branchAddress || detailBooking.branchSnapshot?.address || detailBooking.branchId?.address || '123 Đường Rửa Xe'}<br/>
                 Hồ Chí Minh, Việt Nam<br/>
                 support@autowashpro.com
               </div>
@@ -632,7 +632,7 @@ function PrintReceiptModal({ booking, onClose }) {
                 <tr className="border-b border-black">
                   <th className="py-2 text-left font-normal text-black w-1/2">Mô tả</th>
                   <th className="py-2 text-right font-normal text-black">SL</th>
-                  <th className="py-2 text-right font-normal text-black">Đơn giá</th>
+                  <th className="py-2 text-right font-normal text-black">Đơn giá (đã gồm thuế)</th>
                   <th className="py-2 text-right font-normal text-black">Thuế</th>
                   <th className="py-2 text-right font-normal text-black">Thành tiền</th>
                 </tr>
@@ -640,7 +640,7 @@ function PrintReceiptModal({ booking, onClose }) {
               <tbody>
                 <tr className="border-b border-slate-200">
                   <td className="py-3 text-left align-top">
-                    <div className="font-normal text-black">{detailBooking.packageName || detailBooking.packageId?.name || 'Dịch vụ rửa xe'}</div>
+                    <div className="font-normal text-black">{detailBooking.packageName || detailBooking.packageSnapshot?.name || detailBooking.packageId?.name || 'Dịch vụ rửa xe'}</div>
                     {!detailBooking.isGroup && <div className="text-black">{formatDate(detailBooking.bookingDate)} • {detailBooking.startTime || '—'}</div>}
                     {detailBooking.isGroup && (
                       <div className="mt-2 space-y-1">
@@ -656,18 +656,21 @@ function PrintReceiptModal({ booking, onClose }) {
                   <td className="py-3 text-right text-black align-top">{detailBooking.isGroup ? detailBooking.groupCount || recurringGroupBookings.length : 1}</td>
                   <td className="py-3 text-right text-black align-top">
                     {detailBooking.bookingType === 'slot_pack_usage' ? (
-                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packagePrice || detailBooking.packageId?.price || 0)}</span>
+                      <span className="line-through text-slate-400 mr-2">{formatCurrency(detailBooking.packagePrice || detailBooking.packageSnapshot?.price || detailBooking.packageId?.price || 0)}</span>
                     ) : null}
-                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
+                    {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageSnapshot?.price || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
                   </td>
                   <td className="py-3 text-right text-black align-top">10%</td>
-                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
+                  <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageSnapshot?.price || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
                 
                 {/* Included services rows */}
                 {(() => {
-                  const pkgSubs = detailBooking.packageId?.subServices;
-                  const included = Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : [];
+                  const included = Array.isArray(detailBooking.includedSubServices) && detailBooking.includedSubServices.length > 0
+                    ? detailBooking.includedSubServices
+                    : (Array.isArray(detailBooking.packageSnapshot?.subServices)
+                        ? detailBooking.packageSnapshot.subServices.filter(s => s.isOptional === false)
+                        : (Array.isArray(detailBooking.packageId?.subServices) ? detailBooking.packageId.subServices.filter(s => s.isOptional === false) : []));
                   return included.map((sub, i) => (
                     <tr key={`inc-${i}`} className="border-b border-slate-100/60">
                       <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
@@ -1237,7 +1240,7 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
           <div className="space-y-3">
             <div>
-              <p className="text-base font-bold text-slate-900">{booking.packageId?.name || booking.packageName || 'Gói dịch vụ'}</p>
+              <p className="text-base font-bold text-slate-900">{booking.packageName || booking.packageSnapshot?.name || booking.packageId?.name || 'Gói dịch vụ'}</p>
               <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
                 <Clock size={14} className="text-slate-400" /> Thời gian dự kiến: <strong className="text-slate-800">{booking.packageId?.duration || 45} phút</strong>
               </p>
@@ -1245,9 +1248,13 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
 
             {/* Included & Optional Sub-services */}
             {(() => {
-              const pkgSubs = booking.packageId?.subServices;
               const selectedIncluded = (booking.selectedSubServices || []).filter(s => s.isOptional === false);
-              const included = selectedIncluded.length > 0 ? selectedIncluded : (Array.isArray(pkgSubs) ? pkgSubs.filter(s => s.isOptional === false) : []);
+              const snapshotIncluded = Array.isArray(booking.includedSubServices) && booking.includedSubServices.length > 0
+                ? booking.includedSubServices
+                : (Array.isArray(booking.packageSnapshot?.subServices) ? booking.packageSnapshot.subServices.filter(s => s.isOptional === false) : []);
+              const included = selectedIncluded.length > 0
+                ? selectedIncluded
+                : (snapshotIncluded.length > 0 ? snapshotIncluded : (Array.isArray(booking.packageId?.subServices) ? booking.packageId.subServices.filter(s => s.isOptional === false) : []));
               const extra = (booking.selectedSubServices || []).filter(s => s.isOptional !== false);
 
               return (
@@ -1338,7 +1345,6 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
       </div>
 
       {/* ── INVOICE (full width, outside grid) ── */}
-        {(booking.status === 'completed' || booking.status === 'awaiting_payment') && (
           <div className="mt-5 rounded-2xl border border-emerald-200/80 bg-white overflow-hidden shadow-xs">
             {/* Invoice header */}
             <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-5 py-3 text-white shadow-xs">
@@ -1365,7 +1371,7 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 font-medium">Chi nhánh:</span>
-                  <span className="font-semibold text-slate-900">{booking.branchName || booking.branchId?.name || '—'}</span>
+                  <span className="font-semibold text-slate-900">{booking.branchName || booking.branchSnapshot?.name || booking.branchId?.name || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 font-medium">Biển số:</span>
@@ -1468,7 +1474,6 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
               </div>
             </div>
           </div>
-        )}
 
         {/* Rating + Review (completed) */}
         {booking.status === 'completed' && (booking.rating || booking.feedback) && (
@@ -2160,6 +2165,12 @@ export default function ManagerBookings() {
   }, [fetch_]);
   useSSE(token, 'slots_updated', triggerRefresh);
   useSSE(token, 'payment_new', triggerRefresh);
+  useSSE(token, 'customer_checked_in_via_qr', (data) => {
+    triggerRefresh();
+    if (data?.bookingId) {
+      navigate(`/manager/bookings/${data.bookingId}`);
+    }
+  });
 
   const handleSearch = (v) => {
     setSearch(v);
@@ -2587,7 +2598,7 @@ export default function ManagerBookings() {
                       {b.bookingCode ? <span className="font-mono text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 text-[10px]">#{b.bookingCode}</span> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-slate-600">{b.packageId?.name ?? '—'}</span>
+                      <span className="text-slate-600">{b.packageName || b.packageSnapshot?.name || b.packageId?.name || '—'}</span>
                       {b.bookingType && (
                         <div className="mt-1">
                           <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${TYPE_MAP[b.bookingType]?.cls || 'bg-slate-100 text-slate-500'}`}>

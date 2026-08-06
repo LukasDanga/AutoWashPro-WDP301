@@ -356,6 +356,14 @@ exports.createBooking = async (data) => {
       packageName: pkg.name,
       packageDuration: pkg.duration,
       packagePrice: pkg.price,
+      branchName: branch.name,
+      branchAddress: branch.address,
+      branchPhone: branch.phone,
+      branchSnapshot: {
+        name: branch.name,
+        address: branch.address,
+        phone: branch.phone,
+      },
     });
 
     await booking.save({ session });
@@ -439,9 +447,10 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
     query.bookingDate = { $gte: gte, $lte: lte };
   }
 
-  // search: match by customer name/phone or license plate
+  // search: match by customer name/phone, license plate, or booking code
   if (filters.search && filters.search.trim()) {
-    const re = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const searchStr = filters.search.trim();
+    const re = new RegExp(searchStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     const [matchedUsers, matchedVehicles] = await Promise.all([
       User.find({ $or: [{ name: re }, { phone: re }] }, '_id'),
       Vehicle.find({ licensePlate: re }, 'userId'),
@@ -450,8 +459,24 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
       ...matchedUsers.map(u => String(u._id)),
       ...matchedVehicles.map(v => String(v.userId)),
     ]);
-    if (ids.size === 0) return { bookings: [], total: 0, page: 1, totalPages: 0 };
-    query.userId = { $in: [...ids].map(id => new mongoose.Types.ObjectId(id)) };
+    
+    const searchOrClauses = [];
+    if (ids.size > 0) {
+      searchOrClauses.push({ userId: { $in: [...ids].map(id => new mongoose.Types.ObjectId(id)) } });
+    }
+    searchOrClauses.push({ bookingCode: re });
+    if (mongoose.Types.ObjectId.isValid(searchStr) && String(new mongoose.Types.ObjectId(searchStr)) === searchStr) {
+      searchOrClauses.push({ _id: new mongoose.Types.ObjectId(searchStr) });
+    }
+    
+    if (query.$or) {
+      query.$and = query.$and || [];
+      query.$and.push({ $or: query.$or });
+      query.$and.push({ $or: searchOrClauses });
+      delete query.$or;
+    } else {
+      query.$or = searchOrClauses;
+    }
   }
 
   // keyword: search package name OR branch name
@@ -843,6 +868,23 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
       'Lịch hẹn đã được xác nhận',
       `Lịch rửa xe ${booking.packageId?.name || ''} lúc ${booking.startTime} ngày ${new Date(booking.bookingDate).toLocaleDateString('vi-VN')} đã được xác nhận. Vui lòng đến đúng giờ để check-in.`,
       'booking_confirmed',
+      { bookingId: id }
+    ).catch(() => {});
+  }
+
+  if (status === 'checked_in') {
+    const sseService = require('./sse.service');
+    sseService.broadcastToAll('customer_checked_in_via_qr', {
+      bookingId: id,
+      bookingCode: booking.bookingCode,
+      branchId: String(booking.branchId?._id || booking.branchId),
+      status: 'checked_in',
+    });
+    notificationService.send(
+      booking.userId?._id || currentBooking.userId,
+      'Check-in thành công',
+      `Bạn đã check-in thành công cho xe ${booking.vehicleId?.licensePlate || ''} tại ${booking.branchName || booking.branchId?.name || 'Chi nhánh'}.`,
+      'booking_checked_in',
       { bookingId: id }
     ).catch(() => {});
   }
@@ -1988,6 +2030,16 @@ exports.createRecurringBooking = async (data) => {
   let extraDuration = 0;
   let extraPrice = 0;
   const validSubServices = [];
+  const packageSubServicesSnapshot = Array.isArray(pkg.subServices)
+    ? pkg.subServices.map(s => ({
+        name: s.name,
+        price: s.price || 0,
+        duration: s.duration || 0,
+        isOptional: s.isOptional !== false,
+      }))
+    : [];
+  const includedSubServicesSnapshot = packageSubServicesSnapshot.filter(s => !s.isOptional);
+
   if (selectedSubServices && Array.isArray(selectedSubServices) && pkg.subServices) {
     for (const serviceName of selectedSubServices) {
       const sub = pkg.subServices.find(s => s.name === serviceName);
@@ -2114,9 +2166,25 @@ exports.createRecurringBooking = async (data) => {
         finalPrice: computedFinalPrice,
         depositAmount: depositPerSession,
         selectedSubServices: validSubServices,
+        includedSubServices: includedSubServicesSnapshot,
+        packageSnapshot: {
+          name: pkg.name,
+          price: pkg.price,
+          duration: pkg.duration,
+          description: pkg.description,
+          subServices: packageSubServicesSnapshot,
+        },
         packageName: pkg.name,
         packageDuration: pkg.duration,
         packagePrice: pkg.price,
+        branchName: branch.name,
+        branchAddress: branch.address,
+        branchPhone: branch.phone,
+        branchSnapshot: {
+          name: branch.name,
+          address: branch.address,
+          phone: branch.phone,
+        },
       });
       await booking.save({ session });
       savedBooking = booking;

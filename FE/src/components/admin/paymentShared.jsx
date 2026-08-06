@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CurrencyDollar,
   CheckCircle,
@@ -73,6 +74,7 @@ export function Modal({ title, onClose, children }) {
 
 /* ─────────────────────── Payment detail body (page & modal) ─────────────────────── */
 export function PaymentDetailBody({ payment, onConfirm, onRefund, confirming, refunding, secondaryLabel, onSecondary }) {
+  const navigate = useNavigate();
   const st = STATUS_MAP[payment.status] || { label: payment.status, cls: 'bg-slate-100 text-slate-500' };
   const mt = METHOD_MAP[payment.method] || { label: payment.method, cls: 'bg-slate-100 text-slate-500' };
 
@@ -88,7 +90,37 @@ export function PaymentDetailBody({ payment, onConfirm, onRefund, confirming, re
             {formatCurrency(payment.amount)}
             <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
           </h4>
-          <p className="text-xs text-slate-500 mt-0.5 font-mono">{payment.transactionId || '—'}</p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-xs text-slate-500 font-mono">Mã GD: {payment.transactionId || '—'}</p>
+            {(payment.bookingId?.bookingCode || payment.slotPackId?.packCode || payment.bookingId?._id) && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                <p className="text-xs text-slate-500 font-mono">
+                  {payment.slotPackId ? 'Mã gói:' : 'Mã đơn:'} <span className="font-semibold text-slate-700">
+                    {payment.slotPackId?.packCode || payment.bookingId?.bookingCode || ('AWP-' + String(payment.bookingId?._id).slice(-8).toUpperCase())}
+                  </span>
+                </p>
+                <button
+                  onClick={() => {
+                    const isAdmin = window.location.pathname.startsWith('/admin');
+                    const basePath = isAdmin ? '/admin' : '/manager';
+                    if (payment.slotPackId?._id) {
+                      navigate(`${basePath}/slot-packs`, { 
+                        state: { openSlotPack: { _id: payment.slotPackId._id, packCode: payment.slotPackId.packCode, userId: payment.userId } } 
+                      });
+                    } else if (payment.bookingId?._id) {
+                      navigate(`${basePath}/bookings`, { 
+                        state: { openBooking: { _id: payment.bookingId._id, bookingCode: payment.bookingId.bookingCode, userId: payment.userId } } 
+                      });
+                    }
+                  }}
+                  className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
+                >
+                  {payment.slotPackId ? 'Xem gói' : 'Xem đơn'}
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-2">
             <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${mt.cls}`}>{mt.label}</span>
             <span className="text-[11px] text-slate-400">{formatDateTime(payment.createdAt)}</span>
