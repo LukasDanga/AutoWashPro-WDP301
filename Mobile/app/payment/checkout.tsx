@@ -83,6 +83,15 @@ export default function PaymentCheckoutScreen() {
   const colors = useColors();
   const toast = useToast();
   const insets = useSafeAreaInsets();
+  const configs = useSystemConfig();
+
+  const depositPercent = useMemo(() => {
+    const rate = configs?.DEPOSIT_RATE;
+    if (typeof rate === 'number') {
+      return rate <= 1 ? Math.round(rate * 100) : rate;
+    }
+    return 30;
+  }, [configs?.DEPOSIT_RATE]);
 
   const bottomActionStyle = [
     styles.bottomAction,

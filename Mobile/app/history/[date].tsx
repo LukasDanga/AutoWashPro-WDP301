@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Alert,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { format, parseISO } from 'date-fns';
@@ -72,6 +74,12 @@ export default function HistoryDayScreen() {
   const [recurringLoading, setRecurringLoading] = useState(false);
   const [recurringCancelLoading, setRecurringCancelLoading] = useState(false);
 
+  // Recurring Cancel OTP
+  const [showRecurringOtpModal, setShowRecurringOtpModal] = useState(false);
+  const [recurringOtpCode, setRecurringOtpCode] = useState('');
+  const [isRequestingRecurringOtp, setIsRequestingRecurringOtp] = useState(false);
+  const [isConfirmingRecurringCancel, setIsConfirmingRecurringCancel] = useState(false);
+
   const loadRecurringGroup = useCallback(
     async (groupId: string) => {
       setRecurringGroupId(groupId);
@@ -89,18 +97,70 @@ export default function HistoryDayScreen() {
     [toast],
   );
 
+  const handleRequestRecurringCancel = async (groupId: string) => {
+    setIsRequestingRecurringOtp(true);
+    try {
+      const preview = await bookingApi.getRecurringCancelPreview(groupId);
+      const { totalRefundAmount, totalPenaltyAmount, pendingCount } = preview;
+      
+      const refundText = totalRefundAmount > 0 
+        ? `Số tiền hoàn lại: ${formatCurrency(totalRefundAmount)}` 
+        : `Số tiền hoàn lại: 0 ₫`;
+      const penaltyText = totalPenaltyAmount > 0 
+        ? `\nPhí phạt: ${formatCurrency(totalPenaltyAmount)}` 
+        : '';
+        
+      Alert.alert(
+        'Xác nhận hủy nhóm định kỳ',
+        `Bạn đang hủy ${pendingCount} lịch.\n${refundText}${penaltyText}\n\nHệ thống sẽ gửi mã OTP qua email để xác nhận. Bạn có chắc chắn muốn tiếp tục?`,
+        [
+          { text: 'Hủy bỏ', style: 'cancel' },
+          { 
+            text: 'Nhận OTP', 
+            onPress: async () => {
+              try {
+                await bookingApi.requestRecurringCancelOtp(groupId);
+                setRecurringOtpCode('');
+                setShowRecurringOtpModal(true);
+                toast.success('Đã gửi mã OTP đến email của bạn');
+              } catch (error: any) {
+                toast.error('Lỗi', error.response?.data?.message || 'Không thể yêu cầu OTP');
+              }
+            } 
+          }
+        ]
+      );
+    } catch (error: any) {
+      toast.error('Lỗi', error.response?.data?.message || 'Không thể lấy thông tin hủy');
+    } finally {
+      setIsRequestingRecurringOtp(false);
+    }
+  };
+
+  const handleConfirmRecurringCancel = async () => {
+    if (!recurringGroupId) return;
+    if (recurringOtpCode.length !== 6) {
+      toast.error('Lỗi', 'Vui lòng nhập đủ 6 số OTP');
+      return;
+    }
+    
+    setIsConfirmingRecurringCancel(true);
+    try {
+      await bookingApi.cancelRecurringGroup(recurringGroupId, recurringOtpCode);
+      toast.success('Đã hủy toàn bộ nhóm định kỳ');
+      setShowRecurringOtpModal(false);
+      setShowRecurringModal(false);
+      fetchBookings();
+    } catch (error: any) {
+      toast.error('Lỗi', error.response?.data?.message || 'Hủy nhóm thất bại');
+    } finally {
+      setIsConfirmingRecurringCancel(false);
+    }
+  };
+
   const handleCancelRecurringGroup = useCallback(
     async (groupId: string) => {
-      setRecurringCancelLoading(true);
-      try {
-        await bookingApi.cancelRecurringGroup(groupId);
-        toast.success('Đã hủy toàn bộ nhóm định kỳ');
-        setShowRecurringModal(false);
-      } catch {
-        toast.error('Hủy nhóm thất bại');
-      } finally {
-        setRecurringCancelLoading(false);
-      }
+      handleRequestRecurringCancel(groupId);
     },
     [toast],
   );
@@ -151,12 +211,6 @@ export default function HistoryDayScreen() {
     return (
       <PressableScale
         onPress={() => {
-          // Recurring rows auto-open the group modal (matches FE
-          // HistoryPage behavior). Single bookings navigate to detail.
-          if (isRecurring && (item as any).recurringGroupId) {
-            loadRecurringGroup((item as any).recurringGroupId);
-            return;
-          }
           router.push(`/booking/${item._id}` as any);
         }}
       >
@@ -208,6 +262,17 @@ export default function HistoryDayScreen() {
               {formatCurrency(item.finalPrice)}
             </AppText>
           </View>
+          {isRecurring && (item as any).recurringGroupId ? (
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              style={{ paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, alignItems: 'center', marginTop: spacing.md }}
+              onPress={() => loadRecurringGroup((item as any).recurringGroupId)}
+            >
+              <AppText variant="bodySmall" color="primary" style={{ fontFamily: 'Outfit-Medium' }}>
+                Quản lý nhóm định kỳ
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
         </Card>
       </PressableScale>
     );
@@ -294,18 +359,61 @@ export default function HistoryDayScreen() {
               )}
             </View>
             <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-              <Button
-                title={recurringCancelLoading ? 'Đang hủy...' : 'Hủy toàn bộ'}
-                onPress={() => recurringGroupId && handleCancelRecurringGroup(recurringGroupId)}
-                disabled={recurringCancelLoading}
-                style={{ backgroundColor: colors.error, marginBottom: spacing.sm }}
-                textStyle={{ color: '#FFF' }}
-              />
+              {recurringGroupBookings.some(b => b.status === 'pending' || b.status === 'confirmed') && (
+                <Button
+                  title={isRequestingRecurringOtp ? 'Đang xử lý...' : 'Hủy toàn bộ'}
+                  onPress={() => recurringGroupId && handleCancelRecurringGroup(recurringGroupId)}
+                  disabled={isRequestingRecurringOtp}
+                  style={{ backgroundColor: colors.error, marginBottom: spacing.sm }}
+                  textStyle={{ color: '#FFF' }}
+                />
+              )}
               <Button title="Đóng" variant="outline" onPress={() => setShowRecurringModal(false)} />
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* ═══ RECURRING CANCEL OTP MODAL ═══ */}
+      <Modal visible={showRecurringOtpModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Card style={styles.otpCard}>
+            <AppText variant="h3" style={{ marginBottom: spacing.sm, textAlign: 'center' }}>Xác nhận OTP</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: spacing.md }}>
+              Vui lòng nhập mã OTP gồm 6 chữ số đã được gửi đến email của bạn để xác nhận hủy nhóm lịch định kỳ.
+            </AppText>
+            
+            <TextInput
+              style={[styles.otpInput, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Nhập 6 số OTP"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={recurringOtpCode}
+              onChangeText={setRecurringOtpCode}
+            />
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+              <Button
+                title="Quay lại"
+                variant="outline"
+                onPress={() => {
+                  setShowRecurringOtpModal(false);
+                  setRecurringOtpCode('');
+                }}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={isConfirmingRecurringCancel ? 'Đang hủy...' : 'Xác nhận'}
+                onPress={handleConfirmRecurringCancel}
+                disabled={isConfirmingRecurringCancel || recurringOtpCode.length !== 6}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
       <BottomNavBar />
     </ScreenContainer>
   );
@@ -437,5 +545,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  otpCard: {
+    width: '90%',
+    maxWidth: 400,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
+    ...shadows.lg,
+  },
+  otpInput: {
+    height: 56,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    fontSize: 24,
+    letterSpacing: 8,
+    textAlign: 'center',
+    fontFamily: 'Outfit-Bold',
   },
 });

@@ -9,7 +9,7 @@
  *   - accessible labels & 44pt+ targets
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -92,12 +92,32 @@ export default function BookingDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { i18n } = useTranslation();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const colors = useColors();
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
   const [booking, setBooking] = useState<Booking | null>(null);
+
+  // Calculate loyalty points for this booking
+  const pointsEarned = useMemo(() => {
+    if (!booking) return 0;
+    const amount = booking.bookingType === 'slot_pack_usage'
+      ? (booking.packagePrice || 0)
+      : (booking.finalPrice || booking.totalPrice || 0);
+    if (amount <= 0) return 0;
+
+    const baseRate = configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0.05;
+    let multiplier = 1;
+    if (configs?.LOYALTY_TIERS && Array.isArray(configs.LOYALTY_TIERS)) {
+      const userTier = user?.tier || 'bronze';
+      const tierConfig = configs.LOYALTY_TIERS.find((t: any) => t.id === userTier);
+      if (tierConfig && tierConfig.multiplier) {
+        multiplier = tierConfig.multiplier;
+      }
+    }
+    return Math.floor(amount * baseRate * multiplier);
+  }, [booking, configs, user?.tier]);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -146,7 +166,7 @@ export default function BookingDetailScreen() {
   }, [id]);
 
   useEffect(() => {
-    const unsub1 = sseService.subscribe('customer_checked_in_confirmed', (data: any) => {
+    const unsub1 = sseService.subscribe('customer_checked_in_confirmed' as any, (data: any) => {
       if (data?.bookingId === id || !data?.bookingId) {
         setIsWaitingConfirm(false);
         fetchBooking();
@@ -154,7 +174,7 @@ export default function BookingDetailScreen() {
       }
     });
 
-    const unsub2 = sseService.subscribe('checkin_rejected', (data: any) => {
+    const unsub2 = sseService.subscribe('checkin_rejected' as any, (data: any) => {
       if (data?.bookingId === id || !data?.bookingId) {
         setIsWaitingConfirm(false);
         AlertDialog.error('Từ chối Check-in', data?.reason || 'Quản lý chưa xác nhận hoặc đã từ chối yêu cầu check-in.');
@@ -243,7 +263,7 @@ export default function BookingDetailScreen() {
     }
   };
 
-  const confirmCancel = async () => {
+  const handleRequestCancelOtp = async () => {
     if (!id) return;
     const reason = cancelReason.trim();
     if (!reason) {
@@ -252,7 +272,33 @@ export default function BookingDetailScreen() {
     }
     setIsCancelling(true);
     try {
-      const res = await bookingApi.cancelBooking(id, reason);
+      await bookingApi.requestCancelOtp(id);
+      setCancelStep(2);
+      toast.success('Thành công', 'Mã OTP đã được gửi đến email của bạn.');
+    } catch (error: any) {
+      AlertDialog.error(
+        'Lỗi',
+        error.response?.data?.message || 'Không thể yêu cầu mã OTP. Vui lòng thử lại.'
+      );
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const confirmCancel = async () => {
+    if (!id) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      AlertDialog.error('Thiếu lý do', 'Vui lòng nhập lý do hủy đặt lịch.');
+      return;
+    }
+    if (!cancelOtp.trim()) {
+      AlertDialog.error('Thiếu OTP', 'Vui lòng nhập mã OTP để xác nhận hủy.');
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const res = await bookingApi.cancelBooking(id, reason, cancelOtp.trim());
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       setShowCancelModal(false);
       
@@ -466,6 +512,7 @@ export default function BookingDetailScreen() {
   const canRequestRefund =
     (booking.status === 'cancelled' || (booking.status === 'completed' && hoursSinceCompletion <= 24)) &&
     (booking.depositPaid || booking.paymentStatus === 'paid') &&
+    booking.paymentStatus !== 'refunded' &&
     !refundRequest;
 
   const hasBottomActions =
@@ -477,15 +524,24 @@ export default function BookingDetailScreen() {
         title="Chi tiết đặt lịch"
         showBack
         rightAction={
-          canShowQR ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {canShowQR ? (
+              <PressableScale
+                onPress={handleOpenScanner}
+                accessibilityLabel="Quét mã QR Check-in"
+                style={styles.chatIconBtn}
+              >
+                <Icon name={Icons.qrCodeOutline} size={22} color={colors.primary} />
+              </PressableScale>
+            ) : null}
             <PressableScale
-              onPress={handleOpenScanner}
-              accessibilityLabel="Quét mã QR Check-in"
+              onPress={() => router.replace('/(tabs)' as any)}
+              accessibilityLabel="Về trang chủ"
               style={styles.chatIconBtn}
             >
-              <Icon name={Icons.qrCodeOutline} size={22} color={colors.primary} />
+              <Icon name={Icons.homeOutline} size={22} color={colors.primary} />
             </PressableScale>
-          ) : undefined
+          </View>
         }
       />
 
@@ -772,6 +828,11 @@ export default function BookingDetailScreen() {
           <AppText variant="h4" style={{ marginBottom: spacing.sm }}>
             Chi tiết thanh toán
           </AppText>
+          {booking.recurringGroupId && booking.recurringTotal ? (
+            <AppText variant="caption" color="textSecondary" style={{ marginBottom: spacing.sm, fontStyle: 'italic' }}>
+              * Đây là thông tin của 1 buổi. Các khoản thu sẽ được gộp chung cho toàn bộ {booking.recurringTotal} buổi khi thanh toán.
+            </AppText>
+          ) : null}
           <RowBetween
             label="Tổng tiền"
             value={formatCurrency(booking.finalPrice ?? booking.totalPrice ?? 0)}
@@ -816,6 +877,55 @@ export default function BookingDetailScreen() {
             <RowBetween label="Đã cọc" value={formatCurrency(booking.deposit)} />
           ) : null}
         </Card>
+
+        {/* Loyalty Points Info Card */}
+        {pointsEarned > 0 && booking.status !== 'cancelled' && (
+          <Card
+            style={{
+              marginBottom: spacing.md,
+              backgroundColor: booking.status === 'completed' ? '#ECFDF5' : '#EFF6FF',
+              borderColor: booking.status === 'completed' ? '#A7F3D0' : '#BFDBFE',
+              borderWidth: 1,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: booking.status === 'completed' ? '#D1FAE5' : '#DBEAFE',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon
+                  name={Icons.starOutline}
+                  size={22}
+                  color={booking.status === 'completed' ? '#059669' : '#2563EB'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText
+                  variant="body"
+                  style={{
+                    fontWeight: '700',
+                    color: booking.status === 'completed' ? '#047857' : '#1D4ED8',
+                  }}
+                >
+                  {booking.status === 'completed'
+                    ? `Đã cộng +${pointsEarned.toLocaleString('vi-VN')} điểm thưởng`
+                    : `Tích lũy dự kiến: +${pointsEarned.toLocaleString('vi-VN')} điểm`}
+                </AppText>
+                <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+                  {booking.status === 'completed'
+                    ? 'Điểm thưởng đã được cộng vào ví điểm của bạn.'
+                    : 'Điểm thưởng sẽ tự động cộng vào ví điểm khi dịch vụ hoàn thành.'}
+                </AppText>
+              </View>
+            </View>
+          </Card>
+        )}
 
         {/* QR Section */}
         {canShowQR ? (
@@ -961,7 +1071,12 @@ export default function BookingDetailScreen() {
           backgroundColor: colors.background,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+          paddingBottom: Math.max(insets.bottom, 16),
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
         }}>
           {(() => {
             // Định nghĩa từng action một cách thống nhất để tránh render trùng lặp
@@ -984,6 +1099,7 @@ export default function BookingDetailScreen() {
                     icon={<Icon name={Icons.walletOutline} size={18} color={colors.textInverse} />}
                     onPress={handlePayRemaining}
                     fullWidth
+                    style={styles.actionFlex}
                   />
                 ),
               });
@@ -1001,6 +1117,7 @@ export default function BookingDetailScreen() {
                     icon={<Icon name={Icons.refreshOutline} size={16} color={colors.primary} />}
                     onPress={handleRebook}
                     loading={isRebooking}
+                    fullWidth
                     style={styles.actionFlex}
                     textStyle={styles.actionText}
                   />
@@ -1008,26 +1125,25 @@ export default function BookingDetailScreen() {
               });
             }
 
-            // 3) Hủy đặt lịch — danger. Đặt outline (chỉ viền đỏ) cho đỡ nặng nề
-            //    khi nó nằm trong row cùng action khác; chỉ dùng filled danger
-            //    khi nó là action duy nhất.
+            // 3) Hủy đặt lịch — danger.
             if (canCancel) {
               actions.push({
                 key: 'cancel',
                 render: () => (
                   <Button
                     title="Hủy đặt lịch"
-                    variant={actions.length === 0 ? 'danger' : 'outline'}
+                    variant={actions.length === 1 ? 'danger' : 'outline'}
                     size="medium"
                     icon={
-                      actions.length === 0 ? undefined : (
+                      actions.length === 1 ? undefined : (
                         <Icon name={Icons.close} size={16} color={colors.error} />
                       )
                     }
                     onPress={handleCancel}
                     loading={isCancelling}
-                    style={actions.length === 0 ? undefined : styles.actionFlex}
-                    textStyle={actions.length === 0 ? undefined : styles.actionText}
+                    fullWidth
+                    style={styles.actionFlex}
+                    textStyle={actions.length === 1 ? undefined : styles.actionText}
                   />
                 ),
               });
@@ -1043,6 +1159,7 @@ export default function BookingDetailScreen() {
                     size="medium"
                     icon={<Icon name={Icons.cashOutline} size={16} color={colors.textInverse} />}
                     onPress={() => setShowRefundModal(true)}
+                    fullWidth
                     style={styles.actionFlex}
                     textStyle={styles.actionText}
                   />
@@ -1058,11 +1175,13 @@ export default function BookingDetailScreen() {
             return (
               <View style={[styles.bottomAction, { borderTopWidth: 0 }]}>
                 {/* Primary action — luôn full-width để rõ ràng */}
-                <View style={styles.actionRow}>{primary.render()}</View>
+                <View style={[styles.actionRow, { marginTop: 0 }]}>
+                  <View style={styles.actionFlex}>
+                    {primary.render()}
+                  </View>
+                </View>
 
-                {/* Secondary actions — hàng ngang phía dưới, tối đa 2 nút.
-                    Padding gọn + font 13px để text dài ("Yêu cầu hoàn tiền")
-                    không bị truncate như trước. */}
+                {/* Secondary actions — hàng ngang phía dưới, tối đa 2 nút. */}
                 {secondary.length > 0 ? (
                   <View style={styles.actionRow}>
                     {secondary.map((a) => (
@@ -1136,25 +1255,28 @@ export default function BookingDetailScreen() {
                   showsVerticalScrollIndicator={false}
                 >
                   {cancelPreview && (
-                    <View style={{ marginBottom: spacing.md, padding: spacing.sm, backgroundColor: '#FFF7ED', borderRadius: 8, borderWidth: 1, borderColor: '#FDBA74' }}>
-                      <AppText variant="bodySmall" style={{ fontWeight: '600', color: '#9A3412', marginBottom: 4 }}>
-                        Cảnh báo chính sách hủy
-                      </AppText>
+                    <View style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: '#FEF2F2', borderRadius: 12, borderWidth: 1.5, borderColor: '#FCA5A5' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Icon name={Icons.errorOutline} size={18} color="#DC2626" />
+                        <AppText variant="bodySmall" style={{ fontWeight: '700', color: '#991B1B' }}>
+                          Cảnh báo chính sách hủy
+                        </AppText>
+                      </View>
                       {cancelPreview.policy ? (
-                        <AppText variant="caption" style={{ color: '#C2410C' }}>
+                        <AppText variant="caption" style={{ color: '#B91C1C', lineHeight: 18, fontWeight: '500' }}>
                           {cancelPreview.policy}
                         </AppText>
                       ) : cancelPreview.refundAmount > 0 ? (
-                        <AppText variant="caption" style={{ color: '#C2410C' }}>
+                        <AppText variant="caption" style={{ color: '#B91C1C', lineHeight: 18, fontWeight: '500' }}>
                           Phí phạt: -{formatCurrency(cancelPreview.penaltyAmount)} ({cancelPreview.penaltyPercent}%).{'\n'}
                           Hoàn lại: +{formatCurrency(cancelPreview.refundAmount)} vào ví.
                         </AppText>
                       ) : cancelPreview.penaltyAmount > 0 ? (
-                        <AppText variant="caption" style={{ color: '#C2410C' }}>
+                        <AppText variant="caption" style={{ color: '#B91C1C', lineHeight: 18, fontWeight: '500' }}>
                           Sẽ mất toàn bộ số tiền đã thanh toán (-{formatCurrency(cancelPreview.penaltyAmount)}). Không có hoàn tiền.
                         </AppText>
                       ) : (
-                        <AppText variant="caption" style={{ color: '#C2410C' }}>
+                        <AppText variant="caption" style={{ color: '#15803D', lineHeight: 18, fontWeight: '500' }}>
                           Bạn chưa thanh toán, có thể hủy miễn phí.
                         </AppText>
                       )}
@@ -1172,9 +1294,28 @@ export default function BookingDetailScreen() {
                     onChangeText={setCancelReason}
                     multiline
                     numberOfLines={3}
+                    editable={cancelStep === 1}
                     inputStyle={{ minHeight: 80, textAlignVertical: 'top' }}
                     containerStyle={styles.cancelInputContainer}
                   />
+
+                  {cancelStep === 2 && (
+                    <>
+                      <Text style={[styles.cancelReasonLabel, { marginTop: spacing.md }]}>Mã OTP xác nhận</Text>
+                      <Input
+                        placeholder="Nhập mã 6 số từ email..."
+                        value={cancelOtp}
+                        onChangeText={setCancelOtp}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        editable={!isCancelling}
+                        containerStyle={styles.cancelInputContainer}
+                      />
+                      <AppText variant="caption" color="textTertiary" style={{ marginTop: 4 }}>
+                        Vui lòng kiểm tra email của bạn để lấy mã OTP (có hiệu lực trong 5 phút).
+                      </AppText>
+                    </>
+                  )}
 
                   <View style={styles.cancelActions}>
                     <TouchableOpacity
@@ -1183,30 +1324,54 @@ export default function BookingDetailScreen() {
                       activeOpacity={0.7}
                       accessibilityRole="button"
                     >
-                      <Text style={[styles.cancelBackBtnText, { color: colors.textPrimary }]}>Hủy</Text>
+                      <Text style={[styles.cancelBackBtnText, { color: colors.textPrimary }]}>Hủy bỏ</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[styles.cancelConfirmBtn, isCancelling && { opacity: 0.7 }]}
-                      onPress={confirmCancel}
-                      disabled={isCancelling}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                    >
-                      <LinearGradient
-                        colors={['#EF4444', '#B91C1C'] as const}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.cancelConfirmGradient}
+                    {cancelStep === 1 ? (
+                      <TouchableOpacity
+                        style={[styles.cancelConfirmBtn, isCancelling && { opacity: 0.7 }]}
+                        onPress={handleRequestCancelOtp}
+                        disabled={isCancelling}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
                       >
-                        <View style={styles.cancelConfirmBlob} />
-                        {isCancelling ? (
-                          <ActivityIndicator color="#FFFFFF" />
-                        ) : (
-                          <Text style={styles.cancelConfirmText}>Xác nhận hủy</Text>
-                        )}
-                      </LinearGradient>
-                    </TouchableOpacity>
+                        <LinearGradient
+                          colors={['#EF4444', '#B91C1C'] as const}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.cancelConfirmGradient}
+                        >
+                          <View style={styles.cancelConfirmBlob} />
+                          {isCancelling ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <Text style={styles.cancelConfirmText}>Nhận mã OTP</Text>
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.cancelConfirmBtn, isCancelling && { opacity: 0.7 }]}
+                        onPress={confirmCancel}
+                        disabled={isCancelling}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                      >
+                        <LinearGradient
+                          colors={['#EF4444', '#B91C1C'] as const}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.cancelConfirmGradient}
+                        >
+                          <View style={styles.cancelConfirmBlob} />
+                          {isCancelling ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <Text style={styles.cancelConfirmText}>Xác nhận hủy</Text>
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </ScrollView>
               </View>
@@ -1594,7 +1759,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: 140,
+    paddingBottom: 180,
   },
   statusHero: {
     borderRadius: borderRadius.xl,

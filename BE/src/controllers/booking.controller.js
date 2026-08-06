@@ -42,7 +42,72 @@ exports.createRecurringBooking = catchAsync(async (req, res) => {
   success(res, result, `Recurring booking created: ${result.totalCreated} bookings`, 201);
 });
 
+exports.getRecurringCancelPreview = catchAsync(async (req, res) => {
+  const result = await bookingService.getRecurringCancelPreview(req.params.groupId, req.userId);
+  success(res, result, 'Đã tính toán phí hủy nhóm định kỳ');
+});
+
+exports.requestRecurringCancelOtp = catchAsync(async (req, res) => {
+  const Booking = require('../models/booking.schema');
+  const User = require('../models/user.schema');
+  
+  const bookings = await Booking.find({ recurringGroupId: req.params.groupId, status: { $in: ['pending', 'confirmed'] } });
+  if (bookings.length === 0) {
+    throw Object.assign(new Error('Không tìm thấy lịch nào trong nhóm này'), { statusCode: 404 });
+  }
+  if (String(bookings[0].userId) !== String(req.userId)) {
+    throw Object.assign(new Error('Không có quyền yêu cầu OTP'), { statusCode: 403 });
+  }
+
+  const user = await User.findById(req.userId);
+  if (!user || !user.email) {
+    throw Object.assign(new Error('Tài khoản của bạn chưa có email. Vui lòng cập nhật email để nhận mã OTP!'), { statusCode: 400 });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const bcrypt = require('bcryptjs');
+  
+  const firstBooking = bookings[0];
+  firstBooking.cancelOtpToken = bcrypt.hashSync(otp, 12);
+  firstBooking.cancelOtpExpires = Date.now() + 5 * 60 * 1000;
+  await firstBooking.save();
+
+  const emailService = require('../services/email.service');
+  await emailService.sendCancelOtpEmail(user.email, otp, user.fullName || 'Khách hàng');
+  
+  success(res, null, 'Mã OTP đã được gửi đến email của bạn');
+});
+
 exports.cancelRecurringGroup = catchAsync(async (req, res) => {
+  if (req.user.role === 'customer') {
+    const Booking = require('../models/booking.schema');
+    const bookings = await Booking.find({ recurringGroupId: req.params.groupId, status: { $in: ['pending', 'confirmed'] } });
+    
+    if (bookings.length === 0) {
+      throw Object.assign(new Error('Không tìm thấy lịch nào trong nhóm này'), { statusCode: 404 });
+    }
+    
+    const otp = req.body.otp;
+    if (!otp) {
+      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy'), { statusCode: 400 });
+    }
+    
+    const firstBooking = bookings[0];
+    if (!firstBooking.cancelOtpToken || !firstBooking.cancelOtpExpires || Date.now() > firstBooking.cancelOtpExpires) {
+      throw Object.assign(new Error('Mã OTP đã hết hạn hoặc chưa được yêu cầu'), { statusCode: 400 });
+    }
+    
+    const bcrypt = require('bcryptjs');
+    const isMatch = bcrypt.compareSync(otp, firstBooking.cancelOtpToken);
+    if (!isMatch) {
+      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
+    }
+    
+    firstBooking.cancelOtpToken = undefined;
+    firstBooking.cancelOtpExpires = undefined;
+    await firstBooking.save();
+  }
+
   const result = await bookingService.cancelRecurringGroup(req.params.groupId, req.userId, req.user.role);
   sseService.broadcastToAll('slots_updated');
   sseService.sendToUser(req.userId, 'my_bookings_updated', {});
@@ -254,6 +319,34 @@ exports.requestCancelOtp = catchAsync(async (req, res) => {
 
 exports.cancelBooking = catchAsync(async (req, res) => {
   const reason = req.body.cancellationReason || req.body.reason || 'Khách hàng yêu cầu hủy đơn';
+  
+  if (req.user.role === 'customer') {
+    const Booking = require('../models/booking.schema');
+    const bookingDoc = await Booking.findById(req.params.id);
+    if (!bookingDoc) {
+      throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404 });
+    }
+    
+    const otp = req.body.otp;
+    if (!otp) {
+      throw Object.assign(new Error('Vui lòng nhập mã OTP để xác nhận hủy'), { statusCode: 400 });
+    }
+    
+    if (!bookingDoc.cancelOtpToken || !bookingDoc.cancelOtpExpires || Date.now() > bookingDoc.cancelOtpExpires) {
+      throw Object.assign(new Error('Mã OTP đã hết hạn hoặc chưa được yêu cầu'), { statusCode: 400 });
+    }
+    
+    const bcrypt = require('bcryptjs');
+    const isMatch = bcrypt.compareSync(otp, bookingDoc.cancelOtpToken);
+    if (!isMatch) {
+      throw Object.assign(new Error('Mã OTP không chính xác'), { statusCode: 400 });
+    }
+    
+    bookingDoc.cancelOtpToken = undefined;
+    bookingDoc.cancelOtpExpires = undefined;
+    await bookingDoc.save();
+  }
+
   const booking = await bookingService.cancelBooking(req.params.id, req.userId, req.user.role, reason);
 
   sseService.broadcastToAll('slots_updated');

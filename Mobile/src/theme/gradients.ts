@@ -62,11 +62,11 @@ export type GradientDirection = 'to-r' | 'to-l' | 'to-t' | 'to-b' | 'to-br' | 't
  */
 export const toGradientColors = (
   stops: ReadonlyArray<GradientStop> | undefined | null,
-): string[] => {
-  if (!stops || stops.length === 0) {
+): [string, string, ...string[]] => {
+  if (!stops || stops.length < 2) {
     return ['#10B981', '#059669'];
   }
-  return stops.map((s) => s.color);
+  return stops.map((s) => s.color) as [string, string, ...string[]];
 };
 
 /**

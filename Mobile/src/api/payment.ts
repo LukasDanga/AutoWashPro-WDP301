@@ -114,6 +114,16 @@ export const createVnpayProvisional = async (
   return response.data;
 };
 
+// VNPay callback handler for mobile webview
+export const vnpayCallback = async (data: {
+  transactionId: string;
+  gatewayTransactionId?: string;
+  status?: string;
+}): Promise<any> => {
+  const response = await apiClient.post('/payments/vnpay-callback', data);
+  return response.data;
+};
+
 // Export all payment API functions
 export const paymentApi = {
   createPayment,
@@ -124,6 +134,7 @@ export const paymentApi = {
   createVnpayPayment,
   createBankProvisional,
   createVnpayProvisional,
+  vnpayCallback,
 };
 
 export default paymentApi;

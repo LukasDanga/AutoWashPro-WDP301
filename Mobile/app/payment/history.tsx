@@ -97,6 +97,10 @@ export default function PaymentHistoryScreen() {
     METHOD_INFO[method] || { icon: 'card-outline', label: method };
 
   const renderPaymentCard = ({ item }: { item: Payment }) => {
+    const booking = typeof item.bookingId === 'object' ? item.bookingId as any : null;
+    const bookingCode = booking?.bookingCode || (typeof item.bookingId === 'string' ? item.bookingId.slice(-8).toUpperCase() : 'N/A');
+    const paymentTypeLabel = item.type === 'deposit' ? 'Đặt cọc' : item.type === 'remaining' ? 'Còn lại' : 'Toàn bộ';
+    
     return (
       <Card
         style={styles.paymentCard}
@@ -121,7 +125,7 @@ export default function PaymentHistoryScreen() {
                 {getMethodInfo(item.method).label}
               </AppText>
               <AppText variant="caption" color="textTertiary">
-                #{item._id.slice(-8).toUpperCase()}
+                GD: #{item.transactionId ? item.transactionId : item._id.slice(-8).toUpperCase()}
               </AppText>
             </View>
           </View>
@@ -137,26 +141,30 @@ export default function PaymentHistoryScreen() {
           <View style={styles.infoRow}>
             <Icon name={Icons.calendarOutline} size={16} color={colors.textTertiary} />
             <AppText variant="bodySmall" color="textSecondary">
-              {formatDate(item.createdAt)}
+              {item.paidAt ? `Đã thanh toán: ${formatDate(item.paidAt)}` : `Tạo lúc: ${formatDate(item.createdAt)}`}
             </AppText>
           </View>
           {item.bookingId ? (
             <View style={styles.infoRow}>
               <Icon name={Icons.receiptOutline} size={16} color={colors.textTertiary} />
               <AppText variant="bodySmall" color="textSecondary">
-                Mã đặt lịch: #
-                {typeof item.bookingId === 'string'
-                  ? item.bookingId.slice(-8).toUpperCase()
-                  : 'N/A'}
+                Mã đặt lịch: <AppText variant="bodySmall" color="primary" weight="600">#{bookingCode}</AppText>
               </AppText>
             </View>
           ) : null}
         </View>
 
         <View style={[styles.cardFooter, { borderTopColor: colors.divider }]}>
-          <AppText variant="caption" color="textSecondary">
-            Số tiền
-          </AppText>
+          <View>
+            <AppText variant="caption" color="textSecondary">
+              Số tiền ({paymentTypeLabel})
+            </AppText>
+            {item.status === 'refunded' && item.refundedAt && (
+              <AppText variant="caption" color="textTertiary" style={{ marginTop: 2 }}>
+                Đã hoàn: {formatDate(item.refundedAt)}
+              </AppText>
+            )}
+          </View>
           <AppText
             variant="price"
             color={item.status === 'refunded' ? 'textSecondary' : 'primary'}

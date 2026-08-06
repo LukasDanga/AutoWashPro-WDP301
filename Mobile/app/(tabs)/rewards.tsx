@@ -482,7 +482,7 @@ const VoucherCard: React.FC<{
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Voucher ${voucher.title || voucher.code}`}
+      accessibilityLabel={`Voucher ${voucher.name || voucher.code}`}
     >
       <View style={vc.card}>
         {/* Left: discount preview */}
@@ -557,8 +557,8 @@ const MyVoucherCard: React.FC<{
   voucher: UserVoucher;
   onPress: () => void;
 }> = ({ voucher, onPress }) => {
-  const rawV = voucher.voucherId || voucher;
-  const vObj = (typeof rawV === 'string' ? voucher : rawV) as any;
+  const rawV: any = voucher.voucherId || voucher;
+  const vObj: any = typeof rawV === 'string' ? voucher : rawV;
 
   const { t, i18n } = useTranslation();
   const colors = useColors();
@@ -840,13 +840,22 @@ export default function RewardsScreen() {
           <Text style={styles.headerTitle}>{t('rewards.title')}</Text>
           <Text style={styles.headerSubtitle}>{t('rewards.header_subtitle', 'Tích điểm, đổi quà và nhiều ưu đãi hấp dẫn')}</Text>
         </View>
-        <PressableScale
-          onPress={() => router.push({ pathname: '/voucher', params: { tab: 'my' } })}
-          accessibilityLabel="Lịch sử voucher"
-          style={[styles.historyBtn, { backgroundColor: colors.primarySubtle }]}
-        >
-          <Icon name={Icons.listOutline} size={20} color={colors.primary} />
-        </PressableScale>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <PressableScale
+            onPress={() => router.push('/rewards/history' as any)}
+            accessibilityLabel="Lịch sử điểm thưởng"
+            style={[styles.historyBtn, { backgroundColor: colors.warningLight }]}
+          >
+            <Icon name={Icons.starOutline} size={20} color={colors.warning} />
+          </PressableScale>
+          <PressableScale
+            onPress={() => router.push({ pathname: '/voucher', params: { tab: 'my' } })}
+            accessibilityLabel="Lịch sử voucher"
+            style={[styles.historyBtn, { backgroundColor: colors.primarySubtle }]}
+          >
+            <Icon name={Icons.listOutline} size={20} color={colors.primary} />
+          </PressableScale>
+        </View>
       </View>
 
       <ScrollView
@@ -917,7 +926,7 @@ export default function RewardsScreen() {
                 const accent = g.color || colors.primary;
                 return (
                   <View
-                    key={g._id || g.id}
+                    key={g._id || (g as any).id}
                     style={[styles.prizeCard, { borderColor: colors.border, backgroundColor: colors.background }]}
                   >
                     <View style={[styles.prizeAccent, { backgroundColor: accent }]} />

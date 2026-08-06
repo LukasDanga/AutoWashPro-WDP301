@@ -41,9 +41,19 @@ export const checkRecurringConflicts = async (
   return response.data;
 };
 
+export const getRecurringCancelPreview = async (groupId: string): Promise<any> => {
+  const response = await apiClient.get(`/bookings/recurring/${groupId}/cancel-preview`);
+  return response.data;
+};
+
+export const requestRecurringCancelOtp = async (groupId: string): Promise<any> => {
+  const response = await apiClient.post(`/bookings/recurring/${groupId}/cancel-otp`);
+  return response.data;
+};
+
 // Cancel recurring booking group
-export const cancelRecurringGroup = async (groupId: string): Promise<{ message: string }> => {
-  const response = await apiClient.post(`/bookings/recurring/${groupId}/cancel`);
+export const cancelRecurringGroup = async (groupId: string, otp?: string): Promise<{ message: string }> => {
+  const response = await apiClient.post(`/bookings/recurring/${groupId}/cancel`, { otp });
   return response.data;
 };
 
@@ -93,8 +103,8 @@ export const requestCancelOtp = async (id: string): Promise<any> => {
 };
 
 // Cancel booking
-export const cancelBooking = async (id: string, cancellationReason?: string): Promise<Booking> => {
-  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason });
+export const cancelBooking = async (id: string, cancellationReason?: string, otp?: string): Promise<Booking> => {
+  const response = await apiClient.post(`/bookings/${id}/cancel`, { cancellationReason, otp });
   return response.data;
 };
 
@@ -142,6 +152,8 @@ export const bookingApi = {
   createRecurringBooking,
   checkRecurringConflicts,
   cancelRecurringGroup,
+  getRecurringCancelPreview,
+  requestRecurringCancelOtp,
   getMyBookings,
   getAvailableSlots,
   getBooking,

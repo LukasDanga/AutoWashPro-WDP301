@@ -88,7 +88,11 @@ const WEEKDAY_OPTIONS = [
 const WEEK_PRESETS = [1, 2, 3, 4, 6, 8, 12]; // match landing page (WEEKS_OPTIONS)
 
 // Loyalty point multiplier per tier — mirrors FE RecurringBookingFlow.jsx.
-function getPointMultiplier(tier?: string): number {
+function getPointMultiplier(tier?: string, loyaltyTiersConfig?: any): number {
+  if (Array.isArray(loyaltyTiersConfig)) {
+    const found = loyaltyTiersConfig.find((t: any) => t.id === tier);
+    if (found?.multiplier) return found.multiplier;
+  }
   if (tier === 'diamond') return 2.0;
   if (tier === 'gold') return 1.5;
   if (tier === 'silver') return 1.2;
@@ -97,7 +101,10 @@ function getPointMultiplier(tier?: string): number {
 
 export default function RecurringBookingScreen() {
   const configs = useSystemConfig();
-  const depositPercent = configs?.DEPOSIT_RATE ? Math.round(configs.DEPOSIT_RATE) : 0;
+  const rawDepositConfig = configs?.DEPOSIT_RATE;
+  const depositPercent = typeof rawDepositConfig === 'number'
+    ? (rawDepositConfig <= 1 ? Math.round(rawDepositConfig * 100) : Math.round(rawDepositConfig))
+    : 20;
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
   const toast = useToast();
@@ -1058,8 +1065,8 @@ export default function RecurringBookingScreen() {
     const totalEstimate = totalSessions * pricePerSession;
     const finalEstimate = Math.max(0, totalEstimate - voucherSavings);
     // Cọc theo cấu hình DEPOSIT_RATE × TỔNG tiền cả nhóm, làm tròn 1.000đ — match logic BE.
-    const depositPercent = configs?.DEPOSIT_RATE ?? 0;
-    const depositAmount = Math.round((finalEstimate * depositPercent) / 1000) * 1000;
+    const depositRate = depositPercent / 100;
+    const depositAmount = Math.round((finalEstimate * depositRate) / 1000) * 1000;
     const payNowAmount = paymentOption === 'full' ? finalEstimate : depositAmount;
     // Loyalty points — match FE RecurringBookingFlow.jsx (5% × tier multiplier).
     const priceAfterVoucherPerSession = totalSessions > 0
