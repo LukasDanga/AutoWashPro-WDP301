@@ -576,12 +576,13 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                     <span className="text-sm font-bold text-slate-700">Điểm tích lũy: <span className="text-emerald-600 text-lg">{userPoints}</span></span>
                   </div>
                   <div className="flex bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => {setFilterType('all');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'all' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Quà vật lý</button>
+                    <button onClick={() => {setFilterType('redeem');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeem' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Quà vật lý</button>
+                    <button onClick={() => {setFilterType('redeemable');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeemable' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Đổi điểm</button>
                     <button onClick={() => {setFilterType('mine');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
                   </div>
                 </div>
 
-                {filterType === 'all' && (
+                {filterType === 'redeem' && (
                   <div>
                     {loading ? (
                       <div className="text-center text-slate-400 py-12 font-medium">Đang tải quà tặng...</div>
@@ -601,6 +602,35 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                           {rewards.map((reward, i) => (
                             <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {filterType === 'redeemable' && (
+                  <div>
+                    {loading ? (
+                      <div className="text-center text-slate-400 py-12 font-medium">Đang tải ưu đãi...</div>
+                    ) : vouchers.length === 0 ? (
+                      <div className="text-center py-20">
+                        <p className="text-slate-500 font-medium">Chưa có voucher nào để đổi điểm lúc này.</p>
+                      </div>
+                    ) : (
+                      <div className="mb-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-xl shrink-0 border border-emerald-200/70">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Voucher</h3>
+                            <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các mã giảm giá dùng cho hóa đơn của bạn.</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                          {vouchers.map((voucher, i) => (
+                            <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} onRedeem={handleRedeem} redeeming={redeemingId === voucher._id} />
                           ))}
                         </div>
                       </div>
