@@ -38,9 +38,11 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSystemConfig } from '../../src/contexts/ConfigContext';
 import {
   useBooking,
   type VoucherState,
+  type BookingStep,
 } from '../../src/contexts/BookingContext';
 import { useTranslation } from 'react-i18next';
 import { translateDynamicText } from '../../src/utils';
@@ -116,6 +118,7 @@ export default function BookingScreen() {
   const colors = useColors();
   const toast = useToast();
   const alertDialog = useAlertDialog();
+  const configs = useSystemConfig();
   const params = useLocalSearchParams();
 
   const {
@@ -766,7 +769,11 @@ export default function BookingScreen() {
   }, 0);
   const totalBase = basePrice + subServicesTotal;
   const finalPrice = isPayingWithPack ? 0 : Math.max(0, totalBase - voucherSavings);
-  const depositAmount = finalPrice * (configs?.DEPOSIT_RATE ?? 0);
+  const rawDepositConfig = configs?.DEPOSIT_RATE;
+  const depositRate = typeof rawDepositConfig === 'number'
+    ? (rawDepositConfig > 1 ? rawDepositConfig / 100 : rawDepositConfig)
+    : 0.3;
+  const depositAmount = Math.round((finalPrice * depositRate) / 1000) * 1000;
   // Web uses 5% earn rate × tier multiplier, floored to an integer.
   const pointsEarned = Math.floor((isPayingWithPack ? totalBase : finalPrice) * (configs?.LOYALTY_BASE_EARNING_RATE ? (configs.LOYALTY_BASE_EARNING_RATE / 100) : 0) * pointMultiplier);
 

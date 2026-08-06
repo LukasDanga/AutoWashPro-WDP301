@@ -31,7 +31,7 @@ import { useColors } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
 import { formatCurrency } from '../../src/utils';
-import type { Voucher } from '../../src/types';
+import type { Voucher, UserVoucher } from '../../src/types';
 import { format, parseISO, isValid } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -42,9 +42,11 @@ export default function VoucherDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
 
-  const [voucher, setVoucher] = useState<Voucher | null>(null);
+  const [voucher, setVoucher] = useState<UserVoucher | Voucher | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
+
+  const isUsed = !!(voucher as UserVoucher | null)?.isUsed;
 
   // Get return path - default to rewards
   const returnTo = '/rewards';

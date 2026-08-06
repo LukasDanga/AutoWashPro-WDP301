@@ -934,24 +934,9 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
   if (status === 'completed') {
     setImmediate(async () => {
       try {
-        // Notify customer
         const plate = booking.vehicleId?.licensePlate || '';
         const branch = booking.branchId?.name || 'chi nhánh';
-        await notificationService.send(
-          booking.userId?._id || currentBooking.userId,
-          'Dịch vụ đã hoàn thành',
-          `Xe ${plate} đã hoàn thành tại ${branch}. Bạn đã nhận được 1 vòng quay may mắn, hãy vào trang Quà Tặng (gifts) để quay nhé!`,
-          'booking_completed',
-          { bookingId: id }
-        );
-        // Notify admin + manager
-        await notificationService.sendToAdminAndManager(
-          booking.branchId?._id || booking.branchId,
-          'Dịch vụ hoàn thành',
-          `Xe ${plate} đã hoàn thành tại ${branch}.`,
-          'booking_completed',
-          { bookingId: id }
-        );
+
         // Increment Package booking count
         if (booking.packageId) {
           const pkgId = typeof booking.packageId === 'object' ? booking.packageId._id : booking.packageId;
@@ -960,15 +945,18 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
         }
 
         // Award loyalty points when booking is completed (points removed from payment flow)
+        let pointsEarned = 0;
         const pointsBaseAmount = currentBooking.bookingType === 'slot_pack_usage'
           ? (currentBooking.packagePrice ?? booking.packageId?.price ?? 0) + (currentBooking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
           : currentBooking.finalPrice || 0;
         if ((pointsBaseAmount || 0) > 0) {
           const alreadyAwarded = await PointHistory.findOne({ referenceId: currentBooking._id, type: 'earned' });
           if (!alreadyAwarded) {
-            await loyaltyService.addPointsFromPayment(currentBooking.userId, pointsBaseAmount, currentBooking._id, null);
+            const result = await loyaltyService.addPointsFromPayment(currentBooking.userId, pointsBaseAmount, currentBooking._id, null);
+            if (result) pointsEarned = result.pointsEarned || 0;
           }
         }
+
         // Hoàn thành đúng hẹn = "chuộc lại" 1 strike no-show trước đó (nếu có)
         // Đồng thời tặng 1 lượt quay vòng quay may mắn nếu đã thanh toán đủ
         const isFullyPaid = currentBooking.paymentStatus === 'paid' || currentBooking.bookingType === 'slot_pack_usage';
@@ -982,12 +970,33 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           await Booking.updateOne({ _id: currentBooking._id }, { $set: { spinEarned: true } }).catch(() => {});
           sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
         }
+
+        // Notify customer — include points earned and spin info
+        const extras = [];
+        if (pointsEarned > 0) extras.push(`Bạn được cộng +${pointsEarned.toLocaleString('vi-VN')} điểm thưởng`);
+        if (isFullyPaid) extras.push('nhận được 1 vòng quay may mắn');
+        const extrasText = extras.length > 0 ? ` ${extras.join(' và ')}. Hãy vào trang Quà Tặng (gifts) để quay nhé!` : '';
+        await notificationService.send(
+          booking.userId?._id || currentBooking.userId,
+          'Dịch vụ đã hoàn thành',
+          `Xe ${plate} đã hoàn thành tại ${branch}.${extrasText}`,
+          'booking_completed',
+          { bookingId: id, pointsEarned }
+        );
+        // Notify admin + manager
+        await notificationService.sendToAdminAndManager(
+          booking.branchId?._id || booking.branchId,
+          'Dịch vụ hoàn thành',
+          `Xe ${plate} đã hoàn thành tại ${branch}.`,
+          'booking_completed',
+          { bookingId: id }
+        );
         
         await User.findOneAndUpdate(
           { _id: currentBooking.userId, noShowCount: { $gt: 0 } },
           { $inc: { noShowCount: -1 } }
         ).catch(() => {});
-      } catch { /* silent — side effects must not fail the main response */ }
+      } catch (err) { console.error('[completed side-effects]', err); /* silent */ }
     });
   }
 
@@ -1648,11 +1657,22 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
           user.walletBalance = (user.walletBalance || 0) + refundAmount;
           await user.save({ session });
 
+          let refundReason = `Hoàn tiền hủy lịch hẹn #${booking.bookingCode || id}`;
+          if (cancelledBy === 'customer' && isLateCancel) {
+            const originalPaid = booking.paymentStatus === 'paid'
+              ? (booking.finalPrice || booking.totalPrice || refundAmount)
+              : (booking.depositAmount || refundAmount);
+            const deducted = originalPaid - refundAmount;
+            if (deducted > 0) {
+              refundReason += ` (Khấu trừ phí phạt hủy muộn: -${deducted.toLocaleString('vi-VN')}₫)`;
+            }
+          }
+
           await WalletTx.create([{
             userId: user._id,
             amount: refundAmount,
             type: 'credit',
-            reason: `Hoàn tiền hủy lịch hẹn #${booking.bookingCode || id}`,
+            reason: refundReason,
             bookingId: booking._id,
           }], { session });
         }
@@ -2408,6 +2428,68 @@ exports.checkRecurringConflicts = async (data) => {
  * Hủy toàn bộ booking trong 1 nhóm định kỳ (recurringGroupId).
  * Chỉ hủy những booking đang pending.
  */
+exports.getRecurringCancelPreview = async (recurringGroupId, userId) => {
+  const bookings = await Booking.find({
+    recurringGroupId,
+    status: { $in: ['pending', 'confirmed'] },
+  });
+
+  if (bookings.length === 0) {
+    throw Object.assign(new Error('Không tìm thấy lịch nào trong nhóm này'), { statusCode: 404 });
+  }
+
+  if (String(bookings[0].userId) !== String(userId)) {
+    throw Object.assign(new Error('Không có quyền hủy nhóm định kỳ này'), { statusCode: 403 });
+  }
+
+  const firstBooking = await Booking.findOne({ recurringGroupId, isRecurringFirst: true });
+  const recurringTotal = firstBooking ? (firstBooking.recurringTotal || 1) : 1;
+  const groupDepositAmount = firstBooking ? firstBooking.depositAmount : 0;
+  const depositShare = Math.round(groupDepositAmount / recurringTotal);
+
+  let totalRefundAmount = 0;
+  let totalPenaltyAmount = 0;
+  const now = new Date();
+
+  for (const b of bookings) {
+    const bookingDateTime = getBookingStartDateTime(b.bookingDate, b.startTime);
+    const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
+    const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
+    const isLateCancel = minutesBefore <= lateCancelThreshold;
+
+    const sessionPaidAmount = b.paymentStatus === 'paid' ? (b.depositAmount ?? b.finalPrice ?? 0) : 0;
+    let refundAmountForThisBooking = 0;
+    let penaltyForThisBooking = 0;
+
+    if (sessionPaidAmount > 0) {
+      if (isLateCancel) {
+        const penaltyPercent = await configService.get('LATE_CANCEL_PENALTY_FULL_PERCENT', {}, 30);
+        penaltyForThisBooking = Math.round(sessionPaidAmount * penaltyPercent / 100);
+        refundAmountForThisBooking = Math.max(0, sessionPaidAmount - penaltyForThisBooking);
+      } else {
+        refundAmountForThisBooking = sessionPaidAmount;
+      }
+    } else {
+      if (isLateCancel) {
+        const depositPenalty = await configService.get('LATE_CANCEL_PENALTY_DEPOSIT_PERCENT', {}, 100);
+        penaltyForThisBooking = Math.round(depositShare * depositPenalty / 100);
+        refundAmountForThisBooking = Math.max(0, depositShare - penaltyForThisBooking);
+      } else {
+        refundAmountForThisBooking = depositShare;
+      }
+    }
+
+    totalRefundAmount += refundAmountForThisBooking;
+    totalPenaltyAmount += penaltyForThisBooking;
+  }
+
+  return {
+    totalRefundAmount,
+    totalPenaltyAmount,
+    pendingCount: bookings.length
+  };
+};
+
 exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
   const session = await mongoose.startSession();
   session.startTransaction();

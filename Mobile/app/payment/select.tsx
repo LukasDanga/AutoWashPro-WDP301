@@ -149,7 +149,10 @@ export default function PaymentSelectScreen() {
   const fullAmount = useMemo(() => {
     if (!booking) return 0;
     const beDeposit = booking.depositAmount ?? 0;
-    const depositRate = configs?.DEPOSIT_RATE ?? 0.3;
+    const rawRate = configs?.DEPOSIT_RATE;
+    const depositRate = typeof rawRate === 'number'
+      ? (rawRate > 1 ? rawRate / 100 : rawRate)
+      : 0.3;
     if (beDeposit > 0) {
       return Math.round((beDeposit / depositRate) / 1000) * 1000;
     }

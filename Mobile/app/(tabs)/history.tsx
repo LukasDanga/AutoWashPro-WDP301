@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, parseISO, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, getDaysInMonth, addDays, subDays } from 'date-fns';
@@ -37,6 +38,7 @@ import {
   Skeleton,
   useToast,
   RatingSheet,
+  AlertDialog,
 } from '../../src/components/common';
 import { useColors } from '../../src/theme/ThemeContext';
 import { spacing, borderRadius, shadows } from '../../src/theme/spacing';
@@ -159,6 +161,25 @@ export default function HistoryScreen() {
   // Slot pack view state
   const [slotPacks, setSlotPacks] = useState<SlotPack[]>([]);
   const [slotPacksLoading, setSlotPacksLoading] = useState(false);
+  
+  // Slot Pack Cancel OTP
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [packToCancel, setPackToCancel] = useState<SlotPack | null>(null);
+  const [isRequestingOtp, setIsRequestingOtp] = useState(false);
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
+
+  // Recurring Cancel OTP
+  const [showRecurringOtpModal, setShowRecurringOtpModal] = useState(false);
+  const [recurringOtpCode, setRecurringOtpCode] = useState('');
+  const [recurringGroupIdToCancel, setRecurringGroupIdToCancel] = useState<string | null>(null);
+  const [isRequestingRecurringOtp, setIsRequestingRecurringOtp] = useState(false);
+  const [isConfirmingRecurringCancel, setIsConfirmingRecurringCancel] = useState(false);
+
+  // Usage History Modal
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [usageHistory, setUsageHistory] = useState<any[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -235,6 +256,92 @@ export default function HistoryScreen() {
       setSlotPacksLoading(false);
     }
   }, []);
+
+  const handleCancelSlotPack = (slotPack: SlotPack) => {
+    const isUnused = slotPack.usedSlots === 0;
+    const warningMsg = isUnused
+      ? 'Bạn có chắc chắn muốn hủy gói lượt này? Hệ thống sẽ gửi mã OTP qua email để xác nhận và hoàn tiền nếu đủ điều kiện.'
+      : 'Gói của bạn đã được sử dụng nên sẽ KHÔNG được hoàn tiền nếu hủy. Bạn vẫn muốn tiếp tục hủy?';
+
+    AlertDialog.confirm(
+      'Yêu cầu hủy gói',
+      warningMsg,
+      async () => {
+        setIsRequestingOtp(true);
+        try {
+          await slotPackApi.requestCancelOtp(slotPack._id);
+          setPackToCancel(slotPack);
+          setOtpCode('');
+          setShowOtpModal(true);
+          toast.success('Thành công', 'Mã OTP đã được gửi đến email của bạn');
+        } catch (error: any) {
+          AlertDialog.error('Lỗi', error.response?.data?.message || 'Không thể yêu cầu hủy gói');
+        } finally {
+          setIsRequestingOtp(false);
+        }
+      },
+      undefined,
+      'Đồng ý',
+      'Đóng'
+    );
+  };
+
+  const handleConfirmCancelOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      toast.error('Lỗi', 'Vui lòng nhập đúng 6 số OTP');
+      return;
+    }
+    if (!packToCancel) return;
+
+    setIsConfirmingCancel(true);
+    try {
+      await slotPackApi.cancelSlotPack(packToCancel._id, otpCode);
+      const isUnused = packToCancel.usedSlots === 0;
+      const successMsg = isUnused
+        ? 'Hủy gói thành công. Tiền đã được hoàn vào ví hoặc đang xử lý theo chính sách.'
+        : 'Gói đã được hủy. Bạn không được hoàn tiền theo chính sách sử dụng gói.';
+      
+      toast.success('Đã hủy gói', successMsg);
+      setShowOtpModal(false);
+      setPackToCancel(null);
+      fetchSlotPacks();
+    } catch (error: any) {
+      AlertDialog.error('Lỗi', error.response?.data?.message || 'Xác nhận OTP thất bại');
+    } finally {
+      setIsConfirmingCancel(false);
+    }
+  };
+
+  const handleQuickBook = (item: SlotPack) => {
+    const branchId = typeof item.branchId === 'object' ? (item.branchId as any)._id : item.branchId;
+    const packageId = typeof item.packageId === 'object' ? (item.packageId as any)._id : item.packageId;
+    const vehicleId = typeof item.vehicleId === 'object' ? (item.vehicleId as any)._id : item.vehicleId;
+    router.push({
+      pathname: '/booking',
+      params: {
+        branchId,
+        packageId,
+        vehicleId,
+        quickBook: 'true',
+        quickBookSlotPackId: item._id,
+      },
+    } as any);
+  };
+
+  const openUsageHistory = async (item: SlotPack) => {
+    setShowUsageModal(true);
+    setUsageLoading(true);
+    setUsageHistory([]);
+    try {
+      const history = await slotPackApi.getSlotPackUsageHistory(item._id);
+      setUsageHistory(history || []);
+    } catch (e: any) {
+      toast.error('Lỗi tải lịch sử', e.message);
+      setShowUsageModal(false);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
 
   // Initial load + filter-driven refetch (debounced for the keyword input).
   useEffect(() => {
@@ -381,23 +488,76 @@ export default function HistoryScreen() {
     }
   }, [toast]);
 
-  const handleCancelRecurringGroup = useCallback(async (groupId: string) => {
-    setRecurringCancelLoading(true);
+  const handleRequestRecurringCancel = async (groupId: string) => {
+    setIsRequestingRecurringOtp(true);
     try {
-      await bookingApi.cancelRecurringGroup(groupId);
+      const preview = await bookingApi.getRecurringCancelPreview(groupId);
+      const { totalRefundAmount, totalPenaltyAmount, pendingCount } = preview;
+      
+      const refundText = totalRefundAmount > 0 
+        ? `Số tiền hoàn lại: ${formatCurrency(totalRefundAmount)}` 
+        : `Số tiền hoàn lại: 0 ₫`;
+      const penaltyText = totalPenaltyAmount > 0 
+        ? `\nPhí phạt: ${formatCurrency(totalPenaltyAmount)}` 
+        : '';
+        
+      Alert.alert(
+        'Xác nhận hủy nhóm định kỳ',
+        `Bạn đang hủy ${pendingCount} lịch.\n${refundText}${penaltyText}\n\nHệ thống sẽ gửi mã OTP qua email để xác nhận. Bạn có chắc chắn muốn tiếp tục?`,
+        [
+          { text: 'Hủy bỏ', style: 'cancel' },
+          { 
+            text: 'Nhận OTP', 
+            onPress: async () => {
+              try {
+                await bookingApi.requestRecurringCancelOtp(groupId);
+                setRecurringGroupIdToCancel(groupId);
+                setRecurringOtpCode('');
+                setShowRecurringOtpModal(true);
+                toast.success('Đã gửi mã OTP đến email của bạn');
+              } catch (error: any) {
+                toast.error('Lỗi', error.response?.data?.message || 'Không thể yêu cầu OTP');
+              }
+            } 
+          }
+        ]
+      );
+    } catch (error: any) {
+      toast.error('Lỗi', error.response?.data?.message || 'Không thể lấy thông tin hủy');
+    } finally {
+      setIsRequestingRecurringOtp(false);
+    }
+  };
+
+  const handleConfirmRecurringCancel = async () => {
+    if (!recurringGroupIdToCancel) return;
+    if (recurringOtpCode.length !== 6) {
+      toast.error('Lỗi', 'Vui lòng nhập đủ 6 số OTP');
+      return;
+    }
+    
+    setIsConfirmingRecurringCancel(true);
+    try {
+      await bookingApi.cancelRecurringGroup(recurringGroupIdToCancel, recurringOtpCode);
       toast.success('Đã hủy toàn bộ nhóm định kỳ');
+      setShowRecurringOtpModal(false);
       setShowRecurringModal(false);
+      setRecurringGroupIdToCancel(null);
       fetchBookings(1);
       setPage(1);
       if (detailBooking) {
         setDetailBooking(null);
       }
-    } catch {
-      toast.error('Hủy nhóm thất bại');
+    } catch (error: any) {
+      toast.error('Lỗi', error.response?.data?.message || 'Hủy nhóm thất bại');
     } finally {
-      setRecurringCancelLoading(false);
+      setIsConfirmingRecurringCancel(false);
     }
-  }, [toast, fetchBookings, detailBooking]);
+  };
+
+  const handleCancelRecurringGroup = useCallback(async (groupId: string) => {
+    handleRequestRecurringCancel(groupId);
+  }, []);
 
   // Local UI list filter (chip-row). When dropdown filters are present,
   // the server already returned a narrowed list — `filteredBookings` then
@@ -554,15 +714,6 @@ export default function HistoryScreen() {
     const isRecurring = !!(b as any).isRecurring || !!(b as any).recurringGroupId;
 
     const handlePress = () => {
-      // Recurring rows: open the group modal directly so the user lands on
-      // the "toàn bộ lịch định kỳ" view instead of a single booking detail.
-      // This mirrors the FE HistoryPage behavior where tapping a recurring
-      // row immediately shows the recurring group summary.
-      if (isRecurring && (b as any).recurringGroupId) {
-        setDetailBooking(b);
-        loadRecurringGroup((b as any).recurringGroupId);
-        return;
-      }
       router.push(`/booking/${b._id}` as any);
     };
 
@@ -638,6 +789,17 @@ export default function HistoryScreen() {
               {formatCurrency(b.finalPrice)}
             </AppText>
           </View>
+          {isRecurring && (b as any).recurringGroupId ? (
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              style={{ paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, alignItems: 'center', marginTop: spacing.md }}
+              onPress={() => setDetailBooking(b)}
+            >
+              <AppText variant="bodySmall" color="primary" style={{ fontFamily: 'Outfit-Medium' }}>
+                Quản lý nhóm định kỳ
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
         </Card>
       </PressableScale>
     );
@@ -1121,6 +1283,16 @@ export default function HistoryScreen() {
                                 </AppText>
                               </View>
                             ) : null}
+                          </View>
+                          {/* Actions */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'flex-start', marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 8, flexWrap: 'wrap' }}>
+                            {st.label === 'Đang hoạt động' && remain > 0 && (
+                              <>
+                                <Button title="Đặt lịch nhanh" variant="primary" size="small" onPress={() => handleQuickBook(pack)} style={{ paddingHorizontal: 12 } as any} />
+                                <Button title="Hủy gói slot" variant="outline" size="small" onPress={() => handleCancelSlotPack(pack)} loading={isRequestingOtp && packToCancel?._id === pack._id} style={{ borderColor: colors.border, paddingHorizontal: 12 } as any} />
+                              </>
+                            )}
+                            <Button title="Lịch sử sử dụng" variant="outline" size="small" onPress={() => openUsageHistory(pack)} style={{ borderColor: colors.border, paddingHorizontal: 12 } as any} />
                           </View>
                         </Card>
                       );
@@ -1629,14 +1801,132 @@ export default function HistoryScreen() {
               )}
             </View>
             <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-               <Button
-                  title={recurringCancelLoading ? 'Đang hủy...' : 'Hủy toàn bộ'}
-                  onPress={() => detailBooking?.recurringGroupId && handleCancelRecurringGroup(detailBooking.recurringGroupId)}
-                  disabled={recurringCancelLoading}
-                  style={{ backgroundColor: colors.error, marginBottom: spacing.sm }}
-                  textStyle={{ color: '#FFF' }}
-               />
+               {recurringGroupBookings.some(b => b.status === 'pending' || b.status === 'confirmed') && (
+                 <Button
+                    title={isRequestingRecurringOtp ? 'Đang xử lý...' : 'Hủy toàn bộ'}
+                    onPress={() => detailBooking?.recurringGroupId && handleCancelRecurringGroup(detailBooking.recurringGroupId)}
+                    disabled={isRequestingRecurringOtp}
+                    style={{ backgroundColor: colors.error, marginBottom: spacing.sm }}
+                    textStyle={{ color: '#FFF' }}
+                 />
+               )}
                <Button title="Đóng" variant="outline" onPress={() => setShowRecurringModal(false)} />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ═══ RECURRING CANCEL OTP MODAL ═══ */}
+      <Modal visible={showRecurringOtpModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Card style={styles.otpCard}>
+            <AppText variant="h3" style={{ marginBottom: spacing.sm, textAlign: 'center' }}>Xác nhận OTP</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: spacing.md }}>
+              Vui lòng nhập mã OTP gồm 6 chữ số đã được gửi đến email của bạn để xác nhận hủy nhóm lịch định kỳ.
+            </AppText>
+            
+            <TextInput
+              style={[styles.otpInput, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Nhập 6 số OTP"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={recurringOtpCode}
+              onChangeText={setRecurringOtpCode}
+            />
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+              <Button
+                title="Quay lại"
+                variant="outline"
+                onPress={() => {
+                  setShowRecurringOtpModal(false);
+                  setRecurringOtpCode('');
+                }}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={isConfirmingRecurringCancel ? 'Đang hủy...' : 'Xác nhận'}
+                onPress={handleConfirmRecurringCancel}
+                disabled={isConfirmingRecurringCancel || recurringOtpCode.length !== 6}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
+      {/* ═══ SLOT PACK CANCEL OTP MODAL ═══ */}
+      <Modal visible={showOtpModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Card style={styles.otpCard}>
+            <AppText variant="h3" style={{ marginBottom: spacing.sm, textAlign: 'center' }}>Xác nhận OTP</AppText>
+            <AppText variant="bodySmall" color="textSecondary" style={{ textAlign: 'center', marginBottom: spacing.md }}>
+              Vui lòng nhập mã OTP gồm 6 chữ số đã được gửi đến email của bạn để xác nhận hủy gói.
+            </AppText>
+            <TextInput
+              style={[styles.otpInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+              value={otpCode}
+              onChangeText={setOtpCode}
+              keyboardType="number-pad"
+              maxLength={6}
+              placeholder="Nhập 6 số OTP"
+              placeholderTextColor={colors.textTertiary}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+              <Button
+                title="Hủy"
+                variant="outline"
+                onPress={() => setShowOtpModal(false)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={isConfirmingCancel ? "Đang xử lý..." : "Xác nhận"}
+                variant="primary"
+                onPress={handleConfirmCancelOtp}
+                disabled={isConfirmingCancel || otpCode.length !== 6}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
+      {/* ═══ USAGE HISTORY MODAL ═══ */}
+      <Modal visible={showUsageModal} transparent animationType="slide">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowUsageModal(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.modalContent, { backgroundColor: colors.background, padding: 0 }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border, padding: spacing.md }]}>
+              <AppText variant="h3">Lịch sử sử dụng gói</AppText>
+              <TouchableOpacity onPress={() => setShowUsageModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Icon name={Icons.close} size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ flex: 1 }}>
+              {usageLoading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              ) : usageHistory.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <AppText variant="body" color="textSecondary">Chưa có lịch sử sử dụng</AppText>
+                </View>
+              ) : (
+                <ScrollView contentContainerStyle={{ padding: spacing.md }}>
+                  {usageHistory.map((item, i) => (
+                    <View key={item._id || i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                      <View>
+                        <AppText variant="bodySmall" color="textPrimary">
+                          Lần {i + 1}: {item.usedAt ? format(new Date(item.usedAt), 'dd/MM/yyyy HH:mm') : ''}
+                        </AppText>
+                        <AppText variant="caption" color="textSecondary">
+                          Mã ĐL: {typeof item.bookingId === 'string' ? item.bookingId.slice(-8).toUpperCase() : ((item.bookingId as any)?.bookingCode || (item.bookingId as any)?._id?.slice(-8).toUpperCase() || 'N/A')}
+                        </AppText>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -2311,9 +2601,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalFooter: {
-    padding: spacing.lg,
+    padding: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: spacing.sm,
+  },
+  otpCard: {
+    padding: spacing.lg,
+    width: '90%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  otpInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 20,
+    textAlign: 'center',
+    fontFamily: 'Outfit_700Bold',
+    letterSpacing: 4,
   },
   modalActionBtn: {
     flex: 1,

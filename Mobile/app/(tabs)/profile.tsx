@@ -382,6 +382,12 @@ onPress={() => router.push('/profile/edit' as any)}
         />
         <View style={styles.menuDivider} />
         <MenuItem
+          icon={Icons.starOutline}
+          title="Lịch sử điểm thưởng"
+          onPress={() => router.push('/rewards/history' as any)}
+        />
+        <View style={styles.menuDivider} />
+        <MenuItem
           icon={Icons.cartOutline}
           title={t('profile.slot_packs')}
           onPress={() => router.push('/slot-packs' as any)}

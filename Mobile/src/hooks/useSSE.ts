@@ -3,7 +3,7 @@
  * React hook for SSE real-time notifications
  */
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { sseService, SSEEvent, SSEEventType } from '../services/sse';

@@ -64,9 +64,18 @@ router.post('/recurring', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, RO
   body('voucherCode').optional().trim().isLength({ max: 50 }),
 ], validate, bookingController.createRecurringBooking);
 
+router.get('/recurring/:groupId/cancel-preview', authenticate, authorize(ROLES.CUSTOMER), [
+  param('groupId').isString().notEmpty().withMessage('Group ID required'),
+], validate, bookingController.getRecurringCancelPreview);
+
+router.post('/recurring/:groupId/cancel-otp', authenticate, authorize(ROLES.CUSTOMER), [
+  param('groupId').isString().notEmpty().withMessage('Group ID required'),
+], validate, bookingController.requestRecurringCancelOtp);
+
 // DELETE /api/bookings/recurring/:groupId — Hủy cả loạt định kỳ
 router.post('/recurring/:groupId/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   param('groupId').isString().notEmpty().withMessage('Group ID required'),
+  body('otp').optional().isString(),
 ], validate, bookingController.cancelRecurringGroup);
 
 

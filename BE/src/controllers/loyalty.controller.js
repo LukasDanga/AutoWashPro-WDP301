@@ -80,8 +80,11 @@ exports.getMyPointHistoryDetail = catchAsync(async (req, res, next) => {
     .populate('userId', 'name email phone avatar tier loyaltyPoints lifetimePoints createdAt')
     .populate({
       path: 'referenceId',
-      select: 'bookingCode status bookingDate startTime endTime packagePrice packageName selectedSubServices includedSubServices packageSnapshot voucherCode discountAmount finalPrice depositAmount paymentStatus paymentMethod note packageId',
-      populate: { path: 'packageId', select: 'name price subServices' }
+      select: 'bookingCode status bookingDate startTime endTime packagePrice packageName selectedSubServices includedSubServices packageSnapshot voucherCode discountAmount finalPrice depositAmount paymentStatus paymentMethod note packageId branchId',
+      populate: [
+        { path: 'packageId', select: 'name price subServices' },
+        { path: 'branchId', select: 'name address phone' }
+      ]
     });
 
   if (!item) {
