@@ -279,6 +279,7 @@ exports.createPayment = async (bookingId, requesterId, userRole, method, payment
             ).catch(() => {});
             
             await mongoose.model('User').findByIdAndUpdate(targetUserId, { $inc: { spinCount: 1 } }, { session });
+            await Booking.findByIdAndUpdate(booking._id, { $set: { spinEarned: true } }, { session }).catch(() => {});
             sseService.sendToUser(targetUserId, 'spin_added', { count: 1 });
           }
         }
@@ -488,6 +489,7 @@ exports.confirmPayment = async (transactionId, method, gatewayTransactionId, use
           { session }
         ).catch(() => {});
         await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+        await Booking.findByIdAndUpdate(booking._id, { $set: { spinEarned: true } }, { session }).catch(() => {});
         sseService.sendToUser(payment.userId, 'spin_added', { count: 1 });
       }
     }
@@ -653,7 +655,8 @@ exports.confirmPaymentCallback = async (transactionId, gatewayTransactionId, suc
               { session }
             ).catch(() => {});
             // Re-add spin because booking.service.js won't trigger if it was unpaid when completed
-            await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+await mongoose.model('User').findByIdAndUpdate(payment.userId, { $inc: { spinCount: 1 } }, { session });
+            await Booking.findByIdAndUpdate(booking._id, { $set: { spinEarned: true } }, { session }).catch(() => {});
           }
         }
         isNewlyProcessed = true;
