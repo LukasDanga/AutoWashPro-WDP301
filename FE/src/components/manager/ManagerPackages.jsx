@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
+import useSSE from '@/hooks/useSSE';
 import { MagnifyingGlass, X, ArrowClockwise } from '@phosphor-icons/react';
 
 function api(path, opts = {}) {
@@ -38,6 +39,7 @@ export default function ManagerPackages({ user }) {
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
   const [branchId, setBranchId] = useState(user?.branchId || null);
+  const [currentSortOrder, setCurrentSortOrder] = useState('price_asc');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -56,6 +58,47 @@ export default function ManagerPackages({ user }) {
     }
     loadTemplates();
   }, []);
+
+  useEffect(() => {
+    if (!branchId) return;
+    api(`/branches/${branchId}`)
+      .then(res => res.json())
+      .then(payload => {
+        const b = payload?.data ?? payload;
+        if (b?.packageSortOrder) {
+          setCurrentSortOrder(b.packageSortOrder);
+        }
+      })
+      .catch(() => {});
+  }, [branchId]);
+
+  const handleSortOrderChange = async (newSortOrder) => {
+    setCurrentSortOrder(newSortOrder);
+    try {
+      const res = await api(`/branches/${branchId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ packageSortOrder: newSortOrder }),
+      });
+      if (!res.ok) throw new Error('Lỗi cập nhật kiểu sắp xếp');
+
+      setPackages((prev) => {
+        const list = [...prev];
+        if (newSortOrder === 'price_asc') {
+          list.sort((a, b) => (a.price || 0) - (b.price || 0));
+        } else if (newSortOrder === 'price_desc') {
+          list.sort((a, b) => (b.price || 0) - (a.price || 0));
+        } else if (newSortOrder === 'booking_count') {
+          list.sort((a, b) => (b.bookingCount || 0) - (a.bookingCount || 0));
+        }
+        return list;
+      });
+
+      const label = newSortOrder === 'price_asc' ? 'Giá thấp → cao' : newSortOrder === 'price_desc' ? 'Giá cao → thấp' : 'Lượt đặt nhiều nhất';
+      showToast(`Đã đổi kiểu sắp xếp gói: ${label}`);
+    } catch (err) {
+      showToast(err.message || 'Lỗi cập nhật kiểu sắp xếp', 'error');
+    }
+  };
 
   const loadPackages = useCallback(async (bId, q, pg) => {
     setLoading(true);
@@ -270,6 +313,13 @@ export default function ManagerPackages({ user }) {
     }
   }
 
+  useSSE(getStoredToken(), 'branch_sort_order_updated', useCallback((data) => {
+    if (branchId && String(data?.branchId) === String(branchId)) {
+      if (data?.packageSortOrder) setCurrentSortOrder(data.packageSortOrder);
+      loadPackages(branchId, search, page);
+    }
+  }, [branchId, search, page, loadPackages]));
+
   function toggleVehicleType(vt) {
     setForm(prev => ({
       ...prev,
@@ -282,18 +332,34 @@ export default function ManagerPackages({ user }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Tìm gói dịch vụ..."
-            className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
-          {search && (
-            <button onClick={() => { setSearch(''); setPage(1); loadPackages(branchId, '', 1); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-              <X size={12} />
-            </button>
-          )}
+        <div className="flex items-center gap-3 flex-1 min-w-[280px] max-w-xl">
+          <div className="relative flex-1">
+            <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={search} onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Tìm gói dịch vụ..."
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
+            {search && (
+              <button onClick={() => { setSearch(''); setPage(1); loadPackages(branchId, '', 1); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs">
+            <span className="text-slate-500 font-medium">Sắp xếp:</span>
+            <select
+              value={currentSortOrder}
+              onChange={(e) => handleSortOrderChange(e.target.value)}
+              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+            >
+              <option value="price_asc">Giá từ thấp → cao</option>
+              <option value="price_desc">Giá từ cao → thấp</option>
+              <option value="booking_count">Theo lượt đặt nhiều nhất</option>
+            </select>
+          </div>
         </div>
+
         <div className="flex items-center gap-2">
           <p className="text-xs text-slate-400">{total} gói</p>
           <button onClick={openCreate}
@@ -330,9 +396,14 @@ export default function ManagerPackages({ user }) {
                     <h3 className="font-semibold text-slate-800 truncate">{pkg.name}</h3>
                     <p className="text-xs text-slate-400 mt-0.5 line-clamp-2" title={pkg.description || ''}>{pkg.description || '—'}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                    {isActive ? 'Hoạt động' : 'Tạm dừng'}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                      {isActive ? 'Hoạt động' : 'Tạm dừng'}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-amber-50 border border-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                      🔥 {pkg.bookingCount || 0} lượt đặt
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex gap-4 text-sm">
