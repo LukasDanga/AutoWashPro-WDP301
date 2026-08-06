@@ -287,19 +287,26 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
     if (token) load();
   }, [apiBase, token]);
 
-  useEffect(() => {
+  const loadPackagesForBranch = useCallback(async () => {
     if (!selectedBranch) { setPackages([]); return; }
-    async function loadPackages() {
-      try {
-        const pRes = await fetch(`${apiBase}/packages?branchId=${selectedBranch}`, { headers: { Authorization: `Bearer ${token}` } });
-        const pData = await pRes.json();
-        const pList = (pData?.data || pData || []).filter(p => p.status === 'active').map(p => ({ ...p, id: p._id || p.id }));
-        setPackages(Array.isArray(pList) ? pList : []);
-        if (pList.length > 0 && !pList.find(p => p.id === selectedPackage)) setSelectedPackage(pList[0].id);
-      } catch (e) { console.error(e); }
+    try {
+      const pRes = await fetch(`${apiBase}/packages?branchId=${selectedBranch}`, { headers: { Authorization: `Bearer ${token}` } });
+      const pData = await pRes.json();
+      const pList = (pData?.data || pData || []).filter(p => p.status === 'active').map(p => ({ ...p, id: p._id || p.id }));
+      setPackages(Array.isArray(pList) ? pList : []);
+      if (pList.length > 0 && !pList.find(p => p.id === selectedPackage)) setSelectedPackage(pList[0].id);
+    } catch (e) { console.error(e); }
+  }, [selectedBranch, apiBase, token, selectedPackage]);
+
+  useEffect(() => {
+    loadPackagesForBranch();
+  }, [selectedBranch, loadPackagesForBranch]);
+
+  useSSE(token, 'branch_sort_order_updated', useCallback((data) => {
+    if (selectedBranch && String(data?.branchId) === String(selectedBranch)) {
+      loadPackagesForBranch();
     }
-    loadPackages();
-  }, [selectedBranch, apiBase, token]);
+  }, [selectedBranch, loadPackagesForBranch]));
 
   const loadMyPacks = useCallback(async () => {
     setPacksLoading(true);

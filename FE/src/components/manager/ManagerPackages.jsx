@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
-import { MagnifyingGlass, X, ArrowClockwise } from '@phosphor-icons/react';
+import useSSE from '@/hooks/useSSE';
+import { MagnifyingGlass, X, ArrowClockwise, PencilSimple, Trash, ClockCountdown, Car, Package } from '@phosphor-icons/react';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -14,6 +15,8 @@ function formatCurrency(v) {
   return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`;
 }
 
+const VEHICLE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van' };
+
 const EMPTY_FORM = {
   name: '', description: '', price: '', duration: '', category: 'external', vehicleTypes: [],
   subServices: [],
@@ -25,8 +28,310 @@ const CATEGORIES = [
   { value: 'full', label: 'Toàn bộ' },
 ];
 const VEHICLE_TYPES = ['sedan', 'suv', 'pickup', 'van'];
-const inp = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400';
+const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors';
 const PAGE_SIZE = 9;
+
+function Field({ label, required, error, children }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-slate-600">
+        {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
+      {children}
+      {error && <p className="mt-1 text-[11px] text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+function PackageForm({ initial, onSave, onCancel, saving }) {
+  const [form, setForm] = useState({
+    name: initial?.name || '',
+    description: initial?.description || '',
+    price: initial?.price ? String(initial.price) : '',
+    duration: initial?.duration ? String(initial.duration) : '',
+    image: initial?.image || '',
+    category: initial?.category || 'full',
+    status: initial?.status || 'active',
+    vehicleTypes: initial?.vehicleTypes || [],
+    subServices: (initial?.subServices || []).map((s) => ({
+      name: s.name || '',
+      price: s.price ? String(s.price) : '0',
+      duration: s.duration ? String(s.duration) : '',
+      isOptional: s.isOptional !== false,
+    })),
+  });
+  const [errors, setErrors] = useState({});
+
+  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); };
+
+  const toggleVehicle = (val) => {
+    setForm((f) => ({
+      ...f,
+      vehicleTypes: f.vehicleTypes.includes(val) ? f.vehicleTypes.filter((v) => v !== val) : [...f.vehicleTypes, val],
+    }));
+  };
+
+  const addSubService = () => {
+    setForm((f) => ({ ...f, subServices: [...f.subServices, { name: '', price: '', duration: '', isOptional: true }] }));
+  };
+
+  const updateSub = (idx, key, val) => {
+    setForm((f) => {
+      const subs = [...f.subServices];
+      if (key === 'isOptional' && val === false) {
+        subs[idx] = { ...subs[idx], isOptional: false, price: '0' };
+      } else {
+        subs[idx] = { ...subs[idx], [key]: val };
+      }
+      return { ...f, subServices: subs };
+    });
+    setErrors((e) => {
+      if (!e.subServices) return e;
+      const subErrs = [...e.subServices];
+      if (subErrs[idx]) {
+        subErrs[idx] = { ...subErrs[idx], [key]: '' };
+        if (key === 'isOptional' && val === false) {
+          subErrs[idx].price = '';
+        }
+      }
+      return { ...e, subServices: subErrs };
+    });
+  };
+
+  const removeSub = (idx) => {
+    setForm((f) => ({ ...f, subServices: f.subServices.filter((_, i) => i !== idx) }));
+    setErrors((e) => {
+      if (!e.subServices) return e;
+      return { ...e, subServices: e.subServices.filter((_, i) => i !== idx) };
+    });
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = 'Vui lòng nhập tên gói';
+
+    const numericPrice = Number(form.price);
+    if (!form.price || isNaN(numericPrice) || numericPrice <= 1000) {
+      e.price = 'Giá gói phải lớn hơn 1.000 VNĐ';
+    }
+
+    if (!form.duration || Number(form.duration) <= 0) {
+      e.duration = 'Thời lượng phải lớn hơn 0 phút';
+    }
+
+    const subErrors = [];
+    let hasSubError = false;
+
+    (form.subServices || []).forEach((sub, idx) => {
+      const sErr = {};
+      if (!sub.name || !sub.name.trim()) {
+        sErr.name = 'Vui lòng nhập tên dịch vụ nhỏ';
+        hasSubError = true;
+      }
+      if (!sub.duration || Number(sub.duration) <= 0) {
+        sErr.duration = 'Vui lòng nhập thời gian';
+        hasSubError = true;
+      }
+      if (sub.isOptional) {
+        const subPriceNum = Number(sub.price);
+        if (!sub.price || isNaN(subPriceNum) || subPriceNum <= 1000) {
+          sErr.price = 'Giá phụ thu phải > 1.000 VNĐ';
+          hasSubError = true;
+        }
+      }
+      subErrors[idx] = sErr;
+    });
+
+    if (hasSubError) {
+      e.subServices = subErrors;
+    }
+
+    return e;
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) return setErrors(errs);
+    onSave({
+      name: form.name.trim(),
+      description: (form.description || '').trim(),
+      price: Number(form.price),
+      duration: Number(form.duration),
+      image: form.image || '',
+      category: form.category,
+      status: form.status,
+      vehicleTypes: form.vehicleTypes,
+      subServices: (form.subServices || []).map(s => ({
+        name: s.name.trim(),
+        price: s.isOptional ? Number(s.price) || 0 : 0,
+        duration: Number(s.duration) || 0,
+        isOptional: s.isOptional,
+      })),
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Tên gói" required error={errors.name}>
+          <input className={inp} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Rửa xe cao cấp" />
+        </Field>
+        <Field label="Danh mục">
+          <select className={inp} value={form.category} onChange={(e) => set('category', e.target.value)}>
+            <option value="full">Tổng thể</option>
+            <option value="external">Ngoại thất</option>
+            <option value="internal">Nội thất</option>
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Mô tả" error={errors.description}>
+        <textarea rows={2} className={inp + ' resize-none'} value={form.description}
+          onChange={(e) => set('description', e.target.value)} placeholder="Mô tả gói dịch vụ..." />
+      </Field>
+
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="Giá gói (VNĐ)" required error={errors.price}>
+          <input type="text" inputMode="numeric" className={inp} value={form.price}
+            onChange={(e) => set('price', e.target.value)} placeholder="80000" />
+        </Field>
+        <Field label="Thời lượng (phút)" required error={errors.duration}>
+          <input type="number" min="1" className={inp} value={form.duration}
+            onChange={(e) => set('duration', e.target.value)} placeholder="60" />
+        </Field>
+        <Field label="Trạng thái">
+          <select className={inp} value={form.status} onChange={(e) => set('status', e.target.value)}>
+            <option value="active">Hoạt động</option>
+            <option value="inactive">Ngừng</option>
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Loại xe áp dụng">
+        <div className="flex flex-wrap gap-2">
+          {[{ value: 'sedan', label: 'Sedan' }, { value: 'suv', label: 'SUV' }, { value: 'pickup', label: 'Pickup' }, { value: 'van', label: 'Van' }].map((o) => (
+            <button key={o.value} type="button" onClick={() => toggleVehicle(o.value)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.vehicleTypes.includes(o.value) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <div className="pt-2 border-t border-slate-100">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <label className="text-xs font-bold text-slate-700 block">Các dịch vụ nhỏ trong gói (Sub-services)</label>
+            <span className="text-[11px] text-slate-400">Các công đoạn chi tiết được thực hiện trong gói</span>
+          </div>
+          <button type="button" onClick={addSubService}
+            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors">
+            + Thêm dịch vụ nhỏ
+          </button>
+        </div>
+
+        <div className="space-y-3 mt-3">
+          {form.subServices.map((sub, idx) => (
+            <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => updateSub(idx, 'isOptional', false)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                      !sub.isOptional 
+                        ? 'bg-emerald-500 text-white shadow-xs' 
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    Đã bao gồm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSub(idx, 'isOptional', true)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                      sub.isOptional 
+                        ? 'bg-indigo-500 text-white shadow-xs' 
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    Tùy chọn
+                  </button>
+                </div>
+                <button type="button" onClick={() => removeSub(idx)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors" title="Xóa">
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-1">
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Tên dịch vụ nhỏ <span className="text-red-500">*</span>
+                  </label>
+                  <input placeholder="VD: Phun bọt tuyết, Lau khô..." className={inp + ' text-xs'} value={sub.name}
+                    onChange={(e) => updateSub(idx, 'name', e.target.value)} />
+                  {errors.subServices?.[idx]?.name && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].name}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Giá phụ thu (VNĐ) {sub.isOptional ? <span className="text-red-500">*</span> : <span className="text-slate-400">(Miễn phí)</span>}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={!sub.isOptional ? "0đ (Đã bao gồm)" : "VD: 20000"}
+                    disabled={!sub.isOptional}
+                    className={`${inp} text-xs ${!sub.isOptional ? 'bg-slate-100/90 text-slate-400 cursor-not-allowed border-slate-200' : ''}`}
+                    value={!sub.isOptional ? '0' : sub.price}
+                    onChange={(e) => updateSub(idx, 'price', e.target.value)}
+                  />
+                  {errors.subServices?.[idx]?.price && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].price}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Thời gian (phút) <span className="text-red-500">*</span>
+                  </label>
+                  <input type="number" min="1" placeholder="5" className={inp + ' text-xs'} value={sub.duration}
+                    onChange={(e) => updateSub(idx, 'duration', e.target.value)} />
+                  {errors.subServices?.[idx]?.duration && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].duration}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {form.subServices.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center">
+              <p className="text-xs text-slate-400">Chưa có dịch vụ nhỏ nào trong gói này.</p>
+              <button type="button" onClick={addSubService} className="mt-1 text-xs font-semibold text-blue-600 hover:underline">
+                + Thêm dịch vụ nhỏ ngay
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+          Hủy
+        </button>
+        <button type="submit" disabled={saving}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60 transition-colors">
+          {saving && <ArrowClockwise size={14} className="animate-spin text-white" />}
+          {initial?._id || initial?.id ? 'Cập nhật gói' : 'Tạo gói'}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export default function ManagerPackages({ user }) {
   const [packages, setPackages] = useState([]);
@@ -38,6 +343,7 @@ export default function ManagerPackages({ user }) {
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
   const [branchId, setBranchId] = useState(user?.branchId || null);
+  const [currentSortOrder, setCurrentSortOrder] = useState('price_asc');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -57,10 +363,51 @@ export default function ManagerPackages({ user }) {
     loadTemplates();
   }, []);
 
+  useEffect(() => {
+    if (!branchId) return;
+    api(`/branches/${branchId}`)
+      .then(res => res.json())
+      .then(payload => {
+        const b = payload?.data ?? payload;
+        if (b?.packageSortOrder) {
+          setCurrentSortOrder(b.packageSortOrder);
+        }
+      })
+      .catch(() => {});
+  }, [branchId]);
+
+  const handleSortOrderChange = async (newSortOrder) => {
+    setCurrentSortOrder(newSortOrder);
+    try {
+      const res = await api(`/branches/${branchId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ packageSortOrder: newSortOrder }),
+      });
+      if (!res.ok) throw new Error('Lỗi cập nhật kiểu sắp xếp');
+
+      setPackages((prev) => {
+        const list = [...prev];
+        if (newSortOrder === 'price_asc') {
+          list.sort((a, b) => (a.price || 0) - (b.price || 0));
+        } else if (newSortOrder === 'price_desc') {
+          list.sort((a, b) => (b.price || 0) - (a.price || 0));
+        } else if (newSortOrder === 'booking_count') {
+          list.sort((a, b) => (b.bookingCount || 0) - (a.bookingCount || 0));
+        }
+        return list;
+      });
+
+      const label = newSortOrder === 'price_asc' ? 'Giá thấp → cao' : newSortOrder === 'price_desc' ? 'Giá cao → thấp' : 'Lượt đặt nhiều nhất';
+      showToast(`Đã đổi kiểu sắp xếp gói: ${label}`);
+    } catch (err) {
+      showToast(err.message || 'Lỗi cập nhật kiểu sắp xếp', 'error');
+    }
+  };
+
   const loadPackages = useCallback(async (bId, q, pg) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ branchId: bId });
+      const params = new URLSearchParams({ branchId: bId, includeDeleted: 'true' });
       if (q) params.append('search', q);
       params.append('page', pg);
       params.append('limit', PAGE_SIZE);
@@ -118,94 +465,20 @@ export default function ManagerPackages({ user }) {
 
   function openCreate() {
     setEditPkg(null);
-    setForm({
-      ...EMPTY_FORM,
-      subServices: templates['external'] ? JSON.parse(JSON.stringify(templates['external'])) : []
-    });
-    setError('');
     setShowModal(true);
   }
 
   function openEdit(pkg) {
     setEditPkg(pkg);
-    setForm({
-      name: pkg.name || '',
-      description: pkg.description || '',
-      price: String(pkg.price || ''),
-      duration: String(pkg.duration || ''),
-      category: pkg.category || 'external',
-      vehicleTypes: pkg.vehicleTypes || [],
-      subServices: (pkg.subServices || []).map(s => ({
-        name: s.name || '',
-        price: String(s.price || '0'),
-        duration: String(s.duration || '0'),
-        isOptional: s.isOptional !== false,
-      })),
-    });
-    setError('');
     setShowModal(true);
   }
 
-  function addSubService() {
-    setForm(f => ({ ...f, subServices: [...f.subServices, { ...EMPTY_SUB }] }));
-  }
-
-  function removeSubService(idx) {
-    setForm(f => ({ ...f, subServices: f.subServices.filter((_, i) => i !== idx) }));
-  }
-
-  function updateSub(idx, field, value) {
-    setForm(f => ({
-      ...f,
-      subServices: f.subServices.map((s, i) => i === idx ? { ...s, [field]: value } : s),
-    }));
-  }
-
-  async function handleSave() {
-    if (!form.name.trim() || !form.price || !form.duration) {
-      setError('Vui lòng điền đầy đủ tên, giá và thời gian của gói dịch vụ.');
-      return;
-    }
-    if (Number(form.price) <= 0) {
-      setError('Giá gói dịch vụ phải lớn hơn 0đ.');
-      return;
-    }
-    if (Number(form.duration) <= 0) {
-      setError('Thời gian thực hiện phải lớn hơn 0 phút.');
-      return;
-    }
-
-    // Kiểm tra từng dịch vụ con
-    const activeSubs = form.subServices.filter(s => s.name && s.name.trim());
-    for (const sub of activeSubs) {
-      if (sub.isOptional) {
-        if (!sub.duration || Number(sub.duration) <= 0) {
-          setError(`Dịch vụ thêm "${sub.name}" bắt buộc phải nhập số phút (> 0 phút).`);
-          return;
-        }
-        if (!sub.price || Number(sub.price) <= 1000) {
-          setError(`Giá của dịch vụ thêm "${sub.name}" phải lớn hơn 1.000đ.`);
-          return;
-        }
-      }
-    }
-
+  async function handleSavePackage(formData) {
     setSaving(true);
-    setError('');
     try {
       const body = {
-        name: form.name.trim(),
-        description: form.description.trim(),
-        price: Number(form.price),
-        duration: Number(form.duration),
-        category: form.category,
-        vehicleTypes: form.vehicleTypes,
-        subServices: activeSubs.map(s => ({
-          name: s.name.trim(),
-          price: s.isOptional ? (Number(s.price) || 0) : 0,
-          duration: Number(s.duration) || 0,
-          isOptional: s.isOptional,
-        })),
+        ...formData,
+        branchId,
       };
       const res = editPkg
         ? await api(`/packages/${editPkg._id || editPkg.id}`, { method: 'PUT', body: JSON.stringify(body) })
@@ -216,7 +489,7 @@ export default function ManagerPackages({ user }) {
       showToast(editPkg ? 'Cập nhật gói thành công!' : 'Tạo gói thành công!');
       loadPackages(branchId, search, page);
     } catch (err) {
-      setError(err.message);
+      showToast(err.message || 'Lỗi lưu gói dịch vụ', 'error');
     } finally {
       setSaving(false);
     }
@@ -236,22 +509,19 @@ export default function ManagerPackages({ user }) {
   const [blockedPkg, setBlockedPkg] = useState(null);
 
   async function handleDelete(id) {
-    const pkgTarget = packages.find((p) => (p._id || p.id) === id);
     try {
       const res = await api(`/packages/${id}`, { method: 'DELETE' });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setBlockedMsg(payload.message || payload.error || 'Không thể xóa gói dịch vụ');
-        setBlockedPkg(pkgTarget || null);
+        showToast(payload.message || payload.error || 'Không thể xóa gói dịch vụ', 'error');
         setDeleteId(null);
         return;
       }
       setDeleteId(null);
-      showToast('Xóa gói dịch vụ thành công!');
+      showToast('Đã xóa mềm gói dịch vụ thành công!');
       loadPackages(branchId, search, page);
     } catch (err) {
-      setBlockedMsg(err.message || 'Không thể xóa gói dịch vụ');
-      setBlockedPkg(pkgTarget || null);
+      showToast(err.message || 'Không thể xóa gói dịch vụ', 'error');
       setDeleteId(null);
     }
   }
@@ -270,6 +540,13 @@ export default function ManagerPackages({ user }) {
     }
   }
 
+  useSSE(getStoredToken(), 'branch_sort_order_updated', useCallback((data) => {
+    if (branchId && String(data?.branchId) === String(branchId)) {
+      if (data?.packageSortOrder) setCurrentSortOrder(data.packageSortOrder);
+      loadPackages(branchId, search, page);
+    }
+  }, [branchId, search, page, loadPackages]));
+
   function toggleVehicleType(vt) {
     setForm(prev => ({
       ...prev,
@@ -282,18 +559,34 @@ export default function ManagerPackages({ user }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Tìm gói dịch vụ..."
-            className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
-          {search && (
-            <button onClick={() => { setSearch(''); setPage(1); loadPackages(branchId, '', 1); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-              <X size={12} />
-            </button>
-          )}
+        <div className="flex items-center gap-3 flex-1 min-w-[280px] max-w-xl">
+          <div className="relative flex-1">
+            <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={search} onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Tìm gói dịch vụ..."
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors" />
+            {search && (
+              <button onClick={() => { setSearch(''); setPage(1); loadPackages(branchId, '', 1); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs">
+            <span className="text-slate-500 font-medium">Sắp xếp:</span>
+            <select
+              value={currentSortOrder}
+              onChange={(e) => handleSortOrderChange(e.target.value)}
+              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+            >
+              <option value="price_asc">Giá từ thấp → cao</option>
+              <option value="price_desc">Giá từ cao → thấp</option>
+              <option value="booking_count">Theo lượt đặt nhiều nhất</option>
+            </select>
+          </div>
         </div>
+
         <div className="flex items-center gap-2">
           <p className="text-xs text-slate-400">{total} gói</p>
           <button onClick={openCreate}
@@ -318,85 +611,147 @@ export default function ManagerPackages({ user }) {
         </div>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {packages.map(pkg => {
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {packages.map((pkg) => {
             const id = pkg._id || pkg.id;
             const isActive = pkg.status === 'active';
-            const subCount = (pkg.subServices || []).length;
             return (
-              <div key={id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-slate-800 truncate">{pkg.name}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2" title={pkg.description || ''}>{pkg.description || '—'}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                    {isActive ? 'Hoạt động' : 'Tạm dừng'}
-                  </span>
-                </div>
+              <div
+                key={id}
+                className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-md hover:border-blue-300 transition-all duration-200 group"
+              >
+                <div>
+                  {/* Card Header: Category & Actions */}
+                  <div className="flex items-start justify-between gap-3 mb-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 uppercase tracking-wide border border-blue-100">
+                        {pkg.category === 'external' ? 'Ngoại thất' : pkg.category === 'internal' ? 'Nội thất' : 'Tổng thể'}
+                      </span>
+                      <span className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold border ${
+                        isActive
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                      }`}>
+                        {isActive ? '● Hoạt động' : '○ Ngừng'}
+                      </span>
+                      <span className="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80 flex items-center gap-1">
+                        {pkg.bookingCount || 0} lượt đặt
+                      </span>
+                    </div>
 
-                <div className="flex gap-4 text-sm">
-                  <div>
-                    <span className="text-slate-400 text-xs block">Giá</span>
-                    <span className="font-semibold text-emerald-600">{formatCurrency(pkg.price)}</span>
+                    <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => openEdit(pkg)}
+                        title="Chỉnh sửa"
+                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                      >
+                        <PencilSimple size={15} />
+                      </button>
+                      <button
+                        onClick={() => setConfirmToggleId(pkg)}
+                        title={isActive ? "Tạm dừng gói" : "Kích hoạt gói"}
+                        className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                          isActive
+                            ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {isActive ? 'Tạm dừng' : 'Kích hoạt'}
+                      </button>
+                      <button
+                        onClick={() => setDeleteId(id)}
+                        title="Xóa gói"
+                        className="flex h-7.5 w-7.5 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <Trash size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 text-xs block">Thời gian</span>
-                    <span className="font-medium text-slate-700">{pkg.duration} phút</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-xs block">Loại</span>
-                    <span className="font-medium text-slate-700 capitalize">{pkg.category || '—'}</span>
-                  </div>
-                </div>
 
-                {subCount > 0 && (
-                  <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Chi tiết dịch vụ nhỏ ({subCount})</p>
-                    {(pkg.subServices || []).filter(s => !s.isOptional).length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-emerald-700 block mb-1">✓ Đã bao gồm:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {(pkg.subServices || []).filter(s => !s.isOptional).map((s, i) => (
-                            <span key={i} className="bg-white border border-emerald-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                              {s.name} {s.duration > 0 ? `(${s.duration}p)` : ''}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                  {/* Title & Price Header */}
+                  <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                    <h4 className="text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                      {pkg.name}
+                    </h4>
+                    <div className="text-right shrink-0">
+                      <span className="text-lg font-extrabold text-emerald-600">
+                        {Number(pkg.price).toLocaleString('vi-VN')}₫
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {pkg.description && (
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-3">
+                      {pkg.description}
+                    </p>
+                  )}
+
+                  {/* Duration & Vehicle Types */}
+                  <div className="flex flex-wrap items-center gap-2 py-1.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600 mb-3">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                      <ClockCountdown size={14} className="text-amber-500" />
+                      {pkg.duration} phút
+                    </span>
+                    {pkg.vehicleTypes?.length > 0 && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="inline-flex items-center gap-1.5 font-medium text-slate-600">
+                          <Car size={14} className="text-blue-500" />
+                          {pkg.vehicleTypes.map((vt) => VEHICLE_LABELS[vt] || vt).join(', ')}
+                        </span>
+                      </>
                     )}
-                    {(pkg.subServices || []).filter(s => s.isOptional).length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-indigo-700 block mb-1">✨ Dịch vụ thêm:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {(pkg.subServices || []).filter(s => s.isOptional).map((s, i) => (
-                            <span key={i} className="bg-white border border-indigo-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                              {s.name} {s.price > 0 ? `(+${formatCurrency(s.price)})` : ''}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
-                )}
 
-                <div className="flex gap-2 pt-2 border-t border-slate-100">
-                  <button onClick={() => openEdit(pkg)}
-                    className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                    Sửa
-                  </button>
-                  <button onClick={() => setConfirmToggleId(pkg)}
-                    className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                      isActive
-                        ? 'border border-amber-200 text-amber-600 hover:bg-amber-50'
-                        : 'border border-emerald-200 text-emerald-600 hover:bg-emerald-50'
-                    }`}>
-                    {isActive ? 'Tạm dừng' : 'Kích hoạt'}
-                  </button>
-                  <button onClick={() => setDeleteId(id)}
-                    className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
-                    Xoá
-                  </button>
+                  {/* Sub-services Checklist */}
+                  {pkg.subServices && pkg.subServices.length > 0 && (
+                    <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                      {/* Included subservices */}
+                      {pkg.subServices.filter((s) => !s.isOptional).length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <span className="text-emerald-500 font-bold">✓</span> Quy trình ({pkg.subServices.filter((s) => !s.isOptional).length} công đoạn)
+                          </p>
+                          <div className="grid grid-cols-1 gap-1">
+                            {pkg.subServices.filter((s) => !s.isOptional).map((sub, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-xs text-slate-700 bg-emerald-50/50 px-2.5 py-1 rounded-lg border border-emerald-100/60">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                  <span className="text-emerald-600 font-bold text-xs">✓</span> {sub.name}
+                                </span>
+                                {sub.duration > 0 && (
+                                  <span className="text-[10px] text-slate-400 font-mono">({sub.duration}p)</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Optional add-ons */}
+                      {pkg.subServices.filter((s) => s.isOptional).length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <span className="text-indigo-500 font-bold">+</span> Nâng cấp tùy chọn ({pkg.subServices.filter((s) => s.isOptional).length})
+                          </p>
+                          <div className="grid grid-cols-1 gap-1">
+                            {pkg.subServices.filter((s) => s.isOptional).map((sub, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-xs text-slate-700 bg-indigo-50/40 px-2.5 py-1 rounded-lg border border-indigo-100/60">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                  <span className="text-indigo-500 font-bold text-xs">+</span> {sub.name}
+                                </span>
+                                {sub.price > 0 && (
+                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100/70 px-1.5 py-0.2 rounded">
+                                    +{formatCurrency(sub.price)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -413,7 +768,7 @@ export default function ManagerPackages({ user }) {
               <button key={p} onClick={() => handlePage(p)}
                 className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
                   page === p
-                    ? 'bg-blue-600 text-white shadow-sm'
+                    ? 'bg-emerald-600 text-white shadow-sm'
                     : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}>{p}</button>
             ))}
@@ -428,157 +783,22 @@ export default function ManagerPackages({ user }) {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4" onClick={() => setShowModal(false)}>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[88vh]" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
-              <h2 className="font-bold text-slate-800 text-base">{editPkg ? 'Sửa gói dịch vụ' : 'Thêm gói dịch vụ mới'}</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+              <h2 className="font-semibold text-slate-800 text-base">{editPkg ? 'Sửa gói dịch vụ' : 'Thêm gói dịch vụ mới'}</h2>
+              <button onClick={() => setShowModal(false)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Tên gói dịch vụ <span className="text-red-500">*</span></label>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className={inp} placeholder="VD: Rửa xe cao cấp & Phủ bóng" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Mô tả gói</label>
-                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    rows={2} className={`${inp} resize-none`} placeholder="Mô tả ngắn gọn về quy trình rửa xe..." />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Giá gói chính (VNĐ) <span className="text-red-500">*</span></label>
-                    <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                      className={inp} placeholder="150000" min="0" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Thời gian thực hiện (Phút) <span className="text-red-500">*</span></label>
-                    <input type="number" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
-                      className={inp} placeholder="30" min="1" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Danh mục gói</label>
-                  <select value={form.category} onChange={e => {
-                    const newCat = e.target.value;
-                    setForm(f => {
-                      if (!editPkg) {
-                        const optionalSubs = f.subServices.filter(s => s.isOptional);
-                        const defaultSubs = templates[newCat] ? JSON.parse(JSON.stringify(templates[newCat])) : [];
-                        return { ...f, category: newCat, subServices: [...defaultSubs, ...optionalSubs] };
-                      }
-                      return { ...f, category: newCat };
-                    });
-                  }}
-                    className={inp}>
-                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-2">Loại xe áp dụng</label>
-                  <div className="flex flex-wrap gap-2">
-                    {VEHICLE_TYPES.map(vt => (
-                      <button key={vt} type="button" onClick={() => toggleVehicleType(vt)}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                          form.vehicleTypes.includes(vt)
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        }`}>
-                        {vt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wide block">Danh sách dịch vụ nhỏ (Sub-services)</label>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Tích chọn "Dịch vụ thêm" để đặt giá &gt; 1.000đ và thời gian thực hiện</p>
-                  </div>
-                  <button type="button" onClick={addSubService}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all cursor-pointer">
-                    + Thêm dịch vụ
-                  </button>
-                </div>
-
-                {form.subServices.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400 bg-slate-50/50">
-                    Chưa có dịch vụ nhỏ nào.
-                    <button type="button" onClick={addSubService} className="ml-1 text-emerald-600 font-bold underline">Thêm dịch vụ ngay</button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {form.subServices.map((sub, idx) => (
-                      <div key={idx} className={`rounded-2xl border p-3.5 space-y-2.5 transition-all ${sub.isOptional ? 'bg-indigo-50/40 border-indigo-200' : 'bg-slate-50/70 border-slate-200'}`}>
-                        <div className="flex items-center gap-2">
-                          <input value={sub.name} onChange={e => updateSub(idx, 'name', e.target.value)}
-                            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                            placeholder="Tên dịch vụ (VD: Hút bụi nội thất, Tẩy ố kính)" />
-                          <button type="button" onClick={() => removeSubService(idx)}
-                            className="w-8 h-8 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 font-bold text-base flex items-center justify-center transition-colors shrink-0">✕</button>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                          <div className="flex items-center h-full pt-1 sm:pt-0">
-                            <label className="flex items-center gap-2 cursor-pointer select-none">
-                              <input type="checkbox" checked={sub.isOptional}
-                                onChange={e => {
-                                  const checked = e.target.checked;
-                                  setForm(f => ({
-                                    ...f,
-                                    subServices: f.subServices.map((s, i) =>
-                                      i === idx ? { ...s, isOptional: checked, price: checked ? (s.price && s.price !== '0' ? s.price : '') : '0' } : s
-                                    )
-                                  }));
-                                }}
-                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" />
-                              <span className="text-xs font-bold text-slate-800">Dịch vụ thêm</span>
-                            </label>
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-medium text-slate-500 block mb-1">
-                              Giá thêm (đ) {sub.isOptional ? <span className="text-red-500 font-bold">* (&gt;1.000đ)</span> : <span className="text-slate-400 font-normal">(Cố định 0đ)</span>}
-                            </label>
-                            <input type="number" value={sub.isOptional ? sub.price : '0'}
-                              disabled={!sub.isOptional}
-                              onChange={e => updateSub(idx, 'price', e.target.value)}
-                              className={`w-full rounded-xl border px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 ${!sub.isOptional ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-900'}`}
-                              placeholder={sub.isOptional ? 'VD: 50000' : '0'} min="1001" step="1000" />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-medium text-slate-500 block mb-1">
-                              Số phút {sub.isOptional ? <span className="text-red-500 font-bold">* (Bắt buộc)</span> : <span className="text-slate-400">(Trong gói)</span>}
-                            </label>
-                            <input type="number" value={sub.duration} onChange={e => updateSub(idx, 'duration', e.target.value)}
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                              placeholder="VD: 15" min="1" />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {error && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
-                  ⚠️ {error}
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
-              <button onClick={() => setShowModal(false)}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                Huỷ
-              </button>
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors disabled:opacity-50">
-                {saving ? 'Đang lưu...' : editPkg ? 'Cập nhật' : 'Tạo gói'}
-              </button>
+            <div className="p-6 overflow-y-auto max-h-[78vh]">
+              <PackageForm
+                initial={editPkg || { category: 'full', vehicleTypes: [] }}
+                onSave={handleSavePackage}
+                onCancel={() => setShowModal(false)}
+                saving={saving}
+              />
             </div>
           </div>
         </div>
@@ -589,9 +809,9 @@ export default function ManagerPackages({ user }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 text-center space-y-4">
             <span className="text-4xl">🗑️</span>
-            <p className="text-slate-700 font-semibold">Xác nhận xoá gói dịch vụ này?</p>
-            <p className="text-xs text-red-500 bg-red-50 p-2.5 rounded-xl border border-red-100 leading-relaxed">
-              Lưu ý: Nếu gói này đã có khách hàng đặt lịch hoặc mua gói lượt, hệ thống sẽ chặn xóa để bảo mật dữ liệu. Bạn vui lòng chọn "Tạm dừng" gói thay vì xóa.
+            <p className="text-slate-700 font-semibold">Xác nhận xoá mềm gói dịch vụ này?</p>
+            <p className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200 leading-relaxed">
+              Gói dịch vụ sẽ được chuyển sang trạng thái "Ngừng hoạt động" và ẩn đối với khách hàng. Lịch sử đơn hàng trước đây vẫn được bảo lưu an toàn.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteId(null)}
@@ -600,7 +820,7 @@ export default function ManagerPackages({ user }) {
               </button>
               <button onClick={() => handleDelete(deleteId)}
                 className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
-                Xoá
+                Xoá mềm
               </button>
             </div>
           </div>

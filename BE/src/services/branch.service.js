@@ -60,6 +60,15 @@ exports.updateBranch = async (id, updates, userRole, userId) => {
     if (manager.role !== 'manager') throw Object.assign(new Error('Selected manager must have manager role'), { statusCode: 400, code: 'INVALID_MANAGER_ROLE' });
   }
   const updated = await Branch.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).populate('managerId', 'name email phone status');
+  try {
+    const sseService = require('./sse.service');
+    sseService.broadcastToAll('branch_sort_order_updated', {
+      branchId: String(updated._id),
+      packageSortOrder: updated.packageSortOrder,
+    });
+  } catch (e) {
+    console.error('SSE broadcast error on updateBranch:', e);
+  }
   return updated;
 };
 

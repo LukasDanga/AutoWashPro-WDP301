@@ -22,6 +22,14 @@ const INITIAL_CONFIGS = [
     description: 'Tỉ lệ đặt cọc mặc định cho các dịch vụ rửa xe (30%)'
   },
   {
+    key: 'VAT_PERCENT',
+    value: 10,
+    type: 'number',
+    category: 'payment',
+    isPublic: true,
+    description: 'Tỉ lệ thuế VAT (%) áp dụng cho hóa đơn và in ấn'
+  },
+  {
     key: 'MIN_ADVANCE_BOOKING_MINUTES',
     value: 30,
     type: 'number',

@@ -88,6 +88,20 @@ const parseTime = (t) => {
   return h * 60 + m;
 };
 
+const getBookingStartDateTime = (bookingDate, startTime) => {
+  if (!bookingDate || !startTime) return new Date();
+  let dateStr = '';
+  if (bookingDate instanceof Date) {
+    dateStr = bookingDate.toISOString().slice(0, 10);
+  } else if (typeof bookingDate === 'string') {
+    dateStr = bookingDate.slice(0, 10);
+  } else {
+    dateStr = new Date(bookingDate).toISOString().slice(0, 10);
+  }
+  const timeStr = String(startTime).trim();
+  return new Date(`${dateStr}T${timeStr}:00.000+07:00`);
+};
+
 const isSlotOverlap = (s1, e1, s2, e2) => !(e1 <= s2 || s1 >= e2);
 
 const buildSlots = (packageDuration, openTime = '07:00', closeTime = '20:00') => {
@@ -332,6 +346,7 @@ exports.createBooking = async (data) => {
         }))
       : [];
     const includedSubServicesSnapshot = packageSubServicesSnapshot.filter(s => !s.isOptional);
+    const currentVatPercent = await configService.get('VAT_PERCENT', {}, 10);
 
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
@@ -340,6 +355,7 @@ exports.createBooking = async (data) => {
       voucherCode: voucherCode || undefined,
       discountAmount: computedDiscountAmount,
       finalPrice: computedFinalPrice,
+      vatPercent: currentVatPercent,
       depositAmount,
       selectedSubServices: validSubServices,
       includedSubServices: includedSubServicesSnapshot,
@@ -926,6 +942,13 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           'booking_completed',
           { bookingId: id }
         );
+        // Increment Package booking count
+        if (booking.packageId) {
+          const pkgId = typeof booking.packageId === 'object' ? booking.packageId._id : booking.packageId;
+          const PackageModel = mongoose.model('Package');
+          await PackageModel.findByIdAndUpdate(pkgId, { $inc: { bookingCount: 1 } }).catch(() => {});
+        }
+
         // Award loyalty points when booking is completed (points removed from payment flow)
         const pointsBaseAmount = currentBooking.bookingType === 'slot_pack_usage'
           ? (currentBooking.packagePrice ?? booking.packageId?.price ?? 0) + (currentBooking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
@@ -1267,9 +1290,7 @@ exports.getCancelPreview = async (id, userId) => {
   }
 
   const now = new Date();
-  const bookingDateTime = new Date(booking.bookingDate);
-  const [h, m] = booking.startTime.split(':').map(Number);
-  bookingDateTime.setHours(h, m, 0, 0);
+  const bookingDateTime = getBookingStartDateTime(booking.bookingDate, booking.startTime);
   const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
   const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
   const isLateCancel = minutesBefore <= lateCancelThreshold;
@@ -1406,9 +1427,7 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
     }
 
     const now = new Date();
-    const bookingDateTime = new Date(booking.bookingDate);
-    const [h, m] = booking.startTime.split(':').map(Number);
-    bookingDateTime.setHours(h, m, 0, 0);
+    const bookingDateTime = getBookingStartDateTime(booking.bookingDate, booking.startTime);
 
     const cancelledBy = userRole === 'customer' ? 'customer' : userRole === 'admin' ? 'admin' : 'manager';
 
@@ -1573,7 +1592,9 @@ exports.cancelBooking = async (id, userId, userRole, cancellationReason) => {
             const refundRate = Math.max(0, (100 - penaltyPercent) / 100);
             refundAmount = Math.round(totalPaid * refundRate);
           } else {
-            refundAmount = 0;
+            const depositPenalty = await configService.get('LATE_CANCEL_PENALTY_DEPOSIT_PERCENT', {}, 100);
+            const refundRate = Math.max(0, (100 - depositPenalty) / 100);
+            refundAmount = Math.round(totalPaid * refundRate);
           }
         } else {
           refundAmount = totalPaid;
@@ -2103,6 +2124,8 @@ exports.createRecurringBooking = async (data) => {
   const created = [];
   const failed  = [];
 
+  const currentVatPercent = await configService.get('VAT_PERCENT', {}, 10);
+
   for (let bookingIdx = 0; bookingIdx < targetDates.length; bookingIdx++) {
     const bookingDate = targetDates[bookingIdx];
     const isFirstInGroup = bookingIdx === 0;
@@ -2156,6 +2179,7 @@ exports.createRecurringBooking = async (data) => {
         bookingType: 'recurring',
         recurringGroupId,
         priority,
+        vatPercent: currentVatPercent,
         // Buổi đầu chịu toàn bộ cọc của cả nhóm; các buổi sau = 0.
         // Manager đối soát booking đầu là đủ biết đã thu cọc.
         isRecurringFirst: isFirstInGroup,
@@ -2402,9 +2426,7 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
 
     const results = [];
     for (const b of bookings) {
-      const bookingDateTime = new Date(b.bookingDate);
-      const [h, m] = b.startTime.split(':').map(Number);
-      bookingDateTime.setHours(h, m, 0, 0);
+      const bookingDateTime = getBookingStartDateTime(b.bookingDate, b.startTime);
       const minutesBefore = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60);
       const lateCancelThreshold = await configService.get('LATE_CANCEL_THRESHOLD_MINUTES', {}, 60);
       const isLateCancel = minutesBefore <= lateCancelThreshold;
@@ -2423,7 +2445,12 @@ exports.cancelRecurringGroup = async (recurringGroupId, userId, userRole) => {
         } else {
           refundAmountForThisBooking = sessionPaidAmount;
         }
-      } else if (cancelledBy !== 'customer' || !isLateCancel) {
+      } else if (cancelledBy !== 'customer') {
+        refundAmountForThisBooking = depositShare;
+      } else if (isLateCancel) {
+        const depositPenalty = await configService.get('LATE_CANCEL_PENALTY_DEPOSIT_PERCENT', {}, 100);
+        refundAmountForThisBooking = Math.round(depositShare * Math.max(0, (100 - depositPenalty) / 100));
+      } else {
         refundAmountForThisBooking = depositShare;
       }
 
@@ -2787,6 +2814,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     } catch (_) { /* voucher validation failed silently */ }
   }
   computedFinalPrice = Math.max(0, computedFinalPrice - computedDiscount);
+  const currentVatPercent = await configService.get('VAT_PERCENT', {}, 10);
 
   const newBooking = await Booking.create({
     userId: src.userId,
@@ -2807,6 +2835,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     rebookedFromId: src._id,
     finalPrice: computedFinalPrice,
     discountAmount: computedDiscount,
+    vatPercent: currentVatPercent,
     depositAmount: src.bookingType === 'slot_pack_usage'
       ? 0
       : Math.round(((computedFinalPrice || 0) * (await getDepositRate(user)) / 100) / 1000) * 1000,

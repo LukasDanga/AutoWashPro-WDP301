@@ -91,6 +91,8 @@ const bookingSchema = new mongoose.Schema(
     voucherCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
     finalPrice: { type: Number, min: 0 },
+    // Snapshot tỉ lệ thuế VAT (%) tại thời điểm tạo hóa đơn / booking
+    vatPercent: { type: Number, default: 10, min: 0, max: 100 },
     // Deposit (đặt cọc trước) — tránh khách đặt mà không đến / spam
     depositAmount: { type: Number, default: 0, min: 0 },
     depositPaid: { type: Boolean, default: false },

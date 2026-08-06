@@ -5,6 +5,7 @@ import { RefreshCw, ArrowLeft, QrCode } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
 import CustomerQRScanner from '@/components/customer/CustomerQRScanner';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -1425,6 +1426,8 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
       {/* ── RECEIPT MODAL ── */}
       {showReceipt && (() => {
+        const configs = useSystemConfig();
+        const vatRate = b?.vatPercent ?? configs?.VAT_PERCENT ?? 10;
         const displayTotal = b.isGroup ? (b.groupTotalPrice || 0) : (b.totalAmount || b.finalPrice || 0);
         const displayDeposit = b.isGroup ? (b.groupTotalDeposit || 0) : (b.depositAmount || 0);
         const displayId = b.isGroup ? (b.recurringGroupId || b._id) : b._id;
@@ -1578,7 +1581,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         ) : null}
                         {formatCurrency(b.bookingType === 'slot_pack_usage' ? 0 : (b.packagePrice || b.packageId?.price || b.finalPrice || b.totalAmount))}
                       </td>
-                      <td className="py-3 text-right text-black align-top">10%</td>
+                      <td className="py-3 text-right text-black align-top">{vatRate}%</td>
                       <td className="py-3 text-right text-black align-top">{formatCurrency(b.bookingType === 'slot_pack_usage' ? 0 : (b.packagePrice || b.packageId?.price || b.finalPrice || b.totalAmount))}</td>
                     </tr>
 
@@ -1591,7 +1594,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                       return included.map((sub, i) => (
                         <tr key={`inc-${i}`} className="border-b border-slate-100/60">
                           <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
-                            ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
+                            • {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
                           </td>
                         </tr>
                       ));
@@ -1602,7 +1605,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         <td className="py-2 text-left text-black pl-4 text-indigo-600">+ {sub.name} <span className="text-[10px] text-indigo-400 font-normal">(thêm)</span></td>
                         <td className="py-2 text-right text-black">1</td>
                         <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
-                        <td className="py-2 text-right text-black">10%</td>
+                        <td className="py-2 text-right text-black">{vatRate}%</td>
                         <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
                       </tr>
                     ))}
@@ -1638,7 +1641,7 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                         }
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
+                    <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT {vatRate}%</p>
                   </div>
                 </div>
               </div>            </div>

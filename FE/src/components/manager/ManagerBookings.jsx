@@ -238,37 +238,12 @@ function StatusMenu({ bookingId, current, onUpdated, notify }) {
   );
 }
 
-/* ── "sắp bị auto-cancel" cảnh báo + nút gia hạn thủ công (đồng bộ với QR check-in) ── */
-function AtRiskNotice({ booking, onUpdated, notify }) {
-  const [busy, setBusy] = useState(false);
-  const configs = useSystemConfig();
-  const graceStep = configs?.GRACE_EXTENSION_STEP_MINUTES ?? 5;
-  const maxGrace = configs?.MAX_GRACE_EXTENSION_MINUTES ?? 15;
-
-  const extend = async () => {
-    setBusy(true);
-    try {
-      const res = await api(`/bookings/${booking._id}/extend-grace`, { method: 'PATCH' });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.message || 'Gia hạn thất bại');
-      onUpdated(payload?.data ?? payload);
-      notify(`Đã gia hạn thêm ${graceStep} phút cho đơn`, 'success');
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally { setBusy(false); }
-  };
-
+/* ── "sắp bị auto-cancel" cảnh báo ── */
+function AtRiskNotice({ booking }) {
+  if (!booking?.suggestedSlotStartTime) return null;
   return (
     <div className="mt-1 flex items-center gap-1.5">
-      {booking.status === 'pending' && (booking.graceExtensionMinutes || 0) < maxGrace && (
-        <button onClick={extend} disabled={busy}
-          className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 disabled:opacity-50 transition-colors">
-          {busy ? '...' : `Gia hạn +${graceStep}p`}
-        </button>
-      )}
-      {booking.suggestedSlotStartTime && (
-        <span className="text-[10px] text-slate-400">Gợi ý đổi giờ: {booking.suggestedSlotStartTime}</span>
-      )}
+      <span className="text-[10px] text-slate-400">Gợi ý đổi giờ: {booking.suggestedSlotStartTime}</span>
     </div>
   );
 }
@@ -475,6 +450,8 @@ function PrintReceiptModal({ booking, onClose }) {
   const displayId = detailBooking.isGroup ? (detailBooking.recurringGroupId || detailBooking._id) : detailBooking._id;
   const displayInvoiceNumber = String(displayId).slice(-8).toUpperCase();
   const recurringGroupBookings = detailBooking.children || [];
+  const configs = useSystemConfig();
+  const vatRate = detailBooking?.vatPercent ?? configs?.VAT_PERCENT ?? 10;
 
   const [receiptPayments, setReceiptPayments] = useState(null);
 
@@ -660,7 +637,7 @@ function PrintReceiptModal({ booking, onClose }) {
                     ) : null}
                     {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageSnapshot?.price || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
                   </td>
-                  <td className="py-3 text-right text-black align-top">10%</td>
+                  <td className="py-3 text-right text-black align-top">{vatRate}%</td>
                   <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageSnapshot?.price || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                 </tr>
                 
@@ -674,7 +651,7 @@ function PrintReceiptModal({ booking, onClose }) {
                   return included.map((sub, i) => (
                     <tr key={`inc-${i}`} className="border-b border-slate-100/60">
                       <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
-                        ✓ {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
+                        • {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
                       </td>
                     </tr>
                   ));
@@ -685,7 +662,7 @@ function PrintReceiptModal({ booking, onClose }) {
                     <td className="py-2 text-left text-black pl-4 text-indigo-600">+ {sub.name} <span className="text-[10px] text-indigo-400 font-normal">(thêm)</span></td>
                     <td className="py-2 text-right text-black">1</td>
                     <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
-                    <td className="py-2 text-right text-black">10%</td>
+                    <td className="py-2 text-right text-black">{vatRate}%</td>
                     <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
                   </tr>
                 ))}
@@ -722,7 +699,7 @@ function PrintReceiptModal({ booking, onClose }) {
                     }
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT 10%</p>
+                <p className="text-[11px] text-slate-500 italic text-right mt-1.5 font-medium">* Giá đã bao gồm VAT {vatRate}%</p>
               </div>
             </div>
           </div>          </div>
@@ -1442,7 +1419,7 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                       <span>Thành tiền:</span>
                       <span className="font-mono font-black text-sm sm:text-base text-emerald-700">{finalVal.toLocaleString('vi-VN')}đ</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 text-right">* Giá đã bao gồm VAT 10%</p>
+                    <p className="text-[11px] text-slate-400 text-right">* Giá đã bao gồm VAT {booking?.vatPercent ?? configs?.VAT_PERCENT ?? 10}%</p>
                   </div>
                 );
               })()}

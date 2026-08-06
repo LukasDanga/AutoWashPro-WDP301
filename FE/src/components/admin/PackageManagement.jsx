@@ -144,20 +144,74 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
   const updateSub = (idx, key, val) => {
     setForm((f) => {
       const subs = [...f.subServices];
-      subs[idx] = { ...subs[idx], [key]: val };
+      if (key === 'isOptional' && val === false) {
+        subs[idx] = { ...subs[idx], isOptional: false, price: 0 };
+      } else {
+        subs[idx] = { ...subs[idx], [key]: val };
+      }
       return { ...f, subServices: subs };
+    });
+    setErrors((e) => {
+      if (!e.subServices) return e;
+      const subErrs = [...e.subServices];
+      if (subErrs[idx]) {
+        subErrs[idx] = { ...subErrs[idx], [key]: '' };
+        if (key === 'isOptional' && val === false) {
+          subErrs[idx].price = '';
+        }
+      }
+      return { ...e, subServices: subErrs };
     });
   };
 
   const removeSub = (idx) => {
     setForm((f) => ({ ...f, subServices: f.subServices.filter((_, i) => i !== idx) }));
+    setErrors((e) => {
+      if (!e.subServices) return e;
+      return { ...e, subServices: e.subServices.filter((_, i) => i !== idx) };
+    });
   };
 
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = 'Vui lòng nhập tên gói';
-    if (!form.price || Number(form.price) < 0) e.price = 'Giá không hợp lệ';
-    if (!form.duration || Number(form.duration) < 1) e.duration = 'Thời lượng không hợp lệ';
+    
+    const numericPrice = parseVnd(form.price);
+    if (!form.price || isNaN(numericPrice) || numericPrice <= 1000) {
+      e.price = 'Giá gói phải lớn hơn 1.000 VNĐ';
+    }
+
+    if (!form.duration || Number(form.duration) <= 0) {
+      e.duration = 'Thời lượng phải lớn hơn 0 phút';
+    }
+
+    const subErrors = [];
+    let hasSubError = false;
+
+    (form.subServices || []).forEach((sub, idx) => {
+      const sErr = {};
+      if (!sub.name || !sub.name.trim()) {
+        sErr.name = 'Vui lòng nhập tên dịch vụ nhỏ';
+        hasSubError = true;
+      }
+      if (!sub.duration || Number(sub.duration) <= 0) {
+        sErr.duration = 'Vui lòng nhập thời gian';
+        hasSubError = true;
+      }
+      if (sub.isOptional) {
+        const subPriceNum = parseVnd(sub.price);
+        if (!sub.price || isNaN(subPriceNum) || subPriceNum <= 1000) {
+          sErr.price = 'Giá phụ thu phải > 1.000 VNĐ';
+          hasSubError = true;
+        }
+      }
+      subErrors[idx] = sErr;
+    });
+
+    if (hasSubError) {
+      e.subServices = subErrors;
+    }
+
     return e;
   };
 
@@ -180,7 +234,7 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Giá (VNĐ)" required error={errors.price}>
+        <Field label="Giá gói (VNĐ)" required error={errors.price}>
           <input type="text" inputMode="numeric" className={inp} value={form.price}
             onChange={(e) => set('price', e.target.value)} placeholder="80000" />
         </Field>
@@ -245,7 +299,7 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    ✓ Đã bao gồm
+                    Đã bao gồm
                   </button>
                   <button
                     type="button"
@@ -256,7 +310,7 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    ✨ Tùy chọn
+                    Tùy chọn
                   </button>
                 </div>
                 <button type="button" onClick={() => removeSub(idx)}
@@ -267,19 +321,41 @@ function PackageForm({ initial, onSave, onCancel, saving }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="sm:col-span-1">
-                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Tên dịch vụ nhỏ</label>
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Tên dịch vụ nhỏ <span className="text-red-500">*</span>
+                  </label>
                   <input placeholder="VD: Phun bọt tuyết, Lau khô..." className={inp + ' text-xs'} value={sub.name}
                     onChange={(e) => updateSub(idx, 'name', e.target.value)} />
+                  {errors.subServices?.[idx]?.name && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].name}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Giá phụ thu (VNĐ)</label>
-                  <input type="number" min="0" placeholder="0" className={inp + ' text-xs'} value={sub.price}
-                    onChange={(e) => updateSub(idx, 'price', e.target.value)} />
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Giá phụ thu (VNĐ) {sub.isOptional ? <span className="text-red-500">*</span> : <span className="text-slate-400">(Miễn phí)</span>}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={!sub.isOptional ? "0đ (Đã bao gồm)" : "VD: 20000"}
+                    disabled={!sub.isOptional}
+                    className={`${inp} text-xs ${!sub.isOptional ? 'bg-slate-100/90 text-slate-400 cursor-not-allowed border-slate-200' : ''}`}
+                    value={!sub.isOptional ? '0' : sub.price}
+                    onChange={(e) => updateSub(idx, 'price', e.target.value)}
+                  />
+                  {errors.subServices?.[idx]?.price && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].price}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium text-slate-500 block mb-1">Thời gian (phút)</label>
-                  <input type="number" min="0" placeholder="5" className={inp + ' text-xs'} value={sub.duration}
+                  <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                    Thời gian (phút) <span className="text-red-500">*</span>
+                  </label>
+                  <input type="number" min="1" placeholder="5" className={inp + ' text-xs'} value={sub.duration}
                     onChange={(e) => updateSub(idx, 'duration', e.target.value)} />
+                  {errors.subServices?.[idx]?.duration && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.subServices[idx].duration}</p>
+                  )}
                 </div>
               </div>
             </div>
