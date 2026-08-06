@@ -298,7 +298,13 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
       });
       if (resR.ok) {
         const payload = await resR.json();
-        setRewards(Array.isArray(payload?.data) ? payload.data : []);
+        const list = Array.isArray(payload?.data) ? payload.data : [];
+        setRewards([...list].sort((a, b) => {
+          const trA = TIER_RANK[a.requiredTier || 'bronze'] ?? 0;
+          const trB = TIER_RANK[b.requiredTier || 'bronze'] ?? 0;
+          if (trB !== trA) return trB - trA;
+          return (a.pointCost || 0) - (b.pointCost || 0);
+        }));
       }
 
       const resMyR = await fetch(`${API_BASE}/rewards/me`, {
