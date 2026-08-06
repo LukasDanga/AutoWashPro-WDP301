@@ -1,9 +1,10 @@
 ﻿import { motion, useInView } from 'framer-motion';
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import CustomLuckyWheel from '../widgets/CustomLuckyWheel.jsx';
 import { storageKeys } from '../../../lib/authStorage.js';
 import { showToast } from '@/lib/toast';
 import { confirmDialog } from '@/lib/confirm';
+import TierBadge from '@/components/ui/TierBadge';
 import { Trophy, CheckCircle, Warning, ClockCounterClockwise } from '@phosphor-icons/react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -18,14 +19,33 @@ function formatDate(dStr) {
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-const TIER_LABELS = { bronze: 'Đồng', silver: 'Bạc', gold: 'Vàng', diamond: 'Kim Cương' };
-const TIER_RANK = { bronze: 0, silver: 1, gold: 2, diamond: 3 };
 const TIER_BADGE_CLS = {
   bronze: 'bg-amber-100 text-amber-800',
   silver: 'bg-slate-200 text-slate-700',
   gold: 'bg-yellow-200 text-yellow-900',
   diamond: 'bg-cyan-100 text-cyan-800',
 };
+
+const FALLBACK_TIERS = [
+  { id: 'bronze', name: 'Đồng', minPoints: 0 },
+  { id: 'silver', name: 'Bạc', minPoints: 100000 },
+  { id: 'gold', name: 'Vàng', minPoints: 500000 },
+  { id: 'diamond', name: 'Kim Cương', minPoints: 1000000 },
+];
+
+function buildTierMaps(tiers) {
+  const sorted = [...(tiers || [])].sort((a, b) => (a.minPoints || 0) - (b.minPoints || 0));
+  const rank = {};
+  const label = {};
+  const badge = {};
+  sorted.forEach((t, i) => {
+    const id = String(t.id || '').toLowerCase();
+    rank[id] = i;
+    label[id] = t.name || id;
+    badge[id] = t.badgeCls || TIER_BADGE_CLS[id] || TIER_BADGE_CLS.bronze;
+  });
+  return { sorted, rank, label, badge };
+}
 
 function VoucherCard({ voucher, index, onRedeem, redeeming }) {
   const ref = useRef(null);
@@ -129,15 +149,16 @@ function VoucherCard({ voucher, index, onRedeem, redeeming }) {
   );
 }
 
-function RewardCard({ reward, index, onRedeem, redeeming, points, userTier }) {
+function RewardCard({ reward, index, onRedeem, redeeming, points, userTier, tierMaps }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-40px' });
   const enough = (points || 0) >= (reward.pointCost || 0);
   const soldOut = (reward.stock || 0) <= 0;
-  const reqTier = reward.requiredTier || 'bronze';
-  const userRank = TIER_RANK[userTier] ?? 0;
-  const reqRank = TIER_RANK[reqTier] ?? 0;
+  const reqTier = (reward.requiredTier || 'bronze').toLowerCase();
+  const userRank = tierMaps.rank[(userTier || 'bronze').toLowerCase()] ?? 0;
+  const reqRank = tierMaps.rank[reqTier] ?? 0;
   const tierOk = userRank >= reqRank;
+  const reqLabel = tierMaps.label[reqTier] || 'Đồng';
 
   return (
     <motion.div
@@ -162,8 +183,8 @@ function RewardCard({ reward, index, onRedeem, redeeming, points, userTier }) {
         <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
           ⭐ {reward.pointCost} Điểm
         </div>
-        <div className={`absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black shadow-sm border ${TIER_BADGE_CLS[reqTier] || TIER_BADGE_CLS.bronze}`}>
-          {reqTier === 'bronze' ? 'Mọi hạng' : `Hạng ${TIER_LABELS[reqTier]}`}
+        <div className={`absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black shadow-sm border ${tierMaps.badge[reqTier] || TIER_BADGE_CLS.bronze}`}>
+          {reqTier === 'bronze' ? 'Mọi hạng' : `Hạng ${reqLabel}`}
         </div>
       </div>
       <div className="p-5">
@@ -179,7 +200,7 @@ function RewardCard({ reward, index, onRedeem, redeeming, points, userTier }) {
               : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed'
           }`}
         >
-          {soldOut ? 'Hết hàng' : !tierOk ? `Cần hạng ${TIER_LABELS[reqTier]} trở lên` : !enough ? `Cần thêm ${(reward.pointCost || 0) - (points || 0)} điểm` : redeeming ? 'Đang xử lý...' : 'Đổi ngay'}
+          {soldOut ? 'Hết hàng' : !tierOk ? `Cần hạng ${reqLabel} trở lên` : !enough ? `Cần thêm ${(reward.pointCost || 0) - (points || 0)} điểm` : redeeming ? 'Đang xử lý...' : 'Đổi ngay'}
         </button>
       </div>
     </motion.div>
@@ -203,6 +224,10 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [redeemingId, setRedeemingId] = useState(null);
   const [rewards, setRewards] = useState([]);
   const [rewardLoading, setRewardLoading] = useState(false);
+  const [myRewards, setMyRewards] = useState([]);
+  const [tiers, setTiers] = useState([]);
+
+  const tierMaps = useMemo(() => buildTierMaps(tiers), [tiers]);
 
   const wheelRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
@@ -297,16 +322,45 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
       });
       if (resR.ok) {
         const payload = await resR.json();
-        setRewards(Array.isArray(payload?.data) ? payload.data : []);
+        const list = Array.isArray(payload?.data) ? payload.data : [];
+        setRewards([...list].sort((a, b) => {
+          const trA = tierMaps.rank[(a.requiredTier || 'bronze').toLowerCase()] ?? 0;
+          const trB = tierMaps.rank[(b.requiredTier || 'bronze').toLowerCase()] ?? 0;
+          if (trB !== trA) return trB - trA;
+          return (a.pointCost || 0) - (b.pointCost || 0);
+        }));
+      }
+
+      const resMyR = await fetch(`${API_BASE}/rewards/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (resMyR.ok) {
+        const payload = await resMyR.json();
+        setMyRewards(Array.isArray(payload?.data) ? payload.data : []);
       }
     } catch (e) {
       console.error('Failed to load store data:', e);
     } finally {
       setLoading(false);
     }
-  }, [user, filterType, page]);
+  }, [user, filterType, page, tierMaps]);
 
   useEffect(() => { loadVouchers(); }, [loadVouchers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/loyalty/tiers`)
+      .then((r) => r.json())
+      .then((payload) => {
+        if (cancelled) return;
+        const list = Array.isArray(payload?.data) ? payload.data
+          : (typeof payload?.data === 'object' && Array.isArray(payload.data.tiers)) ? payload.data.tiers
+          : [];
+        setTiers(list.length > 0 ? list : FALLBACK_TIERS);
+      })
+      .catch(() => { if (!cancelled) setTiers(FALLBACK_TIERS); });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleRedeem = async (voucher) => {
     if (!user) return onOpenAuth();
@@ -344,9 +398,9 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const handleRedeemReward = async (reward) => {
     if (!user) return onOpenAuth();
     if (rewardLoading) return;
-    const reqTier = reward.requiredTier || 'bronze';
-    if ((TIER_RANK[user.tier] ?? 0) < (TIER_RANK[reqTier] ?? 0)) {
-      showToast(`Phần thưởng này yêu cầu hạng ${TIER_LABELS[reqTier]} trở lên.`, 'error');
+    const reqTier = (reward.requiredTier || 'bronze').toLowerCase();
+    if ((tierMaps.rank[(user.tier || 'bronze').toLowerCase()] ?? 0) < (tierMaps.rank[reqTier] ?? 0)) {
+      showToast(`Phần thưởng này yêu cầu hạng ${tierMaps.label[reqTier] || reqTier} trở lên.`, 'error');
       return;
     }
     if ((userPoints || 0) < (reward.pointCost || 0)) {
@@ -540,72 +594,131 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                     <span className="text-sm font-bold text-slate-700">Điểm tích lũy: <span className="text-emerald-600 text-lg">{userPoints}</span></span>
                   </div>
                   <div className="flex bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => {setFilterType('all'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'all' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Tất cả</button>
-                    <button onClick={() => {setFilterType('mine'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
-                    <button onClick={() => {setFilterType('redeemable'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeemable' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Đổi điểm</button>
+                    <button onClick={() => {setFilterType('redeem');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeem' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Quà vật lý</button>
+                    <button onClick={() => {setFilterType('redeemable');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeemable' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Voucher</button>
+                    <button onClick={() => {setFilterType('mine');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
                   </div>
                 </div>
 
-                {loading ? (
-                  <div className="text-center text-slate-400 py-16 font-medium">Đang tải ưu đãi...</div>
-                ) : vouchers.length === 0 ? (
-              <div className="text-center py-20">
-                <p className="text-slate-500 font-medium">Chưa có ưu đãi nào dành cho bạn lúc này.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-                {vouchers.map((voucher, i) => (
-                  <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} onRedeem={handleRedeem} redeeming={redeemingId === voucher._id} />
-                ))}
-              </div>
-            )}
-            
-            {!loading && totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 mt-8">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"/></svg>
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPage(p)}
-                      className={`w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${
-                        page === p ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7"/></svg>
-                </button>
-              </div>
-            )}
+                {filterType === 'redeem' && (
+                  <div>
+                    {loading ? (
+                      <div className="text-center text-slate-400 py-12 font-medium">Đang tải quà tặng...</div>
+                    ) : rewards.length === 0 ? (
+                      <div className="text-center py-20">
+                        <p className="text-slate-500 font-medium">Chưa có quà tặng vật lý nào lúc này.</p>
+                      </div>
+                    ) : (
+                      <div className="mb-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
+                          <div>
+                            <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
+                            <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                          {rewards.map((reward, i) => (
+                            <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} tierMaps={tierMaps} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-            {(filterType === 'all' || filterType === 'redeemable') && rewards.length > 0 && (
+                {filterType === 'redeemable' && (
+                  <div>
+                    {loading ? (
+                      <div className="text-center text-slate-400 py-12 font-medium">Đang tải ưu đãi...</div>
+                    ) : vouchers.length === 0 ? (
+                      <div className="text-center py-20">
+                        <p className="text-slate-500 font-medium">Chưa có voucher nào để đổi điểm lúc này.</p>
+                      </div>
+                    ) : (
+                      <div className="mb-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-xl shrink-0 border border-emerald-200/70">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Voucher</h3>
+                            <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các mã giảm giá dùng cho hóa đơn của bạn.</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                          {vouchers.map((voucher, i) => (
+                            <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} onRedeem={handleRedeem} redeeming={redeemingId === voucher._id} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+            {filterType === 'mine' && myRewards.length > 0 && (
               <div className="mt-12">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
-                    <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
+                    <h3 className="text-lg font-black text-slate-900">Phần Thưởng Đã Đổi</h3>
+                    <p className="text-xs text-slate-500 font-medium">Các phần quà vật lý bạn đã dùng điểm để đổi. Xuất trình mã tại quầy để nhận quà.</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {rewards.map((reward, i) => (
-                    <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} />
-                  ))}
+                  {myRewards.map(rd => {
+                    const snap = rd.rewardSnapshot || {};
+                    const cancelled = rd.status === 'cancelled';
+                    const received = rd.status === 'received';
+                    const sent = rd.status === 'sent';
+                    return (
+                      <div key={rd._id} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                          {snap.imageUrl ? (
+                            <img src={snap.imageUrl} alt={snap.name || 'Phần thưởng'} loading="lazy"
+                              className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-4xl">🎁</div>
+                          )}
+                          <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
+                            ⭐ {rd.pointsSpent} Điểm
+                          </div>
+                        </div>
+                        <div className="p-5 flex-1 flex flex-col">
+                          <h4 className="text-base font-bold text-slate-800 mb-1 line-clamp-1">{snap.name}</h4>
+                          <p className="text-[11px] text-slate-400 mb-3">Đổi ngày {formatDate(rd.createdAt)}</p>
+                          <div className={`rounded-lg px-3 py-2 border flex items-center justify-between mb-3 ${cancelled ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50 border-emerald-100'}`}>
+                            <span className="text-xs font-semibold text-slate-500">Mã đổi thưởng</span>
+                            <span className={`font-mono font-extrabold tracking-wider ${cancelled ? 'text-slate-400 line-through' : 'text-emerald-700'}`}>{rd.code}</span>
+                          </div>
+                          <div className="mt-auto flex items-center justify-between text-[11px] text-slate-400 mb-3">
+                            {cancelled
+                              ? <span className="text-rose-500 font-bold">Đã hủy</span>
+                              : received
+                                ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
+                                : sent
+                                  ? <span className="text-blue-600 font-bold">Đã gửi · Chờ xác nhận nhận quà</span>
+                                  : <span className="text-emerald-600 font-bold">Chờ gửi quà</span>}
+                          </div>
+                          {!cancelled && !received && (
+                          <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
+                            className="mt-auto w-full py-2.5 rounded-xl font-bold text-sm border bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 transition-all">
+                            Copy mã đổi thưởng
+                          </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+            )}
+
+            {filterType === 'mine' && myRewards.length === 0 && (
+              <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl shadow-sm">
+                <div className="text-4xl mb-4">🎁</div>
+                <p className="text-slate-500 font-medium">Bạn chưa đổi phần quà vật lý nào.</p>
+                <p className="text-xs text-slate-400 mt-1">Chuyển sang tab "Quà vật lý" để đổi điểm lấy quà.</p>
               </div>
             )}
           </div>

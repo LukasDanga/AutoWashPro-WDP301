@@ -109,6 +109,8 @@ const bookingSchema = new mongoose.Schema(
       default: 'none',
     },
     refundAmount: { type: Number, default: 0 },
+    // Đã tặng 1 lượt quay vòng quay may mắn khi hoàn thành đơn và thanh toán đủ
+    spinEarned: { type: Boolean, default: false },
     paymentMethod: {
       type: String,
       enum: ['cash', 'momo', 'vnpay', 'bank', 'sepay', 'wallet'],

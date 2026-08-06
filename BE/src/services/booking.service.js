@@ -652,6 +652,7 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
         .populate('branchId', 'name address phone')
         .populate('packageId', 'name price duration subServices')
         .populate('vehicleId', 'licensePlate vehicleType brand color')
+        .populate('slotPackId', 'packCode packageName totalSlots usedSlots remainingSlots status')
     : null;
 
   // id có thể là recurringGroupId (UUID) khi mở chi tiết từ danh sách đã gộp lịch định kỳ
@@ -659,9 +660,10 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
     booking = await Booking.findOne({ recurringGroupId: String(id) })
       .populate('userId', 'name email phone tier walletBalance')
       .populate('branchId', 'name address phone')
-      .populate('packageId', 'name price duration subServices')
-      .populate('vehicleId', 'licensePlate vehicleType brand color');
-  }
+.populate('packageId', 'name price duration subServices')
+      .populate('vehicleId', 'licensePlate vehicleType brand color')
+      .populate('slotPackId', 'packCode packageName totalSlots usedSlots remainingSlots status')
+}
   if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404, code: 'BOOKING_NOT_FOUND' });
   // H-5: nếu booking đã soft-delete, customer/manager không truy cập được, admin thì có (?includeDeleted=true qua getAllBookings)
   if (booking.isDeleted && userRole !== 'admin') {
@@ -676,6 +678,14 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
       throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
+
+  // Loyalty points earned for this booking (awarded on completion) — attach for UI display
+  const earnedPoints = await PointHistory.aggregate([
+    { $match: { referenceId: booking._id, type: 'earned', isDeleted: { $ne: true } } },
+    { $group: { _id: null, total: { $sum: '$points' } } },
+  ]);
+  booking.pointsEarned = earnedPoints[0]?.total || 0;
+
   return booking;
 };
 
@@ -957,6 +967,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
               $inc: { spinCount: 1 },
             }
           ).catch(() => {});
+          await Booking.updateOne({ _id: currentBooking._id }, { $set: { spinEarned: true } }).catch(() => {});
           sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
         }
 

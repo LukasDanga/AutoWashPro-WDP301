@@ -5,6 +5,7 @@ import {
   CheckCircle, XCircle, Star, ChatText,
   UserCircle, Buildings, CaretLeft, CaretRight,
 } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -43,6 +44,7 @@ function isSameDay(a, b) {
 }
 
 export default function AdminActivity() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -149,7 +151,13 @@ export default function AdminActivity() {
                               {b.packageId?.name ? ` — ${b.packageId.name}` : ''}
                             </p>
                           </div>
-                          <span className="text-[10px] text-slate-400 shrink-0">{fmtTime(ev.ts)}</span>
+                          <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-2">
+                            <button onClick={() => navigate(`/admin/bookings?search=${encodeURIComponent(b.bookingCode || b._id)}`)}
+                              className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 underline shrink-0">
+                              Xem đơn
+                            </button>
+                            {fmtTime(ev.ts)}
+                          </span>
                         </div>
                         {(ev.type === 'feedback' && b.feedback) && (
                           <p className="text-xs text-slate-500 italic mt-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">

@@ -151,6 +151,15 @@ export default function RefundRequests({ detailPath = '/admin/payments/refunds' 
     setPage(1);
   };
 
+  const goToBooking = (r) => {
+    const b = r.bookingId || {};
+    const bookingId = b._id || b;
+    if (!bookingId) return;
+    const isAdmin = detailPath.startsWith('/admin');
+    const roleBase = isAdmin ? '/admin' : '/manager';
+    navigate(`${roleBase}/bookings?search=${encodeURIComponent(b.bookingCode || bookingId)}`);
+  };
+
   const handleOpenDetail = (r) => {
     if (r._id && !viewedRequests.includes(r._id)) {
       const next = [...viewedRequests, r._id];
@@ -325,6 +334,7 @@ export default function RefundRequests({ detailPath = '/admin/payments/refunds' 
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3.5">Khách hàng</th>
+                  <th className="px-4 py-3.5">Mã đơn</th>
                   <th className="px-4 py-3.5">Lý do</th>
                   <th className="px-4 py-3.5 text-right">Số tiền</th>
                   <th className="px-4 py-3.5">Trạng thái</th>
@@ -357,6 +367,14 @@ export default function RefundRequests({ detailPath = '/admin/payments/refunds' 
                         </div>
                         <div className="text-xs text-slate-400">{r.userId?.email || r.userId?.phone || ''}</div>
                       </td>
+                      <td className="px-4 py-3.5">
+                        <span className="font-mono text-xs font-semibold text-slate-700">
+                          {booking.bookingCode || ('AWP-' + String(booking._id || booking).slice(-8).toUpperCase())}
+                        </span>
+                        {booking.packageName && (
+                          <div className="text-xs text-slate-400 truncate max-w-[160px]">{booking.packageName}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5 max-w-xs truncate" title={r.reason}>{r.reason}</td>
                       <td className="px-4 py-3.5 text-right font-bold text-emerald-600">{formatCurrency(refundAmount)}</td>
                       <td className="px-4 py-3.5">
@@ -365,6 +383,13 @@ export default function RefundRequests({ detailPath = '/admin/payments/refunds' 
                       <td className="px-4 py-3.5 text-xs text-slate-500">{formatDateTime(r.createdAt)}</td>
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => goToBooking(r)}
+                            title="Xem đơn đặt"
+                            className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                          >
+                            Xem đơn
+                          </button>
                           <button
                             onClick={() => handleOpenDetail(r)}
                             title="Xem chi tiết"

@@ -24,6 +24,15 @@ export default function RefundDetailPage({ basePath = '/admin/payments?tab=refun
   const [reviewNote, setReviewNote] = useState('');
   const [reviewing, setReviewing] = useState(false);
 
+  const goToBooking = () => {
+    const b = request?.bookingId || {};
+    const bookingId = b._id || b;
+    if (!bookingId) return;
+    const isAdmin = basePath.startsWith('/admin');
+    const roleBase = isAdmin ? '/admin' : '/manager';
+    navigate(`${roleBase}/bookings?search=${encodeURIComponent(b.bookingCode || bookingId)}`);
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -123,10 +132,20 @@ export default function RefundDetailPage({ basePath = '/admin/payments?tab=refun
                 <span className="font-semibold text-slate-700 mt-0.5">{request.userId?.email || request.userId?.phone || '—'}</span>
               </div>
               <div>
+                <span className="block text-xs text-slate-400 font-medium">Mã đơn</span>
+                <span className="font-semibold text-slate-700 font-mono mt-0.5">
+                  {booking.bookingCode || ('AWP-' + String(booking._id || '—').slice(-8).toUpperCase())}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs text-slate-400 font-medium">Gói dịch vụ</span>
+                <span className="font-semibold text-slate-700 mt-0.5">{booking.packageId?.name || booking.packageName || '—'}</span>
+              </div>
+              <div>
                 <span className="block text-xs text-slate-400 font-medium">Chi nhánh</span>
                 <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
                   <Buildings size={14} className="text-slate-400" />
-                  {booking.branchId?.name || '—'}
+                  {booking.branchId?.name || booking.branchName || '—'}
                 </span>
               </div>
               <div>
@@ -134,6 +153,14 @@ export default function RefundDetailPage({ basePath = '/admin/payments?tab=refun
                 <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
                   <CalendarBlank size={14} className="text-slate-400" />
                   {booking.bookingDate ? formatDateTime(booking.bookingDate) : '—'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs text-slate-400 font-medium">Xe</span>
+                <span className="font-semibold text-slate-700 mt-0.5">
+                  {booking.vehicleId
+                    ? `${booking.vehicleId.licensePlate || ''}${booking.vehicleId.brand ? ` · ${booking.vehicleId.brand}${booking.vehicleId.model ? ' ' + booking.vehicleId.model : ''}` : ''}`.trim() || '—'
+                    : '—'}
                 </span>
               </div>
               <div>
@@ -162,6 +189,17 @@ export default function RefundDetailPage({ basePath = '/admin/payments?tab=refun
                   }
                 </span>
               </div>
+              <div>
+                <span className="block text-xs text-slate-400 font-medium">Phương thức thanh toán</span>
+                <span className="font-semibold text-slate-700 uppercase mt-0.5">{booking.paymentMethod || '—'}</span>
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <button onClick={goToBooking}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer">
+                Xem đơn đặt này
+              </button>
             </div>
 
             <div>

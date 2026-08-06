@@ -74,6 +74,85 @@ exports.getUserRewards = async (userId) => {
 };
 
 /**
+ * Lấy danh sách lượt đổi thưởng (admin/manager) kèm lọc & phân trang
+ */
+exports.getRedemptions = async (query = {}) => {
+  const { page = 1, limit = 10, search, status, branchId } = query;
+  const filter = {};
+  if (status) filter.status = status;
+  if (branchId) filter.branchId = branchId;
+  if (search) {
+    filter.$or = [
+      { code: { $regex: search, $options: 'i' } },
+      { 'rewardSnapshot.name': { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    Redemption.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .populate('user', 'name email phone tier')
+      .populate('sentBy', 'name email')
+      .populate('branchId', 'name address'),
+    Redemption.countDocuments(filter),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+  };
+};
+
+/**
+ * Nhân viên/manager xác nhận đã gửi quà cho khách
+ */
+exports.markRedemptionSent = async (redemptionId, { sentBy, branchId }) => {
+  const redemption = await Redemption.findById(redemptionId);
+  if (!redemption) throw Object.assign(new Error('Redemption not found'), { statusCode: 404 });
+  if (redemption.status === 'cancelled') {
+    throw Object.assign(new Error('Lượt đổi thưởng đã bị hủy'), { statusCode: 400 });
+  }
+  if (redemption.status === 'sent') {
+    return redemption;
+  }
+  redemption.status = 'sent';
+  redemption.sentAt = new Date();
+  redemption.sentBy = sentBy;
+  if (branchId) redemption.branchId = branchId;
+  await redemption.save();
+  return redemption;
+};
+
+/**
+ * Manager/admin nh?p m� d?i thu?ng c?a kh�ch ?? x�c nh?n da nh?n qu�
+ */
+exports.markRedemptionReceived = async (redemptionId, { code }) => {
+  const redemption = await Redemption.findById(redemptionId);
+  if (!redemption) throw Object.assign(new Error('Redemption not found'), { statusCode: 404 });
+  if (redemption.status !== 'sent') {
+    throw Object.assign(new Error('Ch? x?c nh?n nh?n qu? khi qu? ?a du?c g?i cho kh�ch'), { statusCode: 400 });
+  }
+  const entered = String(code || '').trim().toUpperCase();
+  if (!entered || entered !== redemption.code) {
+    throw Object.assign(new Error('M? d?i thu?ng kh�ng h?p. Vui l?ng ki?m tra l?i'), { statusCode: 400 });
+  }
+  redemption.status = 'received';
+  redemption.receivedAt = new Date();
+  await redemption.save();
+  return redemption;
+};
+
+/**
  * Đổi điểm lấy phần thưởng
  */
 exports.redeemReward = async (rewardId, userId) => {

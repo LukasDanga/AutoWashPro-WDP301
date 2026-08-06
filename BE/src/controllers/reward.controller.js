@@ -43,3 +43,22 @@ exports.redeemReward = catchAsync(async (req, res) => {
   const result = await rewardService.redeemReward(rewardId, req.userId);
   success(res, result, 'Đổi điểm lấy phần thưởng thành công', 201);
 });
+
+exports.getRedemptions = catchAsync(async (req, res) => {
+  const result = await rewardService.getRedemptions(req.query);
+  success(res, result.data, 'Đã lấy danh sách lượt đổi thưởng', 200, result.pagination);
+});
+
+exports.markRedemptionSent = catchAsync(async (req, res) => {
+  const branchId = req.body?.branchId || req.user?.branchId;
+  const redemption = await rewardService.markRedemptionSent(req.params.id, {
+    sentBy: req.userId,
+    branchId,
+  });
+  success(res, redemption, 'Đã gửi quà cho khách hàng');
+});
+
+exports.markRedemptionReceived = catchAsync(async (req, res) => {
+  const redemption = await rewardService.markRedemptionReceived(req.params.id, { code: req.body?.code });
+  success(res, redemption, 'Da x�c nh?n kh�ch da nh?n qu�');
+});

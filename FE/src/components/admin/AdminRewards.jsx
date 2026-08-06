@@ -16,6 +16,8 @@ import {
   PencilSimple,
   ClockCounterClockwise,
   Gift,
+  Package,
+  PaperPlaneTilt,
   Coin,
   Trophy,
   ArrowUp,
@@ -24,6 +26,7 @@ import {
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
+import { RewardsConfigTab, RedemptionsTab } from '@/components/admin/AdminRewardsManagement';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -1901,6 +1904,8 @@ export default function AdminRewards() {
           { key: 'history',   label: 'Lịch sử điểm thưởng', icon: Trophy },
           { key: 'lifetime',  label: 'Điểm tích lũy',        icon: Star },
           { key: 'list',      label: 'Danh sách Voucher', icon: Tag },
+          { key: 'gifts',     label: 'Quà tặng vật lý',  icon: Package },
+          { key: 'redemptions', label: 'Trao quà',        icon: PaperPlaneTilt },
           { key: 'wheel',     label: 'Quản lý Vòng Quay', icon: Gift },
           { key: 'report',    label: 'Báo cáo sử dụng', icon: ClockCounterClockwise },
         ].map(tab => {
@@ -2051,6 +2056,10 @@ export default function AdminRewards() {
         <PointHistoryTab branches={branches} />
       ) : activeTab === 'lifetime' ? (
         <LifetimePointsTab branches={branches} />
+      ) : activeTab === 'gifts' ? (
+        <RewardsConfigTab isManager={false} />
+      ) : activeTab === 'redemptions' ? (
+        <RedemptionsTab isManager={false} />
       ) : activeTab === 'wheel' ? (
         <WheelManagementTab />
       ) : activeTab === 'report' ? (

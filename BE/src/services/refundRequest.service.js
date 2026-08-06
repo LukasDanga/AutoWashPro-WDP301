@@ -148,7 +148,7 @@ exports.getAll = async (filters = {}, userRole, userId) => {
     .populate({
       path: 'bookingId',
       populate: { path: 'branchId', select: 'name' },
-      select: 'bookingDate startTime status paymentStatus finalPrice depositAmount deposit depositPaid branchId',
+      select: 'bookingCode packageName packageId bookingDate startTime status paymentStatus finalPrice depositAmount deposit depositPaid paymentMethod branchId',
     })
     .populate('userId', 'name email phone')
     .populate('reviewedBy', 'name')
@@ -180,7 +180,14 @@ const assertManagerOwnsRequest = async (request, userId) => {
 
 exports.getById = async (id, userRole, userId) => {
   const request = await RefundRequest.findById(id)
-    .populate({ path: 'bookingId', populate: { path: 'branchId', select: 'name' } })
+    .populate({
+      path: 'bookingId',
+      populate: [
+        { path: 'branchId', select: 'name' },
+        { path: 'packageId', select: 'name' },
+        { path: 'vehicleId', select: 'licensePlate brand model color' },
+      ],
+    })
     .populate('userId', 'name email phone')
     .populate('reviewedBy', 'name');
   if (!request) throw Object.assign(new Error('Refund request not found'), { statusCode: 404, code: 'NOT_FOUND' });

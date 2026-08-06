@@ -5,6 +5,7 @@ import { confirmDialog } from '@/lib/confirm';
 import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, Buildings, Trash, MagnifyingGlass, Calendar, Spinner } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import useSSE from '@/hooks/useSSE';
+import { useNavigate } from 'react-router-dom';
 
 function api(path, opts = {}) {
   return fetch(`${getApiBaseUrl()}${path}`, {
@@ -102,6 +103,7 @@ const STAR_FILTERS = [
 const PAGE_SIZE = 9;
 
 export default function AdminReviews() {
+  const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -387,6 +389,9 @@ export default function AdminReviews() {
                     <p className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md flex items-center gap-1">
                       <Buildings size={10} /> {fb.branchId?.name || '—'}
                     </p>
+                    <p className="text-xs font-medium text-fuchsia-600 bg-fuchsia-50 px-2 py-1 rounded-md">
+                      Mã đơn: {fb.bookingCode || '—'}
+                    </p>
                   </div>
                   <div className="text-sm text-slate-700 italic bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 min-h-[52px]">
                     {fb.feedback ? `"${fb.feedback}"` : <span className="text-slate-400 not-italic">Không có bình luận</span>}
@@ -402,6 +407,11 @@ export default function AdminReviews() {
                   )}
                 </div>
                 <div className="px-5 pb-4 flex items-center gap-2">
+                  <button onClick={() => navigate(`/admin/bookings?search=${encodeURIComponent(fb.bookingCode || fb._id)}`)}
+                    className="rounded-xl border border-slate-200 py-2 px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
+                    <MagnifyingGlass size={13} />
+                    Xem đơn
+                  </button>
                   <button onClick={() => setReplyTarget(fb)}
                     className="flex-1 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
                     <PaperPlaneTilt size={13} />

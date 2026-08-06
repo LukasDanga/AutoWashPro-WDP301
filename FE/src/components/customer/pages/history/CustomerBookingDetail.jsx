@@ -22,6 +22,10 @@ const STATUS_MAP = {
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
 function formatDate(d) { return new Date(d).toLocaleDateString('vi-VN'); }
+const VEHICLE_TYPE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', moto: 'Xe máy' };
+function vehicleTypeLabel(t) { return VEHICLE_TYPE_LABELS[t] || ''; }
+const PAYMENT_METHOD_LABELS = { wallet: 'Ví AutoWash', cash: 'Tiền mặt', vnpay: 'VNPay', bank: 'Chuyển khoản', sepay: 'Chuyển khoản', momo: 'MoMo' };
+function paymentMethodLabel(m) { return PAYMENT_METHOD_LABELS[m] || (m || '—'); }
 function formatDateTime(d) { return new Date(d).toLocaleDateString('vi-VN') + ' ' + new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
 
 // Tìm thông tin đầy đủ (price/duration/isOptional) của sub-service trong catalog, có fallback từ selectedSubServices
@@ -801,6 +805,30 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
     ? 'Đã trả 100%'
     : (isDepositPaid ? `Đã cọc ${formatCurrency(paidVal)}` : 'Chưa trả');
 
+  // Refund request info (đối chiếu từ danh sách yêu cầu hoàn tiền của khách)
+  const currentRefundReq = findRefundRequest(b._id || b.id);
+  const refundDisplay = (() => {
+    if (currentRefundReq) return { sourceRefReq: true, status: currentRefundReq.status, reason: currentRefundReq.reason, reviewedAt: currentRefundReq.reviewedAt, reviewNote: currentRefundReq.reviewNote };
+    if (b.refundStatus && b.refundStatus !== 'none') return { sourceRefReq: false, status: b.refundStatus, reason: '', reviewedAt: (b.paidAt || b.updatedAt), reviewNote: '' };
+    return null;
+  })();
+  const refundAmountVal = (currentRefundReq?.status === 'approved' || (b.refundStatus === 'completed' && b.refundAmount > 0)) ? (b.refundAmount || 0) : 0;
+
+  // Slot pack info (booking type = dùng lượt gói slot)
+  const slotPack = b.bookingType === 'slot_pack_usage' ? (b.slotPackId || null) : null;
+  // Reward info (voucher sử dụng, điểm thưởng tích lũy, lượt quay may mắn)
+  const voucherUsed = b.voucherCode || '';
+  const pointsEarned = Number(b.pointsEarned) || 0;
+  const spinEarned = !!b.spinEarned;
+  const vehicleInfo = {
+    plate: b.vehicleId?.licensePlate || b.vehiclePlate || '',
+    brand: b.vehicleId?.brand || '',
+    model: b.vehicleId?.model || '',
+    color: b.vehicleId?.color || '',
+    type: b.vehicleId?.vehicleType || '',
+  };
+  const vehicleTypeText = vehicleTypeLabel(vehicleInfo.type);
+
   // Sub-services list
   const pkgIdStr = String(b.packageId?._id || b.packageId?.id || b.packageId || '');
   const pkgFromList = (packagesList || []).find(p => String(p._id || p.id) === pkgIdStr);
@@ -960,14 +988,76 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
                 {b.vehicleId?.licensePlate || b.vehiclePlate || '—'}
               </span>
             </div>
+            {((vehicleInfo.brand || vehicleInfo.model || vehicleInfo.color || vehicleTypeText)) && (
+              <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">🚗 Xe:</span>
+                <span className="text-slate-900 font-semibold text-right max-w-[70%] flex flex-wrap items-center justify-end gap-1">
+                  {vehicleTypeText && <span className="bg-slate-100 border border-slate-200 text-slate-700 text-[11px] px-2 py-0.5 rounded-md">{vehicleTypeText}</span>}
+                  {(vehicleInfo.brand || vehicleInfo.model) && (<span className="truncate">{[vehicleInfo.brand, vehicleInfo.model].filter(Boolean).join(' ')}</span>)}
+                  {vehicleInfo.color && <span className="inline-block w-3 h-3 rounded-full border border-slate-300" style={{ backgroundColor: vehicleInfo.color }} title={vehicleInfo.color} />}
+                  {vehicleInfo.color && <span className="text-[11px] text-slate-500">{vehicleInfo.color}</span>}
+                </span>
+              </div>
+            )}
+            {slotPack && (
+              <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">🎟️ Gói slot:</span>
+                <span className="text-slate-900 font-bold text-right">{slotPack.packCode || slotPack.packageName || 'Gói slot'}</span>
+              </div>
+            )}
+            {slotPack && (
+              <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">🔁 Lượt còn lại:</span>
+                <span className={`font-bold ${slotPack.remainingSlots > 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  {slotPack.remainingSlots}/{slotPack.totalSlots}
+                  <span className="ml-1.5 text-[11px] font-semibold text-slate-400">(đã dùng {slotPack.usedSlots || 0})</span>
+                </span>
+              </div>
+            )}
             <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">📅 Ngày hẹn:</span>
               <span className="text-slate-900 font-bold">{formatDate(b.bookingDate)}</span>
             </div>
-            <div className="flex justify-between items-center py-1.5">
+            <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">⏰ Khung giờ:</span>
               <span className="text-emerald-700 font-extrabold text-sm sm:text-base">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span>
             </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+              <span className="text-slate-500 font-medium">💳 Phương thức thanh toán:</span>
+              <span className="text-slate-900 font-bold">{paymentMethodLabel(b.paymentMethod)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+              <span className="text-slate-500 font-medium">🗓️ Ngày đặt:</span>
+              <span className="text-slate-900 font-bold">{formatDateTime(b.createdAt)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5">
+              <span className="text-slate-500 font-medium">🔄 Ngày cập nhật:</span>
+              <span className="text-slate-900 font-bold">{formatDateTime(b.updatedAt)}</span>
+            </div>
+            {voucherUsed && (
+              <div className="flex justify-between items-center py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">🎟️ Voucher sử dụng:</span>
+                <span className="text-fuchsia-700 font-bold">{voucherUsed}</span>
+              </div>
+            )}
+            {pointsEarned > 0 && (
+              <div className="flex justify-between items-center py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">💰 Điểm thưởng tích lũy:</span>
+                <span className="text-emerald-700 font-bold">+{pointsEarned.toLocaleString('vi-VN')} điểm</span>
+              </div>
+            )}
+            {spinEarned && (
+              <div className="flex justify-between items-center py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">🎡 Vòng quay may mắn:</span>
+                <span className="text-amber-600 font-bold">Đã tặng 1 lượt quay</span>
+              </div>
+            )}
+            {b.note && (
+              <div className="flex justify-between items-start py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">📝 Ghi chú:</span>
+                <span className="text-slate-800 font-medium text-right max-w-[65%] leading-relaxed">{b.note}</span>
+              </div>
+            )}
           </div>
 
           {/* Financial summary */}
@@ -1031,6 +1121,64 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
               </span>
             </div>
           </div>
+
+          {/* Refund request status */}
+          {refundDisplay && (
+            <div className={`rounded-2xl border p-5 space-y-3 text-xs sm:text-sm ${
+              refundDisplay.status === 'approved' || refundDisplay.status === 'completed'
+                ? 'bg-emerald-50/70 border-emerald-200'
+                : refundDisplay.status === 'rejected'
+                  ? 'bg-red-50/70 border-red-200'
+                  : 'bg-amber-50/70 border-amber-200'
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  💸 Yêu cầu hoàn tiền
+                </span>
+                {(() => {
+                  const s = refundDisplay.status;
+                  const map = {
+                    pending:    { label: '⏳ Đang chờ xử lý', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
+                    approved:   { label: '✅ Đã hoàn tiền', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+                    completed:  { label: '✅ Đã hoàn tiền', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+                    rejected:   { label: '❌ Bị từ chối', cls: 'bg-red-100 text-red-700 border-red-300' },
+                  };
+                  const st = map[s] || { label: s, cls: 'bg-slate-100 text-slate-600 border-slate-300' };
+                  return (
+                    <span className={`px-3 py-1 rounded-full border text-[11px] font-bold whitespace-nowrap ${st.cls}`}>{st.label}</span>
+                  );
+                })()}
+              </div>
+
+              {refundDisplay.reason && (
+                <div className="flex items-start gap-2">
+                  <span className="text-slate-500 font-medium shrink-0">Lý do:</span>
+                  <span className="text-slate-800 font-medium leading-relaxed">{refundDisplay.reason}</span>
+                </div>
+              )}
+
+              {refundAmountVal > 0 && (
+                <div className="flex items-center justify-between bg-white/80 rounded-xl px-3.5 py-2.5 border border-emerald-200/80">
+                  <span className="text-slate-600 font-medium">Số tiền đã hoàn:</span>
+                  <span className="font-black text-emerald-600">{formatCurrency(refundAmountVal)}</span>
+                </div>
+              )}
+
+              {refundDisplay.status === 'rejected' && refundDisplay.reviewNote && (
+                <div className="flex items-start gap-2">
+                  <span className="text-slate-500 font-medium shrink-0">Ghi chú xử lý:</span>
+                  <span className="text-red-700 font-medium leading-relaxed">{refundDisplay.reviewNote}</span>
+                </div>
+              )}
+
+              {refundDisplay.reviewedAt && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Thời điểm xử lý:</span>
+                  <span className="text-slate-700 font-semibold">{formatDateTime(refundDisplay.reviewedAt)}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Services list / edit */}
           <div className="pt-3 border-t border-slate-100 space-y-3">

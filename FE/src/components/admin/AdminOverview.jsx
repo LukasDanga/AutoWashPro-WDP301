@@ -23,6 +23,7 @@ import {
 } from 'recharts';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 import TierBadge from '@/components/ui/TierBadge';
 import useSSE from '@/hooks/useSSE';
 
@@ -117,6 +118,10 @@ function CustomTooltip({ active, payload, label, currency }) {
 }
 
 export default function AdminOverview() {
+  const navigate = useNavigate();
+  const goToBooking = useCallback((booking) => {
+    navigate(`/admin/bookings?search=${encodeURIComponent(booking.bookingCode || booking._id)}`);
+  }, [navigate]);
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
   const [branches, setBranches] = useState([]);
@@ -585,15 +590,18 @@ export default function AdminOverview() {
                   <th className="py-2 pr-4">Thời gian</th>
                   <th className="py-2 pr-4">Trạng thái</th>
                   <th className="py-2 text-right">Tiền</th>
+                  <th className="py-2 pl-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {bookings.map((b) => {
                   const sm = STATUS_META[b.status] || STATUS_META.pending;
+                  const sourceCode = b.bookingCode || `AWP-${String(b._id).slice(-8).toUpperCase()}`;
                   return (
                     <tr key={b._id} className="hover:bg-slate-50/50">
                       <td className="py-3 pr-4">
                         <span className="font-medium text-slate-700">{b.userId?.name ?? '—'}</span>
+                        <p className="text-[11px] font-mono text-slate-400 mt-0.5">{sourceCode}</p>
                       </td>
                       <td className="py-3 pr-4 text-slate-600">{b.packageId?.name ?? '—'}</td>
                       <td className="py-3 pr-4 text-slate-600">{b.branchId?.name ?? '—'}</td>
@@ -606,6 +614,12 @@ export default function AdminOverview() {
                       </td>
                       <td className="py-3 text-right font-medium text-slate-700">
                         {b.finalPrice ? fmtCurrency(b.finalPrice) : '—'}
+                      </td>
+                      <td className="py-3 pl-3 text-right">
+                        <button onClick={() => goToBooking(b)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                          Xem thêm
+                        </button>
                       </td>
                     </tr>
                   );

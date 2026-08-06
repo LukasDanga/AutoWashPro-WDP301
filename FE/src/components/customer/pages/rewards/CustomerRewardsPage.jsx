@@ -185,8 +185,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     } catch (e) { }
   };
 
-  const handleRedeem = async (templateId) => {
-    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
+  const handleRedeem = async (templateId) => {    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
     setRedeemLoading(true);
     try {
       const res = await api('/vouchers/redeem-points', {
@@ -407,6 +406,8 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                 {myRewards.map(rd => {
                   const snap = rd.rewardSnapshot || {};
                   const cancelled = rd.status === 'cancelled';
+                  const received = rd.status === 'received';
+                  const sent = rd.status === 'sent';
                   return (
                     <div key={rd._id} className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm">
                       <div className="flex items-center gap-3 mb-3">
@@ -428,12 +429,18 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                         <span className="flex items-center gap-1"><Coins weight="fill" size={12} /> {formatCurrency(rd.pointsSpent)} điểm</span>
                         {cancelled
                           ? <span className="text-rose-500 font-bold">Đã hủy</span>
-                          : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
+                          : received
+                            ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
+                            : sent
+                              ? <span className="text-blue-600 font-bold">Đã gửi · Chờ xác nhận nhận quà</span>
+                              : <span className="text-emerald-600 font-bold">Chờ gửi quà</span>}
                       </div>
-                      <button onClick={() => { navigator.clipboard.writeText(rd.code); }}
-                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all">
+                      {!cancelled && !received && (
+                      <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
+                        className="w-full py-2.5 rounded-lg text-sm font-bold border bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 transition-all">
                         Copy mã đổi thưởng
                       </button>
+                      )}
                     </div>
                   );
                 })}
