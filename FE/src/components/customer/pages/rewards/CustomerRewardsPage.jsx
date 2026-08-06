@@ -435,10 +435,12 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                               ? <span className="text-blue-600 font-bold">Đã gửi · Chờ xác nhận nhận quà</span>
                               : <span className="text-emerald-600 font-bold">Chờ gửi quà</span>}
                       </div>
+                      {!cancelled && !received && (
                       <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
-                        className={`w-full py-2.5 rounded-lg text-sm font-bold border transition-all ${cancelled ? 'bg-slate-50 text-slate-400 border-slate-200' : received ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'}`}>
+                        className="w-full py-2.5 rounded-lg text-sm font-bold border bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 transition-all">
                         Copy mã đổi thưởng
                       </button>
+                      )}
                     </div>
                   );
                 })}

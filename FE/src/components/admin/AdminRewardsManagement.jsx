@@ -58,7 +58,7 @@ function formatDate(dateString) {
 
 const inp = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors';
 
-const TIER_OPTIONS = [
+const FALLBACK_TIER_OPTIONS = [
   { id: 'bronze', name: 'Đồng' },
   { id: 'silver', name: 'Bạc' },
   { id: 'gold', name: 'Vàng' },
@@ -78,7 +78,7 @@ function StatusBadge({ status }) {
 }
 
 /* ═══ Cấu hình quà tặng vật lý (Reward CRUD) ═══ */
-function RewardModal({ initial, onSave, onClose, saving }) {
+function RewardModal({ initial, onSave, onClose, saving, tierOptions = FALLBACK_TIER_OPTIONS }) {
   const [form, setForm] = useState(initial || {
     name: '', description: '', imageUrl: '', pointCost: '', stock: '',
     requiredTier: 'bronze', status: 'active', sortOrder: 0,
@@ -152,7 +152,7 @@ function RewardModal({ initial, onSave, onClose, saving }) {
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Hạng tối thiểu</label>
               <select className={inp} value={form.requiredTier || 'bronze'} onChange={(e) => set('requiredTier', e.target.value)}>
-                {TIER_OPTIONS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {tierOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
             <div>
@@ -186,7 +186,25 @@ export function RewardsConfigTab({ isManager = false }) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
+  const [tierOptions, setTierOptions] = useState(FALLBACK_TIER_OPTIONS);
   const notify = (msg, type = 'success') => showToast(msg, type);
+
+  useEffect(() => {
+    let cancelled = false;
+    api('/loyalty/tiers')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const payload = await res.json();
+        const list = Array.isArray(payload?.data) ? payload.data
+          : (typeof payload?.data === 'object' && Array.isArray(payload.data.tiers)) ? payload.data.tiers
+          : [];
+        if (!cancelled && list.length > 0) {
+          setTierOptions(list.map((t) => ({ id: t.id, name: t.name || t.id })));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -335,8 +353,8 @@ export function RewardsConfigTab({ isManager = false }) {
         </div>
       )}
 
-      {modal === 'create' && <RewardModal initial={null} onSave={handleSave} onClose={() => setModal(null)} saving={saving} />}
-      {modal === 'edit' && selected && <RewardModal initial={selected} onSave={handleSave} onClose={() => setModal(null)} saving={saving} />}
+{modal === 'create' && <RewardModal initial={null} onSave={handleSave} onClose={() => setModal(null)} saving={saving} tierOptions={tierOptions} />}
+{modal === 'edit' && selected && <RewardModal initial={selected} onSave={handleSave} onClose={() => setModal(null)} saving={saving} tierOptions={tierOptions} />}
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
