@@ -576,74 +576,37 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                     <span className="text-sm font-bold text-slate-700">Điểm tích lũy: <span className="text-emerald-600 text-lg">{userPoints}</span></span>
                   </div>
                   <div className="flex bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => {setFilterType('all'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'all' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Tất cả</button>
-                    <button onClick={() => {setFilterType('mine'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
-                    <button onClick={() => {setFilterType('redeemable'); setPage(1);}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeemable' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Đổi điểm</button>
+                    <button onClick={() => {setFilterType('all');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'all' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Quà vật lý</button>
+                    <button onClick={() => {setFilterType('mine');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
                   </div>
                 </div>
 
-                {loading ? (
-                  <div className="text-center text-slate-400 py-16 font-medium">Đang tải ưu đãi...</div>
-                ) : vouchers.length === 0 ? (
-              <div className="text-center py-20">
-                <p className="text-slate-500 font-medium">Chưa có ưu đãi nào dành cho bạn lúc này.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-                {vouchers.map((voucher, i) => (
-                  <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} onRedeem={handleRedeem} redeeming={redeemingId === voucher._id} />
-                ))}
-              </div>
-            )}
-            
-            {!loading && totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 mt-8">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"/></svg>
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPage(p)}
-                      className={`w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${
-                        page === p ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7"/></svg>
-                </button>
-              </div>
-            )}
-
-            {(filterType === 'all' || filterType === 'redeemable') && rewards.length > 0 && (
-              <div className="mt-12">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
+                {filterType === 'all' && (
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
-                    <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
+                    {loading ? (
+                      <div className="text-center text-slate-400 py-12 font-medium">Đang tải quà tặng...</div>
+                    ) : rewards.length === 0 ? (
+                      <div className="text-center py-20">
+                        <p className="text-slate-500 font-medium">Chưa có quà tặng vật lý nào lúc này.</p>
+                      </div>
+                    ) : (
+                      <div className="mb-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
+                          <div>
+                            <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
+                            <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                          {rewards.map((reward, i) => (
+                            <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {rewards.map((reward, i) => (
-                    <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} />
-                  ))}
-                </div>
-              </div>
-            )}
+                )}
 
             {filterType === 'mine' && myRewards.length > 0 && (
               <div className="mt-12">
@@ -705,6 +668,14 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {filterType === 'mine' && myRewards.length === 0 && (
+              <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl shadow-sm">
+                <div className="text-4xl mb-4">🎁</div>
+                <p className="text-slate-500 font-medium">Bạn chưa đổi phần quà vật lý nào.</p>
+                <p className="text-xs text-slate-400 mt-1">Chuyển sang tab "Quà vật lý" để đổi điểm lấy quà.</p>
               </div>
             )}
           </div>
