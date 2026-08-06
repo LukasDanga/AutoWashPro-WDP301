@@ -106,7 +106,7 @@ export default function VouchersIndexScreen() {
           )}
         </View>
         
-        <AppText variant="h3" style={styles.voucherTitle}>
+        <AppText variant="h3" style={styles.voucherName}>
           {item.name || item.code}
         </AppText>
         

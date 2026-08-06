@@ -160,6 +160,7 @@ const bookingValidators = {
   cancel: [
     param('id').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),
     body('cancellationReason').optional().trim().isLength({ max: 500 }),
+    body('otp').optional().trim().isLength({ max: 10 }),
   ],
   getByBookingId: [
     param('bookingId').isMongoId().withMessage('ID lịch hẹn không hợp lệ'),

@@ -4,6 +4,8 @@
  */
 
 // ============ User Types ============
+export type UserTier = 'bronze' | 'silver' | 'gold' | 'diamond';
+
 export interface User {
   _id: string;
   name: string;
@@ -15,7 +17,7 @@ export interface User {
   loyaltyPoints: number;
   lifetimePoints: number;
   walletBalance: number;
-  tier: 'bronze' | 'silver' | 'gold' | 'diamond';
+  tier: UserTier;
   dateOfBirth?: string;
   branchId?: string;
   pointsExpiresAt?: string;
@@ -146,6 +148,9 @@ export interface Booking {
   note?: string;
   subServices?: SubService[];
   selectedSubServices?: (SubService | string)[];
+  packageName?: string;
+  packageDuration?: number;
+  packagePrice?: number;
   voucherCode?: string;
   discountAmount?: number;
   // Giá gói gốc trước khi subService + voucher.
@@ -341,9 +346,11 @@ export interface Voucher {
 }
 
 export interface UserVoucher extends Voucher {
+  voucherId?: Voucher | string;
   isUsed?: boolean;
   usedAt?: string;
   bookingId?: string;
+  discountAmount?: number;
 }
 
 export interface ValidateVoucherRequest {
@@ -441,6 +448,7 @@ export interface PublicStats {
 
 export interface Gift {
   _id: string;
+  id?: string;
   name: string;
   description?: string;
   type: 'percentage' | 'fixed' | 'none';

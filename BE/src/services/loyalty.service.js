@@ -232,6 +232,9 @@ exports.addPointsFromPayment = async (userId, amount, bookingId, session) => {
   let branchId = null;
   let branchName = '';
   let branchAddress = '';
+  let voucherCode = '';
+  let discountAmount = 0;
+  let includedSubServices = [];
 
   if (bookingId) {
     try {

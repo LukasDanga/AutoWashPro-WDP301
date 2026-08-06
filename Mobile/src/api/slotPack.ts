@@ -56,6 +56,12 @@ export const paySlotPack = async (id: string, method: string, client: string = '
   return response.data;
 };
 
+// Get usage history for slot pack
+export const getSlotPackUsageHistory = async (id: string): Promise<any[]> => {
+  const response = await apiClient.get(`/slot-packs/${id}/usage-history`);
+  return response.data;
+};
+
 // Export all slot pack API functions
 export const slotPackApi = {
   previewDiscount,
@@ -65,6 +71,7 @@ export const slotPackApi = {
   requestCancelOtp,
   cancelSlotPack,
   paySlotPack,
+  getSlotPackUsageHistory,
 };
 
 export default slotPackApi;
