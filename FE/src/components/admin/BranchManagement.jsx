@@ -759,7 +759,7 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
       setPkgLoading(true);
       try {
         const params = new URLSearchParams();
-        params.set('status', 'active');
+        params.set('includeDeleted', 'true');
         params.set('branchId', branch._id);
         if (pkgSearch.trim()) params.set('name', pkgSearch.trim());
         const res = await apiFetch(`/packages?${params}`);
@@ -802,17 +802,32 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
     } finally { setPkgSaving(false); }
   };
 
-  const handlePkgDelete = async () => {
+  const [pkgDeleteError, setPkgDeleteError] = useState('');
+
+  const handlePkgDelete = async (isHard = false) => {
     setPkgDeleting(true);
+    setPkgDeleteError('');
     try {
-      const res = await apiFetch(`/packages/${pkgSelected._id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await readError(res));
-      setPackages((p) => p.filter((b) => b._id !== pkgSelected._id));
+      const url = isHard ? `/packages/${pkgSelected._id}?hard=true` : `/packages/${pkgSelected._id}`;
+      const res = await apiFetch(url, { method: 'DELETE' });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        const errMsg = payload.message || payload.error || 'Xóa gói thất bại';
+        setPkgDeleteError(errMsg);
+        return;
+      }
+      if (isHard) {
+        setPackages((p) => p.filter((b) => b._id !== pkgSelected._id));
+        notify('Đã xóa cứng gói dịch vụ khỏi hệ thống!');
+      } else {
+        setPackages((p) => p.map((b) => (b._id === pkgSelected._id ? { ...b, status: 'inactive', isDeleted: true } : b)));
+        notify('Đã xóa mềm gói dịch vụ (chuyển sang Ngừng hoạt động).');
+      }
       setPkgModal(null);
       setPkgSelected(null);
-      notify('Đã xóa gói dịch vụ.');
+      setPkgDeleteError('');
     } catch (err) {
-      notify(err.message || 'Xóa thất bại', 'error');
+      setPkgDeleteError(err.message || 'Xóa gói thất bại');
     } finally { setPkgDeleting(false); }
   };
 
@@ -1042,7 +1057,7 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
                     <div className="flex items-start justify-between gap-3 mb-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-lg bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 uppercase tracking-wide border border-blue-100">
-                          {pkg.category === 'external' ? '🚗 Ngoại thất' : pkg.category === 'internal' ? '🪑 Nội thất' : '✨ Tổng thể'}
+                          {pkg.category === 'external' ? 'Ngoại thất' : pkg.category === 'internal' ? 'Nội thất' : 'Tổng thể'}
                         </span>
                         <span className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold border ${
                           pkg.status === 'active'
@@ -1052,7 +1067,7 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
                           {pkg.status === 'active' ? '● Hoạt động' : '○ Ngừng'}
                         </span>
                         <span className="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80 flex items-center gap-1">
-                          🔥 {pkg.bookingCount || 0} lượt đặt
+                          {pkg.bookingCount || 0} lượt đặt
                         </span>
                       </div>
 
@@ -1195,24 +1210,49 @@ function BranchDetailFull({ branch, onBack, onEdit, onChangeManager }) {
 
       {/* ── Package Delete Modal ── */}
       {pkgModal === 'delete' && pkgSelected && (
-        <Modal title="Xác nhận xóa gói dịch vụ" onClose={() => { setPkgModal(null); setPkgSelected(null); }}>
+        <Modal title="Xóa gói dịch vụ" onClose={() => { setPkgModal(null); setPkgSelected(null); setPkgDeleteError(''); }}>
           <div className="space-y-4">
-            <div className="flex gap-3 rounded-xl bg-red-50 p-4 ring-1 ring-red-100">
-              <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-red-500" />
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-red-700">Bạn chắc chắn muốn xóa gói "{pkgSelected.name}"?</p>
-                <p className="text-xs text-red-600 leading-relaxed">
-                  Lưu ý: Nếu gói này đã được khách hàng đăng ký hoặc mua gói lượt, hệ thống sẽ bảo vệ dữ liệu và không cho phép xóa. Bạn có thể chọn "Ngừng hoạt động" gói thay vì xóa.
-                </p>
-              </div>
+            <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 space-y-2">
+              <p className="text-sm font-bold text-slate-800">Chọn tùy chọn xóa cho gói "{pkgSelected.name}"</p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                • <b>Xóa mềm:</b> Chuyển gói sang trạng thái <i>Ngừng hoạt động</i> và bảo lưu toàn bộ dữ liệu lịch sử đặt xe.<br />
+                • <b>Xóa cứng:</b> Xóa vĩnh viễn khỏi hệ thống (chỉ áp dụng nếu chưa có khách hàng nào đặt lịch hoặc mua gói lượt).
+              </p>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => { setPkgModal(null); setPkgSelected(null); }} disabled={pkgDeleting}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">Hủy</button>
-              <button onClick={handlePkgDelete} disabled={pkgDeleting}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors">
+
+            {pkgDeleteError && (
+              <div className="flex gap-2.5 rounded-xl bg-red-50 p-3.5 border border-red-200 text-xs text-red-700 font-semibold leading-relaxed">
+                <Warning size={18} weight="fill" className="shrink-0 text-red-500 mt-0.5" />
+                <div>{pkgDeleteError}</div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { setPkgModal(null); setPkgSelected(null); setPkgDeleteError(''); }}
+                disabled={pkgDeleting}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePkgDelete(false)}
+                disabled={pkgDeleting}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60 transition-colors"
+              >
                 {pkgDeleting && <Spinner size={14} className="text-white" />}
-                {pkgDeleting ? 'Đang xóa…' : 'Xóa gói'}
+                Xóa mềm (Ngừng)
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePkgDelete(true)}
+                disabled={pkgDeleting}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
+              >
+                {pkgDeleting && <Spinner size={14} className="text-white" />}
+                Xóa cứng (Vĩnh viễn)
               </button>
             </div>
           </div>
