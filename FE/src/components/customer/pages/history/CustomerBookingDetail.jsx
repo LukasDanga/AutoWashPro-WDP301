@@ -24,6 +24,8 @@ function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v |
 function formatDate(d) { return new Date(d).toLocaleDateString('vi-VN'); }
 const VEHICLE_TYPE_LABELS = { sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', moto: 'Xe máy' };
 function vehicleTypeLabel(t) { return VEHICLE_TYPE_LABELS[t] || ''; }
+const PAYMENT_METHOD_LABELS = { wallet: 'Ví AutoWash', cash: 'Tiền mặt', vnpay: 'VNPay', bank: 'Chuyển khoản', sepay: 'Chuyển khoản', momo: 'MoMo' };
+function paymentMethodLabel(m) { return PAYMENT_METHOD_LABELS[m] || (m || '—'); }
 function formatDateTime(d) { return new Date(d).toLocaleDateString('vi-VN') + ' ' + new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
 
 // Tìm thông tin đầy đủ (price/duration/isOptional) của sub-service trong catalog, có fallback từ selectedSubServices
@@ -1012,10 +1014,28 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
               <span className="text-slate-500 font-medium">📅 Ngày hẹn:</span>
               <span className="text-slate-900 font-bold">{formatDate(b.bookingDate)}</span>
             </div>
-            <div className="flex justify-between items-center py-1.5">
+            <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">⏰ Khung giờ:</span>
               <span className="text-emerald-700 font-extrabold text-sm sm:text-base">{b.startTime}{b.endTime ? ` - ${b.endTime}` : ''}</span>
             </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+              <span className="text-slate-500 font-medium">💳 Phương thức thanh toán:</span>
+              <span className="text-slate-900 font-bold">{paymentMethodLabel(b.paymentMethod)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60">
+              <span className="text-slate-500 font-medium">🗓️ Ngày đặt:</span>
+              <span className="text-slate-900 font-bold">{formatDateTime(b.createdAt)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5">
+              <span className="text-slate-500 font-medium">🔄 Ngày cập nhật:</span>
+              <span className="text-slate-900 font-bold">{formatDateTime(b.updatedAt)}</span>
+            </div>
+            {b.note && (
+              <div className="flex justify-between items-start py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">📝 Ghi chú:</span>
+                <span className="text-slate-800 font-medium text-right max-w-[65%] leading-relaxed">{b.note}</span>
+              </div>
+            )}
           </div>
 
           {/* Financial summary */}
