@@ -332,6 +332,7 @@ exports.createBooking = async (data) => {
         }))
       : [];
     const includedSubServicesSnapshot = packageSubServicesSnapshot.filter(s => !s.isOptional);
+    const currentVatPercent = await configService.get('VAT_PERCENT', {}, 10);
 
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
@@ -340,6 +341,7 @@ exports.createBooking = async (data) => {
       voucherCode: voucherCode || undefined,
       discountAmount: computedDiscountAmount,
       finalPrice: computedFinalPrice,
+      vatPercent: currentVatPercent,
       depositAmount,
       selectedSubServices: validSubServices,
       includedSubServices: includedSubServicesSnapshot,
@@ -2103,6 +2105,8 @@ exports.createRecurringBooking = async (data) => {
   const created = [];
   const failed  = [];
 
+  const currentVatPercent = await configService.get('VAT_PERCENT', {}, 10);
+
   for (let bookingIdx = 0; bookingIdx < targetDates.length; bookingIdx++) {
     const bookingDate = targetDates[bookingIdx];
     const isFirstInGroup = bookingIdx === 0;
@@ -2156,6 +2160,7 @@ exports.createRecurringBooking = async (data) => {
         bookingType: 'recurring',
         recurringGroupId,
         priority,
+        vatPercent: currentVatPercent,
         // Buổi đầu chịu toàn bộ cọc của cả nhóm; các buổi sau = 0.
         // Manager đối soát booking đầu là đủ biết đã thu cọc.
         isRecurringFirst: isFirstInGroup,
@@ -2787,6 +2792,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     } catch (_) { /* voucher validation failed silently */ }
   }
   computedFinalPrice = Math.max(0, computedFinalPrice - computedDiscount);
+  const currentVatPercent = await configService.get('VAT_PERCENT', {}, 10);
 
   const newBooking = await Booking.create({
     userId: src.userId,
@@ -2807,6 +2813,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
     rebookedFromId: src._id,
     finalPrice: computedFinalPrice,
     discountAmount: computedDiscount,
+    vatPercent: currentVatPercent,
     depositAmount: src.bookingType === 'slot_pack_usage'
       ? 0
       : Math.round(((computedFinalPrice || 0) * (await getDepositRate(user)) / 100) / 1000) * 1000,

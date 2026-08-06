@@ -2420,6 +2420,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
 
       {/* ── DETAIL MODAL (RECEIPT TEMPLATE) ── */}
       {detailBooking && (() => {
+        const vatRate = detailBooking?.vatPercent ?? configs?.VAT_PERCENT ?? 10;
         const displayTotal = detailBooking.isGroup ? (detailBooking.groupTotalPrice || 0) : (detailBooking.totalAmount || detailBooking.finalPrice || 0);
         const displayDeposit = detailBooking.isGroup ? (detailBooking.groupTotalDeposit || 0) : (detailBooking.depositAmount || 0);
         const displayId = detailBooking.isGroup ? (detailBooking.recurringGroupId || detailBooking._id) : detailBooking._id;
@@ -2494,7 +2495,7 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                   Hồ Chí Minh, Việt Nam
                 </p>
                 <p className="text-[13px] text-black mt-4">
-                  Giá đã bao gồm 10% VAT.
+                  Giá đã bao gồm {vatRate}% VAT.
                 </p>
               </div>
 
@@ -2537,17 +2538,33 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                         ) : null}
                         {formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}
                       </td>
-                      <td className="py-3 text-right text-black align-top">10%</td>
+                      <td className="py-3 text-right text-black align-top">{vatRate}%</td>
                       <td className="py-3 text-right text-black align-top">{formatCurrency(detailBooking.bookingType === 'slot_pack_usage' ? 0 : (detailBooking.packagePrice || detailBooking.packageId?.price || detailBooking.finalPrice || detailBooking.totalAmount))}</td>
                     </tr>
                     
+                    {/* Included services rows */}
+                    {(() => {
+                      const included = Array.isArray(detailBooking.includedSubServices) && detailBooking.includedSubServices.length > 0
+                        ? detailBooking.includedSubServices
+                        : (Array.isArray(detailBooking.packageSnapshot?.subServices)
+                            ? detailBooking.packageSnapshot.subServices.filter(s => s.isOptional === false)
+                            : (Array.isArray(detailBooking.packageId?.subServices) ? detailBooking.packageId.subServices.filter(s => s.isOptional === false) : []));
+                      return included.map((sub, i) => (
+                        <tr key={`inc-${i}`} className="border-b border-slate-100/60">
+                          <td colSpan={5} className="py-2 text-left text-emerald-600 pl-4 text-[13px] font-medium">
+                            • {sub.name} <span className="text-[11px] text-emerald-500 font-normal">(có sẵn)</span>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+
                     {/* Sub-services rows */}
                     {detailBooking.selectedSubServices && detailBooking.selectedSubServices.filter(s => s.isOptional !== false).map((sub, i) => (
                       <tr key={`sub-${i}`} className="border-b border-slate-100">
                         <td className="py-2 text-left text-black pl-4 text-indigo-600">+ {sub.name} <span className="text-[10px] text-indigo-400 font-normal">(thêm)</span></td>
                         <td className="py-2 text-right text-black">1</td>
                         <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
-                        <td className="py-2 text-right text-black">10%</td>
+                        <td className="py-2 text-right text-black">{vatRate}%</td>
                         <td className="py-2 text-right text-black">{formatCurrency(sub.price)}</td>
                       </tr>
                     ))}
@@ -2569,11 +2586,11 @@ export default function CustomerHistoryPage({ onBack, apiBase, token, vehicles: 
                     )}
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="text-black">Tổng tiền (chưa VAT)</span>
-                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.9))}</span>
+                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * (1 - vatRate / 100)))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
-                      <span className="text-black">Thuế VAT (10%)</span>
-                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * 0.1))}</span>
+                      <span className="text-black">Thuế VAT ({vatRate}%)</span>
+                      <span className="text-black">{formatCurrency(Math.round((displayTotal) * (vatRate / 100)))}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="font-normal text-black">Tổng cộng</span>

@@ -46,6 +46,7 @@ const CATEGORY_LABELS = {
 // Config keys that represent percentages (0–100)
 const PERCENT_KEYS = new Set([
   'DEPOSIT_RATE',
+  'VAT_PERCENT',
   'LATE_CANCEL_PENALTY_FULL_PERCENT',
   'LATE_CANCEL_PENALTY_DEPOSIT_PERCENT',
   'LOYALTY_BASE_EARNING_RATE',
@@ -76,6 +77,7 @@ function getConfigUnit(key, description = '') {
   if (k === 'MIN_ADVANCE_BOOKING_MINUTES') return 'phút';
   if (k === 'BIRTHDAY_VOUCHER_MAX_AMOUNT') return 'VNĐ';
   if (k === 'BIRTHDAY_VOUCHER_PERCENT') return '%';
+  if (k === 'VAT_PERCENT') return '% (tỉ lệ)';
   if (k === 'BIRTHDAY_VOUCHER_VALIDITY_DAYS') return 'ngày';
   if (k === 'DEFAULT_BRANCH_CAPACITY') return 'xe';
   if (k === 'DEPOSIT_RATE') return '% (tỉ lệ)';
