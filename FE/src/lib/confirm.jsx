@@ -13,6 +13,7 @@ export function confirmDialog({
   cancelLabel = 'Huỷ',
   danger = false,
   hideCancel = false,
+  maxWidth = null,
 } = {}) {
   return new Promise((resolve) => {
     const host = document.createElement('div');
@@ -33,6 +34,7 @@ export function confirmDialog({
         cancelLabel={cancelLabel}
         danger={danger}
         hideCancel={hideCancel}
+        maxWidth={maxWidth}
         onConfirm={() => close(true)}
         onCancel={() => close(false)}
       />,

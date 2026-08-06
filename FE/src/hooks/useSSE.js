@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const SYNC_EVENTS = ['slots_updated', 'vouchers_updated', 'my_bookings_updated', 'feedback_new', 'booking_new', 'my_vehicles_updated', 'config_updated'];
+const SYNC_EVENTS = ['slots_updated', 'vouchers_updated', 'my_bookings_updated', 'feedback_new', 'booking_new', 'my_vehicles_updated', 'config_updated', 'branch_sort_order_updated'];
 
 class SocketManager {
   constructor() {

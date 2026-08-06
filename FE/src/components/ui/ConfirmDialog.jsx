@@ -14,15 +14,19 @@ export default function ConfirmDialog({
   danger = false,
   busy = false,
   hideCancel = false,
+  maxWidth = null,
 }) {
   if (!open) return null;
+  const computedMaxWidth = typeof maxWidth === 'number' ? `${maxWidth}px` : (maxWidth || undefined);
+
   return (
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200"
+        style={computedMaxWidth ? { maxWidth: computedMaxWidth, width: '100%' } : { width: '100%' }}
+        className={`rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200 transition-all ${computedMaxWidth ? '' : 'max-w-sm'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>

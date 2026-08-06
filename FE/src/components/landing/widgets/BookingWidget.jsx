@@ -296,23 +296,31 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   }, [branches, selectedBranch]);
 
   // Load packages when branch changes
-  useEffect(() => {
+  const loadPackagesForBranch = useCallback(async () => {
     if (!selectedBranch) { setPackages([]); return; }
-    async function loadPackages() {
-      try {
-        const branchId = selectedBranch._id || selectedBranch.id;
-        const res = await fetch(`${API_BASE}/packages?branchId=${branchId}`);
-        const payload = await res.json();
-        const data = payload?.data || payload || [];
-        const activePkgs = (Array.isArray(data) ? data : []).filter(p => p.status === 'active');
-        setPackages(activePkgs);
-        if (activePkgs.length > 0 && !activePkgs.find(p => (p._id || p.id) === (selectedPackage?._id || selectedPackage?.id))) {
-          setSelectedPackage(activePkgs[0]);
-        }
-      } catch (e) { console.error('Failed to load packages', e); }
-    }
-    loadPackages();
+    try {
+      const branchId = selectedBranch._id || selectedBranch.id;
+      const res = await fetch(`${API_BASE}/packages?branchId=${branchId}`);
+      const payload = await res.json();
+      const data = payload?.data || payload || [];
+      const activePkgs = (Array.isArray(data) ? data : []).filter(p => p.status === 'active');
+      setPackages(activePkgs);
+      if (activePkgs.length > 0 && !activePkgs.find(p => (p._id || p.id) === (selectedPackage?._id || selectedPackage?.id))) {
+        setSelectedPackage(activePkgs[0]);
+      }
+    } catch (e) { console.error('Failed to load packages', e); }
+  }, [selectedBranch, selectedPackage]);
+
+  useEffect(() => {
+    loadPackagesForBranch();
   }, [selectedBranch]);
+
+  useSSE(token, 'branch_sort_order_updated', useCallback((data) => {
+    const curBranchId = selectedBranch?._id || selectedBranch?.id;
+    if (curBranchId && String(data?.branchId) === String(curBranchId)) {
+      loadPackagesForBranch();
+    }
+  }, [selectedBranch, loadPackagesForBranch]));
 
   const handledRebookIdRef = useRef(null);
 

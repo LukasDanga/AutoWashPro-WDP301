@@ -1,4 +1,4 @@
-const { Package, Booking, SlotPack } = require('../models');
+const { Package, Booking, SlotPack, Branch } = require('../models');
 
 exports.createPackage = async (data) => {
   const pkg = new Package(data);
@@ -14,13 +14,37 @@ exports.getAllPackages = async (filters = {}) => {
   if (filters.search) {
     query.name = { $regex: filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
   }
+
+  let sortOrder = filters.sort;
+  if (!sortOrder && filters.branchId) {
+    const branch = await Branch.findById(filters.branchId).lean();
+    if (branch?.packageSortOrder) {
+      sortOrder = branch.packageSortOrder;
+    }
+  }
+
+  const sort = {};
+  if (sortOrder === 'price_asc') {
+    sort.price = 1;
+    sort.createdAt = -1;
+  } else if (sortOrder === 'price_desc') {
+    sort.price = -1;
+    sort.createdAt = -1;
+  } else if (sortOrder === 'booking_count') {
+    sort.bookingCount = -1;
+    sort.price = 1;
+  } else {
+    sort.price = 1;
+    sort.createdAt = -1;
+  }
+
   // `limit=all` (or 0) means "no pagination" — used by mobile booking flow
   // which renders a small bounded list and we want the FULL catalog.
   const wantAll = filters.limit === 'all' || filters.limit === 0 || filters.limit === '0';
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
   const limit = wantAll ? 0 : Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 9));
   const skip = wantAll ? 0 : (page - 1) * limit;
-  const find = Package.find(query).sort({ createdAt: -1 });
+  const find = Package.find(query).sort(sort);
   if (skip) find.skip(skip);
   if (limit) find.limit(limit);
   const [data, total] = await Promise.all([
