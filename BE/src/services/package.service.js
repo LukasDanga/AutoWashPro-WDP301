@@ -7,7 +7,10 @@ exports.createPackage = async (data) => {
 };
 
 exports.getAllPackages = async (filters = {}) => {
-  const query = { isDeleted: { $ne: true } };
+  const query = {};
+  if (filters.includeDeleted !== 'true' && filters.includeDeleted !== true) {
+    query.isDeleted = { $ne: true };
+  }
   if (filters.status) query.status = filters.status;
   if (filters.branchId) query.branchId = filters.branchId;
   if (filters.category) query.category = filters.category;
@@ -55,7 +58,7 @@ exports.getAllPackages = async (filters = {}) => {
 };
 
 exports.getPackageById = async (id, userRole, userBranchId) => {
-  const pkg = await Package.findOne({ _id: id, isDeleted: { $ne: true } });
+  const pkg = await Package.findById(id);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -64,7 +67,7 @@ exports.getPackageById = async (id, userRole, userBranchId) => {
 };
 
 exports.updatePackage = async (id, updates, userRole, userBranchId) => {
-  const pkg = await Package.findOne({ _id: id, isDeleted: { $ne: true } });
+  const pkg = await Package.findById(id);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
@@ -73,32 +76,38 @@ exports.updatePackage = async (id, updates, userRole, userBranchId) => {
   return updated;
 };
 
-exports.deletePackage = async (id, userRole, userBranchId) => {
-  const pkg = await Package.findOne({ _id: id, isDeleted: { $ne: true } });
+exports.deletePackage = async (id, userRole, userBranchId, isHardDelete = false) => {
+  const pkg = await Package.findById(id);
   if (!pkg) throw Object.assign(new Error('Package not found'), { statusCode: 404, code: 'PACKAGE_NOT_FOUND' });
   if (userRole === 'manager' && pkg.branchId && String(pkg.branchId) !== String(userBranchId)) {
     throw Object.assign(new Error('Not authorized'), { statusCode: 403, code: 'FORBIDDEN' });
   }
 
-  // Ràng buộc: Kiểm tra xem gói đã được khách hàng sử dụng (đặt lịch hoặc mua gói lượt) chưa
-  const [bookingCount, slotPackCount] = await Promise.all([
-    Booking.countDocuments({ packageId: id }),
-    SlotPack.countDocuments({ packageId: id }),
-  ]);
+  if (isHardDelete) {
+    // Ràng buộc xóa cứng: Kiểm tra xem gói đã từng được khách hàng đặt lịch hoặc mua gói lượt chưa
+    const [bookingCount, slotPackCount] = await Promise.all([
+      Booking.countDocuments({ packageId: id }),
+      SlotPack.countDocuments({ packageId: id }),
+    ]);
 
-  if (bookingCount > 0 || slotPackCount > 0) {
-    const usageDetails = [];
-    if (bookingCount > 0) usageDetails.push(`${bookingCount} đơn đặt lịch`);
-    if (slotPackCount > 0) usageDetails.push(`${slotPackCount} gói lượt`);
+    if (bookingCount > 0 || slotPackCount > 0) {
+      const usageDetails = [];
+      if (bookingCount > 0) usageDetails.push(`${bookingCount} đơn đặt lịch`);
+      if (slotPackCount > 0) usageDetails.push(`${slotPackCount} gói lượt`);
 
-    const err = new Error(
-      `Không thể xóa gói "${pkg.name}" vì đã được khách hàng sử dụng (${usageDetails.join(' và ')}). Bạn vui lòng chuyển trạng thái thành "Ngừng hoạt động" nếu không muốn nhận lượt đặt mới.`
-    );
-    err.statusCode = 400;
-    err.code = 'PACKAGE_IN_USE';
-    throw err;
+      const err = new Error(
+        `Ràng buộc xóa cứng: Không thể xóa vĩnh viễn gói "${pkg.name}" vì đã được khách hàng sử dụng (${usageDetails.join(' và ')}). Vui lòng chọn "Xóa mềm" để bảo lưu lịch sử giao dịch.`
+      );
+      err.statusCode = 400;
+      err.code = 'PACKAGE_IN_USE';
+      throw err;
+    }
+
+    await Package.findByIdAndDelete(id);
+    return { hardDeleted: true, id };
   }
 
-  await Package.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() });
-  return pkg;
+  // Xóa mềm: Chuyển isDeleted = true và status = 'inactive' để bảo lưu dữ liệu lịch sử đặt xe / gói lượt
+  const updated = await Package.findByIdAndUpdate(id, { isDeleted: true, status: 'inactive', deletedAt: new Date() }, { new: true });
+  return updated;
 };

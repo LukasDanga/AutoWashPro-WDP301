@@ -48,6 +48,7 @@ exports.updatePackage = catchAsync(async (req, res) => {
 });
 
 exports.deletePackage = catchAsync(async (req, res) => {
-  await packageService.deletePackage(req.params.id, req.user.role, req.user.branchId);
-  success(res, null, 'Đã xóa gói dịch vụ');
+  const isHardDelete = req.query.hard === 'true' || req.query.type === 'hard';
+  await packageService.deletePackage(req.params.id, req.user.role, req.user.branchId, isHardDelete);
+  success(res, null, isHardDelete ? 'Đã xóa cứng gói dịch vụ khỏi hệ thống' : 'Đã xóa mềm gói dịch vụ');
 });

@@ -11,6 +11,7 @@ import FeaturePlaceholder from '@/components/admin/FeaturePlaceholder';
 import AdminProfile from '@/components/admin/AdminProfile';
 import AdminReviews from '@/components/admin/AdminReviews';
 import AdminBookings from '@/components/admin/AdminBookings';
+import AdminBookingDetail from '@/components/admin/AdminBookingDetail';
 import AdminActivity from '@/components/admin/AdminActivity';
 import AdminSlotPacks from '@/components/admin/AdminSlotPacks';
 import AdminPaymentsPage from '@/components/admin/AdminPaymentsPage';
@@ -118,6 +119,7 @@ export default function AdminRoutes() {
         />
         <Route path="activity" element={<AdminActivity />} />
         <Route path="bookings" element={<AdminBookings />} />
+        <Route path="bookings/:id" element={<AdminBookingDetail />} />
         <Route path="payments" element={<AdminPaymentsPage />} />
         <Route path="payments/refunds" element={<Navigate to="/admin/payments?tab=refunds" replace />} />
         <Route path="payments/refunds/:id" element={<RefundDetailPage basePath="/admin/payments?tab=refunds" />} />
