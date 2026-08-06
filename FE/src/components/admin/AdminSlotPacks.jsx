@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import {
   Buildings, Ticket, CurrencyDollar, User, Phone, Car, CalendarBlank,
@@ -253,6 +253,7 @@ function SlotPackDetail({ pack, onClose }) {
 }
 
 function UsageDetail({ booking, onClose }) {
+  const navigate = useNavigate();
   const st = BOOKING_STATUS_MAP[booking.status] || { label: booking.status, cls: 'bg-slate-100 text-slate-500' };
   return (
     <Modal title="Chi tiết lượt sử dụng" onClose={onClose}>
@@ -341,6 +342,17 @@ function UsageDetail({ booking, onClose }) {
             <p className="mt-1 text-sm text-slate-600 bg-slate-50 rounded-lg p-3 border border-slate-100">{booking.note}</p>
           </div>
         )}
+
+        <div className="pt-1">
+          <button
+            onClick={() => {
+              onClose();
+              navigate(`/admin/bookings/${booking._id}`);
+            }}
+            className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors w-full">
+            Xem đơn đặt này trong Booking
+          </button>
+        </div>
       </div>
     </Modal>
   );
