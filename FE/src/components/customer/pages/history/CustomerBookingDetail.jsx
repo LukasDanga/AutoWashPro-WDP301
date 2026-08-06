@@ -816,6 +816,10 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
 
   // Slot pack info (booking type = dùng lượt gói slot)
   const slotPack = b.bookingType === 'slot_pack_usage' ? (b.slotPackId || null) : null;
+  // Reward info (voucher sử dụng, điểm thưởng tích lũy, lượt quay may mắn)
+  const voucherUsed = b.voucherCode || '';
+  const pointsEarned = Number(b.pointsEarned) || 0;
+  const spinEarned = !!b.spinEarned;
   const vehicleInfo = {
     plate: b.vehicleId?.licensePlate || b.vehiclePlate || '',
     brand: b.vehicleId?.brand || '',
@@ -1030,6 +1034,24 @@ export default function CustomerBookingDetail({ apiBase, token, user, onUserUpda
               <span className="text-slate-500 font-medium">🔄 Ngày cập nhật:</span>
               <span className="text-slate-900 font-bold">{formatDateTime(b.updatedAt)}</span>
             </div>
+            {voucherUsed && (
+              <div className="flex justify-between items-center py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">🎟️ Voucher sử dụng:</span>
+                <span className="text-fuchsia-700 font-bold">{voucherUsed}</span>
+              </div>
+            )}
+            {pointsEarned > 0 && (
+              <div className="flex justify-between items-center py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">💰 Điểm thưởng tích lũy:</span>
+                <span className="text-emerald-700 font-bold">+{pointsEarned.toLocaleString('vi-VN')} điểm</span>
+              </div>
+            )}
+            {spinEarned && (
+              <div className="flex justify-between items-center py-1.5 border-t border-slate-200/60 pt-2.5">
+                <span className="text-slate-500 font-medium">🎡 Vòng quay may mắn:</span>
+                <span className="text-amber-600 font-bold">Đã tặng 1 lượt quay</span>
+              </div>
+            )}
             {b.note && (
               <div className="flex justify-between items-start py-1.5 border-t border-slate-200/60 pt-2.5">
                 <span className="text-slate-500 font-medium">📝 Ghi chú:</span>

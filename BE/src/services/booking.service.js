@@ -678,6 +678,14 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
       throw Object.assign(new Error('Không có quyền truy cập'), { statusCode: 403, code: 'FORBIDDEN' });
     }
   }
+
+  // Loyalty points earned for this booking (awarded on completion) — attach for UI display
+  const earnedPoints = await PointHistory.aggregate([
+    { $match: { referenceId: booking._id, type: 'earned', isDeleted: { $ne: true } } },
+    { $group: { _id: null, total: { $sum: '$points' } } },
+  ]);
+  booking.pointsEarned = earnedPoints[0]?.total || 0;
+
   return booking;
 };
 
@@ -971,6 +979,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
               $inc: { spinCount: 1 },
             }
           ).catch(() => {});
+          await Booking.updateOne({ _id: currentBooking._id }, { $set: { spinEarned: true } }).catch(() => {});
           sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
         }
         
