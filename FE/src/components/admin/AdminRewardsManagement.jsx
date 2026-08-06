@@ -348,6 +348,8 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(null);
+  const [verifying, setVerifying] = useState(null);
+  const [codeInput, setCodeInput] = useState({});
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -376,7 +378,7 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
   const handleSent = async (rd) => {
     const ok = await confirmDialog({
       title: 'Xác nhận đã gửi quà',
-      message: `Xác nhận bạn đã giao "${rd.rewardSnapshot?.name || 'phần quà'}" cho khách hàng? Mã đổi thưởng: ${rd.code}`,
+      message: `Xác nhận bạn đã giao "${rd.rewardSnapshot?.name || 'phần quà'}" cho khách hàng? Khách sẽ dùng mã đổi thưởng để nhận quà.`,
       confirmLabel: 'Đã gửi quà',
     });
     if (!ok) return;
@@ -392,6 +394,23 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
       fetch_();
     } catch (err) { notify(err.message || 'Cập nhật thất bại', 'error'); }
     finally { setSending(null); }
+  };
+
+  const handleVerifyReceived = async (rd) => {
+    const code = (codeInput[rd._id] || '').trim();
+    if (!code) { notify('Vui lòng nhập mã đổi thưởng của khách', 'error'); return; }
+    setVerifying(rd._id);
+    try {
+      const res = await api(`/rewards/redemptions/${rd._id}/received`, {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      notify('Đã xác nhận khách nhận quà!');
+      setCodeInput(prev => ({ ...prev, [rd._id]: '' }));
+      fetch_();
+    } catch (err) { notify(err.message || 'Xác nhận thất bại', 'error'); }
+    finally { setVerifying(null); }
   };
 
   return (
@@ -446,7 +465,6 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-500">
                   <th className="px-4 py-3">Khách hàng</th>
                   <th className="px-4 py-3">Quà tặng</th>
-                  <th className="px-4 py-3">Mã đổi thưởng</th>
                   <th className="px-4 py-3">Ngày đổi</th>
                   <th className="px-4 py-3">Trạng thái</th>
                   <th className="px-4 py-3">Chi nhánh / Người gửi</th>
@@ -458,6 +476,7 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
                   const snap = rd.rewardSnapshot || {};
                   const u = rd.user || {};
                   const canSend = rd.status === 'claimed';
+                  const canVerify = rd.status === 'sent';
                   return (
                     <tr key={rd._id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
@@ -468,9 +487,6 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
                       <td className="px-4 py-3">
                         <p className="font-medium text-slate-800 line-clamp-1">{snap.name || '—'}</p>
                         <p className="text-[11px] text-amber-600 font-semibold">{Number(snap.pointCost || rd.pointsSpent || 0).toLocaleString('vi-VN')} điểm</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-slate-700">{rd.code}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{formatDate(rd.createdAt)}</td>
                       <td className="px-4 py-3"><StatusBadge status={rd.status} /></td>
@@ -490,6 +506,22 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
                             {sending === rd._id ? <Spinner size={12} /> : <PaperPlaneTilt size={13} />}
                             {sending === rd._id ? 'Đang gửi...' : 'Đã gửi quà cho khách'}
                           </button>
+                        ) : canVerify ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={codeInput[rd._id] || ''}
+                              onChange={(e) => setCodeInput(prev => ({ ...prev, [rd._id]: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyReceived(rd); }}
+                              placeholder="Nhập mã của khách"
+                              className="w-36 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors"
+                            />
+                            <button onClick={() => handleVerifyReceived(rd)} disabled={verifying === rd._id}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors">
+                              {verifying === rd._id ? <Spinner size={12} /> : <CheckCircle size={13} />}
+                              {verifying === rd._id ? 'Đang xác nhận...' : 'Xác nhận đã nhận'}
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>
                         )}

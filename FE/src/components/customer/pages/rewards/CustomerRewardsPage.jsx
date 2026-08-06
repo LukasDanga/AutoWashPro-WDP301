@@ -200,17 +200,6 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     } catch (err) { } finally { setRedeemLoading(false); }
   };
 
-  const handleConfirmReceipt = async (redemptionId) => {
-    if (!(await confirmDialog({ title: 'Xác nhận đã nhận quà', message: 'Bạn đã nhận được quà từ cửa hàng?', confirmLabel: 'Đã nhận' }))) return;
-    setRedeemLoading(true);
-    try {
-      const res = await api(`/rewards/redemptions/${redemptionId}/received`, { method: 'POST' });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.message || 'Lỗi xác nhận nhận quà');
-      fetchVouchers();
-    } catch (err) { } finally { setRedeemLoading(false); }
-  };
-
   // Dynamic next tier calculation sorted by minPoints from API
   const sortedTiers = tierList.length > 0 ? [...tierList].sort((a, b) => (a.minPoints || 0) - (b.minPoints || 0)) : [];
   const currentTierId = (user?.tier || 'bronze').toLowerCase();
@@ -443,20 +432,13 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                           : received
                             ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
                             : sent
-                              ? <span className="text-blue-600 font-bold">Đang giao · Quà đã gửi</span>
-                              : <span className="text-emerald-600 font-bold">Còn hiệu lực</span>}
+                              ? <span className="text-blue-600 font-bold">Đã gửi · Chờ xác nhận nhận quà</span>
+                              : <span className="text-emerald-600 font-bold">Chờ gửi quà</span>}
                       </div>
-                      {sent ? (
-                        <button onClick={() => handleConfirmReceipt(rd._id)} disabled={redeemLoading}
-                          className="w-full py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 border border-blue-600 transition-all disabled:opacity-50">
-                          {redeemLoading ? 'Đang xử lý...' : 'Đã nhận quà'}
-                        </button>
-                      ) : (
-                        <button onClick={() => { navigator.clipboard.writeText(rd.code); }}
-                          className={`w-full py-2.5 rounded-lg text-sm font-bold border transition-all ${cancelled ? 'bg-slate-50 text-slate-400 border-slate-200' : received ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'}`}>
-                          Copy mã đổi thưởng
-                        </button>
-                      )}
+                      <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
+                        className={`w-full py-2.5 rounded-lg text-sm font-bold border transition-all ${cancelled ? 'bg-slate-50 text-slate-400 border-slate-200' : received ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'}`}>
+                        Copy mã đổi thưởng
+                      </button>
                     </div>
                   );
                 })}

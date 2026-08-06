@@ -134,16 +134,17 @@ exports.markRedemptionSent = async (redemptionId, { sentBy, branchId }) => {
 };
 
 /**
- * Khách hàng xác nhận đã nhận quà
+ * Manager/admin nh?p m� d?i thu?ng c?a kh�ch ?? x�c nh?n da nh?n qu�
  */
-exports.markRedemptionReceived = async (redemptionId, userId) => {
+exports.markRedemptionReceived = async (redemptionId, { code }) => {
   const redemption = await Redemption.findById(redemptionId);
   if (!redemption) throw Object.assign(new Error('Redemption not found'), { statusCode: 404 });
-  if (String(redemption.user) !== String(userId)) {
-    throw Object.assign(new Error('Bạn không có quyền cập nhật lượt đổi thưởng này'), { statusCode: 403 });
-  }
   if (redemption.status !== 'sent') {
-    throw Object.assign(new Error('Chỉ có thể xác nhận nhận quà khi quà đã được gửi'), { statusCode: 400 });
+    throw Object.assign(new Error('Ch? x?c nh?n nh?n qu? khi qu? ?a du?c g?i cho kh�ch'), { statusCode: 400 });
+  }
+  const entered = String(code || '').trim().toUpperCase();
+  if (!entered || entered !== redemption.code) {
+    throw Object.assign(new Error('M? d?i thu?ng kh�ng h?p. Vui l?ng ki?m tra l?i'), { statusCode: 400 });
   }
   redemption.status = 'received';
   redemption.receivedAt = new Date();
