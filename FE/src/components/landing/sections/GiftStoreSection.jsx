@@ -1,11 +1,12 @@
-﻿import { motion, useInView } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import CustomLuckyWheel from '../widgets/CustomLuckyWheel.jsx';
 import { storageKeys } from '../../../lib/authStorage.js';
 import { showToast } from '@/lib/toast';
 import { confirmDialog } from '@/lib/confirm';
 import TierBadge from '@/components/ui/TierBadge';
-import { Trophy, CheckCircle, Warning, ClockCounterClockwise } from '@phosphor-icons/react';
+import { Trophy, CheckCircle, Warning, ClockCounterClockwise, X, Gift, Sparkle, Copy, Coins, ShieldCheck, Package } from '@phosphor-icons/react';
+import useSSE from '@/hooks/useSSE';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -45,6 +46,210 @@ function buildTierMaps(tiers) {
     badge[id] = t.badgeCls || TIER_BADGE_CLS[id] || TIER_BADGE_CLS.bronze;
   });
   return { sorted, rank, label, badge };
+}
+
+function RewardDetailModal({ reward, user, userPoints, tierMaps, onClose, onConfirm, loading, successData, onCopyCode }) {
+  if (!reward) return null;
+
+  const pointCost = reward.pointCost || 0;
+  const remainingPoints = (userPoints || 0) - pointCost;
+  const reqTier = (reward.requiredTier || 'bronze').toLowerCase();
+  const userRank = tierMaps.rank[(user?.tier || 'bronze').toLowerCase()] ?? 0;
+  const reqRank = tierMaps.rank[reqTier] ?? 0;
+  const tierOk = userRank >= reqRank;
+  const enoughPoints = (userPoints || 0) >= pointCost;
+  const reqLabel = tierMaps.label[reqTier] || 'Đồng';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="relative w-full max-w-2xl my-auto overflow-hidden bg-white shadow-2xl rounded-3xl border border-slate-200/80 flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-white/90 text-slate-600 hover:bg-white hover:text-slate-900 transition-all shadow-md backdrop-blur-md border border-slate-200/60 cursor-pointer"
+          title="Đóng"
+        >
+          <X size={20} weight="bold" />
+        </button>
+
+        {!successData ? (
+          <>
+            {/* Hero Image Section */}
+            <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-slate-100 shrink-0">
+              {reward.imageUrl ? (
+                <img
+                  src={reward.imageUrl}
+                  alt={reward.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-6xl">🎁</div>
+              )}
+              {/* Subtle Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-transparent to-black/20" />
+
+              {/* Badges on Hero */}
+              <div className="absolute bottom-4 left-6 right-6 flex flex-wrap items-center justify-between gap-2 z-10">
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-md">
+                  <Coins size={16} weight="fill" /> {new Intl.NumberFormat('vi-VN').format(pointCost)} Điểm
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black shadow-sm border backdrop-blur-md ${tierMaps.badge[reqTier] || TIER_BADGE_CLS.bronze}`}>
+                    <ShieldCheck size={14} weight="fill" />
+                    {reqTier === 'bronze' ? 'Mọi hạng thành viên' : `Hạng ${reqLabel} trở lên`}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/90 text-slate-700 text-xs font-bold backdrop-blur-md border border-slate-200 shadow-sm">
+                    <Package size={14} weight="bold" /> Còn {reward.stock} phần
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-6">
+              {/* Title & Description */}
+              <div>
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
+                  {reward.name}
+                </h3>
+                <p className="text-base text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                  {reward.description || 'Sản phẩm quà tặng chính hãng chất lượng cao từ hệ thống AutoWashPro.'}
+                </p>
+              </div>
+
+              {/* Point Calculation Card (Clean Light Emerald Theme) */}
+              <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-emerald-50/20 border border-emerald-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center justify-between border-b border-emerald-200/60 pb-2">
+                  <span>Thông tin quy đổi điểm</span>
+                  <span className="text-emerald-700 font-extrabold">Đổi Quà Vật Lý</span>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Điểm tích lũy hiện tại:</span>
+                    <span className="font-bold text-slate-900">{new Intl.NumberFormat('vi-VN').format(userPoints || 0)} điểm</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-emerald-700">
+                    <span>Điểm trừ đổi phần thưởng:</span>
+                    <span className="font-black text-base">- {new Intl.NumberFormat('vi-VN').format(pointCost)} điểm</span>
+                  </div>
+
+                  <div className="border-t border-emerald-200/70 pt-2 flex items-center justify-between text-base font-bold">
+                    <span className="text-slate-800">Điểm còn lại sau khi đổi:</span>
+                    <span className={remainingPoints >= 0 ? 'text-emerald-700 font-black text-lg' : 'text-rose-600 font-black text-lg'}>
+                      {new Intl.NumberFormat('vi-VN').format(Math.max(0, remainingPoints))} điểm
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Usage Notice */}
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-xs sm:text-sm">
+                <Sparkle size={22} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block mb-0.5">Hướng dẫn nhận phần thưởng:</span>
+                  Sau khi bấm <b>Xác nhận đổi quà</b>, hệ thống sẽ cấp <b>Mã đổi thưởng độc quyền</b>. Xuất trình mã này tại bất kỳ chi nhánh AutoWashPro nào để nhân viên bàn giao phần quà vật lý.
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-5 sm:p-6 bg-slate-50 border-t border-slate-200/80 flex items-center gap-3 justify-end rounded-b-3xl shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="px-6 py-3.5 rounded-2xl font-bold text-sm text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer shadow-xs"
+              >
+                Hủy bỏ
+              </button>
+
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={loading || !enoughPoints || !tierOk || (reward.stock || 0) <= 0}
+                className={`flex-1 sm:flex-initial px-8 py-3.5 rounded-2xl font-black text-sm text-white transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
+                  (reward.stock || 0) <= 0 || !enoughPoints || !tierOk
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                    : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/30 active:scale-98'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span>Đang xử lý đổi quà...</span>
+                  </>
+                ) : (
+                  <>
+                    <Gift size={18} weight="bold" />
+                    <span>Xác nhận Đổi quà</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          /* Success Screen */
+          <div className="p-8 text-center space-y-6 my-auto">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 shadow-xl ring-8 ring-emerald-50 animate-bounce mx-auto">
+              <CheckCircle size={52} weight="fill" />
+            </div>
+
+            <div>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mb-2">Đổi phần thưởng thành công! 🎉</h3>
+              <p className="text-slate-600 text-sm max-w-md mx-auto">
+                Bạn đã đổi thành công phần quà <b className="text-slate-900 font-bold">{reward.name}</b>.
+              </p>
+            </div>
+
+            {/* Code Box */}
+            <div className="bg-emerald-50/90 border border-emerald-200 text-slate-900 rounded-2xl p-6 shadow-sm space-y-3 max-w-md mx-auto">
+              <div className="text-xs uppercase font-bold tracking-widest text-emerald-800">Mã nhận quà của bạn</div>
+              <div className="flex items-center justify-center gap-3">
+                <code className="text-2xl sm:text-3xl font-mono font-black text-emerald-700 tracking-widest bg-white px-5 py-2.5 rounded-xl border border-emerald-200 shadow-xs">
+                  {successData.code}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => onCopyCode(successData.code)}
+                  className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Copy size={18} weight="bold" /> Copy
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 bg-slate-50 p-3.5 rounded-xl border border-slate-200 max-w-md mx-auto">
+              Mã này đã được tự động lưu lại. Hãy xuất trình mã khi đến rửa xe tại hệ thống AutoWashPro để nhận phần quà vật lý.
+            </p>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full max-w-md py-4 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-600/25 cursor-pointer mx-auto block"
+            >
+              Hoàn tất
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
 }
 
 function VoucherCard({ voucher, index, onRedeem, redeeming }) {
@@ -166,9 +371,10 @@ function RewardCard({ reward, index, onRedeem, redeeming, points, userTier, tier
       initial={{ opacity: 0, y: 20 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.4, delay: index * 0.08 }}
-      className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-emerald-300 hover:shadow-xl transition-all duration-300"
+      onClick={() => onRedeem(reward)}
+      className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-emerald-300 hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col h-full"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 shrink-0">
         {reward.imageUrl ? (
           <img src={reward.imageUrl} alt={reward.name} loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -176,32 +382,36 @@ function RewardCard({ reward, index, onRedeem, redeeming, points, userTier, tier
           <div className="w-full h-full flex items-center justify-center text-4xl">🎁</div>
         )}
         {soldOut && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center z-10">
             <span className="px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-black uppercase tracking-wider">Hết hàng</span>
           </div>
         )}
-        <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
-          ⭐ {reward.pointCost} Điểm
+        <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm z-10">
+          ⭐ {new Intl.NumberFormat('vi-VN').format(reward.pointCost || 0)} Điểm
         </div>
-        <div className={`absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black shadow-sm border ${tierMaps.badge[reqTier] || TIER_BADGE_CLS.bronze}`}>
+        <div className={`absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black shadow-sm border z-10 ${tierMaps.badge[reqTier] || TIER_BADGE_CLS.bronze}`}>
           {reqTier === 'bronze' ? 'Mọi hạng' : `Hạng ${reqLabel}`}
         </div>
       </div>
-      <div className="p-5">
-        <h4 className="text-base font-bold text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-600 transition-colors">{reward.name}</h4>
-        <p className="text-sm text-slate-500 leading-relaxed mb-3 line-clamp-2">{reward.description}</p>
-        <div className="text-xs text-slate-400 font-medium mb-4">Còn {reward.stock} phần quà</div>
-        <button
-          onClick={() => onRedeem(reward)}
-          disabled={redeeming || soldOut || !enough || !tierOk}
-          className={`w-full px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-            soldOut || !enough || !tierOk
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed'
-          }`}
-        >
-          {soldOut ? 'Hết hàng' : !tierOk ? `Cần hạng ${reqLabel} trở lên` : !enough ? `Cần thêm ${(reward.pointCost || 0) - (points || 0)} điểm` : redeeming ? 'Đang xử lý...' : 'Đổi ngay'}
-        </button>
+      <div className="p-5 flex flex-col justify-between flex-1">
+        <div>
+          <h4 className="text-base font-bold text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-600 transition-colors">{reward.name}</h4>
+          <p className="text-sm text-slate-500 leading-relaxed mb-3 line-clamp-2">{reward.description}</p>
+        </div>
+        <div>
+          <div className="text-xs text-slate-400 font-medium mb-4">Còn {reward.stock} phần quà</div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRedeem(reward); }}
+            disabled={redeeming || soldOut || !enough || !tierOk}
+            className={`w-full px-6 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+              soldOut || !enough || !tierOk
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed'
+            }`}
+          >
+            {soldOut ? 'Hết hàng' : !tierOk ? `Cần hạng ${reqLabel} trở lên` : !enough ? `Cần thêm ${new Intl.NumberFormat('vi-VN').format((reward.pointCost || 0) - (points || 0))} điểm` : redeeming ? 'Đang xử lý...' : 'Xem chi tiết & Đổi quà'}
+          </button>
+        </div>
       </div>
     </motion.div>
   );
@@ -215,7 +425,7 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [userPoints, setUserPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState('redeem');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   
@@ -226,6 +436,9 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   const [rewardLoading, setRewardLoading] = useState(false);
   const [myRewards, setMyRewards] = useState([]);
   const [tiers, setTiers] = useState([]);
+
+  const [selectedRewardModal, setSelectedRewardModal] = useState(null);
+  const [redeemSuccessData, setRedeemSuccessData] = useState(null);
 
   const tierMaps = useMemo(() => buildTierMaps(tiers), [tiers]);
 
@@ -286,40 +499,45 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   }, [user, activeTab, fetchSpinHistory]);
 
   const loadVouchers = useCallback(async () => {
-    if (!user) return;
     setLoading(true);
     try {
       const token = localStorage.getItem(storageKeys.accessToken);
-      const resProfile = await fetch(`${API_BASE}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
-      if (resProfile.ok) {
-         const prof = await resProfile.json();
-         if (prof.data) {
-           setSpinCount(prof.data.spinCount || 0);
-           setUserPoints(prof.data.loyaltyPoints || 0);
-         }
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      if (user && token) {
+        try {
+          const resProfile = await fetch(`${API_BASE}/auth/profile`, { headers });
+          if (resProfile.ok) {
+            const prof = await resProfile.json();
+            if (prof.data) {
+              setSpinCount(prof.data.spinCount || 0);
+              setUserPoints(prof.data.loyaltyPoints || 0);
+            }
+          }
+        } catch (e) {}
+
+        try {
+          const resV = await fetch(`${API_BASE}/vouchers/available?type=${filterType}&page=${page}&limit=6`, { headers });
+          if (resV.ok) {
+            const payload = await resV.json();
+            const { data, pagination, user: uData } = payload?.data || {};
+            if (data) setVouchers(data);
+            if (pagination) setTotalPages(pagination.totalPages || 1);
+            if (uData) setUserPoints(uData.loyaltyPoints || 0);
+          }
+        } catch (e) {}
+
+        try {
+          const resMyR = await fetch(`${API_BASE}/rewards/me`, { headers });
+          if (resMyR.ok) {
+            const payload = await resMyR.json();
+            setMyRewards(Array.isArray(payload?.data) ? payload.data : []);
+          }
+        } catch (e) {}
       }
 
-      const resV = await fetch(`${API_BASE}/vouchers/available?type=${filterType}&page=${page}&limit=6`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (resV.ok) {
-         const payload = await resV.json();
-         const { data, pagination, user: uData } = payload?.data || {};
-         
-         if (data) {
-           setVouchers(data);
-         }
-         if (pagination) {
-           setTotalPages(pagination.totalPages || 1);
-         }
-         if (uData) {
-           setUserPoints(uData.loyaltyPoints || 0);
-         }
-      }
-
-      const resR = await fetch(`${API_BASE}/rewards/public`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Always fetch public physical rewards for everyone (guests and logged in users)
+      const resR = await fetch(`${API_BASE}/rewards/public`);
       if (resR.ok) {
         const payload = await resR.json();
         const list = Array.isArray(payload?.data) ? payload.data : [];
@@ -330,14 +548,6 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
           return (a.pointCost || 0) - (b.pointCost || 0);
         }));
       }
-
-      const resMyR = await fetch(`${API_BASE}/rewards/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (resMyR.ok) {
-        const payload = await resMyR.json();
-        setMyRewards(Array.isArray(payload?.data) ? payload.data : []);
-      }
     } catch (e) {
       console.error('Failed to load store data:', e);
     } finally {
@@ -346,6 +556,11 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   }, [user, filterType, page, tierMaps]);
 
   useEffect(() => { loadVouchers(); }, [loadVouchers]);
+
+  const sseToken = localStorage.getItem(storageKeys.accessToken);
+  useSSE(sseToken, 'my_rewards_updated', loadVouchers);
+  useSSE(sseToken, 'rewards_updated', loadVouchers);
+  useSSE(sseToken, 'vouchers_updated', loadVouchers);
 
   useEffect(() => {
     let cancelled = false;
@@ -395,57 +610,27 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
     }
   };
 
-  const handleRedeemReward = async (reward) => {
+  const handleRedeemReward = (reward) => {
     if (!user) return onOpenAuth();
-    if (rewardLoading) return;
-    const reqTier = (reward.requiredTier || 'bronze').toLowerCase();
-    if ((tierMaps.rank[(user.tier || 'bronze').toLowerCase()] ?? 0) < (tierMaps.rank[reqTier] ?? 0)) {
-      showToast(`Phần thưởng này yêu cầu hạng ${tierMaps.label[reqTier] || reqTier} trở lên.`, 'error');
-      return;
-    }
-    if ((userPoints || 0) < (reward.pointCost || 0)) {
-      showToast('Bạn không đủ điểm để đổi phần thưởng này.', 'error');
-      return;
-    }
-    const ok = await confirmDialog({
-      title: 'Đổi điểm lấy phần thưởng',
-      message: `Bạn có chắc chắn muốn dùng ${reward.pointCost} điểm để đổi lấy "${reward.name}"?`,
-      confirmLabel: 'Đổi điểm',
-    });
-    if (!ok) return;
+    setRedeemSuccessData(null);
+    setSelectedRewardModal(reward);
+  };
 
+  const confirmRedeemAction = async () => {
+    if (!selectedRewardModal) return;
     setRewardLoading(true);
     try {
       const token = localStorage.getItem(storageKeys.accessToken);
       const res = await fetch(`${API_BASE}/rewards/redeem`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ rewardId: reward._id }),
+        body: JSON.stringify({ rewardId: selectedRewardModal._id }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.message || 'Lỗi đổi phần thưởng');
       const code = payload.data?.redemption?.code || '';
-      await confirmDialog({
-        title: 'Đổi phần thưởng thành công! 🎉',
-        content: (
-          <div className="text-center">
-            <p className="text-sm text-slate-500 mb-3">Bạn đã đổi <b className="text-slate-800">{reward.name}</b>. Xuất trình mã sau tại quầy để nhận phần thưởng:</p>
-            <div className="flex items-center justify-center gap-2">
-              <code className="px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-black text-lg tracking-widest">{code}</code>
-              <button
-                type="button"
-                onClick={() => { navigator.clipboard.writeText(code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-sm font-bold hover:bg-slate-700 transition-colors"
-              >
-                Copy
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 mt-3">Mã này cũng được lưu tại mục <b>Quà tặng của tôi</b> trong Kho quà & Tích điểm.</p>
-          </div>
-        ),
-        confirmLabel: 'Đóng',
-        hideCancel: true,
-      });
+      setRedeemSuccessData({ code });
+      showToast('Đổi phần thưởng thành công! 🎉', 'success');
       await loadVouchers();
     } catch (err) {
       showToast(err.message || 'Lỗi đổi phần thưởng', 'error');
@@ -516,28 +701,11 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
   };
 
   return (
-    <section ref={ref} id="gifts" className="relative py-24 md:py-32 overflow-hidden bg-[#fcfdfd]">
+    <section ref={ref} id="gifts" className="relative pt-24 pb-16 md:pt-28 md:pb-20 overflow-hidden bg-[#fcfdfd]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.02),transparent_60%)]" />
       <div className="relative z-10 max-w-6xl mx-auto px-6 md:px-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-12 md:mb-16"
-        >
-          <span className="text-emerald-600 text-xs md:text-sm font-bold tracking-widest uppercase mb-3 block">
-            Tri ân khách hàng
-          </span>
-          <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 mb-6 max-w-2xl mx-auto leading-tight">
-            Kho Ưu Đãi & Quà Tặng
-          </h2>
-          <p className="text-slate-500 max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
-            Nơi tổng hợp các mã giảm giá dành riêng cho bạn và vòng quay may mắn rinh quà bất ngờ.
-          </p>
-        </motion.div>
-
         {/* Tabs */}
-        <div className="flex justify-center mb-12">
+        <div className="flex justify-center mb-10">
           <div className="bg-slate-100 p-1.5 rounded-2xl flex items-center shadow-inner flex-wrap justify-center gap-1.5 border border-slate-200/60">
             <button
               onClick={() => setActiveTab('redeem')}
@@ -547,7 +715,7 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              Ưu Đãi
+              Quà đổi điểm
             </button>
             <button
               onClick={() => setActiveTab('wheel')}
@@ -557,17 +725,7 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              Quà Tặng (Vòng Quay)
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`px-6 sm:px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
-                activeTab === 'history' 
-                  ? 'bg-white text-emerald-600 shadow-md' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Lịch Sử Quay Thưởng
+              Vòng Quay
             </button>
           </div>
         </div>
@@ -576,155 +734,68 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
         {activeTab === 'redeem' ? (
           <div>
             {!user ? (
-              <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl shadow-sm">
-                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-4 sm:p-5 rounded-2xl border border-emerald-200/80 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-md shadow-emerald-600/20">
+                    🎁
+                  </div>
+                  <div>
+                    <span className="text-sm font-black text-slate-900 block">Đăng nhập để tích điểm & Đổi quà ngay!</span>
+                    <span className="text-xs text-slate-500 font-medium">Tích lũy điểm mỗi lần rửa xe để đổi các quà tặng cao cấp bên dưới.</span>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Bạn chưa đăng nhập</h3>
-                <p className="text-slate-500 mb-6">Đăng nhập ngay để xem các ưu đãi dành riêng cho hạng thành viên của bạn.</p>
-                <button onClick={onOpenAuth} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition-all hover:-translate-y-0.5">
-                  Đăng Nhập
+                <button
+                  onClick={onOpenAuth}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 transition-all hover:-translate-y-0.5 cursor-pointer shrink-0"
+                >
+                  Đăng Nhập Ngay
                 </button>
               </div>
             ) : (
-              <div>
-                <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <Trophy weight="fill" className="text-amber-500 w-6 h-6" />
-                    <span className="text-sm font-bold text-slate-700">Điểm tích lũy: <span className="text-emerald-600 text-lg">{userPoints}</span></span>
-                  </div>
-                  <div className="flex bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => {setFilterType('redeem');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeem' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Quà vật lý</button>
-                    <button onClick={() => {setFilterType('redeemable');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'redeemable' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Voucher</button>
-                    <button onClick={() => {setFilterType('mine');}} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === 'mine' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Của tôi</button>
-                  </div>
-                </div>
-
-                {filterType === 'redeem' && (
-                  <div>
-                    {loading ? (
-                      <div className="text-center text-slate-400 py-12 font-medium">Đang tải quà tặng...</div>
-                    ) : rewards.length === 0 ? (
-                      <div className="text-center py-20">
-                        <p className="text-slate-500 font-medium">Chưa có quà tặng vật lý nào lúc này.</p>
-                      </div>
-                    ) : (
-                      <div className="mb-10">
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
-                          <div>
-                            <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
-                            <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                          {rewards.map((reward, i) => (
-                            <RewardCard key={reward._id || i} reward={reward} index={i} onRedeem={handleRedeemReward} redeeming={rewardLoading} points={userPoints} userTier={user?.tier} tierMaps={tierMaps} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {filterType === 'redeemable' && (
-                  <div>
-                    {loading ? (
-                      <div className="text-center text-slate-400 py-12 font-medium">Đang tải ưu đãi...</div>
-                    ) : vouchers.length === 0 ? (
-                      <div className="text-center py-20">
-                        <p className="text-slate-500 font-medium">Chưa có voucher nào để đổi điểm lúc này.</p>
-                      </div>
-                    ) : (
-                      <div className="mb-10">
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-xl shrink-0 border border-emerald-200/70">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Voucher</h3>
-                            <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các mã giảm giá dùng cho hóa đơn của bạn.</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                          {vouchers.map((voucher, i) => (
-                            <VoucherCard key={voucher._id || voucher.id || i} voucher={voucher} index={i} onRedeem={handleRedeem} redeeming={redeemingId === voucher._id} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-            {filterType === 'mine' && myRewards.length > 0 && (
-              <div className="mt-12">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">Phần Thưởng Đã Đổi</h3>
-                    <p className="text-xs text-slate-500 font-medium">Các phần quà vật lý bạn đã dùng điểm để đổi. Xuất trình mã tại quầy để nhận quà.</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {myRewards.map(rd => {
-                    const snap = rd.rewardSnapshot || {};
-                    const cancelled = rd.status === 'cancelled';
-                    const received = rd.status === 'received';
-                    const sent = rd.status === 'sent';
-                    return (
-                      <div key={rd._id} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col">
-                        <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
-                          {snap.imageUrl ? (
-                            <img src={snap.imageUrl} alt={snap.name || 'Phần thưởng'} loading="lazy"
-                              className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-4xl">🎁</div>
-                          )}
-                          <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
-                            ⭐ {rd.pointsSpent} Điểm
-                          </div>
-                        </div>
-                        <div className="p-5 flex-1 flex flex-col">
-                          <h4 className="text-base font-bold text-slate-800 mb-1 line-clamp-1">{snap.name}</h4>
-                          <p className="text-[11px] text-slate-400 mb-3">Đổi ngày {formatDate(rd.createdAt)}</p>
-                          <div className={`rounded-lg px-3 py-2 border flex items-center justify-between mb-3 ${cancelled ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50 border-emerald-100'}`}>
-                            <span className="text-xs font-semibold text-slate-500">Mã đổi thưởng</span>
-                            <span className={`font-mono font-extrabold tracking-wider ${cancelled ? 'text-slate-400 line-through' : 'text-emerald-700'}`}>{rd.code}</span>
-                          </div>
-                          <div className="mt-auto flex items-center justify-between text-[11px] text-slate-400 mb-3">
-                            {cancelled
-                              ? <span className="text-rose-500 font-bold">Đã hủy</span>
-                              : received
-                                ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
-                                : sent
-                                  ? <span className="text-blue-600 font-bold">Đã gửi · Chờ xác nhận nhận quà</span>
-                                  : <span className="text-emerald-600 font-bold">Chờ gửi quà</span>}
-                          </div>
-                          {!cancelled && !received && (
-                          <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}
-                            className="mt-auto w-full py-2.5 rounded-xl font-bold text-sm border bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 transition-all">
-                            Copy mã đổi thưởng
-                          </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="flex items-center justify-between mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Trophy weight="fill" className="text-amber-500 w-6 h-6" />
+                  <span className="text-sm font-bold text-slate-700">Điểm tích lũy: <span className="text-emerald-600 text-lg">{new Intl.NumberFormat('vi-VN').format(userPoints || 0)}</span></span>
                 </div>
               </div>
             )}
 
-            {filterType === 'mine' && myRewards.length === 0 && (
-              <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl shadow-sm">
-                <div className="text-4xl mb-4">🎁</div>
-                <p className="text-slate-500 font-medium">Bạn chưa đổi phần quà vật lý nào.</p>
-                <p className="text-xs text-slate-400 mt-1">Chuyển sang tab "Quà vật lý" để đổi điểm lấy quà.</p>
-              </div>
-            )}
+            <div>
+              {loading ? (
+                <div className="text-center text-slate-400 py-12 font-medium">Đang tải quà tặng...</div>
+              ) : rewards.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="text-slate-500 font-medium">Chưa có quà tặng vật lý nào lúc này.</p>
+                </div>
+              ) : (
+                <div className="mb-10">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0 border border-amber-200/70">🎁</div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">Đổi Điểm Lấy Quà Vật Lý</h3>
+                      <p className="text-xs text-slate-500 font-medium">Dùng điểm tích lũy đổi các phần quà thực tế như dầu nhớt, nước hoa khử mùi xe,...</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {rewards.map((reward, i) => (
+                      <RewardCard
+                        key={reward._id || i}
+                        reward={reward}
+                        index={i}
+                        onRedeem={handleRedeemReward}
+                        redeeming={rewardLoading}
+                        points={userPoints}
+                        userTier={user?.tier}
+                        tierMaps={tierMaps}
+                        isLoggedIn={!!user}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
-    ) : activeTab === 'wheel' ? (
+        ) : (
           <div className="space-y-12">
             {/* ── Spin Wheel Container Card ── */}
             <div className="flex flex-col items-center justify-center py-16 px-6 bg-gradient-to-b from-white via-emerald-50/60 to-teal-50/40 border border-emerald-100/90 rounded-3xl shadow-xl relative overflow-hidden text-slate-900 text-center">
@@ -821,105 +892,30 @@ export default function GiftStoreSection({ user, onOpenAuth }) {
                 );
               })()}
             </div>
-
-            {/* ── Shortcut Banner to History ── */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-2xl shrink-0">
-                  🏆
-                </div>
-                <div>
-                  <h4 className="text-base font-bold text-slate-900">Xem lại các phần quà đã quay trúng</h4>
-                  <p className="text-xs text-slate-500">Xem danh sách đầy đủ mã voucher và quà tặng từ các lượt quay trước</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setActiveTab('history')}
-                className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all shrink-0 cursor-pointer shadow-sm"
-              >
-                Lịch sử quay thưởng →
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* ── TAB 3: LỊCH SỬ QUAY THƯỞNG ── */
-          <div className="bg-white rounded-3xl p-6 md:p-10 border border-slate-200/80 shadow-sm relative z-10">
-            <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-2xl shadow-2xs border border-amber-200/80">
-                  🏆
-                </div>
-                <div>
-                  <h4 className="text-xl font-black text-slate-900">Lịch Sử Quay Thưởng Của Bạn</h4>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">Tất cả các phần quà và mã ưu đãi bạn đã may mắn quay trúng</p>
-                </div>
-              </div>
-              {spinHistory.length > 0 && (
-                <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Tổng trúng: {spinHistory.length} phần quà
-                </span>
-              )}
-            </div>
-
-            {!user ? (
-              <div className="text-center py-16 bg-slate-50/50 rounded-2xl border border-slate-200">
-                <p className="text-slate-500 text-sm font-medium mb-4">Vui lòng đăng nhập để xem danh sách phần quà đã trúng</p>
-                <button onClick={onOpenAuth} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md">
-                  Đăng Nhập
-                </button>
-              </div>
-            ) : historyLoading ? (
-              <div className="text-center py-16 text-slate-400 text-sm font-medium">Đang tải lịch sử trúng quà...</div>
-            ) : spinHistory.length === 0 ? (
-              <div className="text-center py-16 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center text-3xl mx-auto mb-3">
-                  🎁
-                </div>
-                <h5 className="text-base font-bold text-slate-800">Chưa có phần quà nào</h5>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Bạn chưa trúng phần quà nào từ vòng quay. Hãy sang tab Vòng quay để thử vận may ngay!</p>
-                <button
-                  onClick={() => setActiveTab('wheel')}
-                  className="mt-5 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm cursor-pointer"
-                >
-                  Quay thưởng ngay ⚡
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {spinHistory.map((item, idx) => {
-                  const isUsed = item.status === 'used';
-                  const isExpired = item.status === 'expired';
-                  const statusLabel = isUsed ? 'Đã sử dụng' : isExpired ? 'Đã hết hạn' : 'Còn hiệu lực';
-                  const statusCls = isUsed ? 'bg-slate-100 text-slate-500 border-slate-200' : isExpired ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-
-                  return (
-                    <div key={item._id || idx} className="p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-300 hover:shadow-md transition-all flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-xs">
-                          🎁
-                        </div>
-                        <div className="min-w-0">
-                          <h5 className="text-sm font-bold text-slate-900 truncate">{item.name}</h5>
-                          <div className="text-[12px] font-mono text-slate-500 mt-1 flex items-center gap-2">
-                            <span>Mã: <strong className="text-slate-800">{item.code}</strong></span>
-                            <span>·</span>
-                            <span>{formatDate(item.wonAt)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold border ${statusCls}`}>
-                          {statusLabel}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      {/* Reward Detail & Confirmation Modal */}
+      {selectedRewardModal && (
+        <RewardDetailModal
+          reward={selectedRewardModal}
+          user={user}
+          userPoints={userPoints}
+          tierMaps={tierMaps}
+          onClose={() => {
+            setSelectedRewardModal(null);
+            setRedeemSuccessData(null);
+          }}
+          onConfirm={confirmRedeemAction}
+          loading={rewardLoading}
+          successData={redeemSuccessData}
+          onCopyCode={(code) => {
+            navigator.clipboard.writeText(code);
+            showToast('Đã copy mã nhận quà!', 'success');
+          }}
+        />
+      )}
     </section>
   );
 }

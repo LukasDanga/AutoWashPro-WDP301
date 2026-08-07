@@ -56,10 +56,12 @@ export default function App() {
     });
   }
 
-  const loadSession = useCallback(async (accessToken) => {
+  const loadSession = useCallback(async (accessToken, opts = {}) => {
     if (!accessToken) return;
 
-    setAuthLoading(true);
+    if (!opts.skipLoadingState) {
+      setAuthLoading(true);
+    }
     setAuthError('');
 
     try {
@@ -97,7 +99,9 @@ export default function App() {
       clearSession();
       setAuthError(error.message || 'Không thể tải phiên đăng nhập');
     } finally {
-      setAuthLoading(false);
+      if (!opts.skipLoadingState) {
+        setAuthLoading(false);
+      }
     }
   }, [apiBase]);
 
@@ -181,7 +185,7 @@ export default function App() {
     const payload = await response.json();
     const data = payload?.data || payload;
     applySession(data?.accessToken, data?.refreshToken);
-    const profile = await loadSession(data?.accessToken);
+    const profile = await loadSession(data?.accessToken, { skipLoadingState: true });
     
     if (expectedRole && profile?.role !== expectedRole) {
       throw new Error(`Tài khoản không có quyền ${expectedRole === 'admin' ? 'quản trị' : 'quản lý chi nhánh'}.`);
@@ -190,7 +194,7 @@ export default function App() {
     if (profile?.role === 'admin' || profile?.role === 'manager') {
       redirectByRole(profile);
     } else {
-      navigate('/');
+      navigate('/', { replace: true });
     }
     
     return profile;
@@ -215,20 +219,22 @@ export default function App() {
     const registerData = registerPayload?.data || registerPayload;
     applySession(registerData?.accessToken, registerData?.refreshToken);
 
-    const profile = await loadSession(registerData?.accessToken);
-    if (profile?.role !== 'admin' && profile?.role !== 'manager') {
-      navigate('/');
+    const profile = await loadSession(registerData?.accessToken, { skipLoadingState: true });
+    if (profile?.role === 'admin' || profile?.role === 'manager') {
+      redirectByRole(profile);
+    } else {
+      navigate('/', { replace: true });
     }
   }
 
   async function handleGoogleLoginSuccess(accessToken, refreshToken) {
     applySession(accessToken, refreshToken);
-    const profile = await loadSession(accessToken);
+    const profile = await loadSession(accessToken, { skipLoadingState: true });
     
     if (profile?.role === 'admin' || profile?.role === 'manager') {
       redirectByRole(profile);
     } else {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   }
 

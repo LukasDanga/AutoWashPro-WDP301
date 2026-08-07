@@ -373,6 +373,7 @@ export default function BookingDetailScreen() {
         if (parsed.branchId) branchIdFromQR = parsed.branchId;
       } catch {}
 
+      // Gui yeu cau check-in den Quan ly va hien Modal Dang Cho Quan Ly Xac Nhan
       await apiClient.post(`/bookings/${booking._id}/request-checkin`, { branchId: branchIdFromQR });
       setIsWaitingConfirm(true);
     } catch (err: any) {

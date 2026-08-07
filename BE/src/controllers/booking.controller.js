@@ -20,6 +20,86 @@ exports.createBooking = catchAsync(async (req, res) => {
   success(res, booking, 'Đặt lịch thành công', 201);
 });
 
+exports.createWalkInBooking = catchAsync(async (req, res) => {
+  const { name, phone, email, licensePlate, packageId, branchId } = req.body;
+  const User = require('../models/user.schema');
+  const Vehicle = require('../models/vehicle.schema');
+
+  let targetUserId = null;
+  let identifier = email || phone;
+
+  if (!identifier) {
+    throw Object.assign(new Error('Vui lòng cung cấp ít nhất Email hoặc Số điện thoại'), { statusCode: 400 });
+  }
+
+  // 1. Tìm hoặc tạo User
+  const query = identifier.includes('@')
+    ? { email: identifier.toLowerCase().trim() }
+    : { phone: identifier.trim() };
+    
+  let user = await User.findOne(query);
+  let isNewUser = false;
+
+  if (!user) {
+    isNewUser = true;
+    const newEmail = email || `${phone}@khachvanglai.autowash.vn`;
+    const newPhone = phone || undefined;
+    const newPassword = phone || 'Khach@123'; // Mật khẩu mặc định
+
+    user = new User({
+      name: name || 'Khách vãng lai',
+      email: newEmail,
+      phone: newPhone,
+      password: newPassword,
+    });
+    await user.save();
+  }
+  targetUserId = user._id;
+
+  // 2. Tìm hoặc tạo Xe
+  const normalizedPlate = licensePlate.replace(/\s+/g, '').toUpperCase();
+  let vehicle = await Vehicle.findOne({ userId: targetUserId, licensePlate: normalizedPlate });
+  
+  if (!vehicle) {
+    vehicle = new Vehicle({
+      userId: targetUserId,
+      licensePlate: normalizedPlate,
+      vehicleType: 'sedan',
+      brand: 'Khác',
+      color: 'Khác',
+    });
+    await vehicle.save();
+  }
+
+  // 3. Tạo Đơn đặt lịch
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+
+  const bookingData = {
+    ...req.body,
+    userId: targetUserId,
+    vehicleId: vehicle._id,
+    bookingDate: req.body.bookingDate || now.toISOString().split('T')[0],
+    startTime: req.body.startTime || `${h}:${m}`,
+    note: req.body.note || (phone ? `Khách vãng lai - SĐT: ${phone}` : 'Khách vãng lai'),
+    isWalkIn: true,
+    isNewCustomerWalkIn: isNewUser,
+    status: 'checked_in'
+  };
+  
+  const booking = await bookingService.createBooking(bookingData);
+
+  sseService.broadcastToAll('slots_updated');
+  sseService.sendToUser(targetUserId, 'my_bookings_updated', {});
+  
+  const targetBranchId = booking.branchId?._id || booking.branchId;
+  if (targetBranchId) sseService.broadcastToManagers(targetBranchId, 'customer_checked_in_via_qr', { bookingId: booking._id });
+  sseService.broadcastToAll('customer_checked_in_via_qr', { bookingId: booking._id });
+
+  success(res, booking, 'Tạo đơn vãng lai thành công', 201);
+});
+
 exports.checkRecurringConflicts = catchAsync(async (req, res) => {
   const result = await bookingService.checkRecurringConflicts({ ...req.body, userId: req.userId });
   success(res, result, 'Kiểm tra trùng lịch hoàn tất');
@@ -161,7 +241,45 @@ exports.updateBooking = catchAsync(async (req, res) => {
   const booking = await bookingService.updateBooking(req.params.id, req.body, req.user.role, req.userId);
   sseService.broadcastToAll('slots_updated');
   if (booking && booking.userId) sseService.sendToUser(booking.userId?._id || booking.userId, 'my_bookings_updated', {});
-  success(res, booking, 'Cập nhật đặt lịch thành công');
+  success(res, booking, 'Cập nhật lịch hẹn thành công');
+});
+
+exports.updateWalkInInfo = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { name, phone, email, licensePlate, vehicleType, brand, color } = req.body;
+  
+  const booking = await require('../models/booking.schema').findById(id).populate('userId').populate('vehicleId');
+  if (!booking) throw Object.assign(new Error('Lịch hẹn không tồn tại'), { statusCode: 404 });
+  
+  if (req.user.role === 'manager' && booking.branchId.toString() !== req.user.branchId.toString()) {
+    throw Object.assign(new Error('Không có quyền'), { statusCode: 403 });
+  }
+
+  if (booking.userId) {
+    if (name) booking.userId.name = name;
+    if (phone) booking.userId.phone = phone;
+    if (email) booking.userId.email = email;
+    await booking.userId.save();
+  }
+
+  if (booking.vehicleId) {
+    if (licensePlate) booking.vehicleId.licensePlate = licensePlate;
+    if (vehicleType) booking.vehicleId.vehicleType = vehicleType;
+    if (brand) booking.vehicleId.brand = brand;
+    if (color) booking.vehicleId.color = color;
+    await booking.vehicleId.save();
+  }
+
+  if (licensePlate && booking.vehiclePlate !== licensePlate) {
+    booking.vehiclePlate = licensePlate;
+    await booking.save();
+  }
+
+  const updatedBooking = await require('../models/booking.schema').findById(id)
+    .populate('userId', 'name email phone tier')
+    .populate('vehicleId', 'licensePlate vehicleType brand color');
+
+  success(res, updatedBooking, 'Cập nhật thông tin khách hàng & xe thành công');
 });
 
 exports.updateBookingStatus = catchAsync(async (req, res) => {
