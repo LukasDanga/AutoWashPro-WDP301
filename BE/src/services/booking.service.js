@@ -708,13 +708,16 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
 // Gắn thông tin phần thưởng (điểm tích lũy + vòng quay) vào booking để UI hiển thị ngay
 // — kể cả trước khi side-effect cộng điểm / tặng spin chạy xong.
 async function attachRewardInfo(booking) {
+  // Chuyển doc Mongoose sang plain object NGAY tư đȗu để các field động (pointsEarned/expectedPoints/expectedSpin)
+  // không bị Mongoose toObject()/toJSON() bỏ sót khi controller res.json(booking).
+  const result = booking.toObject ? booking.toObject() : { ...booking };
   try {
     // Điểm thực tế đã cộng cho booking này (awarded on completion)
     const earnedPoints = await PointHistory.aggregate([
       { $match: { referenceId: booking._id, type: 'earned', isDeleted: { $ne: true } } },
       { $group: { _id: null, total: { $sum: '$points' } } },
     ]);
-    booking.pointsEarned = earnedPoints[0]?.total || 0;
+    result.pointsEarned = earnedPoints[0]?.total || 0;
 
     // Ước lượng phần thưởng khách sẽ nhận khi hoàn thành đơn (điểm + vòng quay)
     const isSlotPack = booking.bookingType === 'slot_pack_usage';
@@ -726,17 +729,17 @@ async function attachRewardInfo(booking) {
     if (pointsBaseAmount > 0) {
       const loyaltyConfig = await loyaltyService.getLoyaltyConfig();
       const userTier = booking.userId?.tier || 'bronze';
-      booking.expectedPoints = loyaltyService.calculatePoints(pointsBaseAmount, userTier, loyaltyConfig) || 0;
+      result.expectedPoints = loyaltyService.calculatePoints(pointsBaseAmount, userTier, loyaltyConfig) || 0;
     } else {
-      booking.expectedPoints = 0;
+      result.expectedPoints = 0;
     }
-    booking.expectedSpin = !!isFullyPaid;
+    result.expectedSpin = !!isFullyPaid;
   } catch (e) {
-    booking.pointsEarned = booking.pointsEarned || 0;
-    booking.expectedPoints = 0;
-    booking.expectedSpin = false;
+    result.pointsEarned = result.pointsEarned || 0;
+    result.expectedPoints = 0;
+    result.expectedSpin = false;
   }
-  return booking;
+  return result;
 }
 
 exports.updateBooking = async (id, updates, userRole, userId) => {
