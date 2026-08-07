@@ -238,7 +238,9 @@ exports.createBooking = async (data) => {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const startMinutes = parseTime(startTime);
       if (startMinutes !== null && startMinutes <= currentMinutes + minAdvance) {
-        throw Object.assign(new Error(`Đặt lịch phải trước ít nhất ${minAdvance} phút`), { statusCode: 400, code: 'INVALID_TIME' });
+        if (!data.isWalkIn) {
+          throw Object.assign(new Error(`Đặt lịch phải trước ít nhất ${minAdvance} phút`), { statusCode: 400, code: 'INVALID_TIME' });
+        }
       }
     }
 
@@ -255,14 +257,32 @@ exports.createBooking = async (data) => {
       userTier: user.tier,
     }, session);
 
+    let finalStartTime = startTime;
+    let finalEndTime = endTime;
+
     if (capacityResult.hasConflict) {
-      if (capacityResult.conflictReason === 'SLOT_FULL_VIP') {
-        throw Object.assign(
-          new Error('Khung giờ này đang có thành viên VIP giữ chỗ cuối. Vui lòng chọn khung giờ khác hoặc nâng hạng lên Gold/Diamond.'),
-          { statusCode: 403, code: 'SLOT_VIP_ONLY' }
-        );
+      if (data.isWalkIn) {
+        const suggested = await findNearestAvailableSlot({
+          branchId,
+          bookingDateStr: bookingStr,
+          duration: totalDuration,
+          afterMinutes: parseTime(startTime) || (now.getHours() * 60 + now.getMinutes()),
+        });
+        if (suggested) {
+          finalStartTime = suggested.startTime;
+          finalEndTime = suggested.endTime;
+        } else {
+          throw Object.assign(new Error('Hôm nay chi nhánh đã kín lịch, không còn slot trống.'), { statusCode: 409, code: 'SLOT_FULL' });
+        }
+      } else {
+        if (capacityResult.conflictReason === 'SLOT_FULL_VIP') {
+          throw Object.assign(
+            new Error('Khung giờ này đang có thành viên VIP giữ chỗ cuối. Vui lòng chọn khung giờ khác hoặc nâng hạng lên Gold/Diamond.'),
+            { statusCode: 403, code: 'SLOT_VIP_ONLY' }
+          );
+        }
+        throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
       }
-      throw Object.assign(new Error('Khung giờ đã đầy'), { statusCode: 409, code: 'SLOT_FULL' });
     }
 
     let computedDiscountAmount = 0;
@@ -350,7 +370,10 @@ exports.createBooking = async (data) => {
 
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
-      bookingDate: bd, startTime, endTime, note,
+      bookingDate: bd, startTime: finalStartTime, endTime: finalEndTime, note,
+      status: data.status || 'pending',
+      isWalkIn: data.isWalkIn || false,
+      isNewCustomerWalkIn: data.isNewCustomerWalkIn || false,
       bookingCode: generateBookingCode(),
       voucherCode: voucherCode || undefined,
       discountAmount: computedDiscountAmount,
