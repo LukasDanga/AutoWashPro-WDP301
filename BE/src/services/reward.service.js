@@ -152,6 +152,7 @@ exports.markRedemptionReceived = async (redemptionId, { code }) => {
   }
   redemption.status = 'received';
   redemption.receivedAt = new Date();
+  await redemption.save();
   return redemption;
 };
 

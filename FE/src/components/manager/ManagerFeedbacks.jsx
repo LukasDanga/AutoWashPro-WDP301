@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { Star, ChatText, UserCircle, ArrowClockwise, PaperPlaneTilt, CheckCircle, TrendUp, TrendDown, Minus, MagnifyingGlass } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
@@ -149,6 +150,7 @@ const STAR_FILTERS = [
 const PAGE_SIZE = 9;
 
 export default function ManagerFeedbacks() {
+  const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -357,6 +359,17 @@ export default function ManagerFeedbacks() {
 
                 {/* Body */}
                 <div className="flex-1 px-5 py-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[11px] font-bold text-slate-700">{fb.bookingCode || '—'}</span>
+                    {fb.bookingCode && (
+                      <button
+                        onClick={() => navigate(`/manager/bookings?search=${encodeURIComponent(fb.bookingCode)}`)}
+                        className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
+                      >
+                        Xem đơn
+                      </button>
+                    )}
+                  </div>
                   <p className="text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md w-fit">
                     {fb.packageId?.name || '—'}
                   </p>
