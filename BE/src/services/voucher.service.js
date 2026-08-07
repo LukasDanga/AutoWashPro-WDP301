@@ -555,13 +555,16 @@ exports.getVoucherUsageReport = async (filters = {}) => {
   };
 };
 
-exports.getUserVouchers = async (userId) => {
+exports.getUserVouchers = async (userId, query = {}) => {
+  const { page = 1, limit = 10, search, status, sort = 'newest' } = query;
+  const now = new Date();
+
   const usageVouchers = await VoucherUsage.find({ userId })
     .populate('voucherId')
     .populate('bookingId', 'bookingDate startTime status')
     .sort({ usedAt: -1 });
 
-  // Gộp các voucher được gán riêng cho user (trúng vòng quay / đổi điểm) chưa nằm trong VoucherUsage
+  // Gộp các voucher được gán riêng cho user (trúng vòng quay / đổi điểm)
   const assignedVouchers = await Voucher.find({
     assignedTo: userId,
     isDeleted: { $ne: true },
@@ -569,9 +572,6 @@ exports.getUserVouchers = async (userId) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  const now = new Date();
-
-  // Chỉ giữ voucher còn dùng được (chưa dùng hết, chưa hết hạn) — ẩn voucher đã dùng/hết hạn khỏi "Quà tặng của tôi"
   const isUsable = (voucherId) => {
     if (!voucherId) return false;
     const v = voucherId.remaining !== undefined ? voucherId : (voucherId._doc || voucherId);
@@ -598,7 +598,70 @@ exports.getUserVouchers = async (userId) => {
       usedAt: v.createdAt,
     }));
 
-  return [...assignedExtras, ...usableUsage];
+  let allList = [...assignedExtras, ...usableUsage];
+
+  // Status filtering
+  if (status === 'active') {
+    allList = allList.filter(item => {
+      const v = item.voucherId;
+      return v && v.remaining > 0 && (!v.endDate || new Date(v.endDate) >= now);
+    });
+  } else if (status === 'expired') {
+    allList = allList.filter(item => {
+      const v = item.voucherId;
+      return v && (v.status === 'expired' || (v.endDate && new Date(v.endDate) < now));
+    });
+  } else if (status === 'used') {
+    allList = allList.filter(item => {
+      const v = item.voucherId;
+      return v && (v.status === 'used' || v.remaining <= 0);
+    });
+  }
+
+  // Text search
+  if (search && search.trim()) {
+    const term = search.trim().toLowerCase();
+    allList = allList.filter(item => {
+      const v = item.voucherId;
+      if (!v) return false;
+      return (v.code && v.code.toLowerCase().includes(term)) ||
+             (v.name && v.name.toLowerCase().includes(term)) ||
+             (v.description && v.description.toLowerCase().includes(term));
+    });
+  }
+
+  // Sorting
+  if (sort === 'oldest') {
+    allList.sort((a, b) => new Date(a.usedAt || 0) - new Date(b.usedAt || 0));
+  } else if (sort === 'discount_desc') {
+    allList.sort((a, b) => (b.voucherId?.discountValue || 0) - (a.voucherId?.discountValue || 0));
+  } else if (sort === 'expiring_soon') {
+    allList.sort((a, b) => {
+      const dateA = a.voucherId?.endDate ? new Date(a.voucherId.endDate).getTime() : Infinity;
+      const dateB = b.voucherId?.endDate ? new Date(b.voucherId.endDate).getTime() : Infinity;
+      return dateA - dateB;
+    });
+  } else {
+    allList.sort((a, b) => new Date(b.usedAt || 0) - new Date(a.usedAt || 0));
+  }
+
+  const pageNum = parseInt(page, 10) || 1;
+  const limitNum = parseInt(limit, 10) || 10;
+  const total = allList.length;
+  const skip = (pageNum - 1) * limitNum;
+  const paginatedData = allList.slice(skip, skip + limitNum);
+
+  return {
+    data: paginatedData,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      hasNextPage: pageNum * limitNum < total,
+      hasPrevPage: pageNum > 1,
+    },
+  };
 };
 
 /**
