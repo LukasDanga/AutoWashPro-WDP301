@@ -1044,17 +1044,25 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       // Link provisional payment (VNPay return) vào booking
       const provisionalData = JSON.parse(sessionStorage.getItem('aw_provisionalPayment') || '{}');
       const provisionalTxn = provisionalData?.transactionId;
+      let paymentSuccess = false;
+
       if (provisionalTxn) {
-        const linkRes = await fetch(`${apiBase}/payments/link-provisional`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: ah },
-          body: JSON.stringify({ transactionId: provisionalTxn, bookingId: bkId, paymentType: draft.paymentMode }),
-        });
-        const linkData = await linkRes.json();
-        if (!linkRes.ok) throw new Error(linkData.message || 'Liên kết thanh toán thất bại');
-        const payment = linkData?.data || linkData;
-      } else {
-        // Fallback: create new payment + simulate (for bank flow or no provisional)
+        try {
+          const linkRes = await fetch(`${apiBase}/payments/link-provisional`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: ah },
+            body: JSON.stringify({ transactionId: provisionalTxn, bookingId: bkId, paymentType: draft.paymentMode }),
+          });
+          if (linkRes.ok) {
+            paymentSuccess = true;
+          }
+        } catch (e) {
+          console.warn('Link provisional payment failed, executing fallback:', e);
+        }
+      }
+
+      if (!paymentSuccess) {
+        // Fallback: create new payment + simulate (for bank flow, no provisional, or older backend deployment)
         const actualAmount = draft.paymentMode === 'full' ? draft.finalPrice : draft.depositAmount;
         const method = isBank ? 'bank' : 'vnpay';
         const payRes = await fetch(`${apiBase}/payments`, {
