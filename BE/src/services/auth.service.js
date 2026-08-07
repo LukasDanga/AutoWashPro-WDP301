@@ -6,6 +6,18 @@ const loyaltyService = require('./loyalty.service');
 
 const client = new OAuth2Client();
 
+// Validate + chuẩn hóa email trước khi cho đổi (nếu có truyền email trong payload)
+async function validateEmailChange(userId, email) {
+  if (email === undefined || email === null || email === '') return;
+  const normalized = String(email).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw Object.assign(new Error('Email không hợp lệ'), { statusCode: 400, code: 'INVALID_EMAIL' });
+  }
+  const clash = await User.findOne({ email: normalized, _id: { $ne: userId } });
+  if (clash) throw Object.assign(new Error('Email đã được sử dụng bởi tài khoản khác'), { statusCode: 409, code: 'EMAIL_EXISTS' });
+  return normalized;
+}
+
 const generateTokens = (userId) => {
   const accessToken = jwt.sign({ id: userId }, config.JWT_SECRET, { expiresIn: config.JWT_EXPIRES_IN });
   const refreshToken = jwt.sign({ id: userId }, config.JWT_REFRESH_SECRET, { expiresIn: config.JWT_REFRESH_EXPIRES_IN });
@@ -157,9 +169,12 @@ exports.getCustomerProfile = async (userId) => {
 };
 
 exports.updateCustomerProfile = async (userId, updates) => {
-  const allowed = ['name', 'phone', 'avatar', 'dateOfBirth'];
+  const allowed = ['name', 'phone', 'avatar', 'dateOfBirth', 'email'];
   const filtered = {};
   allowed.forEach((k) => { if (updates[k] !== undefined) filtered[k] = updates[k]; });
+
+  const normalizedEmail = await validateEmailChange(userId, updates.email);
+  if (normalizedEmail) filtered.email = normalizedEmail;
 
   const Vehicle = require('../models/vehicle.schema');
 
@@ -172,9 +187,13 @@ exports.updateCustomerProfile = async (userId, updates) => {
 };
 
 exports.updateProfile = async (userId, updates) => {
-  const allowed = ['name', 'phone', 'avatar', 'dateOfBirth'];
+  const allowed = ['name', 'phone', 'avatar', 'dateOfBirth', 'email'];
   const filtered = {};
   allowed.forEach((k) => { if (updates[k] !== undefined) filtered[k] = updates[k]; });
+
+  const normalizedEmail = await validateEmailChange(userId, updates.email);
+  if (normalizedEmail) filtered.email = normalizedEmail;
+
   const user = await User.findByIdAndUpdate(userId, filtered, { new: true, runValidators: true });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'USER_NOT_FOUND' });
   return user;
