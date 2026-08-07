@@ -486,11 +486,13 @@ export function RedemptionsTab() {
                       <td className="px-4 py-3"><StatusBadge status={rd.status} /></td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {rd.status === 'sent' || rd.status === 'received' ? (
-                          <>
-                            {rd.sentAt && <p>{formatDate(rd.sentAt)}</p>}
-                            {rd.branchId?.name && <p className="text-slate-400">{rd.branchId.name}</p>}
-                            {rd.sentBy?.name && <p className="text-slate-400">bởi {rd.sentBy.name}</p>}
-                          </>
+                          (rd.sentAt || rd.branchId?.name || rd.sentBy?.name) ? (
+                            <>
+                              {rd.sentAt && <p>{formatDate(rd.sentAt)}</p>}
+                              {rd.branchId?.name && <p className="text-slate-400">{rd.branchId.name}</p>}
+                              {rd.sentBy?.name && <p className="text-slate-400">bởi {rd.sentBy.name}</p>}
+                            </>
+                          ) : <span className="text-slate-300">—</span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-3">

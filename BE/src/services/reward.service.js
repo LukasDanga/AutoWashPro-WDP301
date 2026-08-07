@@ -137,7 +137,7 @@ exports.markRedemptionSent = async (redemptionId, { sentBy, branchId }) => {
  * Manager/admin nhập mã đổi thưởng của khách để xác nhận đã nhận quà.
  * Cho phép trực tiếp từ 'claimed' -> 'received' (bỏ bước "đã gửi quà").
  */
-exports.markRedemptionReceived = async (redemptionId, { code }) => {
+exports.markRedemptionReceived = async (redemptionId, { code, sentBy, branchId }) => {
   const redemption = await Redemption.findById(redemptionId);
   if (!redemption) throw Object.assign(new Error('Redemption not found'), { statusCode: 404 });
   if (redemption.status === 'cancelled') {
@@ -152,6 +152,9 @@ exports.markRedemptionReceived = async (redemptionId, { code }) => {
   }
   redemption.status = 'received';
   redemption.receivedAt = new Date();
+  if (sentBy && !redemption.sentBy) redemption.sentBy = sentBy;
+  if (branchId && !redemption.branchId) redemption.branchId = branchId;
+  if (!redemption.sentAt) redemption.sentAt = new Date();
   await redemption.save();
   return redemption;
 };
