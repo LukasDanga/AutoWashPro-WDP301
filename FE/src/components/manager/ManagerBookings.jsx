@@ -259,12 +259,12 @@ function WaitingSlotNotice({ booking }) {
     const todayStr = new Date().toLocaleDateString('en-CA');
     const bookingDateStr = new Date(booking.bookingDate).toLocaleDateString('en-CA');
     if (bookingDateStr !== todayStr) return null;
-    
+
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const [bh, bm] = booking.startTime.split(':').map(Number);
     const bookingMinutes = (bh || 0) * 60 + (bm || 0);
-    
+
     if (bookingMinutes > currentMinutes) {
       return (
         <div className="mt-1.5 flex items-center">
@@ -274,7 +274,7 @@ function WaitingSlotNotice({ booking }) {
         </div>
       );
     }
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -655,7 +655,7 @@ function PrintReceiptModal({ booking, onClose }) {
                           : (Array.isArray(detailBooking.packageSnapshot?.subServices)
                             ? detailBooking.packageSnapshot.subServices.filter(s => s.isOptional === false)
                             : (Array.isArray(detailBooking.packageId?.subServices) ? detailBooking.packageId.subServices.filter(s => s.isOptional === false) : []));
-                        
+
                         if (included.length > 0) {
                           return `(${included.map(s => s.name).join(', ')})`;
                         }
@@ -1114,10 +1114,10 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                     <div key={stage.id} className="flex flex-col items-center group">
                       <div
                         className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 z-10 ${isPast
-                            ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 ring-4 ring-white'
-                            : isCurrent
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-300 ring-4 ring-blue-100 animate-pulse'
-                              : 'bg-white text-slate-300 border-2 border-slate-200'
+                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 ring-4 ring-white'
+                          : isCurrent
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-300 ring-4 ring-blue-100 animate-pulse'
+                            : 'bg-white text-slate-300 border-2 border-slate-200'
                           }`}
                       >
                         <Icon size={22} weight={isPast ? 'fill' : isCurrent ? 'duotone' : 'regular'} />
@@ -1552,8 +1552,8 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                     <button key={m.id} type="button"
                       onClick={() => setManagerPayMethod(prev => prev === m.id ? null : m.id)}
                       className={`flex flex-col items-center justify-center text-center gap-1 rounded-lg border py-2 px-1 text-[11px] font-semibold transition-colors ${managerPayMethod === m.id
-                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                         }`}>
                       {m.icon}{m.label}
                     </button>
@@ -1617,8 +1617,8 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
             <div className="flex justify-between items-center">
               <span className="text-slate-500 font-medium">Thanh toán:</span>
               <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${booking.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                  booking.paymentStatus === 'deposit_paid' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                    'bg-slate-100 text-slate-600 border border-slate-200'
+                booking.paymentStatus === 'deposit_paid' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                  'bg-slate-100 text-slate-600 border border-slate-200'
                 }`}>
                 {booking.paymentStatus === 'paid' ? 'Đã thanh toán' : booking.paymentStatus === 'deposit_paid' ? 'Đã đặt cọc' : 'Chưa thanh toán'}
               </span>
@@ -2574,8 +2574,8 @@ export default function ManagerBookings() {
               id="tab-all-bookings"
               onClick={() => handleBookingTypeTab('all')}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${bookingTypeTab === 'all'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                 }`}
             >
               📋 Tất cả
@@ -2584,8 +2584,8 @@ export default function ManagerBookings() {
               id="tab-regular-bookings"
               onClick={() => handleBookingTypeTab('regular')}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${bookingTypeTab === 'regular'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                 }`}
             >
               📅 Đặt lịch thường
@@ -2594,8 +2594,8 @@ export default function ManagerBookings() {
               id="tab-recurring-bookings"
               onClick={() => handleBookingTypeTab('recurring')}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${bookingTypeTab === 'recurring'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                 }`}
             >
               🔄 Đặt lịch định kỳ
@@ -2605,7 +2605,7 @@ export default function ManagerBookings() {
           <div className="flex items-center gap-2">
             <button onClick={() => setShowWalkInModal(true)}
               className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 transition-all shadow-sm">
-              <Lightning size={18} weight="fill" className="text-blue-600" /> Tạo đơn tại của hàng
+              <Lightning size={18} weight="fill" className="text-blue-600" /> Tạo đơn tại cửa hàng
             </button>
             <button onClick={() => setShowQRScanner(true)}
               className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
@@ -2634,10 +2634,10 @@ export default function ManagerBookings() {
             {total > 0 ? `${total} lịch hẹn` : ''}
           </p>
           <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${bookingTypeTab === 'recurring'
-              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-              : bookingTypeTab === 'regular'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-blue-50 text-blue-700 border-blue-200'
+            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+            : bookingTypeTab === 'regular'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-blue-50 text-blue-700 border-blue-200'
             }`}>
             {bookingTypeTab === 'recurring' ? '🔄 Đang xem: Đặt lịch định kỳ' : bookingTypeTab === 'regular' ? '📅 Đang xem: Đặt lịch thường' : '📋 Đang xem: Tất cả'}
           </span>
@@ -2752,9 +2752,9 @@ export default function ManagerBookings() {
                             </td>
                             <td className="px-4 py-3">
                               <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${child.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' :
-                                  child.paymentStatus === 'deposit_paid' ? 'bg-teal-50 text-teal-700' :
-                                    child.paymentStatus === 'refunded' ? 'bg-slate-100 text-slate-500' :
-                                      'bg-amber-50 text-amber-700'
+                                child.paymentStatus === 'deposit_paid' ? 'bg-teal-50 text-teal-700' :
+                                  child.paymentStatus === 'refunded' ? 'bg-slate-100 text-slate-500' :
+                                    'bg-amber-50 text-amber-700'
                                 }`}>
                                 {
                                   child.paymentStatus === 'paid' ? 'Đã thanh toán' :
@@ -2848,9 +2848,9 @@ export default function ManagerBookings() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' :
-                            b.paymentStatus === 'deposit_paid' ? 'bg-teal-50 text-teal-700' :
-                              b.paymentStatus === 'refunded' ? 'bg-slate-100 text-slate-500' :
-                                'bg-amber-50 text-amber-700'
+                          b.paymentStatus === 'deposit_paid' ? 'bg-teal-50 text-teal-700' :
+                            b.paymentStatus === 'refunded' ? 'bg-slate-100 text-slate-500' :
+                              'bg-amber-50 text-amber-700'
                           }`}>
                           {
                             b.paymentStatus === 'paid' ? 'Đã thanh toán' :
