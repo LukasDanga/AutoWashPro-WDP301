@@ -64,6 +64,7 @@ function authHeader(token) {
 export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles = [], apiBase, token, onGoToHistory, pendingBooking, onSetPendingBooking, onVehicleCreated, onUserUpdate, initialBranchId, initialTab, rebookData }) {
   const configs = useSystemConfig();
   const depositPercent = Math.round(configs?.DEPOSIT_RATE ?? 0);
+  const vatRate = Math.round(configs?.VAT_PERCENT ?? 10);
   const isLoggedIn = !!user && !!token;
   const bookingDates = useMemo(() => buildBookingDates(), []);
 
@@ -616,12 +617,17 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         sessionCount = Math.max(1, actualRecurringSessions || previewDates.length || 1);
       }
       const estimatedTotal = perSession * sessionCount;
+      const origEstimatedTotal = (perSessionBase || perSession) * sessionCount;
+      const discEstimatedTotal = (pb.appliedDiscount || pb.discount || discount || 0) * sessionCount;
       const calculatedDeposit = Math.round((estimatedTotal * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
 
       if (estimatedTotal > 0) {
         setPendingDeposit({
           isDraft: true,
           tab: pb.tab || 'regular',
+          originalPrice: origEstimatedTotal,
+          discount: discEstimatedTotal,
+          voucherCode: pb.appliedVoucher?.code || pb.voucherCode || appliedVoucher?.code || '',
           finalPrice: estimatedTotal,
           totalAmount: estimatedTotal,
           depositAmount: calculatedDeposit,
@@ -651,7 +657,11 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           vehicle: { licensePlate: gv?.licensePlate || '', name: gv?.brand || '' },
           pkg: pkg || { name: '' },
           currentDate: pb.selectedDate ? getDateObj(pb.selectedDate) : null,
-          selectedTime: pb.selectedTime, total: estimatedTotal, discount: 0, points: 0, isPayingWithPack: false, bookingCode: code,
+          selectedTime: pb.selectedTime,
+          total: estimatedTotal,
+          discount: pb.appliedDiscount || pb.discount || discount || 0,
+          voucherCode: pb.appliedVoucher?.code || pb.voucherCode || appliedVoucher?.code || '',
+          points: 0, isPayingWithPack: false, bookingCode: code,
           subServices: (pb.selectedSubServices || []).map(n => { const s = pkg?.subServices?.find(x => x.name === n); return s ? { name: s.name, price: s.price } : { name: n, price: 0 }; }),
           recurringCount: isRec ? bk?.totalCreated || 0 : undefined,
           recurringBookings: isRec ? (bk?.created || []).map(c => ({ date: c.bookingDate, time: c.startTime })) : undefined,
@@ -846,7 +856,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           currentDate,
           selectedTime,
           total: fullPrice,
-          discount: 0, points: 0, isPayingWithPack: false,
+          discount: discount || draft.discountAmount || 0,
+          voucherCode: appliedVoucher?.code || draft.voucherCode || '',
+          points: 0, isPayingWithPack: false,
           bookingCode: '',
           subServices: (currentSubServices || []).map(n => {
             const s = pkg?.subServices?.find(x => x.name === n);
@@ -885,7 +897,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           currentDate,
           selectedTime,
           total: fullPrice,
-          discount: 0, points: 0, isPayingWithPack: false,
+          discount: discount || pendingDeposit?.discount || 0,
+          voucherCode: appliedVoucher?.code || pendingDeposit?.voucherCode || '',
+          points: 0, isPayingWithPack: false,
           bookingCode: '',
           subServices: (currentSubServices || []).map(n => {
             const s = pkg?.subServices?.find(x => x.name === n);
@@ -933,7 +947,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
           _id: bkId,
           branch: selectedBranch, vehicle, pkg, currentDate, selectedTime,
           total: pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0,
-          discount: 0, points: 0, isPayingWithPack: false,
+          discount: discount || pendingDeposit?.discount || 0,
+          voucherCode: appliedVoucher?.code || pendingDeposit?.voucherCode || '',
+          points: 0, isPayingWithPack: false,
           bookingCode: (pendingDeposit.tab === 'recurring' ? bk?.recurringGroupId : (bk?.bookingCode || bk?.code)) || '',
           subServices: (currentSubServices || []).map(n => {
             const s = pkg?.subServices?.find(x => x.name === n);
@@ -1349,7 +1365,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
       const calculatedDeposit = Math.round((total * (configs?.DEPOSIT_RATE ?? 0) / 100) / 1000) * 1000;
       if (total > 0) {
         setPendingDeposit({
-          isDraft: true, tab: 'regular', finalPrice: total, totalAmount: total, depositAmount: calculatedDeposit, depositPaid: false
+          isDraft: true,
+          tab: 'regular',
+          originalPrice: totalBase,
+          discount: discount || 0,
+          voucherCode: appliedVoucher?.code || '',
+          finalPrice: total,
+          totalAmount: total,
+          depositAmount: calculatedDeposit,
+          depositPaid: false,
         });
         setDepositQrStep('select');
         setDepositPayment(null);
@@ -1441,6 +1465,9 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
         setPendingDeposit({
           isDraft: true,
           tab: 'recurring',
+          originalPrice: totalBase * totalValid,
+          discount: (discount || 0) * totalValid,
+          voucherCode: appliedVoucher?.code || '',
           finalPrice: totalPrice,
           totalAmount: totalPrice,
           depositAmount: totalDeposit,
@@ -2807,7 +2834,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                               <span className="text-base font-bold text-slate-800">Thành tiền tổng cộng</span>
                               <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(total)}</span>
                             </div>
-                            <p className="text-[11px] font-medium text-slate-400 text-right mt-1">* Giá đã bao gồm VAT 10%</p>
+                            <p className="text-[11px] font-medium text-slate-400 text-right mt-1">* Giá đã bao gồm VAT {vatRate}%</p>
                           </div>
                         )}
                       </div>
@@ -3099,18 +3126,24 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                       );
                     })}
 
-                    {lastBooking.discount > 0 && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                          <span>Mã giảm giá</span>
-                          {lastBooking.voucherCode && <span className="font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-bold">({lastBooking.voucherCode})</span>}
+                    {(lastBooking.discount > 0 || lastBooking.voucherCode) && (
+                      <div className="flex justify-between items-center text-xs py-1.5 px-3 rounded-xl bg-emerald-50/90 border border-emerald-200/80">
+                        <span className="text-emerald-800 font-bold flex items-center gap-1.5">
+                          <span>🏷️ Ưu đãi Voucher</span>
+                          {lastBooking.voucherCode && (
+                            <span className="font-mono bg-emerald-200/80 text-emerald-900 px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider">
+                              ({lastBooking.voucherCode})
+                            </span>
+                          )}
                         </span>
-                        <span className="font-bold text-emerald-600">-{formatCurrency(lastBooking.discount)}</span>
+                        <span className="font-black text-emerald-700">
+                          {lastBooking.discount > 0 ? `-${formatCurrency(lastBooking.discount)}` : 'Đã áp dụng'}
+                        </span>
                       </div>
                     )}
 
                     <div className="!mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
-                      <span className="font-bold text-sm text-slate-700">Tổng dịch vụ</span>
+                      <span className="font-bold text-sm text-slate-700">Tổng thanh toán</span>
                       <span className="font-extrabold text-base text-emerald-600">{formatCurrency(lastBooking.total || 0)}</span>
                     </div>
 
@@ -3316,41 +3349,78 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   <div className="p-4 space-y-2">
                     <div>
                       <div className="bg-slate-50 border border-slate-100/60 p-2.5 rounded-xl space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-400 font-semibold">Tổng dịch vụ</span>
-                          <span className="font-bold text-slate-700">{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</span>
-                        </div>
-                        {paymentMode === 'deposit' ? (
-                          <>
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <span className="text-amber-600 font-semibold text-sm">Đặt cọc ({depositPercent}%)</span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">{depositPercent}% × {formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</div>
-                              </div>
-                              <span className="font-black text-xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
-                            </div>
-                            <div className="h-px bg-slate-200" />
-                            <div className="flex justify-between text-sm">
-                              <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
-                              <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, (pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0) - (pendingDeposit.depositAmount || 0)))}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <span className="text-emerald-600 font-semibold text-sm">Thanh toán (100%)</span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">Thanh toán toàn bộ hóa đơn</div>
-                              </div>
-                              <span className="font-black text-xl text-emerald-600">{formatCurrency(pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0)}</span>
-                            </div>
-                            <div className="h-px bg-slate-200" />
-                            <div className="flex justify-between text-sm">
-                              <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
-                              <span className="font-bold text-slate-500">0đ</span>
-                            </div>
-                          </>
-                        )}
+                        {(() => {
+                          const finalAmt = pendingDeposit.finalPrice || pendingDeposit.totalAmount || 0;
+                          const discAmt = pendingDeposit.discount || (appliedVoucher ? discount : 0);
+                          const origAmt = pendingDeposit.originalPrice || (finalAmt + discAmt);
+                          const code = pendingDeposit.voucherCode || appliedVoucher?.code;
+                          const hasVoucher = discAmt > 0 || !!code;
+
+                          return (
+                            <>
+                              {hasVoucher ? (
+                                <>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-slate-400 font-semibold">Tổng dịch vụ</span>
+                                    <span className="font-semibold text-slate-400 line-through">{formatCurrency(origAmt)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center bg-emerald-50/80 -mx-1 px-2 py-1 rounded-lg border border-emerald-100/60 text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-emerald-700 font-bold">🏷️ Ưu đãi Voucher</span>
+                                      {code && (
+                                        <span className="bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">
+                                          ({code})
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="font-black text-emerald-600">-{formatCurrency(discAmt)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm pt-0.5 border-t border-slate-200">
+                                    <span className="text-slate-600 font-bold">Tổng sau giảm</span>
+                                    <span className="font-bold text-slate-800">{formatCurrency(finalAmt)}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-slate-400 font-semibold">Tổng dịch vụ</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(finalAmt)}</span>
+                                </div>
+                              )}
+
+                              {paymentMode === 'deposit' ? (
+                                <>
+                                  <div className="flex justify-between items-end">
+                                    <div>
+                                      <span className="text-amber-600 font-semibold text-sm">Đặt cọc ({depositPercent}%)</span>
+                                      <div className="text-[11px] text-slate-400 mt-0.5">{depositPercent}% × {formatCurrency(finalAmt)}</div>
+                                    </div>
+                                    <span className="font-black text-xl text-amber-600">{formatCurrency(pendingDeposit.depositAmount || 0)}</span>
+                                  </div>
+                                  <div className="h-px bg-slate-200" />
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
+                                    <span className="font-bold text-slate-500">{formatCurrency(Math.max(0, finalAmt - (pendingDeposit.depositAmount || 0)))}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex justify-between items-end">
+                                    <div>
+                                      <span className="text-emerald-600 font-semibold text-sm">Thanh toán (100%)</span>
+                                      <div className="text-[11px] text-slate-400 mt-0.5">Thanh toán toàn bộ hóa đơn</div>
+                                    </div>
+                                    <span className="font-black text-xl text-emerald-600">{formatCurrency(finalAmt)}</span>
+                                  </div>
+                                  <div className="h-px bg-slate-200" />
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-400 font-semibold">Còn lại (thanh toán sau)</span>
+                                    <span className="font-bold text-slate-500">0đ</span>
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
 

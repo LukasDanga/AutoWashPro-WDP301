@@ -169,24 +169,24 @@ exports.deleteVoucher = async (id, userRole, userId, userBranchId) => {
 
 exports.validateVoucher = async (code, bookingData, userId) => {
   const voucher = await Voucher.findOne({ code: code.toUpperCase(), isDeleted: { $ne: true } });
-  if (!voucher) throw Object.assign(new Error('Voucher not found'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
-  if (voucher.status !== 'active') throw Object.assign(new Error('Voucher is inactive'), { statusCode: 400, code: 'VOUCHER_INACTIVE' });
-  if (voucher.isTemplate) throw Object.assign(new Error('Voucher template cannot be used directly'), { statusCode: 400, code: 'VOUCHER_IS_TEMPLATE' });
+  if (!voucher) throw Object.assign(new Error('Mã giảm giá không tồn tại'), { statusCode: 404, code: 'VOUCHER_NOT_FOUND' });
+  if (voucher.status !== 'active') throw Object.assign(new Error('Mã giảm giá hiện đang bị khóa hoặc tạm ngưng'), { statusCode: 400, code: 'VOUCHER_INACTIVE' });
+  if (voucher.isTemplate) throw Object.assign(new Error('Mẫu voucher không thể sử dụng trực tiếp'), { statusCode: 400, code: 'VOUCHER_IS_TEMPLATE' });
 
   // Kiểm tra gán cho user cụ thể
   if (voucher.assignedTo && String(voucher.assignedTo) !== String(userId)) {
-    throw Object.assign(new Error('Voucher is assigned to another user'), { statusCode: 403, code: 'VOUCHER_ASSIGNED_TO_OTHER' });
+    throw Object.assign(new Error('Mã voucher này chỉ dành riêng cho khách hàng được chỉ định'), { statusCode: 403, code: 'VOUCHER_ASSIGNED_TO_OTHER' });
   }
 
   const now = new Date();
-  if (now < voucher.startDate) throw Object.assign(new Error('Voucher is not yet active'), { statusCode: 400, code: 'VOUCHER_NOT_ACTIVE' });
-  if (now > voucher.endDate) throw Object.assign(new Error('Voucher has expired'), { statusCode: 400, code: 'VOUCHER_EXPIRED' });
-  if (voucher.remaining <= 0) throw Object.assign(new Error('Voucher is fully redeemed'), { statusCode: 400, code: 'VOUCHER_EXHAUSTED' });
+  if (now < voucher.startDate) throw Object.assign(new Error('Mã giảm giá chưa đến ngày bắt đầu áp dụng'), { statusCode: 400, code: 'VOUCHER_NOT_ACTIVE' });
+  if (now > voucher.endDate) throw Object.assign(new Error('Mã giảm giá đã hết hạn sử dụng'), { statusCode: 400, code: 'VOUCHER_EXPIRED' });
+  if (voucher.remaining <= 0) throw Object.assign(new Error('Mã voucher này đã hết lượt sử dụng trong hệ thống'), { statusCode: 400, code: 'VOUCHER_EXHAUSTED' });
 
   if (userId && voucher.maxUsagePerUser > 0) {
     const usageCount = await VoucherUsage.countDocuments({ voucherId: voucher._id, userId });
     if (usageCount >= voucher.maxUsagePerUser) {
-      throw Object.assign(new Error(`You have reached the maximum usage limit for this voucher (${voucher.maxUsagePerUser} time(s))`), { statusCode: 400, code: 'VOUCHER_MAX_USAGE' });
+      throw Object.assign(new Error(`Bạn đã đạt giới hạn sử dụng voucher này tối đa ${voucher.maxUsagePerUser} lần`), { statusCode: 400, code: 'VOUCHER_MAX_USAGE' });
     }
   }
 
@@ -194,18 +194,18 @@ exports.validateVoucher = async (code, bookingData, userId) => {
   if (userId && voucher.applicableTiers && voucher.applicableTiers.length > 0) {
     const user = await User.findById(userId);
     if (!user || !voucher.applicableTiers.includes(user.tier)) {
-      throw Object.assign(new Error(`Voucher is only applicable for tiers: ${voucher.applicableTiers.join(', ')}`), { statusCode: 403, code: 'VOUCHER_TIER_MISMATCH' });
+      throw Object.assign(new Error(`Voucher này chỉ áp dụng cho hạng thành viên: ${voucher.applicableTiers.join(', ')}`), { statusCode: 403, code: 'VOUCHER_TIER_MISMATCH' });
     }
   }
 
   if (!voucher.applicableToAllPackages && voucher.applicablePackages.length > 0) {
     if (!voucher.applicablePackages.some((p) => String(p) === String(bookingData.packageId))) {
-      throw Object.assign(new Error('Voucher not applicable to this package'), { statusCode: 400, code: 'VOUCHER_NOT_APPLICABLE' });
+      throw Object.assign(new Error('Voucher không áp dụng cho gói dịch vụ này'), { statusCode: 400, code: 'VOUCHER_NOT_APPLICABLE' });
     }
   }
   if (!voucher.applicableToAllBranches && voucher.applicableBranches.length > 0) {
     if (!voucher.applicableBranches.some((b) => String(b) === String(bookingData.branchId))) {
-      throw Object.assign(new Error('Voucher not applicable at this branch'), { statusCode: 400, code: 'VOUCHER_NOT_APPLICABLE' });
+      throw Object.assign(new Error('Voucher không áp dụng tại chi nhánh này'), { statusCode: 400, code: 'VOUCHER_NOT_APPLICABLE' });
     }
   }
 
@@ -218,7 +218,7 @@ exports.validateVoucher = async (code, bookingData, userId) => {
   }
 
   if (amount < voucher.minOrder) {
-    throw Object.assign(new Error(`Minimum order amount is ${voucher.minOrder}`), { statusCode: 400, code: 'MIN_ORDER_NOT_MET' });
+    throw Object.assign(new Error(`Đơn hàng cần đạt tối thiểu ${voucher.minOrder.toLocaleString('vi-VN')}đ để áp dụng voucher`), { statusCode: 400, code: 'MIN_ORDER_NOT_MET' });
   }
 
   const discount = applyVoucher(voucher, amount);

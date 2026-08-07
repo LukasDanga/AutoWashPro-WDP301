@@ -537,10 +537,15 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
   const skip = (page - 1) * limit;
 
-  let sortObj = { bookingDate: -1, startTime: -1 };
+  let sortObj = { createdAt: -1 };
   if (filters.sort) {
-    if (filters.sort === '-createdAt') sortObj = { createdAt: -1 };
-    else if (filters.sort === 'createdAt') sortObj = { createdAt: 1 };
+    if (filters.sort === '-createdAt' || filters.sort === 'newest') sortObj = { createdAt: -1 };
+    else if (filters.sort === 'createdAt' || filters.sort === 'oldest') sortObj = { createdAt: 1 };
+    else if (filters.sort === 'booking_asc' || filters.sort === 'bookingDate' || filters.sort === 'time_asc') sortObj = { bookingDate: 1, startTime: 1 };
+    else if (filters.sort === 'booking_desc' || filters.sort === '-bookingDate' || filters.sort === 'time_desc') sortObj = { bookingDate: -1, startTime: -1 };
+    else if (filters.sort === 'price_desc' || filters.sort === '-finalPrice') sortObj = { finalPrice: -1 };
+    else if (filters.sort === 'price_asc' || filters.sort === 'finalPrice') sortObj = { finalPrice: 1 };
+    else if (filters.sort === 'priority_desc' || filters.sort === '-priority') sortObj = { priority: -1, createdAt: -1 };
   }
 
   if (filters.groupByRecurring === 'true') {
