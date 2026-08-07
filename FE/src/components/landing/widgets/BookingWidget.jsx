@@ -2394,29 +2394,39 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                           const hasSlots = availableSlots.length > 0;
                           const allPast = hasSlots && availableSlots.every(s => !s.available);
                           const isTodayClosed = isToday && allPast;
+                          const isConfiguredDayOff = selectedBranch?.scheduleConfig?.daysOff?.includes(currentDate?.iso);
+                          
                           return (
                             <div className={`flex items-center gap-3 p-5 rounded-2xl border ${
-                              isTodayClosed 
-                                ? 'bg-slate-50 border-slate-200' 
-                                : 'bg-amber-50 border-amber-200'
+                              isConfiguredDayOff 
+                                ? 'bg-red-50 border-red-200'
+                                : isTodayClosed 
+                                  ? 'bg-slate-50 border-slate-200' 
+                                  : 'bg-amber-50 border-amber-200'
                             }`}>
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
-                                isTodayClosed ? 'bg-slate-100' : 'bg-amber-100'
+                                isConfiguredDayOff ? 'bg-red-100' : isTodayClosed ? 'bg-slate-100' : 'bg-amber-100'
                               }`}>
-                                {isTodayClosed ? '🔒' : '📅'}
+                                {isConfiguredDayOff ? '⛔' : isTodayClosed ? '🔒' : '📅'}
                               </div>
                               <div>
                                 <p className={`text-sm font-bold ${
-                                  isTodayClosed ? 'text-slate-700' : 'text-amber-800'
+                                  isConfiguredDayOff ? 'text-red-800' : isTodayClosed ? 'text-slate-700' : 'text-amber-800'
                                 }`}>
-                                  {isTodayClosed ? 'Cửa hàng hôm nay đã đóng cửa' : 'Hết lịch trống'}
+                                  {isConfiguredDayOff 
+                                    ? 'Chi nhánh tạm nghỉ ngày này' 
+                                    : isTodayClosed 
+                                      ? 'Cửa hàng hôm nay đã đóng cửa' 
+                                      : 'Hết lịch trống'}
                                 </p>
                                 <p className={`text-xs mt-0.5 ${
-                                  isTodayClosed ? 'text-slate-500' : 'text-amber-600'
+                                  isConfiguredDayOff ? 'text-red-600' : isTodayClosed ? 'text-slate-500' : 'text-amber-600'
                                 }`}>
-                                  {isTodayClosed 
-                                    ? 'Đã hết giờ tiếp nhận cho hôm nay. Vui lòng chọn ngày khác từ ngày mai.'
-                                    : 'Ngày này đã hết chỗ. Vui lòng chọn ngày khác.'
+                                  {isConfiguredDayOff
+                                    ? 'Cửa hàng không nhận khách trong ngày này. Vui lòng chọn ngày khác.'
+                                    : isTodayClosed 
+                                      ? 'Đã hết giờ tiếp nhận cho hôm nay. Vui lòng chọn ngày khác từ ngày mai.'
+                                      : 'Ngày này đã hết chỗ. Vui lòng chọn ngày khác.'
                                   }
                                 </p>
                               </div>
@@ -2454,7 +2464,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     }`}
                                   >
                                     <span className={isDisabled ? 'line-through text-slate-300 text-sm' : 'text-sm'}>{timeLabel}</span>
-                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">Đã kín</span>}
+                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400 text-center px-1 w-full truncate" title={s.reason || 'Đã kín'}>{s.reason || 'Đã kín'}</span>}
                                     {isVipBooked && (
                                       <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
                                         <Sparkles className="w-3 h-3" />
@@ -2495,7 +2505,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                     }`}
                                   >
                                     <span className={isDisabled ? 'line-through text-slate-300 text-sm' : 'text-sm'}>{timeLabel}</span>
-                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400">Đã kín</span>}
+                                    {isDisabled && <span className="text-[10px] leading-none mt-1 font-medium text-red-400 text-center px-1 w-full truncate" title={s.reason || 'Đã kín'}>{s.reason || 'Đã kín'}</span>}
                                     {isVipBooked && (
                                       <span className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-full p-0.5 shadow-sm" title="Khách VIP đã đặt giờ này">
                                         <Sparkles className="w-3 h-3" />
