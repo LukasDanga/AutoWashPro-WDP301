@@ -8,7 +8,6 @@ import { showToast } from '@/lib/toast';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import useSSE from '@/hooks/useSSE';
 
-
 function buildDiscountTiers(rawDiscounts, maxQty = 50) {
   if (!Array.isArray(rawDiscounts) || rawDiscounts.length === 0) {
     return [
@@ -40,8 +39,8 @@ const STATUS_MAP = {
 };
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
-function getDiscountPct(n, discountTiers) { return discountTiers.find(t => n >= t.min && n <= t.max)?.pct || 0; }
-function getDiscountLabel(n, discountTiers) { return discountTiers.find(t => n >= t.min && n <= t.max)?.label || ''; }
+function getDiscountPct(n, discountTiers) { return (discountTiers || []).find(t => n >= t.min && n <= t.max)?.pct || 0; }
+function getDiscountLabel(n, discountTiers) { return (discountTiers || []).find(t => n >= t.min && n <= t.max)?.label || ''; }
 
 function SlotMeter({ total, remaining }) {
   const pct = total > 0 ? (remaining / total) * 100 : 0;
@@ -752,7 +751,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           </div>
           {discountPct > 0 && (
             <div className="text-center p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-semibold">
-              🎉 Chiết khấu số lượng: <strong>{discountPct}%</strong> — {getDiscountLabel(slotCount)}!
+              🎉 Chiết khấu số lượng: <strong>{discountPct}%</strong> — {getDiscountLabel(slotCount, discountTiers)}!
             </div>
           )}
         </motion.div>
