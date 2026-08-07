@@ -6,6 +6,8 @@ import VoucherPicker from '../../VoucherPicker.jsx';
 import QuickBookModal from './QuickBookModal.jsx';
 import { showToast } from '@/lib/toast';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
+import useSSE from '@/hooks/useSSE';
+
 
 function buildDiscountTiers(rawDiscounts, maxQty = 50) {
   if (!Array.isArray(rawDiscounts) || rawDiscounts.length === 0) {
