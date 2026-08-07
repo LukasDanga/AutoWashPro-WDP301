@@ -686,6 +686,29 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
   ]);
   booking.pointsEarned = earnedPoints[0]?.total || 0;
 
+  // Ước lượng phần thưởng khách sẽ nhận khi hoàn thành đơn (điểm + vòng quay) — để UI hiển thị ngay cả trước khi side-effect cộng điểm chạy xong
+  try {
+    const isSlotPack = booking.bookingType === 'slot_pack_usage';
+    const pointsBaseAmount = isSlotPack
+      ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+      : (booking.finalPrice || 0);
+    const isFullyPaid = booking.paymentStatus === 'paid' || isSlotPack;
+
+    if (pointsBaseAmount > 0) {
+      const loyaltyConfig = await loyaltyService.getLoyaltyConfig();
+      const userTier = booking.userId?.tier || 'bronze';
+      booking.expectedPoints = loyaltyService.calculatePoints(pointsBaseAmount, userTier, loyaltyConfig) || 0;
+    } else {
+      booking.expectedPoints = 0;
+    }
+
+    // Khách được tặng 1 vòng quay khi đơn hoàn thành + đã thanh toán đủ (hoặc dùng gói lượt). Chưa cần xét `currentPaid` riêng vì paymentStatus 'paid' đã bao hàm.
+    booking.expectedSpin = !!isFullyPaid;
+  } catch (e) {
+    booking.expectedPoints = 0;
+    booking.expectedSpin = false;
+  }
+
   return booking;
 };
 

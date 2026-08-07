@@ -38,6 +38,8 @@ import {
   MapPin,
   NotePencil,
   ArrowRight,
+  Gift,
+  Sparkle,
 } from '@phosphor-icons/react';
 import useSSE from '@/hooks/useSSE';
 import { useNavigate, useLocation, useSearchParams, useOutletContext } from 'react-router-dom';
@@ -1271,6 +1273,115 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
                 <MapPin size={15} className="text-slate-400" /> Chi nhánh: <strong className="text-slate-800">{booking.branchId?.name || booking.branchName || '—'}</strong>
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* CARD 3: ƯU ĐÃI & TÍCH ĐIỂM */}
+        <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <Sparkle size={16} className="text-amber-500" /> Ưu đãi & Tích điểm
+            </h3>
+            {booking.spinEarned && (
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+                🎡 +1 vòng quay
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                <Tag size={14} className="text-slate-400" /> Voucher đã dùng:
+              </span>
+              <span className={`font-mono font-bold ${booking.voucherCode ? 'text-emerald-700' : 'text-slate-400'}`}>
+                {booking.voucherCode || '—'}
+              </span>
+            </div>
+            {(booking.discountAmount || 0) > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Giảm từ voucher:</span>
+                <span className="font-bold text-emerald-600">-{formatCurrency(booking.discountAmount)}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+              <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                <Star size={14} className="text-amber-400" /> Điểm tích lũy:
+              </span>
+              <span className={`font-bold ${(booking.pointsEarned || 0) > 0 ? 'text-emerald-600' : (booking.expectedPoints || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                {(booking.pointsEarned || 0) > 0
+                  ? `+${Number(booking.pointsEarned).toLocaleString('vi-VN')} điểm`
+                  : (booking.expectedPoints || 0) > 0
+                    ? `Sẽ nhận +${Number(booking.expectedPoints).toLocaleString('vi-VN')} điểm khi hoàn thành`
+                    : '—'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                <Gift size={14} className="text-pink-400" /> Vòng quay may mắn:
+              </span>
+              <span className={`font-bold ${booking.spinEarned ? 'text-pink-600' : booking.expectedSpin ? 'text-amber-600' : 'text-slate-400'}`}>
+                {booking.spinEarned
+                  ? 'Đã tặng 1 lượt'
+                  : booking.expectedSpin
+                    ? 'Sẽ tặng 1 lượt khi hoàn thành'
+                    : '—'}
+              </span>
+            </div>
+
+            {booking.bookingType === 'slot_pack_usage' && (
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+                <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                  <Package size={14} className="text-amber-500" /> Gói lượt:
+                </span>
+                <span className="font-mono font-bold text-slate-900">{booking.slotPackId?.packCode || booking.slotPackId?._id || '—'}</span>
+              </div>
+            )}
+
+            {(booking.depositAmount > 0 || booking.depositPaid) && (
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+                <span className="text-slate-500 font-medium">Đặt cọc:</span>
+                <span className={`font-bold ${booking.depositPaid ? 'text-amber-600' : 'text-slate-400'}`}>
+                  {formatCurrency(booking.depositAmount || 0)} {booking.depositPaid ? '(Đã cọc)' : '(Chưa cọc)'}
+                </span>
+              </div>
+            )}
+
+            {(booking.refundStatus && booking.refundStatus !== 'none') && (
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+                <span className="text-slate-500 font-medium">Hoàn tiền:</span>
+                <span className="font-bold text-rose-600">
+                  {formatCurrency(booking.refundAmount || 0)} ({booking.refundStatus === 'completed' ? 'đã hoàn' : 'đang xử lý'})
+                </span>
+              </div>
+            )}
+
+            {booking.rescheduleCount > 0 && (
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+                <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                  <ClockCounterClockwise size={14} className="text-slate-400" /> Đổi lịch:
+                </span>
+                <span className="font-bold text-slate-700">{booking.rescheduleCount} lần</span>
+              </div>
+            )}
+
+            {booking.priority > 1 && (
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
+                <span className="text-slate-500 font-medium">Ưu tiên xử lý:</span>
+                <span className="font-bold text-blue-600">
+                  {['Bronze', 'Silver', 'Gold', 'Diamond'][booking.priority - 1] || booking.priority}
+                </span>
+              </div>
+            )}
+
+            {booking.note && (
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ghi chú khách:</p>
+                <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">{booking.note}</p>
+              </div>
+            )}
           </div>
         </div>
 
