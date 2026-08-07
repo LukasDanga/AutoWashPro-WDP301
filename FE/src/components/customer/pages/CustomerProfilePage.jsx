@@ -32,7 +32,7 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
   const [showEditVehicle, setShowEditVehicle] = useState(false);
 
   // Forms state
-  const [profileForm, setProfileForm] = useState({ name: user?.name || '', phone: user?.phone || '', avatar: user?.avatar || '' });
+  const [profileForm, setProfileForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', avatar: user?.avatar || '' });
   const [profileSaving, setProfileSaving] = useState(false);
 
   const [passForm, setPassForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -49,7 +49,7 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
   const [tierList, setTierList] = useState([]);
 
   useEffect(() => {
-    setProfileForm({ name: user?.name || '', phone: user?.phone || '', avatar: user?.avatar || '' });
+    setProfileForm({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', avatar: user?.avatar || '' });
   }, [user]);
 
   useEffect(() => {
@@ -502,7 +502,7 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
             </div>
 
             <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
-              <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">EMAIL (KHÔNG THỂ THAY ĐỔI)</span>
+              <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">EMAIL</span>
               <p className="text-sm font-semibold text-slate-600">{user?.email}</p>
             </div>
           </div>
@@ -682,9 +682,9 @@ export default function CustomerProfilePage({ user, vehicles: initialVehicles, o
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Email (Không thể thay đổi)</label>
-                    <input type="email" value={user?.email || ''} disabled
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed" />
+                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Email</label>
+                    <input type="email" value={profileForm.email || ''} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                      placeholder="Nhập email" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none" />
                   </div>
                 </div>
 

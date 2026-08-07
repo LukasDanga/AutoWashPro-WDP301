@@ -702,15 +702,45 @@ exports.getBookingById = async (id, userRole, userId, userBranchId) => {
     }
   }
 
-  // Loyalty points earned for this booking (awarded on completion) — attach for UI display
-  const earnedPoints = await PointHistory.aggregate([
-    { $match: { referenceId: booking._id, type: 'earned', isDeleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: '$points' } } },
-  ]);
-  booking.pointsEarned = earnedPoints[0]?.total || 0;
-
-  return booking;
+  return attachRewardInfo(booking);
 };
+
+// Gắn thông tin phần thưởng (điểm tích lũy + vòng quay) vào booking để UI hiển thị ngay
+// — kể cả trước khi side-effect cộng điểm / tặng spin chạy xong.
+async function attachRewardInfo(booking) {
+  // Chuyển doc Mongoose sang plain object NGAY tư đȗu để các field động (pointsEarned/expectedPoints/expectedSpin)
+  // không bị Mongoose toObject()/toJSON() bỏ sót khi controller res.json(booking).
+  const result = booking.toObject ? booking.toObject() : { ...booking };
+  try {
+    // Điểm thực tế đã cộng cho booking này (awarded on completion)
+    const earnedPoints = await PointHistory.aggregate([
+      { $match: { referenceId: booking._id, type: 'earned', isDeleted: { $ne: true } } },
+      { $group: { _id: null, total: { $sum: '$points' } } },
+    ]);
+    result.pointsEarned = earnedPoints[0]?.total || 0;
+
+    // Ước lượng phần thưởng khách sẽ nhận khi hoàn thành đơn (điểm + vòng quay)
+    const isSlotPack = booking.bookingType === 'slot_pack_usage';
+    const pointsBaseAmount = isSlotPack
+      ? (booking.packagePrice ?? booking.packageId?.price ?? 0) + (booking.selectedSubServices || []).reduce((sum, s) => sum + (s.price || 0), 0)
+      : (booking.finalPrice || 0);
+    const isFullyPaid = booking.paymentStatus === 'paid' || isSlotPack;
+
+    if (pointsBaseAmount > 0) {
+      const loyaltyConfig = await loyaltyService.getLoyaltyConfig();
+      const userTier = booking.userId?.tier || 'bronze';
+      result.expectedPoints = loyaltyService.calculatePoints(pointsBaseAmount, userTier, loyaltyConfig) || 0;
+    } else {
+      result.expectedPoints = 0;
+    }
+    result.expectedSpin = !!isFullyPaid;
+  } catch (e) {
+    result.pointsEarned = result.pointsEarned || 0;
+    result.expectedPoints = 0;
+    result.expectedSpin = false;
+  }
+  return result;
+}
 
 exports.updateBooking = async (id, updates, userRole, userId) => {
   const session = await mongoose.startSession();
@@ -994,6 +1024,13 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
           sseService.sendToUser(currentBooking.userId, 'spin_added', { count: 1 });
         }
 
+        // Thông báo manager/admin refresh chi tiết đơn để điểm + spin mới nhất hiển thị ngay
+        sseService.broadcastToManagers(
+          currentBooking.branchId?._id || currentBooking.branchId,
+          'slots_updated',
+          { bookingId: currentBooking._id }
+        );
+
         // Notify customer — include points earned and spin info
         const extras = [];
         if (pointsEarned > 0) extras.push(`Bạn được cộng +${pointsEarned.toLocaleString('vi-VN')} điểm thưởng`);
@@ -1023,7 +1060,7 @@ exports.updateBookingStatus = async (id, status, updateData = {}, userRole, user
     });
   }
 
-  return booking;
+  return attachRewardInfo(booking);
 };
 
 exports.updateSubServices = async (id, subServiceNames, userRole, userBranchId, userId) => {
