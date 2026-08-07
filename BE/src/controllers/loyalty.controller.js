@@ -16,14 +16,27 @@ exports.getConfig = catchAsync(async (req, res, next) => {
 
 exports.updateConfig = catchAsync(async (req, res, next) => {
   const updatedConfig = await loyaltyService.updateLoyaltyConfig(req.body);
+  const sseService = require('../services/sse.service');
+  if (sseService && typeof sseService.broadcastToAll === 'function') {
+    sseService.broadcastToAll('config_updated', { key: 'LOYALTY_TIERS' });
+    sseService.broadcastToAll('loyalty_config_updated', updatedConfig);
+    sseService.broadcastToAll('rewards_updated');
+  }
   success(res, updatedConfig, 'Cập nhật cấu hình điểm thưởng thành công');
 });
 
 exports.getMyPointHistory = catchAsync(async (req, res, next) => {
+  const mongoose = require('mongoose');
   const { PointHistory } = require('../models');
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, type } = req.query;
 
-  const filter = { userId: req.user._id, isDeleted: { $ne: true } };
+  const userObjectId = new mongoose.Types.ObjectId(req.user._id);
+  const filter = { userId: userObjectId, isDeleted: { $ne: true } };
+  if (type === 'lifetime') {
+    filter.type = { $in: ['earned', 'adjustment'] };
+  } else if (type && type !== 'all') {
+    filter.type = type;
+  }
 
   const pageNum = parseInt(page, 10) || 1;
   const limitNum = parseInt(limit, 10) || 10;
@@ -38,7 +51,7 @@ exports.getMyPointHistory = catchAsync(async (req, res, next) => {
     .limit(limitNum);
 
   const statsAggregate = await PointHistory.aggregate([
-    { $match: filter },
+    { $match: { userId: userObjectId, isDeleted: { $ne: true } } },
     {
       $group: {
         _id: null,
@@ -67,8 +80,13 @@ exports.getMyPointHistory = catchAsync(async (req, res, next) => {
   const summary = statsAggregate[0] || { totalEarned: 0, totalRedeemed: 0 };
 
   success(res, items, 'Lấy lịch sử điểm thưởng thành công', 200, {
-    page: pageNum, limit: limitNum, total, totalPages,
-    hasNextPage: pageNum < totalPages, hasPrevPage: pageNum > 1, summary,
+    page: pageNum,
+    limit: limitNum,
+    total,
+    totalPages,
+    hasNextPage: pageNum < totalPages,
+    hasPrevPage: pageNum > 1,
+    summary,
   });
 });
 

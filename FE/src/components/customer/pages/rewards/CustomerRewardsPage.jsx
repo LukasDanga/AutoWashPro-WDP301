@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Gift, Coins, Star, Ticket, Tag, CheckCircle, CaretRight, ArrowUp, ArrowDown, Eye, Lightbulb, Medal, Info, Warning } from '@phosphor-icons/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TierBadge from '@/components/ui/TierBadge';
+import CustomerPagination from '@/components/ui/CustomerPagination';
 import { confirmDialog } from '@/lib/confirm';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import useSSE from '@/hooks/useSSE';
@@ -41,13 +42,13 @@ function getTypeBadge(type) {
 
 function PointHistoryTable({ items, loading, page, pagination, setPage, navigate, emptyMsg, activeTab }) {
   if (loading) return <div className="text-center py-12 text-slate-400 text-sm">Đang tải...</div>;
-  if (items.length === 0) return <div className="text-center py-12 text-slate-400 text-sm">{emptyMsg || 'Chưa có dữ liệu'}</div>;
+  if (!items || items.length === 0) return <div className="text-center py-12 text-slate-400 text-sm">{emptyMsg || 'Chưa có dữ liệu'}</div>;
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
             <tr>
               <th className="px-4 py-3 text-left">Ngày</th>
               <th className="px-4 py-3 text-left">Loại</th>
@@ -75,7 +76,7 @@ function PointHistoryTable({ items, loading, page, pagination, setPage, navigate
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => navigate(`/rewards/history/${item._id}?tab=${activeTab}`)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+                      className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer">
                       <Eye size={14} /> Xem
                     </button>
                   </td>
@@ -85,15 +86,7 @@ function PointHistoryTable({ items, loading, page, pagination, setPage, navigate
           </tbody>
         </table>
       </div>
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-4">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Trước</button>
-          <span className="text-xs text-slate-500">Trang {page} / {pagination.totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page >= pagination.totalPages}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Sau</button>
-        </div>
-      )}
+      <CustomerPagination pagination={pagination} page={page} setPage={setPage} itemName="giao dịch" />
     </div>
   );
 }
@@ -106,7 +99,8 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
   const [summary, setSummary] = useState({ totalEarned: 0, totalRedeemed: 0 });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 10 });
+  const [myRewardsPagination, setMyRewardsPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 10 });
 
   const [vouchers, setVouchers] = useState([]);
   const [myVouchers, setMyVouchers] = useState([]);
@@ -140,13 +134,17 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     }).catch(() => {});
   }, []);
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (targetPage = page, targetTab = activeTab) => {
     setLoading(true);
     try {
-      const res = await api('/loyalty/my-history?limit=50');
+      const typeQuery = targetTab === 'lifetime' ? '&type=lifetime' : '';
+      const res = await api(`/loyalty/my-history?page=${targetPage}&limit=10${typeQuery}`);
       const data = await res.json();
       if (data?.data) {
         setHistory(data.data);
+      }
+      if (data?.pagination) {
+        setPagination(data.pagination);
       }
       const summaryData = data?.pagination?.summary || data?.meta?.summary;
       if (summaryData) {
@@ -155,25 +153,9 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     } catch (e) { } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, activeTab]);
 
-  useEffect(() => {
-    if (refreshUser) refreshUser();
-    fetchHistory();
-    fetchVouchers();
-  }, [fetchHistory]);
-
-  const sseToken = getStoredToken();
-  useSSE(sseToken, 'my_rewards_updated', () => {
-    fetchVouchers();
-    fetchHistory();
-    if (refreshUser) refreshUser();
-  });
-  useSSE(sseToken, 'rewards_updated', () => {
-    fetchVouchers();
-  });
-
-  const fetchVouchers = async () => {
+  const fetchVouchers = useCallback(async (targetPage = page) => {
     try {
       const resTpl = await api('/vouchers/available');
       const dataTpl = await resTpl.json();
@@ -189,13 +171,42 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     } catch (e) { }
 
     try {
-      const resRewards = await api('/rewards/me');
+      const resRewards = await api(`/rewards/me?page=${targetPage}&limit=10`);
       const dataRewards = await resRewards.json();
       setMyRewards(dataRewards.data || []);
+      if (dataRewards.pagination) {
+        setMyRewardsPagination(dataRewards.pagination);
+      }
     } catch (e) { }
+  }, [page]);
+
+  useEffect(() => {
+    if (refreshUser) refreshUser();
+    if (activeTab === 'reward' || activeTab === 'lifetime') {
+      fetchHistory(page, activeTab);
+    } else {
+      fetchVouchers(page);
+    }
+  }, [fetchHistory, fetchVouchers, page, activeTab]);
+
+  const sseToken = getStoredToken();
+  useSSE(sseToken, 'my_rewards_updated', () => {
+    fetchVouchers(page);
+    fetchHistory(page, activeTab);
+    if (refreshUser) refreshUser();
+  });
+  useSSE(sseToken, 'rewards_updated', () => {
+    fetchVouchers(page);
+  });
+
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    setPage(1);
+    setSearchParams({ tab: newTab }, { replace: true });
   };
 
-  const handleRedeem = async (templateId) => {    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
+  const handleRedeem = async (templateId) => {
+    if (!(await confirmDialog({ title: 'Đổi điểm lấy voucher', message: 'Bạn có chắc chắn muốn đổi điểm lấy voucher này?', confirmLabel: 'Đổi điểm' }))) return;
     setRedeemLoading(true);
     try {
       const res = await api('/vouchers/redeem-points', {
@@ -204,9 +215,9 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.message || 'Lỗi đổi điểm');
-      fetchVouchers();
+      fetchVouchers(page);
       if (refreshUser) refreshUser();
-      fetchHistory();
+      fetchHistory(page, activeTab);
     } catch (err) { } finally { setRedeemLoading(false); }
   };
 
@@ -222,8 +233,6 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
   const progress = nextTierObj
     ? Math.min(100, Math.max(0, (((user?.lifetimePoints || 0) - currentMin) / (nextMin - currentMin)) * 100))
     : 100;
-
-  const lifetimeHistory = history.filter(item => item.type === 'earned' || item.type === 'adjustment');
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -254,11 +263,11 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
         {['reward', 'lifetime', 'exchange', 'rules', 'my-vouchers'].map(tab => (
-          <button key={tab} onClick={() => { setActiveTab(tab); setSearchParams({ tab }, { replace: true }); }}
-            className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-              ? (tab === 'lifetime' ? 'border-blue-600 text-blue-600' : 'border-emerald-600 text-emerald-600')
+          <button key={tab} onClick={() => handleTabChange(tab)}
+            className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === tab
+              ? (tab === 'lifetime' ? 'border-blue-600 text-blue-600' : 'border-emerald-600 text-emerald-600 font-bold')
               : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
             {tab === 'reward' ? 'Điểm thưởng' : tab === 'lifetime' ? 'Điểm tích lũy' : tab === 'exchange' ? 'Đổi điểm lấy quà' : tab === 'rules' ? 'Cách tính điểm' : 'Quà tặng của tôi'}
           </button>
@@ -289,7 +298,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
             <p className="text-xs text-slate-500">Tổng điểm tích lũy (chỉ bị trừ khi hủy đơn/hoàn tiền)</p>
             <p className="text-lg font-extrabold text-blue-700">{formatCurrency(user?.lifetimePoints || 0)}</p>
           </div>
-          <PointHistoryTable items={lifetimeHistory} loading={loading} page={page} pagination={pagination} setPage={setPage} navigate={navigate} emptyMsg="Chưa có lịch sử điểm tích lũy" activeTab={activeTab} />
+          <PointHistoryTable items={history} loading={loading} page={page} pagination={pagination} setPage={setPage} navigate={navigate} emptyMsg="Chưa có lịch sử điểm tích lũy" activeTab={activeTab} />
         </div>
       )}
 
@@ -466,6 +475,7 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                   );
                 })}
               </div>
+              <CustomerPagination pagination={myRewardsPagination} page={page} setPage={setPage} itemName="phần thưởng" />
             </div>
           )}
 

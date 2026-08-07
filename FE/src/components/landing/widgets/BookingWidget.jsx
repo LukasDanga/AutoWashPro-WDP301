@@ -103,7 +103,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
   const [selectedVehicle, setSelectedVehicle] = useState(() => initialBookingState?.selectedVehicle || '');
   const [selectedPackage, setSelectedPackage] = useState(() => initialBookingState?.selectedPackage || null);
   const [selectedSubServices, setSelectedSubServices] = useState(() => (initialBookingState?.selectedSubServices && Object.keys(initialBookingState.selectedSubServices).length) ? initialBookingState.selectedSubServices : {});
-  const [selectedDate, setSelectedDate] = useState(() => initialBookingState?.selectedDate || bookingDates[1]?.id || bookingDates[0]?.id);
+  const [selectedDate, setSelectedDate] = useState(() => initialBookingState?.selectedDate || null);
   const [selectedTime, setSelectedTime] = useState(() => initialBookingState?.selectedTime || '');
   const [selectedDays, setSelectedDays] = useState(() => initialBookingState?.selectedDays || []);
   const [weeks, setWeeks] = useState(() => initialBookingState?.weeks || 2);
@@ -255,20 +255,28 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
 
   const [loyaltyConfig, setLoyaltyConfig] = useState(null);
 
-  // Load loyalty config (public)
-  useEffect(() => {
-    async function loadLoyaltyConfig() {
-      try {
-        const res = await fetch(`${API_BASE}/loyalty/config`);
-        const payload = await res.json();
-        if (payload?.data) setLoyaltyConfig(payload.data);
-        else if (payload?.tiers) setLoyaltyConfig(payload);
-      } catch (e) {
-        console.error('Failed to load loyalty config', e);
-      }
+  // Load loyalty config (public) with real-time SSE sync
+  const loadLoyaltyConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/loyalty/config`);
+      const payload = await res.json();
+      if (payload?.data) setLoyaltyConfig(payload.data);
+      else if (payload?.tiers) setLoyaltyConfig(payload);
+    } catch (e) {
+      console.error('Failed to load loyalty config', e);
     }
-    loadLoyaltyConfig();
   }, []);
+
+  useEffect(() => {
+    loadLoyaltyConfig();
+  }, [loadLoyaltyConfig]);
+
+  useSSE(token, 'config_updated', loadLoyaltyConfig);
+  useSSE(token, 'loyalty_config_updated', (data) => {
+    if (data) setLoyaltyConfig(data);
+    else loadLoyaltyConfig();
+  });
+  useSSE(token, 'rewards_updated', loadLoyaltyConfig);
 
   // Load branches (public)
   useEffect(() => {
@@ -464,8 +472,67 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     return time ? `${dateLabel} · ${time}` : dateLabel;
   }, []);
 
+  // Calculate max advance booking days based on user's tier
+  const userTierKey = (user?.tier || user?.membershipTier || 'bronze').toLowerCase();
+  const userTierObj = useMemo(() => {
+    return (loyaltyConfig?.tiers || []).find(t => (t.id || '').toLowerCase() === userTierKey);
+  }, [loyaltyConfig?.tiers, userTierKey]);
+
+  const maxAdvanceDays = useMemo(() => {
+    const tierDays = Number(userTierObj?.advanceDays);
+    if (!isNaN(tierDays) && tierDays > 0) return tierDays;
+    const configDays = Number(configs?.ADVANCE_BOOKING_LIMITS?.[userTierKey]);
+    if (!isNaN(configDays) && configDays > 0) return configDays;
+    return userTierKey === 'diamond' ? 60 : userTierKey === 'gold' ? 30 : 14;
+  }, [userTierObj, configs?.ADVANCE_BOOKING_LIMITS, userTierKey]);
+
+  const tierDisplayName = useMemo(() => {
+    return userTierObj?.name || (userTierKey === 'diamond' ? 'Kim Cương' : userTierKey === 'gold' ? 'Vàng' : userTierKey === 'silver' ? 'Bạc' : 'Đồng');
+  }, [userTierObj, userTierKey]);
+
+  const maxAdvanceDateObj = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + maxAdvanceDays);
+    return d;
+  }, [maxAdvanceDays]);
+
+  const maxAdvanceDateIso = useMemo(() => {
+    return maxAdvanceDateObj.toLocaleDateString('en-CA');
+  }, [maxAdvanceDateObj]);
+
+  const maxAdvanceDateFormatted = useMemo(() => {
+    const day = String(maxAdvanceDateObj.getDate()).padStart(2, '0');
+    const month = String(maxAdvanceDateObj.getMonth() + 1).padStart(2, '0');
+    const year = maxAdvanceDateObj.getFullYear();
+    return `${day}/${month}/${year}`;
+  }, [maxAdvanceDateObj]);
+
+  const higherTiersLabel = useMemo(() => {
+    const allTiers = loyaltyConfig?.tiers || [];
+    const higher = allTiers.filter(t => {
+      const days = Number(t.advanceDays) || Number(configs?.ADVANCE_BOOKING_LIMITS?.[t.id?.toLowerCase()]) || 0;
+      return days > maxAdvanceDays;
+    });
+    if (higher.length === 0) return null;
+    const tierNames = higher.map(t => t.name);
+    let names = '';
+    if (tierNames.length === 1) {
+      names = `hạng ${tierNames[0]}`;
+    } else if (tierNames.length === 2) {
+      names = `hạng ${tierNames[0]} hoặc ${tierNames[1]}`;
+    } else {
+      const head = tierNames.slice(0, -1).join(', ');
+      const tail = tierNames[tierNames.length - 1];
+      names = `hạng ${head} hoặc ${tail}`;
+    }
+    const daysArr = higher.map(t => Number(t.advanceDays) || Number(configs?.ADVANCE_BOOKING_LIMITS?.[t.id?.toLowerCase()]));
+    const days = daysArr.length > 1 ? `${Math.min(...daysArr)} - ${Math.max(...daysArr)} ngày` : `${daysArr[0]} ngày`;
+    return { names, days };
+  }, [loyaltyConfig?.tiers, configs?.ADVANCE_BOOKING_LIMITS, maxAdvanceDays]);
+
   // Fetch available slots
-  const currentDate = useMemo(() => getDateObj(selectedDate), [selectedDate, getDateObj]);
+  const currentDate = useMemo(() => selectedDate ? getDateObj(selectedDate) : null, [selectedDate, getDateObj]);
   useEffect(() => {
     if (!selectedBranch || !selectedPackage || !currentDate?.iso) return;
     async function fetchSlots() {
@@ -1237,7 +1304,6 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     }
   }, [validPacks, selectedSlotPack]);
 
-  const userTierObj = (loyaltyConfig?.tiers || []).find(t => (t.id || '').toLowerCase() === (user?.tier || 'bronze').toLowerCase());
   const pointMultiplier = userTierObj?.multiplier ?? 1.0;
   const baseEarningRate = (loyaltyConfig?.baseEarningRate ?? 5) / 100;
 
@@ -1580,7 +1646,7 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
     setSelectedVehicle('');
     setSelectedPackage(null);
     setSelectedSubServices({});
-    setSelectedDate(bookingDates[1]?.id || bookingDates[0]?.id);
+    setSelectedDate(null);
     setSelectedTime('');
     setSelectedDays([]);
     setWeeks(2);
@@ -2195,8 +2261,13 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                             <button 
                               key={d.id} 
                               type="button"
-                              onClick={() => setSelectedDate(d.id)}
-                              className={`flex flex-col items-center justify-between min-w-[76px] p-4 rounded-2xl border-2 transition-all duration-300 ${
+                              onClick={() => {
+                                if (selectedDate !== d.id) {
+                                  setSelectedDate(d.id);
+                                  setSelectedTime('');
+                                }
+                              }}
+                              className={`flex flex-col items-center justify-between min-w-[76px] p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                                 isSelected 
                                   ? 'border-emerald-500 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20 scale-105' 
                                   : 'border-slate-100 bg-white hover:border-slate-200 text-slate-600'
@@ -2214,14 +2285,15 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                         })}
 
                         {/* Extended Custom Date Selector */}
-                        <div className="flex flex-col items-center justify-between min-w-[130px] p-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 transition-all shrink-0">
+                        <div className="flex flex-col items-center justify-between min-w-[140px] p-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 transition-all shrink-0">
                           <span className="text-[10px] uppercase font-bold text-emerald-800 flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Chọn ngày khác
                           </span>
                           <input
                             type="date"
                             min={new Date().toLocaleDateString('en-CA')}
-                            value={bookingDates.some(d => d.id === selectedDate) ? '' : selectedDate}
+                            max={maxAdvanceDateIso}
+                            value={bookingDates.some(d => d.id === selectedDate) ? '' : (selectedDate || '')}
                             onChange={(e) => {
                               const val = e.target.value;
                               if (!val) return;
@@ -2230,7 +2302,12 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 showToast('Chỉ được chọn ngày từ hiện tại trở đi vào tương lai!', 'error');
                                 return;
                               }
+                              if (val > maxAdvanceDateIso) {
+                                showToast(`Hạng ${tierDisplayName} chỉ được đặt trước tối đa ${maxAdvanceDays} ngày (đến ngày ${maxAdvanceDateFormatted}).`, 'warning');
+                                return;
+                              }
                               setSelectedDate(val);
+                              setSelectedTime('');
                             }}
                             className="w-full text-xs font-bold text-emerald-900 bg-white border border-emerald-200 rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 text-center cursor-pointer shadow-sm mt-1"
                           />
@@ -2241,6 +2318,27 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                                 return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : selectedDate;
                               })()}
                             </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Informative Tier Advance Booking Rule Note */}
+                      <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-blue-100 bg-blue-50/70 p-3.5 text-xs text-blue-950 shadow-2xs">
+                        <Info size={18} className="text-blue-600 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-800">Quy định đặt lịch trước:</span>
+                            <span className="inline-flex items-center gap-1 rounded-md bg-blue-100 text-blue-800 px-2 py-0.5 font-extrabold text-[11px] border border-blue-200">
+                              Hạng {tierDisplayName}: Tối đa {maxAdvanceDays} ngày
+                            </span>
+                          </div>
+                          <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                            Quý khách thuộc <strong>Hạng {tierDisplayName}</strong> được đặt lịch trước tối đa <strong>{maxAdvanceDays} ngày</strong> (hạn chót đến ngày <strong>{maxAdvanceDateFormatted}</strong>). Quy định này nhằm đảm bảo hệ thống chuẩn bị chu đáo cơ sở vật chất và ưu tiên phân bổ kỹ thuật viên chuyên nghiệp nhất cho xe của quý khách.
+                          </p>
+                          {higherTiersLabel && (
+                            <p className="text-[11px] text-blue-700 font-semibold pt-0.5">
+                              💡 <em>Mẹo: Nâng cấp lên hạng {higherTiersLabel.names} để mở rộng thời gian đặt trước lên tới {higherTiersLabel.days}!</em>
+                            </p>
                           )}
                         </div>
                       </div>
@@ -2270,7 +2368,19 @@ export default function BookingWidget({ onOpenAuth, user, vehicles: userVehicles
                   <div className="mb-6">
                     <label className="text-xs text-slate-400 font-bold uppercase tracking-wide block mb-3">Chọn khung giờ{tab === 'recurring' ? ' cố định' : ''}</label>
                     <div className="space-y-6">
-                      {slotsLoading ? (
+                      {tab === 'regular' && !selectedDate ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-6 rounded-3xl border-2 border-dashed border-emerald-200/80 bg-emerald-50/30 text-center">
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 mb-3 shadow-2xs">
+                            <Calendar className="w-6 h-6" />
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-800 mb-1">
+                            Vui lòng chọn ngày bạn muốn đặt lịch
+                          </h4>
+                          <p className="text-xs text-slate-500 max-w-sm">
+                            Hãy ấn chọn 1 trong 7 ngày ở trên hoặc chọn ngày khác để xem các khung giờ còn trống tại chi nhánh.
+                          </p>
+                        </div>
+                      ) : slotsLoading ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
                           <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
                           <span className="text-sm">Đang tìm lịch trống...</span>

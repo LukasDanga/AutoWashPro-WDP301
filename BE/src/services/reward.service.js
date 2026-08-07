@@ -69,8 +69,33 @@ exports.deleteReward = async (id) => {
   if (!reward) throw Object.assign(new Error('Reward not found'), { statusCode: 404 });
 };
 
-exports.getUserRewards = async (userId) => {
-  return Redemption.find({ user: userId }).sort({ createdAt: -1 }).populate('reward', 'name imageUrl');
+exports.getUserRewards = async (userId, query = {}) => {
+  const { page = 1, limit = 10 } = query;
+  const filter = { user: userId };
+  const pageNum = parseInt(page, 10) || 1;
+  const limitNum = parseInt(limit, 10) || 10;
+  const skip = (pageNum - 1) * limitNum;
+
+  const [data, total] = await Promise.all([
+    Redemption.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .populate('reward', 'name imageUrl'),
+    Redemption.countDocuments(filter),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      hasNextPage: pageNum * limitNum < total,
+      hasPrevPage: pageNum > 1,
+    },
+  };
 };
 
 /**
