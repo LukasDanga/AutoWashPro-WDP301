@@ -35,6 +35,16 @@ const { ROLES } = require('../config/permissions');
  */
 router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.create, validate, bookingController.createBooking);
 
+// POST /api/bookings/walk-in — Tạo đơn khách vãng lai (Gộp tạo user, xe, đơn, check-in)
+router.post('/walk-in', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), [
+  body('name').trim().notEmpty().withMessage('Tên khách hàng là bắt buộc'),
+  body('email').optional({ checkFalsy: true }).trim().isEmail().normalizeEmail(),
+  body('phone').optional({ checkFalsy: true }).trim(),
+  body('licensePlate').trim().notEmpty().withMessage('Biển số xe là bắt buộc'),
+  body('branchId').isMongoId().withMessage('ID chi nhánh không hợp lệ'),
+  body('packageId').isMongoId().withMessage('ID gói dịch vụ không hợp lệ'),
+], validate, bookingController.createWalkInBooking);
+
 // POST /api/bookings/vnpay-provisional — Tạo VNPay URL trước khi có booking
 router.post('/vnpay-provisional', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), [
   body('amount').isFloat({ gt: 0 }).withMessage('Amount must be positive'),
@@ -166,6 +176,15 @@ router.get('/:id', authenticate, bookingController.getBookingById);
  *       - bearerAuth: []
  */
 router.put('/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.CUSTOMER), bookingValidators.update, validate, bookingController.updateBooking);
+
+/**
+ * @swagger
+ * /api/bookings/{id}/walk-in-info:
+ *   patch:
+ *     summary: Update walk-in booking user and vehicle info (manager/admin)
+ *     tags: [Bookings]
+ */
+router.patch('/:id/walk-in-info', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), bookingController.updateWalkInInfo);
 
 /**
  * @swagger

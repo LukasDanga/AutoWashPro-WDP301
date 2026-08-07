@@ -58,6 +58,8 @@ const bookingSchema = new mongoose.Schema(
     cancelledBy: { type: String, enum: ['customer', 'admin', 'manager', 'system'] },
     cancellationReason: { type: String, trim: true, maxlength: 500 },
     cancelOtpToken: { type: String },
+    isWalkIn: { type: Boolean, default: false },
+    isNewCustomerWalkIn: { type: Boolean, default: false },
     cancelOtpExpires: { type: Date },
     rescheduleCount: { type: Number, default: 0 },
     // Cảnh báo sắp bị auto-cancel đã gửi lúc nào (tránh gửi lặp lại mỗi lần cron chạy)
