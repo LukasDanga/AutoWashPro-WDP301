@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Voucher, Package, VoucherUsage, User, PointHistory } = require('../models');
+const { Voucher, Package, VoucherUsage, User, PointHistory, Booking, SlotPack } = require('../models');
 const sseService = require('./sse.service');
 
 const generateCode = () => {
@@ -399,6 +399,52 @@ exports.getVoucherUsage = async (voucherId, filters = {}) => {
   };
 };
 
+async function enrichReportBookings(data) {
+  if (!Array.isArray(data) || !data.length) return data;
+  const idSet = new Set();
+  data.forEach((item) => item.vouchersUsed?.forEach((v) => (v.bookings || []).forEach((b) => idSet.add(String(b)))));
+  const ids = [...idSet];
+  if (!ids.length) return data;
+  const [bookings, slotPacks] = await Promise.all([
+    Booking.find({ _id: { $in: ids } }).select('bookingCode bookingType').lean(),
+    SlotPack.find({ _id: { $in: ids } }).select('packCode').lean(),
+  ]);
+  const bookingMap = new Map(bookings.map((b) => [String(b._id), b]));
+  const packMap = new Map(slotPacks.map((p) => [String(p._id), p]));
+  // Map every slot pack id -> a representative slot_pack_usage booking code (if any)
+  const packIds = [...packMap.keys()];
+  const usageBookings = packIds.length
+    ? await Booking.find({ slotPackId: { $in: packIds }, bookingType: 'slot_pack_usage' })
+        .sort({ bookingDate: -1, createdAt: -1 })
+        .select('slotPackId bookingCode')
+        .lean()
+    : [];
+  const usageCodeByPack = new Map();
+  usageBookings.forEach((ub) => {
+    if (ub.slotPackId && !usageCodeByPack.has(String(ub.slotPackId))) {
+      usageCodeByPack.set(String(ub.slotPackId), ub.bookingCode);
+    }
+  });
+  data.forEach((item) => {
+    item.vouchersUsed?.forEach((v) => {
+      if (!Array.isArray(v.bookings)) return;
+      v.bookings = v.bookings.map((b) => {
+        const bid = String(b);
+        if (bookingMap.has(bid)) {
+          const bk = bookingMap.get(bid);
+          return { id: bid, isSlotPack: false, code: bk.bookingCode, bookingType: bk.bookingType };
+        }
+        if (packMap.has(bid)) {
+          const pk = packMap.get(bid);
+          return { id: bid, isSlotPack: true, code: usageCodeByPack.get(bid) || pk.packCode, packCode: pk.packCode };
+        }
+        return { id: bid, isSlotPack: false, code: null };
+      });
+    });
+  });
+  return data;
+}
+
 exports.getVoucherUsageReport = async (filters = {}) => {
   const now = new Date();
   let startOfPeriod = null;
@@ -489,6 +535,8 @@ exports.getVoucherUsageReport = async (filters = {}) => {
     VoucherUsage.aggregate(buildPipeline(startOfPeriod, endOfPeriod)),
     (startOfPrev && endOfPrev) ? VoucherUsage.aggregate(buildPipeline(startOfPrev, endOfPrev)) : Promise.resolve([])
   ]);
+
+  await enrichReportBookings(data);
 
   const calcStats = (reportData) => {
     let totalDiscount = 0;
