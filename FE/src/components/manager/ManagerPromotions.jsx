@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { showToast } from '@/lib/toast';
 import { confirmDialog } from '@/lib/confirm';
 import {
@@ -338,6 +338,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
 
 /* ── voucher usage report tab ── */
 function VoucherUsageReportTab() {
+  const navigate = useNavigate();
   const [report, setReport] = useState([]);
   const [stats, setStats] = useState(null);
   const [previousStats, setPreviousStats] = useState(null);
@@ -433,6 +434,17 @@ function VoucherUsageReportTab() {
                 <div className="flex flex-col gap-1 overflow-hidden pr-2">
                    <div className="flex items-center gap-1.5">
                      <span className="font-mono text-[10px] font-bold bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded shadow-sm">{v.code}</span>
+                     {v.bookings && v.bookings.length > 0 && (
+                       <button
+                         onClick={() => {
+                           const b = v.bookings[0];
+                           navigate(`/manager/bookings?search=${encodeURIComponent(b?.code || b?.id || '')}`);
+                         }}
+                         className="text-[10px] text-blue-600 hover:text-blue-700 underline font-medium"
+                       >
+                         {v.bookings.length === 1 ? 'Xem đơn' : 'Xem gần nhất'}
+                       </button>
+                     )}
                    </div>
                    <span className="text-[11px] font-medium text-slate-600 truncate" title={v.name}>{v.name}</span>
                 </div>

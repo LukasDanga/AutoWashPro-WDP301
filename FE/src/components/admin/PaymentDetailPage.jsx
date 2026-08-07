@@ -107,7 +107,11 @@ export default function PaymentDetailPage({ basePath = '/admin/payments' }) {
             )}
             {payment?.bookingId && (
               <button 
-                onClick={() => navigate('/admin/bookings', { state: { openBooking: { ...payment.bookingId, userId: payment.userId } } })} 
+                onClick={() => {
+                  const roleBase = basePath.startsWith('/manager') ? '/manager' : '/admin';
+                  const code = payment.bookingId?.bookingCode || ('AWP-' + String(payment.bookingId?._id).slice(-8).toUpperCase());
+                  navigate(`${roleBase}/bookings?search=${encodeURIComponent(code)}`);
+                }} 
                 className="text-xs text-indigo-600 hover:text-indigo-700 font-medium underline ml-1"
               >
                 Xem đơn

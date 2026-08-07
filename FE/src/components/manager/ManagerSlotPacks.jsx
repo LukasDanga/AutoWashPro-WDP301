@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
 import { showToast } from '@/lib/toast';
 import useSSE from '@/hooks/useSSE';
@@ -61,6 +62,7 @@ function SlotBar({ total, remaining }) {
 const PAGE_SIZE = 9;
 
 export default function ManagerSlotPacks({ user }) {
+  const navigate = useNavigate();
   const [packs, setPacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -539,6 +541,7 @@ export default function ManagerSlotPacks({ user }) {
                         <tr className="bg-slate-50 border-b border-slate-100">
                           <th className="px-3 py-2 font-semibold text-slate-500">Ngày</th>
                           <th className="px-3 py-2 font-semibold text-slate-500">Giờ</th>
+                          <th className="px-3 py-2 font-semibold text-slate-500">Đơn hàng</th>
                           <th className="px-3 py-2 font-semibold text-slate-500">Trạng thái</th>
                         </tr>
                       </thead>
@@ -557,12 +560,25 @@ export default function ManagerSlotPacks({ user }) {
                           
                           return (
                             <tr key={b._id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
-                              <td className="px-3 py-2 font-medium text-slate-700">{dateStr}</td>
-                              <td className="px-3 py-2 text-slate-600">{b.startTime || '—'}</td>
-                              <td className="px-3 py-2">
-                                <span className={statusCls}>{statusLabel}</span>
-                              </td>
-                            </tr>
+                                <td className="px-3 py-2 font-medium text-slate-700">{dateStr}</td>
+                                <td className="px-3 py-2 text-slate-600">{b.startTime || '—'}</td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[11px] font-bold text-slate-700">{b.bookingCode || '—'}</span>
+                                    {b.bookingCode && (
+                                      <button
+                                        onClick={() => navigate(`/manager/bookings?search=${encodeURIComponent(b.bookingCode)}`)}
+                                        className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
+                                      >
+                                        Xem đơn
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={statusCls}>{statusLabel}</span>
+                                </td>
+                              </tr>
                           );
                         })}
                       </tbody>

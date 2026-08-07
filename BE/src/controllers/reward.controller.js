@@ -59,6 +59,11 @@ exports.markRedemptionSent = catchAsync(async (req, res) => {
 });
 
 exports.markRedemptionReceived = catchAsync(async (req, res) => {
-  const redemption = await rewardService.markRedemptionReceived(req.params.id, { code: req.body?.code });
-  success(res, redemption, 'Da x�c nh?n kh�ch da nh?n qu�');
+  const branchId = req.body?.branchId || req.user?.branchId;
+  const redemption = await rewardService.markRedemptionReceived(req.params.id, {
+    code: req.body?.code,
+    sentBy: req.userId,
+    branchId,
+  });
+  success(res, redemption, 'Đã xác nhận khách đã nhận quà');
 });

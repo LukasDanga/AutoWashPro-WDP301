@@ -12,7 +12,6 @@ import {
   X,
   XCircle,
   PencilSimple,
-  PaperPlaneTilt,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -360,12 +359,11 @@ export function RewardsConfigTab({ isManager = false }) {
   );
 }
 
-/* ═══ Trao quà: danh sách lượt đổi + nút "Đã gửi quà cho khách" ═══ */
-export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
+/* ═══ Trao quà: danh sách lượt đổi + nhập mã xác nhận khách đã nhận ═══ */
+export function RedemptionsTab() {
   const [redemptions, setRedemptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sending, setSending] = useState(null);
   const [verifying, setVerifying] = useState(null);
   const [codeInput, setCodeInput] = useState({});
   const [search, setSearch] = useState('');
@@ -392,27 +390,6 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
   }, [search, statusFilter, page]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
-
-  const handleSent = async (rd) => {
-    const ok = await confirmDialog({
-      title: 'Xác nhận đã gửi quà',
-      message: `Xác nhận bạn đã giao "${rd.rewardSnapshot?.name || 'phần quà'}" cho khách hàng? Khách sẽ dùng mã đổi thưởng để nhận quà.`,
-      confirmLabel: 'Đã gửi quà',
-    });
-    if (!ok) return;
-
-    setSending(rd._id);
-    try {
-      const res = await api(`/rewards/redemptions/${rd._id}/sent`, {
-        method: 'POST',
-        body: JSON.stringify(managerBranchId ? { branchId: managerBranchId } : {}),
-      });
-      if (!res.ok) throw new Error(await readErr(res));
-      notify('Đã gửi quà cho khách hàng!');
-      fetch_();
-    } catch (err) { notify(err.message || 'Cập nhật thất bại', 'error'); }
-    finally { setSending(null); }
-  };
 
   const handleVerifyReceived = async (rd) => {
     const code = (codeInput[rd._id] || '').trim();
@@ -457,7 +434,7 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors">
           <option value="">Tất cả trạng thái</option>
-          <option value="claimed">Chờ gửi quà</option>
+          <option value="claimed">Chờ trao quà</option>
           <option value="sent">Đã gửi cho khách</option>
           <option value="received">Khách đã nhận</option>
           <option value="cancelled">Đã hủy</option>
@@ -493,8 +470,7 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
                 {redemptions.map((rd) => {
                   const snap = rd.rewardSnapshot || {};
                   const u = rd.user || {};
-                  const canSend = rd.status === 'claimed';
-                  const canVerify = rd.status === 'sent';
+                  const canVerify = rd.status === 'claimed' || rd.status === 'sent';
                   return (
                     <tr key={rd._id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
@@ -510,21 +486,17 @@ export function RedemptionsTab({ isManager = false, managerBranchId = '' }) {
                       <td className="px-4 py-3"><StatusBadge status={rd.status} /></td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {rd.status === 'sent' || rd.status === 'received' ? (
-                          <>
-                            {rd.sentAt && <p>{formatDate(rd.sentAt)}</p>}
-                            {rd.branchId?.name && <p className="text-slate-400">{rd.branchId.name}</p>}
-                            {rd.sentBy?.name && <p className="text-slate-400">bởi {rd.sentBy.name}</p>}
-                          </>
+                          (rd.sentAt || rd.branchId?.name || rd.sentBy?.name) ? (
+                            <>
+                              {rd.sentAt && <p>{formatDate(rd.sentAt)}</p>}
+                              {rd.branchId?.name && <p className="text-slate-400">{rd.branchId.name}</p>}
+                              {rd.sentBy?.name && <p className="text-slate-400">bởi {rd.sentBy.name}</p>}
+                            </>
+                          ) : <span className="text-slate-300">—</span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        {canSend ? (
-                          <button onClick={() => handleSent(rd)} disabled={sending === rd._id}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60 transition-colors">
-                            {sending === rd._id ? <Spinner size={12} /> : <PaperPlaneTilt size={13} />}
-                            {sending === rd._id ? 'Đang gửi...' : 'Đã gửi quà cho khách'}
-                          </button>
-                        ) : canVerify ? (
+                        {canVerify ? (
                           <div className="flex items-center gap-1.5">
                             <input
                               type="text"

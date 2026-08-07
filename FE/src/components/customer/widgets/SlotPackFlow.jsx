@@ -6,6 +6,7 @@ import VoucherPicker from '../../VoucherPicker.jsx';
 import QuickBookModal from './QuickBookModal.jsx';
 import { showToast } from '@/lib/toast';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
+import useSSE from '@/hooks/useSSE';
 
 function buildDiscountTiers(rawDiscounts, maxQty = 50) {
   if (!Array.isArray(rawDiscounts) || rawDiscounts.length === 0) {
@@ -38,8 +39,8 @@ const STATUS_MAP = {
 };
 
 function formatCurrency(v) { return `${new Intl.NumberFormat('vi-VN').format(v || 0)}đ`; }
-function getDiscountPct(n, discountTiers) { return discountTiers.find(t => n >= t.min && n <= t.max)?.pct || 0; }
-function getDiscountLabel(n, discountTiers) { return discountTiers.find(t => n >= t.min && n <= t.max)?.label || ''; }
+function getDiscountPct(n, discountTiers) { return (discountTiers || []).find(t => n >= t.min && n <= t.max)?.pct || 0; }
+function getDiscountLabel(n, discountTiers) { return (discountTiers || []).find(t => n >= t.min && n <= t.max)?.label || ''; }
 
 function SlotMeter({ total, remaining }) {
   const pct = total > 0 ? (remaining / total) * 100 : 0;
@@ -381,12 +382,13 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi tạo gói slot');
-      const selectedPkgName = pkg?.name || pack.packageId?.name || pack.packageName || 'Gói rửa xe';
-      const selectedBranchName = branchObj?.name || pack.branchId?.name || pack.branchName || 'Toàn hệ thống';
-      setBuyResult({ ...pack, packageName: selectedPkgName, branchName: selectedBranchName });
+      const createdPack = data?.data || data;
+      const selectedPkgName = pkg?.name || createdPack.packageId?.name || createdPack.packageName || 'Gói rửa xe';
+      const selectedBranchName = branchObj?.name || createdPack.branchId?.name || createdPack.branchName || 'Toàn hệ thống';
+      setBuyResult({ ...createdPack, packageName: selectedPkgName, branchName: selectedBranchName });
 
       // Tạo thanh toán theo phương thức đã chọn
-      const payRes = await fetch(`${apiBase}/slot-packs/${pack._id}/pay`, {
+      const payRes = await fetch(`${apiBase}/slot-packs/${createdPack._id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ method: paymentMethod }),
@@ -398,8 +400,8 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
       if (paymentMethod === 'vnpay') {
         // Lưu thông tin vào sessionStorage rồi redirect
         sessionStorage.setItem('aw_lastSlotPack', JSON.stringify({
-          packCode: pack.packCode,
-          finalPrice: pack.finalPriceAfterVoucher || pack.finalPrice,
+          packCode: createdPack.packCode,
+          finalPrice: createdPack.finalPriceAfterVoucher || createdPack.finalPrice,
           packageName: selectedPkgName,
           branchName: selectedBranchName,
           totalSlots: slotCount,
@@ -750,7 +752,7 @@ export default function SlotPackFlow({ step: stepProp, setStep: setStepProp, use
           </div>
           {discountPct > 0 && (
             <div className="text-center p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-semibold">
-              🎉 Chiết khấu số lượng: <strong>{discountPct}%</strong> — {getDiscountLabel(slotCount)}!
+              🎉 Chiết khấu số lượng: <strong>{discountPct}%</strong> — {getDiscountLabel(slotCount, discountTiers)}!
             </div>
           )}
         </motion.div>

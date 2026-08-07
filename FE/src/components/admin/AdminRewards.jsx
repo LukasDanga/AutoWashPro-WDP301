@@ -346,15 +346,7 @@ function VoucherUsageModal({ voucherId, onClose }) {
                             <button
                               onClick={() => {
                                 const code = u.bookingId.bookingCode || ('AWP-' + String(u.bookingId._id).slice(-8).toUpperCase());
-                                if (code.startsWith('SP-')) {
-                                  navigate(isManager ? '/manager/slot-packs' : '/admin/slot-packs', { 
-                                    state: { openSlotPack: { _id: u.bookingId._id, packCode: code, userId: u.userId } } 
-                                  });
-                                } else {
-                                  navigate(isManager ? '/manager/bookings' : '/admin/bookings', { 
-                                    state: { openBooking: { _id: u.bookingId._id, bookingCode: code, userId: u.userId } } 
-                                  });
-                                }
+                                navigate(`${isManager ? '/manager/bookings' : '/admin/bookings'}?search=${encodeURIComponent(code)}`);
                               }}
                               className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
                             >
@@ -464,13 +456,16 @@ function VoucherUsageReportTab() {
                      <span className="font-mono text-[10px] font-bold bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded shadow-sm">{v.code}</span>
                      {v.bookings && v.bookings.length > 0 && (
                        <button
-                         onClick={() => navigate(isManager ? '/manager/bookings' : '/admin/bookings', { state: { openBooking: { _id: v.bookings[0], userId: item.userId } } })}
+                         onClick={() => {
+                           const b = v.bookings[0];
+                           navigate(`${isManager ? '/manager/bookings' : '/admin/bookings'}?search=${encodeURIComponent(b?.code || b?.id || '')}`);
+                         }}
                          className="text-[10px] text-blue-600 hover:text-blue-700 underline font-medium"
                        >
                          {v.bookings.length === 1 ? 'Xem đơn' : 'Xem đơn gần nhất'}
                        </button>
                      )}
-                   </div>
+                     </div>
                    <span className="text-[11px] font-medium text-slate-600 truncate" title={v.name}>{v.name}</span>
                 </div>
                 <div className="text-right flex flex-col shrink-0">
