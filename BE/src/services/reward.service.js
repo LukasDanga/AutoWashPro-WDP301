@@ -113,6 +113,41 @@ exports.getRedemptions = async (query = {}) => {
   };
 };
 
+async function applySnapshots(redemption, sentBy, branchId) {
+  const targetBranchId = branchId || redemption.branchId;
+  const targetUserId = sentBy || redemption.sentBy;
+
+  if (targetBranchId && (!redemption.branchSnapshot || !redemption.branchSnapshot.name)) {
+    try {
+      const Branch = require('../models/branch.schema');
+      const bDoc = await Branch.findById(targetBranchId);
+      if (bDoc) {
+        redemption.branchSnapshot = {
+          id: String(bDoc._id),
+          name: bDoc.name,
+          code: bDoc.code || '',
+        };
+      }
+    } catch {}
+  }
+
+  if (targetUserId && (!redemption.sentBySnapshot || !redemption.sentBySnapshot.name)) {
+    try {
+      const User = require('../models/user.schema');
+      const uDoc = await User.findById(targetUserId);
+      if (uDoc) {
+        redemption.sentBySnapshot = {
+          id: String(uDoc._id),
+          name: uDoc.fullName || uDoc.name || 'Quản lý',
+          phone: uDoc.phone || '',
+          email: uDoc.email || '',
+          role: uDoc.role || '',
+        };
+      }
+    } catch {}
+  }
+}
+
 /**
  * Nhân viên/manager xác nhận đã gửi quà cho khách
  */
@@ -127,8 +162,9 @@ exports.markRedemptionSent = async (redemptionId, { sentBy, branchId }) => {
   }
   redemption.status = 'sent';
   redemption.sentAt = new Date();
-  redemption.sentBy = sentBy;
+  if (sentBy) redemption.sentBy = sentBy;
   if (branchId) redemption.branchId = branchId;
+  await applySnapshots(redemption, sentBy, branchId);
   await redemption.save();
   return redemption;
 };
@@ -138,23 +174,31 @@ exports.markRedemptionSent = async (redemptionId, { sentBy, branchId }) => {
  * Cho phép trực tiếp từ 'claimed' -> 'received' (bỏ bước "đã gửi quà").
  */
 exports.markRedemptionReceived = async (redemptionId, { code, sentBy, branchId }) => {
-  const redemption = await Redemption.findById(redemptionId);
-  if (!redemption) throw Object.assign(new Error('Redemption not found'), { statusCode: 404 });
+  const entered = String(code || '').trim().toUpperCase();
+  let redemption;
+  if (redemptionId && redemptionId !== 'by-code' && mongoose.Types.ObjectId.isValid(redemptionId)) {
+    redemption = await Redemption.findById(redemptionId);
+  }
+  if (!redemption && entered) {
+    redemption = await Redemption.findOne({ code: entered });
+  }
+
+  if (!redemption) throw Object.assign(new Error('Mã đổi thưởng không tồn tại trong hệ thống. Vui lòng kiểm tra lại!'), { statusCode: 404 });
   if (redemption.status === 'cancelled') {
-    throw Object.assign(new Error('Lượt đổi thưởng đã bị hủy'), { statusCode: 400 });
+    throw Object.assign(new Error('Lượt đổi thưởng này đã bị hủy'), { statusCode: 400 });
   }
   if (redemption.status === 'received') {
-    return redemption;
+    throw Object.assign(new Error('Quà tặng này đã được khách hàng nhận trước đó rồi!'), { statusCode: 400 });
   }
-  const entered = String(code || '').trim().toUpperCase();
-  if (!entered || entered !== redemption.code) {
-    throw Object.assign(new Error('Mã đổi thưởng không hợp lệ. Vui lòng kiểm tra lại'), { statusCode: 400 });
+  if (entered && entered !== redemption.code) {
+    throw Object.assign(new Error('Mã đổi thưởng không khớp. Vui lòng kiểm tra lại!'), { statusCode: 400 });
   }
   redemption.status = 'received';
   redemption.receivedAt = new Date();
   if (sentBy && !redemption.sentBy) redemption.sentBy = sentBy;
   if (branchId && !redemption.branchId) redemption.branchId = branchId;
   if (!redemption.sentAt) redemption.sentAt = new Date();
+  await applySnapshots(redemption, sentBy, branchId);
   await redemption.save();
   return redemption;
 };
@@ -248,4 +292,88 @@ exports.redeemReward = async (rewardId, userId) => {
   } finally {
     session.endSession();
   }
+};
+
+/**
+ * Hủy lượt đổi quà (manager / admin)
+ */
+exports.cancelRedemption = async (redemptionId, userId, reason = '') => {
+  const redemption = await Redemption.findById(redemptionId);
+  if (!redemption) throw Object.assign(new Error('Không tìm thấy đơn đổi quà'), { statusCode: 404 });
+  if (redemption.status === 'cancelled') {
+    throw Object.assign(new Error('Lượt đổi quà này đã bị hủy từ trước'), { statusCode: 400 });
+  }
+
+  redemption.status = 'cancelled';
+  redemption.cancelledAt = new Date();
+  if (reason) {
+    redemption.cancelReason = String(reason).trim();
+  }
+  await redemption.save();
+
+  // Hoàn lại điểm cho khách hàng nếu có
+  if (redemption.pointsSpent > 0 && redemption.user) {
+    try {
+      const userDoc = await User.findById(redemption.user);
+      if (userDoc) {
+        userDoc.loyaltyPoints = (userDoc.loyaltyPoints || 0) + redemption.pointsSpent;
+        await userDoc.save();
+
+        await PointHistory.create({
+          userId: redemption.user,
+          points: redemption.pointsSpent,
+          type: 'earned',
+          description: `Hoàn điểm do hủy đơn đổi quà ${redemption.code}${reason ? ` (Lý do: ${reason})` : ''}`,
+          referenceId: redemption._id,
+        });
+      }
+    } catch (e) {
+      console.error('Error refunding points on redemption cancel:', e);
+    }
+  }
+
+  return redemption;
+};
+
+/**
+ * Xóa 1 lượt đổi quà (Admin only)
+ */
+exports.deleteRedemption = async (redemptionId) => {
+  const redemption = await Redemption.findByIdAndDelete(redemptionId);
+  if (!redemption) throw Object.assign(new Error('Không tìm thấy lượt đổi quà để xóa'), { statusCode: 404 });
+  return redemption;
+};
+
+/**
+ * Xóa lượt đổi quà hàng loạt hoặc từ ngày đến ngày (Admin only)
+ */
+exports.bulkDeleteRedemptions = async ({ fromDate, toDate, deleteAll }) => {
+  if (deleteAll) {
+    const result = await Redemption.deleteMany({});
+    return { deletedCount: result.deletedCount };
+  }
+
+  if (!fromDate || !toDate) {
+    throw Object.assign(new Error('Vui lòng cung cấp khoảng thời gian từ ngày và đến ngày hợp lệ'), { statusCode: 400 });
+  }
+
+  const start = new Date(fromDate);
+  const end = new Date(toDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw Object.assign(new Error('Ngày tháng không đúng định dạng'), { statusCode: 400 });
+  }
+
+  if (start > end) {
+    throw Object.assign(new Error('Thời gian Từ ngày phải nhỏ hơn hoặc bằng Đến ngày!'), { statusCode: 400 });
+  }
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  const filter = {
+    createdAt: { $gte: start, $lte: end },
+  };
+
+  const result = await Redemption.deleteMany(filter);
+  return { deletedCount: result.deletedCount, fromDate: start, toDate: end };
 };

@@ -179,6 +179,9 @@ router.post('/redemptions/:id/sent', authenticate, authorize(ROLES.ADMIN, ROLES.
  *         description: Cập nhật thành công
  */
 router.post('/redemptions/:id/received', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), rewardController.markRedemptionReceived);
+router.post('/redemptions/:id/cancel', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), rewardController.cancelRedemption);
+router.delete('/redemptions/bulk', authenticate, authorize(ROLES.ADMIN), rewardController.bulkDeleteRedemptions);
+router.delete('/redemptions/:id', authenticate, authorize(ROLES.ADMIN), rewardController.deleteRedemption);
 
 /**
  * @swagger

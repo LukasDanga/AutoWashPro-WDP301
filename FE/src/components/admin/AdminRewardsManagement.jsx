@@ -12,6 +12,7 @@ import {
   X,
   XCircle,
   PencilSimple,
+  Gift,
 } from '@phosphor-icons/react';
 import TierBadge from '@/components/ui/TierBadge';
 import { getApiBaseUrl, getStoredToken } from '@/lib/authStorage';
@@ -360,17 +361,455 @@ export function RewardsConfigTab({ isManager = false }) {
 }
 
 /* ═══ Trao quà: danh sách lượt đổi + nhập mã xác nhận khách đã nhận ═══ */
-export function RedemptionsTab() {
+function GiveGiftModal({ redemption, onClose, onSuccess }) {
+  const [code, setCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async (e) => {
+    e?.preventDefault();
+    const enteredCode = code.trim().toUpperCase();
+    if (!enteredCode) {
+      showToast('Vui lòng yêu cầu khách đọc mã đổi quà và nhập vào đây!', 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const redemptionId = redemption?._id || 'by-code';
+      const res = await api(`/rewards/redemptions/${redemptionId}/received`, {
+        method: 'POST',
+        body: JSON.stringify({ code: enteredCode }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      showToast('Xác nhận trao quà thành công! Trạng thái đã tự động cập nhật phía khách hàng. 🎉');
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      showToast(err.message || 'Mã xác nhận không đúng. Vui lòng kiểm tra lại!', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const snap = redemption?.rewardSnapshot || {};
+  const user = redemption?.user || {};
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-3xl border border-slate-200/80 p-6 sm:p-8 space-y-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+        >
+          <X size={18} weight="bold" />
+        </button>
+
+        {/* Header Icon & Title */}
+        <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
+          <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25">
+            <Gift size={26} weight="fill" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Xác Nhận Trao Quà</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Nhập mã đối soát từ khách hàng tại quầy</p>
+          </div>
+        </div>
+
+        {/* Security Notice */}
+        <div className="bg-amber-50/80 rounded-2xl p-3.5 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2.5">
+          <Warning size={18} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold block mb-0.5">Bảo mật mã đối soát:</span>
+            Mã đổi quà không tự hiển thị. Vui lòng yêu cầu <b>khách hàng đọc hoặc đưa mã</b> hiển thị trên màn hình của họ để Quản lý đối soát & xác nhận.
+          </div>
+        </div>
+
+        {/* Product & Customer Summary */}
+        {redemption?._id && (
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/70 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-400 uppercase tracking-wider">Khách hàng:</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-800">{user.name || '—'}</span>
+                {user.tier && <TierBadge tier={user.tier} />}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-200/60 pt-2 text-xs">
+              <span className="font-bold text-slate-400 uppercase tracking-wider">Phần quà:</span>
+              <span className="font-black text-emerald-700">{snap.name || 'Quà vật lý'}</span>
+            </div>
+
+            {snap.pointCost && (
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>Số điểm quy đổi:</span>
+                <span className="font-bold text-amber-600">{Number(snap.pointCost).toLocaleString('vi-VN')} điểm</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Code Input Form */}
+        <form onSubmit={handleConfirm} className="space-y-5">
+          <div className="space-y-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 text-center">
+              Nhập Mã Quà Tặng Khách Hàng Đọc:
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="VD: AWP-9X82K1"
+              className="w-full text-center font-mono font-black text-2xl tracking-widest text-emerald-700 bg-slate-50 border-2 border-emerald-300 focus:border-emerald-500 focus:bg-white rounded-2xl py-3.5 px-4 outline-none transition-all shadow-inner uppercase"
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="w-1/3 py-3.5 rounded-2xl font-bold text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !code.trim()}
+              className="w-2/3 py-3.5 rounded-2xl font-black text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 transition-all shadow-lg shadow-emerald-600/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {submitting ? (
+                <>
+                  <Spinner size={16} />
+                  <span>Đang xác nhận...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={18} weight="bold" />
+                  <span>Xác nhận Trao quà</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BulkDeleteRedemptionsModal({ onClose, onSuccess }) {
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [deleteAll, setDeleteAll] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    if (!deleteAll) {
+      if (!fromDate || !toDate) {
+        showToast('Vui lòng chọn đầy đủ thời gian Từ ngày và Đến ngày!', 'error');
+        return;
+      }
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      if (start > end) {
+        showToast('Ngày bắt đầu (Từ ngày) phải nhỏ hơn hoặc bằng Ngày kết thúc (Đến ngày)!', 'error');
+        return;
+      }
+    }
+
+    const confirmMsg = deleteAll
+      ? 'CẢNH BÁO NGUY HIỂM: Bạn có chắc chắn muốn XÓA TOÀN BỘ dữ liệu lượt đổi quà trong hệ thống? Thao tác này KHÔNG THỂ HOÀN TÁC.'
+      : `Bạn có chắc chắn muốn xóa tất cả các lượt đổi quà từ ngày ${fromDate} đến ngày ${toDate}? Thao tác này KHÔNG THỂ HOÀN TÁC.`;
+
+    const ok = await confirmDialog({
+      title: deleteAll ? 'Xóa Toàn Bộ Dữ Liệu Lượt Đổi Quà' : 'Xóa Dữ Liệu Theo Khoảng Thời Gian',
+      message: confirmMsg,
+      confirmText: 'Xóa vĩnh viễn',
+      cancelText: 'Hủy bỏ',
+      type: 'danger',
+    });
+
+    if (!ok) return;
+
+    setSubmitting(true);
+    try {
+      const res = await api('/rewards/redemptions/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ fromDate, toDate, deleteAll }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      const payload = await res.json();
+      showToast(payload?.message || 'Đã xóa dữ liệu thành công!');
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      showToast(err.message || 'Xóa dữ liệu thất bại', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-3xl border border-slate-200/80 p-6 sm:p-8 space-y-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+        >
+          <X size={18} weight="bold" />
+        </button>
+
+        {/* Header Icon & Title */}
+        <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
+          <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-red-500/25">
+            <Trash size={26} weight="fill" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Xóa Dữ Liệu Đổi Quà</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Dọn dẹp lượt đổi quà (Dành cho Admin)</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Delete All Checkbox Toggle */}
+          <div className="bg-red-50/70 rounded-2xl p-4 border border-red-200/80 space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteAll}
+                onChange={(e) => setDeleteAll(e.target.checked)}
+                className="w-4 h-4 rounded text-red-600 focus:ring-red-500 accent-red-600 cursor-pointer"
+              />
+              <span className="text-xs font-black text-red-900 uppercase tracking-wider">
+                Xóa TOÀN BỘ dữ liệu đổi quà
+              </span>
+            </label>
+            <p className="text-[11px] text-red-700 pl-7 leading-relaxed">
+              Tùy chọn này sẽ xóa tất cả bản ghi lượt đổi quà trong CSDL. Thao tác không thể hoàn tác!
+            </p>
+          </div>
+
+          {/* Date Range Inputs (disabled if deleteAll is checked) */}
+          {!deleteAll && (
+            <div className="space-y-4 bg-slate-50 rounded-2xl p-4 border border-slate-200/70">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                Hoặc Chọn Khoảng Thời Gian Để Xóa:
+              </span>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">Từ ngày (From Date):</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => {
+                    const newFrom = e.target.value;
+                    setFromDate(newFrom);
+                    if (toDate && newFrom && new Date(newFrom) > new Date(toDate)) {
+                      showToast('Chú ý: Từ ngày không thể lớn hơn Đến ngày!', 'warning');
+                    }
+                  }}
+                  className="w-full text-sm bg-white border border-slate-200 rounded-xl py-2.5 px-3 focus:border-red-400 focus:outline-none transition-all text-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">Đến ngày (To Date):</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => {
+                    const newTo = e.target.value;
+                    setToDate(newTo);
+                    if (fromDate && newTo && new Date(fromDate) > new Date(newTo)) {
+                      showToast('Chú ý: Đến ngày phải lớn hơn hoặc bằng Từ ngày!', 'warning');
+                    }
+                  }}
+                  className="w-full text-sm bg-white border border-slate-200 rounded-xl py-2.5 px-3 focus:border-red-400 focus:outline-none transition-all text-slate-800"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="w-1/3 py-3.5 rounded-2xl font-bold text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || (!deleteAll && (!fromDate || !toDate))}
+              className="w-2/3 py-3.5 rounded-2xl font-black text-sm text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 transition-all shadow-lg shadow-red-600/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {submitting ? (
+                <>
+                  <Spinner size={16} />
+                  <span>Đang xóa...</span>
+                </>
+              ) : (
+                <>
+                  <Trash size={18} weight="bold" />
+                  <span>Xác nhận Xóa Dữ Liệu</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CancelRedemptionModal({ redemption, onClose, onSuccess }) {
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    const cleanReason = reason.trim();
+    if (!cleanReason) {
+      showToast('Vui lòng nhập lý do hủy lượt đổi quà!', 'error');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await api(`/rewards/redemptions/${redemption._id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: cleanReason }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      showToast('Đã hủy lượt đổi quà và hoàn điểm cho khách hàng!');
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      showToast(err.message || 'Hủy thất bại', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const snap = redemption?.rewardSnapshot || {};
+  const user = redemption?.user || {};
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-3xl border border-slate-200/80 p-6 sm:p-8 space-y-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+        >
+          <X size={18} weight="bold" />
+        </button>
+
+        <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
+          <div className="w-13 h-13 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/25">
+            <XCircle size={26} weight="fill" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Hủy Lượt Đổi Quà</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Nhập lý do hủy & hoàn điểm cho khách</p>
+          </div>
+        </div>
+
+        <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200/80 space-y-2 text-xs text-amber-900">
+          <div className="flex justify-between font-bold">
+            <span>Khách hàng:</span>
+            <span>{user.name || '—'}</span>
+          </div>
+          <div className="flex justify-between font-bold">
+            <span>Quà tặng:</span>
+            <span className="text-amber-800">{snap.name || 'Quà vật lý'}</span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+              Lý Do Hủy (bắt buộc):
+            </label>
+            <textarea
+              rows={3}
+              required
+              autoFocus
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="VD: Hết quà tại kho / Khách hàng quá hạn không tới nhận..."
+              className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white rounded-2xl p-3 text-slate-800 outline-none transition-all resize-none"
+            />
+            <p className="text-[11px] text-slate-400">Lý do này sẽ hiển thị trực tiếp cho khách hàng xem trên app/web.</p>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="w-1/3 py-3.5 rounded-2xl font-bold text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Quay lại
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !reason.trim()}
+              className="w-2/3 py-3.5 rounded-2xl font-black text-sm text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-all shadow-lg shadow-amber-600/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {submitting ? (
+                <>
+                  <Spinner size={16} />
+                  <span>Đang xử lý...</span>
+                </>
+              ) : (
+                <>
+                  <XCircle size={18} weight="bold" />
+                  <span>Xác nhận Hủy Đơn</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function RedemptionsTab({ isManager = false }) {
   const [redemptions, setRedemptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [verifying, setVerifying] = useState(null);
-  const [codeInput, setCodeInput] = useState({});
+  const [selectedForModal, setSelectedForModal] = useState(null);
+  const [cancelModalRedemption, setCancelModalRedemption] = useState(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
-  const notify = (msg, type = 'success') => showToast(msg, type);
 
   const fetch_ = useCallback(async () => {
     setLoading(true); setError('');
@@ -391,28 +830,34 @@ export function RedemptionsTab() {
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
-  const handleVerifyReceived = async (rd) => {
-    const code = (codeInput[rd._id] || '').trim();
-    if (!code) { notify('Vui lòng nhập mã đổi thưởng của khách', 'error'); return; }
-    setVerifying(rd._id);
+  const handleCancelRedemption = (rd) => {
+    setCancelModalRedemption(rd);
+  };
+
+  const handleDeleteRedemption = async (rd) => {
+    const ok = await confirmDialog({
+      title: 'Xóa Vĩnh Viễn Lượt Đổi Quà',
+      message: `Bạn có chắc chắn muốn XÓA VĨNH VIỄN lượt đổi quà "${rd.code}"? Thao tác này KHÔNG THỂ HOÀN TÁC.`,
+      confirmText: 'Xóa Vĩnh Viễn',
+      cancelText: 'Hủy bỏ',
+      type: 'danger',
+    });
+    if (!ok) return;
     try {
-      const res = await api(`/rewards/redemptions/${rd._id}/received`, {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-      });
+      const res = await api(`/rewards/redemptions/${rd._id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await readErr(res));
-      notify('Đã xác nhận khách nhận quà!');
-      setCodeInput(prev => ({ ...prev, [rd._id]: '' }));
+      showToast('Đã xóa vĩnh viễn lượt đổi quà!');
       fetch_();
-    } catch (err) { notify(err.message || 'Xác nhận thất bại', 'error'); }
-    finally { setVerifying(null); }
+    } catch (err) {
+      showToast(err.message || 'Xóa thất bại', 'error');
+    }
   };
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={fetch_} disabled={loading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white !text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors cursor-pointer">
           <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
         </button>
         <div className="relative flex-1 max-w-md">
@@ -439,6 +884,25 @@ export function RedemptionsTab() {
           <option value="received">Khách đã nhận</option>
           <option value="cancelled">Đã hủy</option>
         </select>
+
+        {!isManager && (
+          <button
+            onClick={() => setShowBulkDeleteModal(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ml-auto"
+            title="Xóa dữ liệu hàng loạt hoặc theo khoảng thời gian"
+          >
+            <Trash size={16} weight="bold" />
+            <span>Xóa dữ liệu</span>
+          </button>
+        )}
+
+        <button
+          onClick={() => setSelectedForModal({})}
+          className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-black text-white hover:from-emerald-500 hover:to-teal-500 transition-all shadow-md shadow-emerald-600/20 cursor-pointer ${isManager ? 'ml-auto' : ''}`}
+        >
+          <Gift size={18} weight="bold" />
+          Trao quà ngay
+        </button>
       </div>
 
       {loading ? (
@@ -463,7 +927,7 @@ export function RedemptionsTab() {
                   <th className="px-4 py-3">Ngày đổi</th>
                   <th className="px-4 py-3">Trạng thái</th>
                   <th className="px-4 py-3">Chi nhánh / Người gửi</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -486,35 +950,54 @@ export function RedemptionsTab() {
                       <td className="px-4 py-3"><StatusBadge status={rd.status} /></td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {rd.status === 'sent' || rd.status === 'received' ? (
-                          (rd.sentAt || rd.branchId?.name || rd.sentBy?.name) ? (
+                          (rd.sentAt || rd.branchSnapshot?.name || rd.branchId?.name || rd.sentBySnapshot?.name || rd.sentBy?.name) ? (
                             <>
                               {rd.sentAt && <p>{formatDate(rd.sentAt)}</p>}
-                              {rd.branchId?.name && <p className="text-slate-400">{rd.branchId.name}</p>}
-                              {rd.sentBy?.name && <p className="text-slate-400">bởi {rd.sentBy.name}</p>}
+                              {(rd.branchSnapshot?.name || rd.branchId?.name) && (
+                                <p className="text-slate-600 font-semibold">{rd.branchSnapshot?.name || rd.branchId?.name}</p>
+                              )}
+                              {(rd.sentBySnapshot?.name || rd.sentBy?.name) && (
+                                <p className="text-slate-400">bởi {rd.sentBySnapshot?.name || rd.sentBy?.name}</p>
+                              )}
                             </>
                           ) : <span className="text-slate-300">—</span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="px-4 py-3">
-                        {canVerify ? (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="text"
-                              value={codeInput[rd._id] || ''}
-                              onChange={(e) => setCodeInput(prev => ({ ...prev, [rd._id]: e.target.value }))}
-                              onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyReceived(rd); }}
-                              placeholder="Nhập mã của khách"
-                              className="w-36 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-colors"
-                            />
-                            <button onClick={() => handleVerifyReceived(rd)} disabled={verifying === rd._id}
-                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors">
-                              {verifying === rd._id ? <Spinner size={12} /> : <CheckCircle size={13} />}
-                              {verifying === rd._id ? 'Đang xác nhận...' : 'Xác nhận đã nhận'}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canVerify && (
+                            <button
+                              onClick={() => setSelectedForModal(rd)}
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 text-xs font-black text-white hover:from-emerald-500 hover:to-teal-500 transition-all shadow-sm active:scale-95 cursor-pointer"
+                              title="Trao quà"
+                            >
+                              <Gift size={14} weight="bold" />
+                              <span className="hidden sm:inline">Trao quà</span>
                             </button>
-                          </div>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
+                          )}
+
+                          {rd.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleCancelRedemption(rd)}
+                              className="inline-flex items-center gap-1 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/80 px-2.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
+                              title="Hủy lượt đổi quà"
+                            >
+                              <XCircle size={14} weight="bold" />
+                              <span className="hidden sm:inline">Hủy</span>
+                            </button>
+                          )}
+
+                          {!isManager && (
+                            <button
+                              onClick={() => handleDeleteRedemption(rd)}
+                              className="inline-flex items-center gap-1 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200/80 px-2.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
+                              title="Xóa vĩnh viễn lượt đổi quà"
+                            >
+                              <Trash size={14} weight="bold" />
+                              <span className="hidden sm:inline">Xóa</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -533,6 +1016,32 @@ export function RedemptionsTab() {
           <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page >= pagination.totalPages}
             className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Sau</button>
         </div>
+      )}
+
+      {/* Give Gift Confirmation Modal */}
+      {selectedForModal !== null && (
+        <GiveGiftModal
+          redemption={selectedForModal._id ? selectedForModal : null}
+          onClose={() => setSelectedForModal(null)}
+          onSuccess={fetch_}
+        />
+      )}
+
+      {/* Cancel Redemption Modal */}
+      {cancelModalRedemption !== null && (
+        <CancelRedemptionModal
+          redemption={cancelModalRedemption}
+          onClose={() => setCancelModalRedemption(null)}
+          onSuccess={fetch_}
+        />
+      )}
+
+      {/* Admin Bulk Delete Modal */}
+      {showBulkDeleteModal && (
+        <BulkDeleteRedemptionsModal
+          onClose={() => setShowBulkDeleteModal(false)}
+          onSuccess={fetch_}
+        />
       )}
     </div>
   );
