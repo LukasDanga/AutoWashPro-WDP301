@@ -180,7 +180,7 @@ router.patch('/:id/status', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER, 
 
 router.post('/:id/request-checkin', authenticate, authorize(ROLES.CUSTOMER, ROLES.MANAGER, ROLES.ADMIN), bookingController.requestCheckin);
 router.post('/:id/reject-checkin', authenticate, authorize(ROLES.MANAGER, ROLES.ADMIN), bookingController.rejectCheckin);
-router.post('/:id/customer-scan-checkin', authenticate, authorize(ROLES.CUSTOMER), bookingController.customerScanCheckin);
+router.post('/:id/customer-scan-checkin', authenticate, authorize(ROLES.CUSTOMER, ROLES.MANAGER, ROLES.ADMIN), bookingController.customerScanCheckin);
 
 /**
  * @swagger

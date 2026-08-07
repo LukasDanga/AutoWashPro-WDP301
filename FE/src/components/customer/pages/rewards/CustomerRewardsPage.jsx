@@ -163,6 +163,16 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
     fetchVouchers();
   }, [fetchHistory]);
 
+  const sseToken = getStoredToken();
+  useSSE(sseToken, 'my_rewards_updated', () => {
+    fetchVouchers();
+    fetchHistory();
+    if (refreshUser) refreshUser();
+  });
+  useSSE(sseToken, 'rewards_updated', () => {
+    fetchVouchers();
+  });
+
   const fetchVouchers = async () => {
     try {
       const resTpl = await api('/vouchers/available');
@@ -419,12 +429,23 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                         <div className="min-w-0">
                           <p className="font-bold text-slate-800 text-sm line-clamp-2">{snap.name}</p>
                           <p className="text-[11px] text-slate-400 mt-0.5">Đổi ngày {formatDate(rd.createdAt)}</p>
+                          {received && (rd.receivedAt || rd.updatedAt) && (
+                            <p className="text-[11px] text-emerald-600 font-bold mt-0.5">✓ Ngày nhận quà: {new Date(rd.receivedAt || rd.updatedAt).toLocaleString('vi-VN')}</p>
+                          )}
                         </div>
                       </div>
                       <div className={`rounded-lg px-3 py-2 border flex items-center justify-between mb-3 ${cancelled ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50 border-emerald-100'}`}>
                         <span className="text-xs font-semibold text-slate-500">Mã đổi thưởng</span>
                         <span className={`font-mono font-extrabold tracking-wider ${cancelled ? 'text-slate-400 line-through' : 'text-emerald-700'}`}>{rd.code}</span>
                       </div>
+
+                      {cancelled && (
+                        <div className="mb-3 bg-red-50 p-2.5 rounded-lg border border-red-100 text-xs text-red-700">
+                          <span className="font-bold">Lý do hủy: </span>
+                          <span>{rd.cancelReason || 'Quản lý hoặc hệ thống đã hủy đơn đổi quà này.'}</span>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between text-[11px] text-slate-400 mb-3">
                         <span className="flex items-center gap-1"><Coins weight="fill" size={12} /> {formatCurrency(rd.pointsSpent)} điểm</span>
                         {cancelled
@@ -432,8 +453,8 @@ export default function CustomerRewardsPage({ user, refreshUser }) {
                           : received
                             ? <span className="text-emerald-600 font-bold">Đã nhận quà</span>
                             : sent
-                              ? <span className="text-blue-600 font-bold">Đã gửi · Chờ xác nhận nhận quà</span>
-                              : <span className="text-emerald-600 font-bold">Chờ gửi quà</span>}
+                              ? <span className="text-blue-600 font-bold">Đã gửi · Chờ nhận</span>
+                              : <span className="text-amber-600 font-bold">Chờ nhận quà</span>}
                       </div>
                       {!cancelled && !received && (
                       <button onClick={() => { navigator.clipboard.writeText(rd.code); showToast('Đã copy mã đổi thưởng!', 'success'); }}

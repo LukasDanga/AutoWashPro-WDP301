@@ -65,5 +65,47 @@ exports.markRedemptionReceived = catchAsync(async (req, res) => {
     sentBy: req.userId,
     branchId,
   });
-  success(res, redemption, 'Đã xác nhận khách đã nhận quà');
+
+  // Realtime SSE broadcast to customer and managers
+  const sseService = require('../services/sse.service');
+  sseService.broadcastToAll('rewards_updated');
+  sseService.broadcastToAll('vouchers_updated');
+  if (redemption && redemption.userId) {
+    const custId = String(redemption.userId._id || redemption.userId);
+    sseService.sendToUser(custId, 'my_rewards_updated', {
+      redemptionId: redemption._id,
+      status: 'received',
+    });
+  }
+
+  success(res, redemption, 'Đã xác nhận khách đã nhận quà thành công!');
+});
+
+exports.cancelRedemption = catchAsync(async (req, res) => {
+  const reason = req.body?.reason || req.body?.cancelReason || '';
+  const redemption = await rewardService.cancelRedemption(req.params.id, req.userId, reason);
+  const sseService = require('../services/sse.service');
+  sseService.broadcastToAll('rewards_updated');
+  if (redemption && redemption.user) {
+    sseService.sendToUser(String(redemption.user._id || redemption.user), 'my_rewards_updated', {
+      redemptionId: redemption._id,
+      status: 'cancelled',
+      cancelReason: redemption.cancelReason,
+    });
+  }
+  success(res, redemption, 'Đã hủy lượt đổi quà thành công!');
+});
+
+exports.deleteRedemption = catchAsync(async (req, res) => {
+  const redemption = await rewardService.deleteRedemption(req.params.id);
+  const sseService = require('../services/sse.service');
+  sseService.broadcastToAll('rewards_updated');
+  success(res, redemption, 'Đã xóa vĩnh viễn lượt đổi quà!');
+});
+
+exports.bulkDeleteRedemptions = catchAsync(async (req, res) => {
+  const result = await rewardService.bulkDeleteRedemptions(req.body || {});
+  const sseService = require('../services/sse.service');
+  sseService.broadcastToAll('rewards_updated');
+  success(res, result, `Đã xóa thành công ${result.deletedCount} bản ghi lượt đổi quà!`);
 });

@@ -15,8 +15,21 @@ const redemptionSchema = new mongoose.Schema({
   sentAt: { type: Date },
   sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+  branchSnapshot: {
+    id: { type: String },
+    name: { type: String },
+    code: { type: String },
+  },
+  sentBySnapshot: {
+    id: { type: String },
+    name: { type: String },
+    phone: { type: String },
+    email: { type: String },
+    role: { type: String },
+  },
   receivedAt: { type: Date },
   cancelledAt: { type: Date },
+  cancelReason: { type: String, trim: true },
 }, { timestamps: true });
 
 redemptionSchema.index({ user: 1, createdAt: -1 });
