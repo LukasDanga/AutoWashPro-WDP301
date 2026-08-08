@@ -14,6 +14,54 @@ const INITIAL_CONFIGS = [
     description: 'Giới hạn thời gian đặt lịch trước theo hạng thành viên (ngày)'
   },
   {
+    key: 'WALK_IN_DEFAULT_PASSWORD',
+    value: '{phone}',
+    type: 'string',
+    category: 'general',
+    isPublic: false,
+    description: 'Mật khẩu mặc định khi tạo tài khoản khách vãng lai (có thể dùng {phone} để lấy SĐT)'
+  },
+  {
+    key: 'WALK_IN_DEFAULT_EMAIL_SUFFIX',
+    value: '@khachvanglai.autowash.vn',
+    type: 'string',
+    category: 'general',
+    isPublic: false,
+    description: 'Đuôi email ảo khi tạo tài khoản khách vãng lai không có email'
+  },
+  {
+    key: 'WALK_IN_PRIMARY_IDENTIFIER',
+    value: 'email',
+    type: 'string',
+    category: 'general',
+    isPublic: false,
+    description: 'Ưu tiên lấy thông tin làm tài khoản khi khách vãng lai cung cấp cả hai (email/phone)'
+  },
+  {
+    key: 'WALK_IN_SEND_CREDENTIALS',
+    value: true,
+    type: 'boolean',
+    category: 'general',
+    isPublic: false,
+    description: 'Tự động gửi SMS/Email thông báo tài khoản & mật khẩu khi tạo khách vãng lai'
+  },
+  {
+    key: 'CRON_BIRTHDAY_TIME',
+    value: '08:00',
+    type: 'string',
+    category: 'general',
+    isPublic: false,
+    description: 'Giờ hệ thống chạy tự động phát voucher sinh nhật (VD: 08:00)'
+  },
+  {
+    key: 'CRON_EXPIRE_TIME',
+    value: '00:05',
+    type: 'string',
+    category: 'general',
+    isPublic: false,
+    description: 'Giờ hệ thống chạy dọn dẹp các gói lượt hết hạn (VD: 00:05)'
+  },
+  {
     key: 'DEPOSIT_RATE',
     value: 30,
     type: 'number',
