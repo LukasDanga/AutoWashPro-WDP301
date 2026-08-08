@@ -6,6 +6,7 @@ const SMTP_USER = process.env.SMTP_USER || 'dinhanh200304@gmail.com';
 const SMTP_PASS = process.env.SMTP_PASS || 'meblixxhmxoxpuou';
 
 const transporter = nodemailer.createTransport({
+  service: 'gmail',
   host: SMTP_HOST,
   port: SMTP_PORT,
   secure: SMTP_PORT === 465, // true for 465, false for other ports
@@ -13,6 +14,9 @@ const transporter = nodemailer.createTransport({
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 exports.sendPasswordResetEmail = async (email, otp) => {
