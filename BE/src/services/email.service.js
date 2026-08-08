@@ -5,20 +5,20 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587;
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 
-function getTransporter() {
-  if (!SMTP_USER || !SMTP_PASS) {
-    return null;
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465, // true for 465, false for other ports
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false
   }
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-  });
-}
+});
+
 
 exports.sendPasswordResetEmail = async (email, otp) => {
   if (process.env.NODE_ENV === 'test') {
