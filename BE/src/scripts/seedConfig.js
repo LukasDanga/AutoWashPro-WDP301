@@ -112,6 +112,38 @@ const INITIAL_CONFIGS = [
     description: 'Số điểm đền bù khi hệ thống tự động hủy đơn gói lượt'
   },
   {
+    key: 'MAX_SLOT_PACK_QUANTITY',
+    value: 50,
+    type: 'number',
+    category: 'booking',
+    isPublic: true,
+    description: 'Số lượng slot tối đa khách hàng có thể mua trong một gói lượt'
+  },
+  {
+    key: 'SLOT_PACK_REFUND_FEE_PERCENT',
+    value: 10,
+    type: 'number',
+    category: 'payment',
+    isPublic: true,
+    description: 'Phần trăm phí quản lý khi khách yêu cầu hoàn tiền gói lượt chưa dùng hết (%)'
+  },
+  {
+    key: 'SLOT_PACK_REFUND_MAX_DAYS',
+    value: 30,
+    type: 'number',
+    category: 'payment',
+    isPublic: true,
+    description: 'Thời hạn tối đa được yêu cầu hoàn tiền gói lượt (ngày kể từ lúc mua)'
+  },
+  {
+    key: 'NO_SHOW_STRIKE_LIMIT',
+    value: 5,
+    type: 'number',
+    category: 'booking',
+    isPublic: true,
+    description: 'Số lần hủy/vắng mặt trong tháng tối đa trước khi bị yêu cầu cọc 100%'
+  },
+  {
     key: 'SLOT_PACK_DISCOUNTS',
     value: [
       { minSlots: 5, discountPercent: 5 },
@@ -124,7 +156,7 @@ const INITIAL_CONFIGS = [
   },
   {
     key: 'SLOT_PACK_VIP_BONUS_DISCOUNTS',
-    value: { gold: 5, diamond: 10 },
+    value: { gold: 2, diamond: 5, Ruby: 5 },
     type: 'json',
     isPublic: true,
     description: 'Cấu hình chiết khấu cộng thêm khi VIP mua Gói Lượt'

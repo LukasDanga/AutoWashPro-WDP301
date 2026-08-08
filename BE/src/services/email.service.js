@@ -2,27 +2,37 @@ const nodemailer = require('nodemailer');
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587;
-const SMTP_USER = process.env.SMTP_USER || 'dinhanh200304@gmail.com';
-const SMTP_PASS = process.env.SMTP_PASS || 'meblixxhmxoxpuou';
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
 
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_PORT === 465, // true for 465, false for other ports
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-});
+function getTransporter() {
+  if (!SMTP_USER || !SMTP_PASS) {
+    return null;
+  }
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+  });
+}
 
 exports.sendPasswordResetEmail = async (email, otp) => {
   if (process.env.NODE_ENV === 'test') {
     console.log(`[EmailService - TEST MODE] Skipped sending Password Reset OTP to ${email}`);
     return Promise.resolve();
   }
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.log(`[EmailService] SMTP credentials not set in .env, skipping Password Reset OTP email to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Password Reset OTP to ${email}`);
   return transporter.sendMail({
-    from: `"AutoWashPro" <${SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER || 'no-reply@autowashpro.com'}>`,
     to: email,
     subject: 'Mã xác nhận khôi phục mật khẩu - AutoWashPro',
     html: `
@@ -46,6 +56,11 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
     console.log(`[EmailService - TEST MODE] Skipped sending Booking Confirmation to ${email}`);
     return Promise.resolve();
   }
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.log(`[EmailService] SMTP credentials not set in .env, skipping Booking Confirmation email to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Booking Confirmation Email to ${email} (Code: ${bookingInfo?.bookingCode || 'N/A'})`);
   const isRecurring = bookingInfo.bookingType === 'recurring';
   const isSlotPack = bookingInfo.bookingType === 'slot_pack_usage';
@@ -57,7 +72,7 @@ exports.sendBookingConfirmationEmail = async (email, bookingInfo) => {
   const packageName = bookingInfo.packageName || (bookingInfo.packageId && bookingInfo.packageId.name) || 'Gói dịch vụ rửa xe';
 
   return transporter.sendMail({
-    from: `"AutoWashPro" <${SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER || 'no-reply@autowashpro.com'}>`,
     to: email,
     subject: `Xác nhận đặt lịch thành công - AutoWashPro (${bookingInfo.bookingCode || ''})`,
     html: `
@@ -86,9 +101,14 @@ exports.sendCancellationOtpEmail = async (email, otp) => {
     console.log(`[EmailService - TEST MODE] Skipped sending Cancellation OTP to ${email}`);
     return Promise.resolve();
   }
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.log(`[EmailService] SMTP credentials not set in .env, skipping Cancellation OTP email to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending Cancellation OTP (${otp}) to ${email}`);
   return transporter.sendMail({
-    from: `"AutoWashPro" <${SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER || 'no-reply@autowashpro.com'}>`,
     to: email,
     subject: `Mã OTP xác nhận hủy lịch - AutoWashPro`,
     html: `
@@ -112,9 +132,14 @@ exports.sendSlotPackConfirmationEmail = async (email, slotPack) => {
     console.log(`[EmailService - TEST MODE] Skipped sending SlotPack Confirmation to ${email}`);
     return Promise.resolve();
   }
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.log(`[EmailService] SMTP credentials not set in .env, skipping SlotPack Confirmation email to ${email}`);
+    return Promise.resolve();
+  }
   console.log(`[EmailService] Sending SlotPack Confirmation Email to ${email} (Code: ${slotPack?.packCode || 'N/A'})`);
   return transporter.sendMail({
-    from: `"AutoWashPro" <${SMTP_USER}>`,
+    from: `"AutoWashPro" <${SMTP_USER || 'no-reply@autowashpro.com'}>`,
     to: email,
     subject: `Xác nhận mua gói lượt thành công - AutoWashPro`,
     html: `

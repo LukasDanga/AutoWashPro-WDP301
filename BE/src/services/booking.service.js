@@ -2154,7 +2154,7 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
 };
 
 // ─── Tier → Priority mapping ─────────────────────────────────────────────────
-const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4, Ruby: 5 };
+// Sử dụng hàm động loyaltyService.getTierPriority(user?.tier) dựa theo minPoints của từng hạng
 
 // ─── Recurring Booking ────────────────────────────────────────────────────────
 
@@ -2240,8 +2240,8 @@ exports.createRecurringBooking = async (data) => {
     throw Object.assign(new Error('Giờ kết thúc vượt quá giờ đóng cửa của chi nhánh'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
   }
 
-  // --- Priority ---
-  const priority = TIER_PRIORITY[user?.tier] || 1;
+  // --- Priority (Động theo cấu hình hạng) ---
+  const priority = await loyaltyService.getTierPriority(user?.tier);
 
   // --- Validate voucher (1 lần, áp cho toàn bộ series) ---
   let computedDiscountAmount = 0;
@@ -3004,7 +3004,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
 
   // Get user for priority
   const user = await User.findById(src.userId);
-  const priority = TIER_PRIORITY[user?.tier] || 1;
+  const priority = await loyaltyService.getTierPriority(user?.tier);
 
   // ── Price re-computation ─────────────────────────────────────────────
   // Base: package price (fallback to src.finalPrice)
