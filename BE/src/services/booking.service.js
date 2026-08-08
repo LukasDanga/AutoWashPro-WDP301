@@ -104,16 +104,53 @@ const getBookingStartDateTime = (bookingDate, startTime) => {
 
 const isSlotOverlap = (s1, e1, s2, e2) => !(e1 <= s2 || s1 >= e2);
 
-const buildSlots = (packageDuration, openTime = '07:00', closeTime = '20:00') => {
+const buildSlots = (packageDuration, openTime = '07:00', closeTime = '20:00', scheduleConfig = null) => {
+  const slots = [];
+  
+  if (scheduleConfig && (scheduleConfig.morning || scheduleConfig.afternoon)) {
+    const { morning, afternoon } = scheduleConfig;
+    const interval = scheduleConfig.slotInterval || 30;
+    
+    if (morning && morning.start && morning.end) {
+      const mOpen = parseTime(morning.start);
+      const mClose = parseTime(morning.end);
+      if (mOpen !== null && mClose !== null) {
+        for (let current = mOpen; current + packageDuration <= mClose; current += interval) {
+          const start = `${String(Math.floor(current / 60)).padStart(2, '0')}:${String(current % 60).padStart(2, '0')}`;
+          const endH = Math.floor((current + packageDuration) / 60);
+          const endM = (current + packageDuration) % 60;
+          const end = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+          slots.push({ startTime: start, endTime: end });
+        }
+      }
+    }
+    
+    if (afternoon && afternoon.start && afternoon.end) {
+      const aOpen = parseTime(afternoon.start);
+      const aClose = parseTime(afternoon.end);
+      if (aOpen !== null && aClose !== null) {
+        for (let current = aOpen; current + packageDuration <= aClose; current += interval) {
+          const start = `${String(Math.floor(current / 60)).padStart(2, '0')}:${String(current % 60).padStart(2, '0')}`;
+          const endH = Math.floor((current + packageDuration) / 60);
+          const endM = (current + packageDuration) % 60;
+          const end = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+          slots.push({ startTime: start, endTime: end });
+        }
+      }
+    }
+    
+    return slots;
+  }
+
+  const interval = (scheduleConfig && scheduleConfig.slotInterval) ? scheduleConfig.slotInterval : 30;
   const open = parseTime(openTime);
   const close = parseTime(closeTime);
   if (open === null || close === null) return [];
-  const slots = [];
-  for (let current = open; current + packageDuration <= close; current += 30) {
+  for (let current = open; current + packageDuration <= close; current += interval) {
     const start = `${String(Math.floor(current / 60)).padStart(2, '0')}:${String(current % 60).padStart(2, '0')}`;
     const endH = Math.floor((current + packageDuration) / 60);
     const endM = (current + packageDuration) % 60;
-    const end = `${String(endH).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`;
+    const end = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
     slots.push({ startTime: start, endTime: end });
   }
   return slots;
@@ -160,7 +197,7 @@ const findNearestAvailableSlot = async ({ branchId, bookingDateStr, duration, af
   }).select('startTime endTime');
 
   const capacity = await resolveBranchCapacity(branch);
-  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00', branch.scheduleConfig);
 
   for (const slot of slots) {
     const sns = parseTime(slot.startTime);
@@ -371,7 +408,7 @@ exports.createBooking = async (data) => {
     const booking = new Booking({
       userId, branchId, packageId, vehicleId,
       bookingDate: bd, startTime: finalStartTime, endTime: finalEndTime, note,
-      status: data.status || 'pending',
+      status: (data.isWalkIn && finalStartTime !== startTime) ? 'confirmed' : (data.status || 'pending'),
       isWalkIn: data.isWalkIn || false,
       isNewCustomerWalkIn: data.isNewCustomerWalkIn || false,
       bookingCode: generateBookingCode(),
@@ -537,10 +574,15 @@ exports.getAllBookings = async (filters = {}, userRole, userId) => {
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
   const skip = (page - 1) * limit;
 
-  let sortObj = { bookingDate: -1, startTime: -1 };
+  let sortObj = { createdAt: -1 };
   if (filters.sort) {
-    if (filters.sort === '-createdAt') sortObj = { createdAt: -1 };
-    else if (filters.sort === 'createdAt') sortObj = { createdAt: 1 };
+    if (filters.sort === '-createdAt' || filters.sort === 'newest') sortObj = { createdAt: -1 };
+    else if (filters.sort === 'createdAt' || filters.sort === 'oldest') sortObj = { createdAt: 1 };
+    else if (filters.sort === 'booking_asc' || filters.sort === 'bookingDate' || filters.sort === 'time_asc') sortObj = { bookingDate: 1, startTime: 1 };
+    else if (filters.sort === 'booking_desc' || filters.sort === '-bookingDate' || filters.sort === 'time_desc') sortObj = { bookingDate: -1, startTime: -1 };
+    else if (filters.sort === 'price_desc' || filters.sort === '-finalPrice') sortObj = { finalPrice: -1 };
+    else if (filters.sort === 'price_asc' || filters.sort === 'finalPrice') sortObj = { finalPrice: 1 };
+    else if (filters.sort === 'priority_desc' || filters.sort === '-priority') sortObj = { priority: -1, createdAt: -1 };
   }
 
   if (filters.groupByRecurring === 'true') {
@@ -2038,6 +2080,11 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
   const duration = pkg ? pkg.duration : 30;
 
   const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
+  
+  if (branch.scheduleConfig?.daysOff?.includes(dateStr)) {
+    return [];
+  }
+
   const { gte, lte } = getDayBounds(dateStr);
   const existing = await Booking.find({
     branchId,
@@ -2045,10 +2092,16 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     status: { $in: ACTIVE_SLOT_STATUSES },
   }).select('startTime endTime priority');
 
-  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00');
+  const slots = buildSlots(duration, branch.openingTime || '07:00', branch.closingTime || '20:00', branch.scheduleConfig);
   const capacity = await resolveBranchCapacity(branch);
+  const minAdvanceMinutes = await configService.get('MIN_ADVANCE_BOOKING_MINUTES', {}, 30);
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  
+  // Lấy ngày hiện tại theo múi giờ địa phương (local time) để tránh lỗi lệch ngày với UTC
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
 
   return slots.map((s) => {
     const overlappingBookings = existing.filter((b) => {
@@ -2068,25 +2121,53 @@ exports.getAvailableSlots = async (branchId, date, packageId) => {
     //   2. VÀ đang có VIP thực sự giữ chỗ trong slot đó
     // → Không giữ chỗ vô nghĩa khi không có VIP nào đặt → tránh mất doanh thu
     let vipOnly = capacity > 1 && overlappingCount >= capacity - 1 && overlappingCount < capacity && vipBooked;
+    
+    let reason = null;
 
     if (dateStr === todayStr) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const slotStartMinutes = parseTime(s.startTime);
-      if (slotStartMinutes !== null && slotStartMinutes <= currentMinutes + 30) {
-        // Quá muộn để đặt (cần ít nhất 30 phút chuẩn bị)
+      
+      if (slotStartMinutes !== null && slotStartMinutes <= currentMinutes) {
         available = false;
         vipOnly = false;
-      } else if (slotStartMinutes !== null && slotStartMinutes - currentMinutes <= 30 * 2) {
-        // Anti-waste: Còn ≤ 60 phút mà chỗ cuối chưa có VIP nào đặt → mở cho tất cả
+        reason = 'Đã qua giờ';
+      } else if (slotStartMinutes !== null && slotStartMinutes <= currentMinutes + minAdvanceMinutes) {
+        // Quá muộn để đặt (cần thời gian chuẩn bị)
+        available = false;
+        vipOnly = false;
+        reason = `Sát giờ (<${minAdvanceMinutes}p)`;
+      } else if (slotStartMinutes !== null && slotStartMinutes - currentMinutes <= minAdvanceMinutes * 2) {
+        // Anti-waste: Còn sát giờ mà chỗ cuối chưa có VIP nào đặt → mở cho tất cả
         if (!vipBooked) vipOnly = false;
       }
     }
-    return { ...s, available, vipOnly, vipBooked };
+    
+    // Check blocked slots
+    const ns = parseTime(s.startTime);
+    const ne = parseTime(s.endTime);
+    const isBlocked = branch.scheduleConfig?.blockedSlots?.some(bs => {
+      if (bs.date !== dateStr) return false;
+      const bStart = parseTime(bs.startTime);
+      const bEnd = parseTime(bs.endTime);
+      if (bStart !== null && bEnd !== null && isSlotOverlap(ns, ne, bStart, bEnd)) {
+        reason = bs.reason || 'Chi nhánh tạm nghỉ giờ này';
+        return true;
+      }
+      return false;
+    });
+
+    if (isBlocked) {
+      available = false;
+      vipOnly = false;
+    }
+
+    return { ...s, available, vipOnly, vipBooked, reason };
   });
 };
 
 // ─── Tier → Priority mapping ─────────────────────────────────────────────────
-const TIER_PRIORITY = { bronze: 1, silver: 2, gold: 3, diamond: 4, Ruby: 5 };
+// Sử dụng hàm động loyaltyService.getTierPriority(user?.tier) dựa theo minPoints của từng hạng
 
 // ─── Recurring Booking ────────────────────────────────────────────────────────
 
@@ -2172,8 +2253,8 @@ exports.createRecurringBooking = async (data) => {
     throw Object.assign(new Error('Giờ kết thúc vượt quá giờ đóng cửa của chi nhánh'), { statusCode: 400, code: 'OUTSIDE_HOURS' });
   }
 
-  // --- Priority ---
-  const priority = TIER_PRIORITY[user?.tier] || 1;
+  // --- Priority (Động theo cấu hình hạng) ---
+  const priority = await loyaltyService.getTierPriority(user?.tier);
 
   // --- Validate voucher (1 lần, áp cho toàn bộ series) ---
   let computedDiscountAmount = 0;
@@ -2936,7 +3017,7 @@ exports.rebookBooking = async (bookingId, userId, userRole, { bookingDate, start
 
   // Get user for priority
   const user = await User.findById(src.userId);
-  const priority = TIER_PRIORITY[user?.tier] || 1;
+  const priority = await loyaltyService.getTierPriority(user?.tier);
 
   // ── Price re-computation ─────────────────────────────────────────────
   // Base: package price (fallback to src.finalPrice)
