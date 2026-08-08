@@ -1487,7 +1487,7 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
               </div>
             )}
 
-            {(booking.depositAmount > 0 || booking.depositPaid) && (
+            {((booking.depositAmount > 0 && !booking.isWalkIn) || booking.depositPaid) && (
               <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
                 <span className="text-slate-500 font-medium">Đặt cọc:</span>
                 <span className={`font-bold ${booking.depositPaid ? 'text-amber-600' : 'text-slate-400'}`}>
@@ -1680,7 +1680,7 @@ export function BookingDetailsTab({ booking, onBack, onUpdated, notify }) {
           })()}
 
           {/* Deposit summary */}
-          {booking.depositAmount > 0 && (
+          {(booking.depositAmount > 0 && (!booking.isWalkIn || booking.depositPaid || booking.paymentStatus === 'paid')) && (
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
               {booking.paymentStatus === 'paid' ? (
                 <span className="text-emerald-700 font-bold">

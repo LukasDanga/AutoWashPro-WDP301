@@ -165,3 +165,30 @@ exports.sendCancellationSuccessEmail = async (email, info, refundAmount) => {
     `
   });
 };
+
+exports.sendWalkInCredentialsEmail = async (email, password) => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log(`[EmailService - TEST MODE] Skipped sending Walk-In Credentials to ${email}`);
+    return Promise.resolve();
+  }
+  console.log(`[EmailService] Sending Walk-In Credentials Email to ${email}`);
+  return transporter.sendMail({
+    from: `"AutoWashPro" <${SMTP_USER}>`,
+    to: email,
+    subject: `Tài khoản khách hàng AutoWashPro của bạn`,
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #2563eb;">Chào mừng bạn đến với AutoWashPro!</h2>
+        <p>Xin chào,</p>
+        <p>Hệ thống vừa tự động tạo tài khoản cho bạn sau khi bạn sử dụng dịch vụ tại cửa hàng của chúng tôi. Dưới đây là thông tin đăng nhập của bạn:</p>
+        <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px dashed #cbd5e1;">
+          <p><strong>Tài khoản (Email hoặc SĐT):</strong> ${email}</p>
+          <p><strong>Mật khẩu mặc định:</strong> <span style="font-weight: bold; color: #dc2626;">${password}</span></p>
+        </div>
+        <p style="color: #64748b; font-size: 14px;">Vui lòng đăng nhập vào ứng dụng AutoWashPro và đổi mật khẩu để bảo vệ tài khoản của bạn. Đăng nhập để theo dõi lịch sử dịch vụ và hạng thành viên!</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #94a3b8;">Hệ thống chăm sóc xe AutoWashPro</p>
+      </div>
+    `
+  });
+};
