@@ -321,25 +321,27 @@ export default function ManagerSchedule() {
             if (!hasItems && !TIME_SLOTS.includes(slot)) return null;
 
             let isPast = false;
+            let isFullyPast = false;
             if (isToday) {
               const now = new Date();
               const currentMinutes = now.getHours() * 60 + now.getMinutes();
               const slotMinutes = parseInt(slot.split(':')[0], 10) * 60 + parseInt(slot.split(':')[1], 10);
               if (slotMinutes <= currentMinutes) {
                 isPast = true;
+                if (activeCount === 0) isFullyPast = true;
               }
             }
 
             return (
-              <div key={slot} className={`flex flex-col rounded-2xl border ${isFull ? 'border-red-200 bg-red-50/20' : isPast ? 'border-slate-200 bg-slate-100/50 opacity-75' : 'border-slate-200 bg-slate-50/50'} overflow-hidden shadow-sm transition-all hover:border-blue-200`}>
-                <div className={`px-4 py-3 flex items-center justify-between border-b ${isFull ? 'border-red-100 bg-red-50' : isPast ? 'border-slate-200 bg-slate-100' : 'border-slate-100 bg-white'}`}>
+              <div key={slot} className={`flex flex-col rounded-2xl border ${isFull ? 'border-red-200 bg-red-50/20' : isFullyPast ? 'border-slate-200 bg-slate-100/50 opacity-75' : 'border-slate-200 bg-slate-50/50'} overflow-hidden shadow-sm transition-all hover:border-blue-200`}>
+                <div className={`px-4 py-3 flex items-center justify-between border-b ${isFull ? 'border-red-100 bg-red-50' : isFullyPast ? 'border-slate-200 bg-slate-100' : 'border-slate-100 bg-white'}`}>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-800 text-lg tracking-tight">{slot}</span>
                     {isPast && <span className="text-[10px] font-semibold bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-sm">Đã qua</span>}
-                    {activeCount > 0 && !isFull && !isPast && <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-sm" title="Đang có lịch" />}
-                    {isFull && !isPast && <span className="flex h-2 w-2 rounded-full bg-red-500 shadow-sm animate-pulse" title="Đã đầy" />}
+                    {activeCount > 0 && !isFull && <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-sm" title="Đang có lịch" />}
+                    {isFull && <span className="flex h-2 w-2 rounded-full bg-red-500 shadow-sm animate-pulse" title="Đã đầy" />}
                   </div>
-                  <div className={`text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${isFull ? 'bg-red-100 text-red-700' : isPast ? 'bg-slate-200 text-slate-500' : 'bg-slate-100 text-slate-600'}`}>
+                  <div className={`text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${isFull ? 'bg-red-100 text-red-700' : isFullyPast ? 'bg-slate-200 text-slate-500' : 'bg-slate-100 text-slate-600'}`}>
                     {activeCount}/{maxSlotCapacity} LƯỢT
                   </div>
                 </div>
